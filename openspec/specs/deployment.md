@@ -68,6 +68,57 @@ If deployment fails:
 ssh -p 52222 root@120.77.222.205 'cd ~/hotnews && git reset --hard HEAD~1 && systemctl restart trendradar'
 ```
 
+## Emergency Restore (Offline Image Tarball)
+
+Use this runbook when production is down or a deploy introduces a bug and you need to recover quickly without relying on Docker Hub.
+
+### Assumptions
+- You have an offline image tarball like `V1.0.1.tar.gz`.
+- The tarball contains the versioned images tagged as `v1.0.1` (lowercase `v`).
+- Production server: `root@120.77.222.205:52222`, project path `~/hotnews`.
+
+### Fast Restore (Recommended)
+
+1) Load images on the server (no registry required):
+
+```bash
+gzip -dc V1.0.1.tar.gz | ssh -p 52222 root@120.77.222.205 "docker load"
+```
+
+2) Switch the server to the target version and start services:
+
+```bash
+ssh -p 52222 root@120.77.222.205 "cd ~/hotnews/docker && \
+printf 'TREND_RADAR_TAG=v1.0.1\nTREND_RADAR_MCP_TAG=v1.0.1\nTREND_RADAR_VIEWER_TAG=v1.0.1\nVIEWER_PORT=8090\n' > .env && \
+docker compose up -d trend-radar trend-radar-mcp trend-radar-viewer"
+```
+
+3) Verify:
+
+```bash
+ssh -p 52222 root@120.77.222.205 "curl -fsS http://127.0.0.1:8090/health && echo"
+curl -fsS https://hot.uihash.com/health && echo
+```
+
+### Alternative: Use sync-to-server.sh (Offline Deploy)
+
+If the tarball is loaded into your local Docker first, you can reuse the deployment script:
+
+```bash
+gzip -dc V1.0.1.tar.gz | docker load
+bash sync-to-server.sh v1.0.1 --offline --force
+```
+
+### Data vs Image Backup
+
+Image tarballs recover the runtime quickly, but persistent state still lives on the server in `~/hotnews/config` and `~/hotnews/output`.
+
+To snapshot server state to a local file:
+
+```bash
+ssh -p 52222 root@120.77.222.205 "tar -czf - -C ~/hotnews config output" > hotnews-data-$(date +%F).tar.gz
+```
+
 ## Security Notes
 - SSH key authentication required
 - Firewall: only ports 22, 8080 exposed

@@ -105,93 +105,96 @@ def get_services():
 async def fetch_news_data():
     """执行一次数据获取"""
     global _last_fetch_time
-    
-    try:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔄 开始获取最新数据...")
-        
-        # 加载配置
-        config = load_config(str(project_root / "config" / "config.yaml"))
-        
-        # 获取平台列表（load_config 返回的 key 是大写 PLATFORMS）
-        platforms_config = config.get("PLATFORMS", [])
-        
-        # 处理列表格式：[{id: "xxx", name: "xxx"}, ...]
-        if isinstance(platforms_config, list):
-            platforms = {p["id"]: p["name"] for p in platforms_config if isinstance(p, dict) and "id" in p}
-        else:
-            # 字典格式：{id: name, ...}
-            platforms = platforms_config
-        
-        platform_ids = list(platforms.keys())
-        
-        if not platform_ids:
-            print("⚠️ 未配置任何平台")
-            return {"success": False, "error": "未配置平台"}
-        
-        # 创建数据获取器
-        crawler_config = config.get("CRAWLER", {})
-        proxy_url = crawler_config.get("proxy_url") if crawler_config.get("use_proxy") else None
-        api_url = crawler_config.get("api_url")
-        fetcher = DataFetcher(proxy_url=proxy_url, api_url=api_url)
-        
-        # 构建平台ID和名称的元组列表
-        platform_tuples = [(pid, platforms[pid]) for pid in platform_ids]
-        
-        # 批量获取数据
-        crawl_results, id_to_name, failed_ids = fetcher.crawl_websites(platform_tuples)
-        
-        if not crawl_results:
-            print("⚠️ 未获取到任何数据")
-            return {"success": False, "error": "未获取到数据"}
-        
-        # 获取当前时间
-        now = datetime.now()
-        crawl_time = now.strftime("%H:%M")
-        crawl_date = now.strftime("%Y-%m-%d")
-        
-        # 转换并保存数据
-        news_data = convert_crawl_results_to_news_data(
-            crawl_results, 
-            id_to_name, 
-            failed_ids, 
-            crawl_time, 
-            crawl_date
-        )
-        
-        # 获取存储管理器并保存
-        from trendradar.storage import StorageManager
-        from trendradar.core import load_config as load_full_config
-        
-        # 使用正确的存储配置初始化
-        storage_config = config.get("STORAGE", {})
-        storage = StorageManager(
-            backend_type=storage_config.get("backend", "local"),
-            data_dir=str(project_root / storage_config.get("local", {}).get("data_dir", "output")),
-            enable_txt=storage_config.get("formats", {}).get("txt", False),
-            enable_html=storage_config.get("formats", {}).get("html", False),
-        )
-        storage.save_news_data(news_data)
-        
-        _last_fetch_time = datetime.now()
-        
-        # 清除缓存以加载新数据
-        from mcp_server.services.cache_service import get_cache
-        cache = get_cache()
-        cache.clear()  # 清除所有缓存
-        
-        # 重置服务实例
-        global _viewer_service, _data_service
-        _viewer_service = None
-        _data_service = None
-        
-        total_news = sum(len(items) for items in crawl_results.values())
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ 数据获取完成: {len(crawl_results)} 个平台, {total_news} 条新闻")
-        
-        return {"success": True, "platforms": len(crawl_results), "news_count": total_news}
-        
-    except Exception as e:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ 数据获取失败: {e}")
-        return {"success": False, "error": str(e)}
+
+    def _run_blocking_fetch():
+        try:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔄 开始获取最新数据...")
+
+            # 加载配置
+            config = load_config(str(project_root / "config" / "config.yaml"))
+
+            # 获取平台列表（load_config 返回的 key 是大写 PLATFORMS）
+            platforms_config = config.get("PLATFORMS", [])
+
+            # 处理列表格式：[{id: "xxx", name: "xxx"}, ...]
+            if isinstance(platforms_config, list):
+                platforms = {p["id"]: p["name"] for p in platforms_config if isinstance(p, dict) and "id" in p}
+            else:
+                # 字典格式：{id: name, ...}
+                platforms = platforms_config
+
+            platform_ids = list(platforms.keys())
+
+            if not platform_ids:
+                print("⚠️ 未配置任何平台")
+                return {"success": False, "error": "未配置平台"}
+
+            # 创建数据获取器
+            crawler_config = config.get("CRAWLER", {})
+            proxy_url = crawler_config.get("proxy_url") if crawler_config.get("use_proxy") else None
+            api_url = crawler_config.get("api_url")
+            fetcher = DataFetcher(proxy_url=proxy_url, api_url=api_url)
+
+            # 构建平台ID和名称的元组列表
+            platform_tuples = [(pid, platforms[pid]) for pid in platform_ids]
+
+            # 批量获取数据（阻塞调用，放到线程里执行，避免卡住事件循环）
+            crawl_results, id_to_name, failed_ids = fetcher.crawl_websites(platform_tuples)
+
+            if not crawl_results:
+                print("⚠️ 未获取到任何数据")
+                return {"success": False, "error": "未获取到数据"}
+
+            # 获取当前时间
+            now = datetime.now()
+            crawl_time = now.strftime("%H:%M")
+            crawl_date = now.strftime("%Y-%m-%d")
+
+            # 转换并保存数据
+            news_data = convert_crawl_results_to_news_data(
+                crawl_results,
+                id_to_name,
+                failed_ids,
+                crawl_time,
+                crawl_date,
+            )
+
+            # 获取存储管理器并保存
+            from trendradar.storage import StorageManager
+
+            # 使用正确的存储配置初始化
+            storage_config = config.get("STORAGE", {})
+            storage = StorageManager(
+                backend_type=storage_config.get("backend", "local"),
+                data_dir=str(project_root / storage_config.get("local", {}).get("data_dir", "output")),
+                enable_txt=storage_config.get("formats", {}).get("txt", False),
+                enable_html=storage_config.get("formats", {}).get("html", False),
+            )
+            storage.save_news_data(news_data)
+
+            global _viewer_service, _data_service, _last_fetch_time
+            _last_fetch_time = datetime.now()
+
+            # 清除缓存以加载新数据
+            from mcp_server.services.cache_service import get_cache
+
+            cache = get_cache()
+            cache.clear()  # 清除所有缓存
+
+            # 重置服务实例
+            _viewer_service = None
+            _data_service = None
+
+            total_news = sum(len(items) for items in crawl_results.values())
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ 数据获取完成: {len(crawl_results)} 个平台, {total_news} 条新闻")
+
+            return {"success": True, "platforms": len(crawl_results), "news_count": total_news}
+
+        except Exception as e:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ 数据获取失败: {e}")
+            return {"success": False, "error": str(e)}
+
+    return await asyncio.to_thread(_run_blocking_fetch)
 
 
 async def scheduler_loop():
@@ -412,6 +415,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "TrendRadar News Viewer",
+        "health_schema": "2",
         "version": os.environ.get("APP_VERSION", "unknown"),
         "config_rev": os.environ.get("CONFIG_REV", "0"),
     }
@@ -471,8 +475,11 @@ async def on_startup():
     """服务器启动时的初始化"""
     # 读取配置决定是否自动启动定时任务
     try:
-        config = load_config(str(project_root / "config" / "config.yaml"))
-        viewer_config = config.get("viewer", {})
+        import yaml
+        config_path = project_root / "config" / "config.yaml"
+        with open(config_path, "r", encoding="utf-8") as f:
+            full_config = yaml.safe_load(f) or {}
+        viewer_config = full_config.get("viewer", {}) or {}
         
         auto_fetch = viewer_config.get("auto_fetch", False)
         fetch_interval = viewer_config.get("fetch_interval_minutes", 30)
@@ -480,10 +487,8 @@ async def on_startup():
         if auto_fetch:
             print(f"📅 自动启动定时获取任务 (间隔: {fetch_interval} 分钟)")
             start_scheduler(fetch_interval)
-            
-            # 启动时立即获取一次
-            if viewer_config.get("fetch_on_startup", True):
-                asyncio.create_task(fetch_news_data())
+
+            # scheduler_loop 本身会立即执行一次 fetch_news_data()，避免启动时重复触发
     except Exception as e:
         print(f"⚠️ 读取配置失败，跳过自动定时任务: {e}")
 

@@ -10,20 +10,48 @@ SSH_PORT="52222"                      # SSH端口
 PROJECT_PATH="~/hotnews"              # 项目在服务器上的路径
 # ============================================
 
+CONTROL_PATH="/tmp/hotnews-ssh-${SERVER_USER}@${SERVER_HOST}-${SSH_PORT}"
+SSH_OPTS="-p ${SSH_PORT} -o ControlMaster=auto -o ControlPersist=600 -o ControlPath=${CONTROL_PATH}"
+
 set -e  # 遇到错误立即退出
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 TAG="${1:-}"
-MODE="${2:-}"
+shift || true
+
+ROLLBACK=false
+OFFLINE=false
+FORCE=false
+
+for arg in "$@"; do
+    case "$arg" in
+        "--rollback")
+            ROLLBACK=true
+            ;;
+        "--offline")
+            OFFLINE=true
+            ;;
+        "--force")
+            FORCE=true
+            ;;
+        "")
+            ;;
+        *)
+            echo "❌ 未知参数: $arg"
+            echo "用法: $0 <image-tag> [--offline] [--rollback] [--force]"
+            exit 1
+            ;;
+    esac
+done
 
 if [ -z "$TAG" ]; then
-    echo "用法: $0 <image-tag> [--rollback]"
+    echo "用法: $0 <image-tag> [--offline] [--rollback] [--force]"
     exit 1
 fi
 
-if [ "$MODE" != "--rollback" ]; then
+if [ "$ROLLBACK" != "true" ]; then
     if [ "$TAG" = "latest" ] || echo "$TAG" | grep -qi '^latest$'; then
         echo "❌ 禁止使用 latest，请使用明确版本号 tag（如 v1.2.3）"
         exit 1
@@ -34,7 +62,7 @@ if [ "$MODE" != "--rollback" ]; then
     fi
 fi
 
-if [ "$MODE" != "--rollback" ] && [ "$MODE" != "--force" ]; then
+if [ "$ROLLBACK" != "true" ] && [ "$FORCE" != "true" ]; then
     if [ ! -f ".local_validation_ok" ]; then
         echo "❌ 拒绝部署：未检测到本地 Docker 验证标记文件 .local_validation_ok"
         echo "请先在本地运行："
@@ -71,17 +99,17 @@ copy_files() {
     local remote_host="${dest%%:*}"
     local remote_path="${dest#*:}"
 
-    remote_path_expanded=$(ssh -p "${SSH_PORT}" -o ConnectTimeout=5 "$remote_host" "eval echo $remote_path")
+    remote_path_expanded=$(ssh ${SSH_OPTS} -o ConnectTimeout=5 "$remote_host" "eval echo $remote_path")
     if [ -z "$remote_path_expanded" ]; then
         echo "❌ 远端路径解析失败: $remote_path"
         exit 1
     fi
 
-    ssh -p "${SSH_PORT}" -o ConnectTimeout=5 "$remote_host" "mkdir -p '$remote_path_expanded'" >/dev/null
+    ssh ${SSH_OPTS} -o ConnectTimeout=5 "$remote_host" "mkdir -p '$remote_path_expanded'" >/dev/null
 
     if command -v rsync >/dev/null 2>&1; then
-        if ssh -p "${SSH_PORT}" -o ConnectTimeout=5 "$remote_host" "command -v rsync" >/dev/null 2>&1; then
-            rsync -avz --progress -e "ssh -p ${SSH_PORT}" "$@" "$dest"
+        if ssh ${SSH_OPTS} -o ConnectTimeout=5 "$remote_host" "command -v rsync" >/dev/null 2>&1; then
+            rsync -avz --progress -e "ssh ${SSH_OPTS}" "$@" "$dest"
             return
         fi
     fi
@@ -93,7 +121,39 @@ copy_files() {
         base=$(basename "$f")
         tar_args+=("-C" "$dir" "$base")
     done
-    COPYFILE_DISABLE=1 tar -czf - "${tar_args[@]}" | ssh -p "${SSH_PORT}" "$remote_host" "tar -xzf - -C '$remote_path_expanded'"
+    COPYFILE_DISABLE=1 tar -czf - "${tar_args[@]}" | ssh ${SSH_OPTS} "$remote_host" "tar -xzf - -C '$remote_path_expanded'"
+}
+
+transfer_images_offline() {
+    local remote="${SERVER_USER}@${SERVER_HOST}"
+
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "❌ 本机未检测到 docker，无法离线传镜像"
+        exit 1
+    fi
+
+    echo "📦 离线传输镜像到服务器（docker save | ssh | docker load），跳过 Docker Hub pull"
+    ssh ${SSH_OPTS} -o ConnectTimeout=5 "$remote" "command -v docker >/dev/null 2>&1" || {
+        echo "❌ 服务器未检测到 docker，无法离线导入镜像"
+        exit 1
+    }
+
+    local images=(
+        "wantcat/trendradar:${TAG}"
+        "wantcat/trendradar-mcp:${TAG}"
+        "wantcat/trendradar-viewer:${TAG}"
+    )
+
+    for img in "${images[@]}"; do
+        if ! docker image inspect "$img" >/dev/null 2>&1; then
+            echo "❌ 本机未找到镜像：$img"
+            echo "请先在本地 build 并确保 tag 正确，然后再运行离线部署。"
+            exit 1
+        fi
+
+        echo "➡️  传输 $img"
+        docker save "$img" | ssh ${SSH_OPTS} "$remote" "docker load" >/dev/null
+    done
 }
 
 echo "🚀 开始同步修复代码到服务器..."
@@ -103,7 +163,7 @@ echo ""
 
 # 1. 测试 SSH 连接
 echo "📡 测试服务器连接..."
-if ! ssh -p ${SSH_PORT} -o ConnectTimeout=5 ${SERVER_USER}@${SERVER_HOST} "echo '连接成功'"; then
+if ! ssh ${SSH_OPTS} -o ConnectTimeout=5 ${SERVER_USER}@${SERVER_HOST} "echo '连接成功'"; then
     echo "❌ 无法连接到服务器，请检查服务器地址和 SSH 配置"
     exit 1
 fi
@@ -129,10 +189,14 @@ copy_files "${SERVER_USER}@${SERVER_HOST}:${PROJECT_PATH}/docker/" \
 
 echo "⚠️  文档同步可选，跳过"
 
+if [ "$OFFLINE" = "true" ]; then
+    transfer_images_offline
+fi
+
 # 3. 在服务器上重启服务
 echo ""
 echo "🔄 重启服务..."
-ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} TAG="$TAG" MODE="$MODE" bash -s << 'ENDSSH'
+ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER_HOST} TAG="$TAG" OFFLINE="$OFFLINE" ROLLBACK="$ROLLBACK" bash -s << 'ENDSSH'
 set -e
 PROJECT_PATH=~/hotnews
 cd "$PROJECT_PATH"
@@ -155,7 +219,7 @@ if [ -f "docker/docker-compose.yml" ]; then
         exit 1
     fi
 
-    if [ "$MODE" = "--rollback" ]; then
+    if [ "$ROLLBACK" = "true" ]; then
         if [ ! -f ".env.prev" ]; then
             echo "❌ 未找到 .env.prev，无法回滚"
             exit 1
@@ -179,11 +243,32 @@ if [ -f "docker/docker-compose.yml" ]; then
         printf "TREND_RADAR_TAG=%s\nTREND_RADAR_MCP_TAG=%s\nTREND_RADAR_VIEWER_TAG=%s\nVIEWER_PORT=8090\n" "$TAG" "$TAG" "$TAG" > .env
     fi
 
-    if [ "$MODE" != "--rollback" ]; then
-        existing_8090=$(docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep '127.0.0.1:8090->' || true)
+    existing_8090=$(docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep '127.0.0.1:8090->' || true)
+    if [ "$ROLLBACK" != "true" ]; then
+        if command -v ss >/dev/null 2>&1; then
+            if ss -lntp 2>/dev/null | grep -q ":8090" && [ -z "$existing_8090" ]; then
+                echo "❌ 127.0.0.1:8090 被非 Docker 服务占用（需要先停掉旧服务或改端口）"
+                ss -lntp 2>/dev/null | grep ":8090" || true
+                exit 1
+            fi
+        elif command -v netstat >/dev/null 2>&1; then
+            if netstat -lntp 2>/dev/null | grep -q ":8090" && [ -z "$existing_8090" ]; then
+                echo "❌ 127.0.0.1:8090 被非 Docker 服务占用（需要先停掉旧服务或改端口）"
+                netstat -lntp 2>/dev/null | grep ":8090" || true
+                exit 1
+            fi
+        fi
+    fi
 
+    if [ "$OFFLINE" != "true" ]; then
+        $compose_cmd pull trend-radar trend-radar-viewer trend-radar-mcp || true
+    else
+        echo "⚠️ 离线模式：跳过 docker compose pull"
+    fi
+
+    if [ "$ROLLBACK" != "true" ]; then
         if [ -n "$existing_8090" ]; then
-            echo "⚠️ 发现占用 127.0.0.1:8090 的容器，将先停止以便部署:"
+            echo "⚠️ 发现占用 127.0.0.1:8090 的容器，将在启动新版本前停止:"
             echo "$existing_8090"
             ids=$(echo "$existing_8090" | awk '{print $1}')
             for id in $ids; do
@@ -191,23 +276,7 @@ if [ -f "docker/docker-compose.yml" ]; then
             done
         fi
         docker rm -f trend-radar-viewer >/dev/null 2>&1 || true
-
-        if command -v ss >/dev/null 2>&1; then
-            if ss -lntp 2>/dev/null | grep -q ":8090"; then
-                echo "❌ 127.0.0.1:8090 已被占用（需要先停掉旧服务或改端口）"
-                ss -lntp 2>/dev/null | grep ":8090" || true
-                exit 1
-            fi
-        elif command -v netstat >/dev/null 2>&1; then
-            if netstat -lntp 2>/dev/null | grep -q ":8090"; then
-                echo "❌ 127.0.0.1:8090 已被占用（需要先停掉旧服务或改端口）"
-                netstat -lntp 2>/dev/null | grep ":8090" || true
-                exit 1
-            fi
-        fi
     fi
-
-    $compose_cmd pull trend-radar trend-radar-viewer trend-radar-mcp || true
     $compose_cmd up -d trend-radar-viewer trend-radar trend-radar-mcp
 
     viewer_cid=$($compose_cmd ps -q trend-radar-viewer || true)

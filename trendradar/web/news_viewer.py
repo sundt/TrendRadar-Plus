@@ -183,6 +183,24 @@ class NewsViewerService:
         Returns:
             分类后的新闻数据结构
         """
+        def _derive_updated_at(items: List[Dict]) -> str:
+            best: Optional[datetime] = None
+            for it in items or []:
+                ts = it.get("timestamp")
+                if not ts or not isinstance(ts, str):
+                    continue
+                try:
+                    dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    continue
+                if best is None or dt > best:
+                    best = dt
+            if best is None:
+                return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            return best.strftime("%Y-%m-%d %H:%M:%S")
+
+        updated_at = _derive_updated_at(news_list)
+
         # 应用内容过滤
         if apply_filter:
             filtered_news, removed_news, filter_stats = self.content_filter.filter_news(
@@ -288,7 +306,7 @@ class NewsViewerService:
             "total_news": len(filtered_news),
             "total_filtered": len(removed_news),
             "filter_stats": filter_stats,
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "updated_at": updated_at
         }
 
     def get_categorized_news(

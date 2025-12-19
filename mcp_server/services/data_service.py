@@ -49,15 +49,27 @@ class DataService:
         """
         # 尝试从缓存获取
         cache_key = f"latest_news:{','.join(platforms or [])}:{limit}:{include_url}"
-        cached = self.cache.get(cache_key, ttl=900)  # 15分钟缓存
+        cached = self.cache.get(cache_key, ttl=300)  # 5分钟缓存
         if cached:
             return cached
 
-        # 读取今天的数据
-        all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
-            date=None,
-            platform_ids=platforms
-        )
+        # 读取今天的数据；如果今天没有数据，则回退到最近可用日期
+        try:
+            all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
+                date=None,
+                platform_ids=platforms
+            )
+        except DataNotFoundError:
+            _, latest = self.get_available_date_range()
+            if latest is None:
+                raise DataNotFoundError(
+                    "暂无新闻数据",
+                    suggestion="请先运行爬虫或稍后再试"
+                )
+            all_titles, id_to_name, timestamps = self.parser.read_all_titles_for_date(
+                date=latest,
+                platform_ids=platforms
+            )
 
         # 获取最新的文件时间
         if timestamps:
