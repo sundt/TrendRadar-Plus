@@ -238,6 +238,7 @@
         }
         
         .news-item.filtered { display: none !important; }
+        .news-item.search-hidden { display: none !important; }
         .news-item.read { display: none !important; }
         .news-item.paged-hidden { display: none !important; }
 
@@ -436,10 +437,78 @@
             font-size: 0.75rem;
             cursor: pointer;
         }
+
+        .new-badge {
+            display: inline-block;
+            margin-left: 6px;
+            padding: 1px 6px;
+            border-radius: 9999px;
+            font-size: 0.65rem;
+            line-height: 1.2;
+            font-weight: 800;
+            letter-spacing: 0.3px;
+            background: #f97316;
+            color: #fff;
+            vertical-align: middle;
+        }
         .filter-count {
             font-size: 0.7rem;
             color: #dc2626;
             margin-left: 4px;
+        }
+
+        .filter-mode-toggle {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .filter-mode-toggle input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+            width: 1px;
+            height: 1px;
+        }
+        .filter-mode-pill {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 8px;
+            border-radius: 9999px;
+            border: 1px solid #fecaca;
+            background: #fee2e2;
+            color: #b91c1c;
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+        .filter-mode-toggle input:checked + .filter-mode-pill {
+            border-color: #c7d2fe;
+            background: #eef2ff;
+            color: #3730a3;
+        }
+        .filter-mode-thumb {
+            position: absolute;
+            top: 2px;
+            bottom: 2px;
+            width: 30px;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.8);
+            transition: transform 0.15s ease;
+            transform: translateX(0);
+        }
+        .filter-mode-toggle input:checked + .filter-mode-pill .filter-mode-thumb {
+            transform: translateX(36px);
+        }
+        .filter-mode-off,
+        .filter-mode-on {
+            position: relative;
+            z-index: 1;
+            width: 30px;
+            text-align: center;
+            font-weight: 700;
         }
 
         /* 平台筛选按钮和面板 */
@@ -585,19 +654,15 @@
                     <span class="spinner"></span>
                     <span class="btn-text">🔄 刷新</span>
                 </button>
-                <button class="filter-toggle-btn" onclick="toggleFilterPanel()">
-                    🚫 过滤设置 <span class="filter-count" id="filterCount"></span>
-                </button>
                 <button class="platform-filter-btn" onclick="togglePlatformFilterPanel()">
-                    📱 平台筛选 <span id="hiddenPlatformCount"></span>
+                    &#128241; 平台筛选 <span id="hiddenPlatformCount"></span>
+                </button>
+                <button class="filter-toggle-btn" onclick="toggleFilterPanel()">
+                    &#128683; 过滤设置<span class="filter-count" id="filterCount"></span><span class="new-badge" id="newBadgeFilterSettings" style="display:none;">NEW</span>
                 </button>
                 <button class="show-read-btn" id="showReadBtn" onclick="toggleShowRead()">
                     👁 已读: <span id="readCount">0</span>
                 </button>
-                <div class="stat-card" style="background: linear-gradient(135deg, #10b981, #059669);" id="filteredStatCard">
-                    <span class="stat-label">已过滤</span>
-                    <span class="stat-value" id="filteredCount">0</span>
-                </div>
                 <div class="stat-card" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
                     <span class="stat-label">更新</span>
                     <span class="stat-value" id="updatedAt">{{ data.updated_at }}</span>
@@ -613,6 +678,14 @@
             <!-- 过滤面板 -->
             <div class="filter-panel" id="filterPanel">
                 <div class="filter-input-row">
+                    <label class="filter-mode-toggle" title="关键词模式：过滤=隐藏命中关键词；显示=只显示命中关键词">
+                        <input type="checkbox" id="filterModeToggle" onchange="handleFilterModeToggle(this)">
+                        <span class="filter-mode-pill">
+                            <span class="filter-mode-thumb"></span>
+                            <span class="filter-mode-off">过滤</span>
+                            <span class="filter-mode-on">显示</span>
+                        </span>
+                    </label>
                     <input type="text" class="filter-input" id="filterInput" placeholder="输入关键词，回车添加..." onkeypress="handleFilterKeypress(event)">
                     <button class="filter-add-btn" onclick="addFilterKeyword()">+ 添加</button>
                 </div>
@@ -649,7 +722,7 @@
                  data-category="{{ cat_id }}"
                  onclick="switchTab('{{ cat_id }}')">
                 <div class="category-tab-icon">{{ category.icon }}</div>
-                <div class="category-tab-name">{{ category.name }}</div>
+                <div class="category-tab-name">{{ category.name }}{% if cat_id == 'sports' %}<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>{% endif %}</div>
             </div>
             {% endfor %}
         </div>
@@ -785,7 +858,7 @@
         }
         
         function updatePlatformCount(card) {
-            const visibleItems = card.querySelectorAll('.news-item:not(.read):not(.filtered):not(.paged-hidden)');
+            const visibleItems = card.querySelectorAll('.news-item:not(.read):not(.filtered):not(.search-hidden):not(.paged-hidden)');
             const visibleEl = card.querySelector('.platform-visible-count');
             if (visibleEl) visibleEl.textContent = visibleItems.length;
         }
@@ -795,7 +868,7 @@
                 updatePlatformCount(card);
             });
             // 更新总数
-            const totalVisible = document.querySelectorAll('.news-item:not(.read):not(.filtered):not(.paged-hidden)').length;
+            const totalVisible = document.querySelectorAll('.news-item:not(.read):not(.filtered):not(.search-hidden):not(.paged-hidden)').length;
             const totalEl = document.getElementById('totalNews');
             if (totalEl) totalEl.textContent = totalVisible;
         }
@@ -873,6 +946,19 @@
             // 恢复后更新所有计数
             updateAllCounts();
             updateReadCount();
+        }
+
+        function formatUpdatedAt(value) {
+            const raw = (value == null) ? '' : String(value).trim();
+            if (!raw) return raw;
+
+            const m1 = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::\d{2})?$/);
+            if (m1) return `${m1[2]}-${m1[3]} ${m1[4]}:${m1[5]}`;
+
+            const m2 = raw.match(/^(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
+            if (m2) return raw;
+
+            return raw;
         }
         
         function toggleShowRead() {
@@ -969,7 +1055,67 @@
         }
         
         function toggleFilterPanel() {
-            document.getElementById('filterPanel').classList.toggle('show');
+            const panel = document.getElementById('filterPanel');
+            if (!panel) return;
+            panel.classList.toggle('show');
+            if (panel.classList.contains('show')) {
+                markFeatureSeen('filter-mode-toggle');
+                updateNewBadges();
+            }
+        }
+
+        const FEATURE_BADGE_PREFIX = 'trendradar_feature_badge_v1:';
+
+        function getFeatureBadgeState(featureId) {
+            try {
+                const raw = localStorage.getItem(FEATURE_BADGE_PREFIX + featureId);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function setFeatureBadgeState(featureId, state) {
+            try {
+                localStorage.setItem(FEATURE_BADGE_PREFIX + featureId, JSON.stringify(state));
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        function ensureFeatureFirstSeen(featureId) {
+            const st = getFeatureBadgeState(featureId);
+            if (st && typeof st.firstSeenAt === 'number') return st;
+            const next = { firstSeenAt: Date.now(), seenAt: null };
+            setFeatureBadgeState(featureId, next);
+            return next;
+        }
+
+        function markFeatureSeen(featureId) {
+            const st = ensureFeatureFirstSeen(featureId);
+            if (!st.seenAt) {
+                st.seenAt = Date.now();
+                setFeatureBadgeState(featureId, st);
+            }
+        }
+
+        function shouldShowFeatureBadge(featureId, ttlDays) {
+            const st = ensureFeatureFirstSeen(featureId);
+            if (st.seenAt) return false;
+            const ttlMs = (ttlDays || 7) * 24 * 60 * 60 * 1000;
+            return (Date.now() - (st.firstSeenAt || 0)) <= ttlMs;
+        }
+
+        function updateNewBadges() {
+            const el = document.getElementById('newBadgeFilterSettings');
+            if (el) {
+                el.style.display = shouldShowFeatureBadge('filter-mode-toggle', 7) ? '' : 'none';
+            }
+
+            const elSports = document.getElementById('newBadgeSportsTab');
+            if (elSports) {
+                elSports.style.display = shouldShowFeatureBadge('sports-nba-schedule', 7) ? '' : 'none';
+            }
         }
         
         function handleFilterKeypress(event) {
@@ -999,28 +1145,49 @@
             saveFilterKeywords(keywords);
             renderFilterTags();
             applyFilter();
+            updateNewBadges();
+        }
+
+        const FILTER_MODE_KEY = 'trendradar_filter_mode_v1';
+
+        function getFilterMode() {
+            const v = localStorage.getItem(FILTER_MODE_KEY);
+            return v === 'include' ? 'include' : 'exclude';
+        }
+
+        function setFilterMode(mode) {
+            localStorage.setItem(FILTER_MODE_KEY, mode === 'include' ? 'include' : 'exclude');
+        }
+
+        function initFilterModeToggle() {
+            const el = document.getElementById('filterModeToggle');
+            if (!el) return;
+            el.checked = getFilterMode() === 'include';
+        }
+
+        function handleFilterModeToggle(input) {
+            setFilterMode(input && input.checked ? 'include' : 'exclude');
+            applyFilter();
+            updateAllCounts();
         }
         
         function renderFilterTags() {
-            const container = document.getElementById('filterTags');
             const keywords = getFilterKeywords();
-            
-            container.innerHTML = keywords.map(k => 
-                `<span class="filter-tag">${k}<span class="filter-tag-remove" onclick="removeFilterKeyword('${k}')">×</span></span>`
+            const tagsEl = document.getElementById('filterTags');
+            tagsEl.innerHTML = keywords.map(k => 
+                `<span class="filter-tag">${k}<span class="filter-remove" onclick="removeFilterKeyword('${k}')">×</span></span>`
             ).join('');
-            
-            // 更新过滤按钮上的数量
-            const countEl = document.getElementById('filterCount');
-            countEl.textContent = keywords.length > 0 ? `(${keywords.length})` : '';
         }
         
         function applyFilter() {
             const keywords = getFilterKeywords();
             let filteredCount = 0;
+            const mode = getFilterMode();
             
             document.querySelectorAll('.news-item').forEach(item => {
                 const title = item.textContent.toLowerCase();
-                const shouldFilter = keywords.some(k => title.includes(k));
+                const matched = keywords.length > 0 ? keywords.some(k => title.includes(k)) : false;
+                const shouldFilter = keywords.length === 0 ? false : (mode === 'include' ? !matched : matched);
                 
                 if (shouldFilter) {
                     item.classList.add('filtered');
@@ -1030,12 +1197,14 @@
                 }
             });
             
-            // 更新已过滤数量
-            document.getElementById('filteredCount').textContent = filteredCount;
+            const countEl = document.getElementById('filterCount');
+            if (countEl) countEl.textContent = filteredCount > 0 ? `+${filteredCount}` : '';
         }
         
         // 页面加载时初始化过滤
         document.addEventListener('DOMContentLoaded', function() {
+            initFilterModeToggle();
+            updateNewBadges();
             renderFilterTags();
             applyFilter();
         });
@@ -1206,6 +1375,11 @@
             document.getElementById(`tab-${categoryId}`).classList.add('active');
             // 保存当前Tab状态
             localStorage.setItem(TAB_STORAGE_KEY, categoryId);
+
+            if (categoryId === 'sports') {
+                markFeatureSeen('sports-nba-schedule');
+                updateNewBadges();
+            }
         }
         
         function restoreActiveTab() {
@@ -1221,22 +1395,18 @@
         // === 搜索 ===
         function searchNews() {
             const q = document.getElementById('searchInput').value.toLowerCase();
-            const keywords = getFilterKeywords();
-            
+
             document.querySelectorAll('.news-item').forEach(item => {
                 const text = item.textContent.toLowerCase();
                 const matchSearch = !q || text.includes(q);
-                const matchFilter = !keywords.some(k => text.includes(k));
-                
-                if (matchSearch && matchFilter) {
-                    item.classList.remove('filtered');
-                    item.style.display = '';
-                } else if (!matchFilter) {
-                    item.classList.add('filtered');
+                if (matchSearch) {
+                    item.classList.remove('search-hidden');
                 } else {
-                    item.style.display = 'none';
+                    item.classList.add('search-hidden');
                 }
             });
+
+            updateAllCounts();
         }
 
         // === 数据获取 ===
@@ -1323,10 +1493,11 @@
             const tabsHtml = Object.entries(categories).map(([catId, cat]) => {
                 const icon = escapeHtml(cat?.icon || '');
                 const name = escapeHtml(cat?.name || catId);
+                const badge = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
                 return `
             <div class="category-tab" data-category="${escapeHtml(catId)}" onclick="switchTab('${escapeHtml(catId)}')">
                 <div class="category-tab-icon">${icon}</div>
-                <div class="category-tab-name">${name}</div>
+                <div class="category-tab-name">${name}${badge}</div>
             </div>`;
             }).join('');
 
@@ -1385,7 +1556,7 @@
             contentEl.innerHTML = contentHtml;
 
             const updatedAtEl = document.getElementById('updatedAt');
-            if (updatedAtEl && data?.updated_at) updatedAtEl.textContent = data.updated_at;
+            if (updatedAtEl && data?.updated_at) updatedAtEl.textContent = formatUpdatedAt(data.updated_at);
 
             if (state?.activeTab) {
                 switchTab(state.activeTab);
@@ -1465,6 +1636,10 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            const updatedAtEl = document.getElementById('updatedAt');
+            if (updatedAtEl && updatedAtEl.textContent) {
+                updatedAtEl.textContent = formatUpdatedAt(updatedAtEl.textContent);
+            }
             setupAjaxAutoRefresh();
         });
     </script>

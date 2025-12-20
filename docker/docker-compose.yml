@@ -77,7 +77,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${VIEWER_PORT:-8090}:${VIEWER_PORT:-8090}"
+      - "${VIEWER_PORT:-8090}:${VIEWER_PORT:-8090}"
 
     volumes:
       - ../config:/app/config:ro

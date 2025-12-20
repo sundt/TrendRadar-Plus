@@ -51,6 +51,8 @@ if [ -z "$TAG" ]; then
     exit 1
 fi
 
+SERVER_ARCH=""
+
 if [ "$ROLLBACK" != "true" ]; then
     if [ "$TAG" = "latest" ] || echo "$TAG" | grep -qi '^latest$'; then
         echo "❌ 禁止使用 latest，请使用明确版本号 tag（如 v1.2.3）"
@@ -144,10 +146,39 @@ transfer_images_offline() {
         "wantcat/trendradar-viewer:${TAG}"
     )
 
+    local local_arch
+    local_arch=$(docker info --format '{{.Architecture}}' 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    case "$local_arch" in
+        x86_64|amd64)
+            local_arch="amd64"
+            ;;
+        aarch64|arm64)
+            local_arch="arm64"
+            ;;
+    esac
+    if [ -n "$SERVER_ARCH" ] && [ -n "$local_arch" ] && [ "$SERVER_ARCH" != "$local_arch" ]; then
+        echo "⚠️  本机 docker 架构($local_arch) 与服务器($SERVER_ARCH) 不一致，离线部署必须确保镜像为服务器架构"
+    fi
+
     for img in "${images[@]}"; do
         if ! docker image inspect "$img" >/dev/null 2>&1; then
             echo "❌ 本机未找到镜像：$img"
             echo "请先在本地 build 并确保 tag 正确，然后再运行离线部署。"
+            exit 1
+        fi
+
+        img_arch=$(docker image inspect "$img" --format '{{.Architecture}}' 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n')
+        case "$img_arch" in
+            x86_64|amd64)
+                img_arch="amd64"
+                ;;
+            aarch64|arm64)
+                img_arch="arm64"
+                ;;
+        esac
+        if [ -n "$SERVER_ARCH" ] && [ -n "$img_arch" ] && [ "$SERVER_ARCH" != "$img_arch" ]; then
+            echo "❌ 镜像架构不匹配：$img ($img_arch) != server($SERVER_ARCH)"
+            echo "请使用 DOCKER_DEFAULT_PLATFORM=linux/$SERVER_ARCH 重新 build 后再离线部署。"
             exit 1
         fi
 
@@ -167,6 +198,20 @@ if ! ssh ${SSH_OPTS} -o ConnectTimeout=5 ${SERVER_USER}@${SERVER_HOST} "echo '�
     echo "❌ 无法连接到服务器，请检查服务器地址和 SSH 配置"
     exit 1
 fi
+
+SERVER_ARCH=$(ssh ${SSH_OPTS} -o ConnectTimeout=10 ${SERVER_USER}@${SERVER_HOST} "docker info --format '{{.Architecture}}' 2>/dev/null || uname -m" | tail -n 1 | tr -d '\r\n' | tr '[:upper:]' '[:lower:]')
+if [ -z "$SERVER_ARCH" ]; then
+    echo "❌ 无法获取服务器架构信息"
+    exit 1
+fi
+case "$SERVER_ARCH" in
+    x86_64|amd64)
+        SERVER_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        SERVER_ARCH="arm64"
+        ;;
+esac
 
 # 2. 同步修复的文件
 echo ""
@@ -200,6 +245,17 @@ ssh ${SSH_OPTS} ${SERVER_USER}@${SERVER_HOST} TAG="$TAG" OFFLINE="$OFFLINE" ROLL
 set -e
 PROJECT_PATH=~/hotnews
 cd "$PROJECT_PATH"
+
+server_arch=$(docker info --format '{{.Architecture}}' 2>/dev/null || uname -m | tr -d '\r\n')
+server_arch=$(echo "$server_arch" | tr '[:upper:]' '[:lower:]')
+case "$server_arch" in
+    x86_64|amd64)
+        server_arch="amd64"
+        ;;
+    aarch64|arm64)
+        server_arch="arm64"
+        ;;
+esac
 
 compose_cmd=""
 if command -v docker-compose >/dev/null 2>&1; then
@@ -240,10 +296,10 @@ if [ -f "docker/docker-compose.yml" ]; then
         if [ -f ".env" ]; then
             cp .env .env.prev || true
         fi
-        printf "TREND_RADAR_TAG=%s\nTREND_RADAR_MCP_TAG=%s\nTREND_RADAR_VIEWER_TAG=%s\nVIEWER_PORT=8090\n" "$TAG" "$TAG" "$TAG" > .env
+        printf "TREND_RADAR_TAG=%s\nTREND_RADAR_MCP_TAG=%s\nTREND_RADAR_VIEWER_TAG=%s\nVIEWER_PORT=8090\n" "$TAG" "$TAG" "$TAG" > .env.new
     fi
 
-    existing_8090=$(docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep '127.0.0.1:8090->' || true)
+    existing_8090=$(docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | grep ':8090->' || true)
     if [ "$ROLLBACK" != "true" ]; then
         if command -v ss >/dev/null 2>&1; then
             if ss -lntp 2>/dev/null | grep -q ":8090" && [ -z "$existing_8090" ]; then
@@ -261,23 +317,82 @@ if [ -f "docker/docker-compose.yml" ]; then
     fi
 
     if [ "$OFFLINE" != "true" ]; then
-        $compose_cmd pull trend-radar trend-radar-viewer trend-radar-mcp || true
+        if ! curl -fsS --max-time 8 https://registry-1.docker.io/v2/ >/dev/null 2>&1; then
+            echo "❌ 服务器无法访问 Docker Hub registry（建议使用 --offline 离线部署）"
+            if [ -f ".env.prev" ]; then
+                cp .env.prev .env || true
+            fi
+            rm -f .env.new || true
+            exit 1
+        fi
+
+        if [ -f ".env.new" ]; then
+            mv .env.new .env
+        fi
+
+        $compose_cmd pull trend-radar trend-radar-viewer trend-radar-mcp
     else
         echo "⚠️ 离线模式：跳过 docker compose pull"
+        if [ -f ".env.new" ]; then
+            mv .env.new .env
+        fi
     fi
 
+    for img in "wantcat/trendradar:${TAG}" "wantcat/trendradar-mcp:${TAG}" "wantcat/trendradar-viewer:${TAG}"; do
+        img_arch=$(docker image inspect "$img" --format '{{.Architecture}}' 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r\n' || true)
+        case "$img_arch" in
+            x86_64|amd64)
+                img_arch="amd64"
+                ;;
+            aarch64|arm64)
+                img_arch="arm64"
+                ;;
+        esac
+        if [ -z "$img_arch" ]; then
+            echo "❌ 服务器未找到镜像：$img"
+            if [ -f ".env.prev" ]; then
+                cp .env.prev .env || true
+            fi
+            exit 1
+        fi
+        if [ -n "$server_arch" ] && [ "$img_arch" != "$server_arch" ]; then
+            echo "❌ 镜像架构不匹配：$img ($img_arch) != server($server_arch)"
+            if [ -f ".env.prev" ]; then
+                cp .env.prev .env || true
+            fi
+            exit 1
+        fi
+    done
+
+    backup_suffix=$(date +%Y%m%d%H%M%S)
+    backups=""
     if [ "$ROLLBACK" != "true" ]; then
-        if [ -n "$existing_8090" ]; then
-            echo "⚠️ 发现占用 127.0.0.1:8090 的容器，将在启动新版本前停止:"
-            echo "$existing_8090"
-            ids=$(echo "$existing_8090" | awk '{print $1}')
-            for id in $ids; do
-                docker rm -f "$id" >/dev/null 2>&1 || true
+        for svc in trend-radar-viewer trend-radar trend-radar-mcp; do
+            if docker ps -a --format '{{.Names}}' | grep -qx "$svc"; then
+                docker stop "$svc" >/dev/null 2>&1 || true
+                docker rename "$svc" "${svc}.prev.${backup_suffix}" >/dev/null 2>&1 || true
+                backups="$backups $svc:${svc}.prev.${backup_suffix}"
+            fi
+        done
+    fi
+
+    if ! $compose_cmd up -d trend-radar-viewer trend-radar trend-radar-mcp; then
+        if [ -n "$backups" ]; then
+            for pair in $backups; do
+                svc="${pair%%:*}"
+                prev="${pair#*:}"
+                docker rm -f "$svc" >/dev/null 2>&1 || true
+                if docker ps -a --format '{{.Names}}' | grep -qx "$prev"; then
+                    docker rename "$prev" "$svc" >/dev/null 2>&1 || true
+                    docker start "$svc" >/dev/null 2>&1 || true
+                fi
             done
         fi
-        docker rm -f trend-radar-viewer >/dev/null 2>&1 || true
+        if [ -f ".env.prev" ]; then
+            cp .env.prev .env || true
+        fi
+        exit 1
     fi
-    $compose_cmd up -d trend-radar-viewer trend-radar trend-radar-mcp
 
     viewer_cid=$($compose_cmd ps -q trend-radar-viewer || true)
     if [ -z "$viewer_cid" ]; then
@@ -292,10 +407,30 @@ if [ -f "docker/docker-compose.yml" ]; then
     for i in $(seq 1 30); do
         if curl -fsS "http://127.0.0.1:8090/health" >/dev/null 2>&1; then
             echo "✅ viewer 健康检查通过"
+            if [ -n "$backups" ]; then
+                for pair in $backups; do
+                    prev="${pair#*:}"
+                    docker rm -f "$prev" >/dev/null 2>&1 || true
+                done
+            fi
             break
         fi
         if [ "$i" -eq 30 ]; then
             echo "❌ viewer 健康检查失败"
+            docker rm -f trend-radar-viewer trend-radar trend-radar-mcp >/dev/null 2>&1 || true
+            if [ -n "$backups" ]; then
+                for pair in $backups; do
+                    svc="${pair%%:*}"
+                    prev="${pair#*:}"
+                    if docker ps -a --format '{{.Names}}' | grep -qx "$prev"; then
+                        docker rename "$prev" "$svc" >/dev/null 2>&1 || true
+                        docker start "$svc" >/dev/null 2>&1 || true
+                    fi
+                done
+            fi
+            if [ -f ".env.prev" ]; then
+                cp .env.prev .env || true
+            fi
             exit 1
         fi
         sleep 2

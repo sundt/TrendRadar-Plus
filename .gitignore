@@ -30,8 +30,19 @@ output/
 # Amazon Q / Copilot
 .amazonq/
 
-# OpenSpec changes (keep specs, ignore work in progress)
+# OpenSpec changes
+# Default: ignore change proposals, but allow specific approved ones to be committed.
 openspec/changes/*/
+!openspec/changes/harden-deployment-safety-rails/
+!openspec/changes/harden-deployment-safety-rails/**
+!openspec/changes/add-real-sports-and-game-rankings/
+!openspec/changes/add-real-sports-and-game-rankings/**
+
+# OpenSpec archive
+openspec/changes/archive/
+
+# Local validation markers
+.local_validation_ok
 
 # Temporary files
 *.tmp
