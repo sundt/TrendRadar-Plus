@@ -65,6 +65,29 @@ def _is_http_url(url: str) -> bool:
         return False
 
 
+_CAIXIN_ARTICLE_PATH_RE = re.compile(r"/\d{4}-\d{2}-\d{2}/\d+\.html$")
+
+
+def _looks_like_caixin_article_url(url: str) -> bool:
+    if not _is_http_url(url):
+        return False
+    try:
+        u = urlparse(url)
+    except Exception:
+        return False
+
+    host = (u.netloc or "").lower()
+    if not host.endswith("caixin.com"):
+        return False
+
+    path = u.path or ""
+    if _CAIXIN_ARTICLE_PATH_RE.search(path):
+        return True
+    if "/" in path and path.endswith(".html") and re.search(r"/\d{4}-\d{2}-\d{2}/", path):
+        return True
+    return False
+
+
 def _stable_key(title: str, url: str) -> str:
     raw = f"{title}\n{url}".encode("utf-8")
     return hashlib.sha1(raw).hexdigest()
@@ -86,6 +109,7 @@ class CaixinProvider:
         timeout_s = int(platform_config.get("timeout_s") or 12)
         max_items = int(platform_config.get("max_items") or 30)
         user_agent = str(platform_config.get("user_agent") or "Mozilla/5.0")
+        article_url_only = bool(platform_config.get("article_url_only", True))
 
         rss_urls = platform_config.get("rss_urls")
         if not isinstance(rss_urls, list):
@@ -112,6 +136,8 @@ class CaixinProvider:
             if not title or not url:
                 return
             if not _is_http_url(url):
+                return
+            if article_url_only and not _looks_like_caixin_article_url(url):
                 return
             key = _stable_key(title, url)
             if key in content_keys:
@@ -189,6 +215,8 @@ class CaixinProvider:
                     title = unescape(re.sub(r"\s+", " ", text)).strip()
                     # heuristic: keep caixin links only
                     if "caixin.com" not in full_url:
+                        continue
+                    if article_url_only and not _looks_like_caixin_article_url(full_url):
                         continue
                     # heuristic: ignore navigation
                     if len(title) < 6:
