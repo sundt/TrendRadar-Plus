@@ -808,11 +808,28 @@
         // === 已读状态管理（基于内容哈希 + 自动过期） ===
         const READ_STORAGE_KEY = 'trendradar_read_news_v2';  // 新版本 key
         const OLD_STORAGE_KEY = 'trendradar_read_news';      // 旧版本 key
+        const SHOW_READ_MODE_KEY = 'trendradar_show_read_mode';
         const EXPIRE_HOURS = 24;  // 已读记录过期时间（小时）
         
         function getReadNews() {
             const stored = localStorage.getItem(READ_STORAGE_KEY);
             return stored ? JSON.parse(stored) : {};
+        }
+
+        function getShowReadModePref() {
+            const raw = localStorage.getItem(SHOW_READ_MODE_KEY);
+            if (raw === null) return true;
+            return raw === '1';
+        }
+
+        function applyShowReadMode(enabled) {
+            if (enabled) document.body.classList.add('show-read-mode');
+            else document.body.classList.remove('show-read-mode');
+            const btn = document.getElementById('showReadBtn');
+            if (btn) {
+                if (enabled) btn.classList.add('active');
+                else btn.classList.remove('active');
+            }
         }
         
         function saveReadNews(reads) {
@@ -995,9 +1012,9 @@
         }
         
         function toggleShowRead() {
-            document.body.classList.toggle('show-read-mode');
-            const btn = document.getElementById('showReadBtn');
-            btn.classList.toggle('active');
+            const next = !document.body.classList.contains('show-read-mode');
+            applyShowReadMode(next);
+            localStorage.setItem(SHOW_READ_MODE_KEY, next ? '1' : '0');
             updateAllCounts();
         }
         
@@ -1017,14 +1034,11 @@
             // 更新计数
             updateAllCounts();
             updateReadCount();
-            
-            // 关闭显示已读模式
-            document.body.classList.remove('show-read-mode');
-            document.getElementById('showReadBtn').classList.remove('active');
         }
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
+            applyShowReadMode(getShowReadModePref());
             // 1. 迁移旧格式数据
             migrateOldFormat();
             // 2. 清理过期记录
@@ -1750,15 +1764,8 @@
 
             applyPlatformFilter();
 
-            if (state?.showReadMode) {
-                document.body.classList.add('show-read-mode');
-                const btn = document.getElementById('showReadBtn');
-                if (btn) btn.classList.add('active');
-            } else {
-                document.body.classList.remove('show-read-mode');
-                const btn = document.getElementById('showReadBtn');
-                if (btn) btn.classList.remove('active');
-            }
+            const nextShowReadMode = (typeof state?.showReadMode === 'boolean') ? state.showReadMode : getShowReadModePref();
+            applyShowReadMode(nextShowReadMode);
 
             renderFilterTags();
             applyFilter();
