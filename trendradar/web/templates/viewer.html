@@ -333,8 +333,19 @@
             width: 14px;
             height: 14px;
             margin-right: 6px;
-            cursor: pointer;
+            align-self: flex-start;
+            margin-top: 2px;
             flex-shrink: 0;
+        }
+
+        .news-index {
+            width: 18px;
+            flex-shrink: 0;
+            text-align: right;
+            color: #9ca3af;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            margin-top: 1px;
         }
 
         .news-item-content {
@@ -771,6 +782,7 @@
                             <li class="news-item" data-news-id="{{ news.stable_id }}" data-news-title="{{ news.title }}">
                                 <div class="news-item-content">
                                     <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
+                                    <span class="news-index">{{ loop.index }}</span>
                                     <div class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="{{ news.url or '' }}">
                                         {{ news.title }}
                                         {% if news.is_cross_platform %}
@@ -1688,10 +1700,13 @@
                         const crossCount = escapeHtml(n?.cross_platform_count ?? '');
                         const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
                         const crossClass = isCross ? 'cross-platform' : '';
+                        const displayIndex = (rank !== '' && rank !== 'null' && rank !== 'undefined') ? rank : '';
+                        const indexHtml = `<span class="news-index">${displayIndex || ''}</span>`;
                         return `
                             <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
                                 <div class="news-item-content">
                                     <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
+                                    ${indexHtml}
                                     <div class="news-title ${crossClass}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="${url}">
                                         ${title}
                                         ${crossBadge}
