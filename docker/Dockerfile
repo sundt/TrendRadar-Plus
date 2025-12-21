@@ -8,7 +8,7 @@ ENV SUPERCRONIC_VERSION=v0.2.39
 
 RUN set -ex && \
     apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates && \
+    apt-get install -y --no-install-recommends ca-certificates && \
     case ${TARGETARCH} in \
     amd64) \
     export SUPERCRONIC_URL_PRIMARY=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64; \
@@ -27,29 +27,53 @@ RUN set -ex && \
     esac && \
     export SUPERCRONIC_URL_MIRROR=https://ghproxy.com/${SUPERCRONIC_URL_PRIMARY} && \
     echo "Downloading supercronic for ${TARGETARCH} from ${SUPERCRONIC_URL_PRIMARY} (mirror fallback: ${SUPERCRONIC_URL_MIRROR})" && \
-    # 重试机制：最多3次，每次超时30秒
-    for i in 1 2 3; do \
-        echo "Download attempt $i/3"; \
-        for url in "$SUPERCRONIC_URL_PRIMARY" "$SUPERCRONIC_URL_MIRROR"; do \
-            echo "Trying $url"; \
-            if curl -fsSL --connect-timeout 30 --max-time 120 -o "$SUPERCRONIC" "$url"; then \
-                echo "Download successful"; \
-                break 2; \
-            fi; \
-        done; \
-        echo "Download attempt $i failed"; \
-        if [ $i -eq 3 ]; then \
-            echo "All download attempts failed"; \
-            exit 1; \
-        fi; \
-        sleep 2; \
-    done && \
-    echo "${SUPERCRONIC_SHA1SUM}  ${SUPERCRONIC}" | sha1sum -c - && \
+    python - <<'PY'
+import hashlib
+import os
+import sys
+import time
+import urllib.request
+
+def download(url: str, out_path: str, timeout_s: int = 60) -> str:
+    h = hashlib.sha1()
+    req = urllib.request.Request(url, headers={"User-Agent": "curl/8"})
+    with urllib.request.urlopen(req, timeout=timeout_s) as resp, open(out_path, "wb") as f:
+        while True:
+            chunk = resp.read(1024 * 64)
+            if not chunk:
+                break
+            f.write(chunk)
+            h.update(chunk)
+    return h.hexdigest()
+
+primary = os.environ["SUPERCRONIC_URL_PRIMARY"]
+mirror = os.environ["SUPERCRONIC_URL_MIRROR"]
+out_path = os.environ["SUPERCRONIC"]
+expected = os.environ["SUPERCRONIC_SHA1SUM"].lower()
+
+urls = [primary, mirror]
+for attempt in range(1, 4):
+    print(f"Download attempt {attempt}/3")
+    for url in urls:
+        print(f"Trying {url}")
+        try:
+            sha1 = download(url, out_path, timeout_s=60)
+            if sha1.lower() != expected:
+                raise ValueError(f"sha1 mismatch: expected {expected}, got {sha1}")
+            print("Download successful")
+            sys.exit(0)
+        except Exception as e:
+            print(f"Download failed: {e}", file=sys.stderr)
+    time.sleep(2)
+
+print("All download attempts failed", file=sys.stderr)
+sys.exit(1)
+PY
+    && \
     chmod +x "$SUPERCRONIC" && \
     mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" && \
     ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic && \
     supercronic -version && \
-    apt-get remove -y curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
