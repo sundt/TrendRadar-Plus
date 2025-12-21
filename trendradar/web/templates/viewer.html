@@ -22,11 +22,16 @@
             --cross-platform-color: #f97316;
         }
 
+        html {
+            scrollbar-gutter: stable;
+        }
+
         body {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 24px 0 56px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            overflow-y: scroll;
         }
 
         .main-container { max-width: 1400px; margin: 0 auto; padding: 0 15px; min-height: calc(100vh - 80px); display: flex; flex-direction: column; gap: 10px; }
@@ -217,7 +222,7 @@
         .news-item {
             padding: 4px 0;
             border-bottom: 1px solid #f3f4f6;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             box-sizing: border-box;
             min-height: calc(1.4em + 8px);
         }
@@ -225,7 +230,7 @@
         .news-item:last-child { border-bottom: none; }
 
         .news-title {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: #1f2937;
             line-height: 1.4;
             margin-bottom: 0;
