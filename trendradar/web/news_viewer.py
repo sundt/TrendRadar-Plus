@@ -5,6 +5,7 @@
 """
 
 import hashlib
+import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,10 @@ def generate_news_id(platform_id: str, title: str) -> str:
     content = f"{platform_id}:{title}"
     hash_value = hashlib.md5(content.encode()).hexdigest()[:8]
     return f"{platform_id}-{hash_value}"
+
+
+_CAIXIN_DATE_PREFIX_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2})\]\s+")
+_NBA_TIME_PREFIX_RE = re.compile(r"^\[(\d{2}-\d{2}\s+\d{2}:\d{2})\]\s+")
 
 
 # 平台分类定义（6类）
@@ -262,6 +267,16 @@ class NewsViewerService:
             cat_id = self.get_platform_category(platform_id)
             title = news.get("title", "").strip()
 
+            display_title = title
+            meta = ""
+            if platform_id == "caixin":
+                display_title = _CAIXIN_DATE_PREFIX_RE.sub("", display_title).strip()
+            elif platform_id == "nba-schedule":
+                m = _NBA_TIME_PREFIX_RE.match(display_title)
+                if m:
+                    meta = m.group(1)
+                    display_title = _NBA_TIME_PREFIX_RE.sub("", display_title).strip()
+
             # 跨平台新闻去重：只在第一个出现的平台显示
             is_cross = title in cross_platform_news
             if is_cross and title in shown_cross_platform_titles:
@@ -283,7 +298,7 @@ class NewsViewerService:
             stable_id = generate_news_id(platform_id, title)
             
             # 添加跨平台信息和稳定ID
-            news_with_cross = {**news, "stable_id": stable_id}
+            news_with_cross = {**news, "stable_id": stable_id, "display_title": display_title, "meta": meta}
             if is_cross:
                 other_platforms = [p for p in cross_platform_news[title] if p != platform_name]
                 if other_platforms:

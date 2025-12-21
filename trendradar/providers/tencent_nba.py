@@ -125,8 +125,9 @@ class TencentNbaProvider:
         days = int(platform_config.get("days") or 7)
         max_items = int(platform_config.get("max_items") or 30)
         timeout_s = int(platform_config.get("timeout_s") or 10)
+        include_tomorrow = bool(platform_config.get("include_tomorrow", True))
 
-        end_day = date.today()
+        end_day = date.today() + timedelta(days=1) if include_tomorrow else date.today()
         start_day = end_day - timedelta(days=max(days, 1) - 1)
         start_str = start_day.strftime("%Y-%m-%d")
         end_str = end_day.strftime("%Y-%m-%d")
