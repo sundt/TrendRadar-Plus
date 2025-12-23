@@ -6,12 +6,25 @@
 
 import hashlib
 import re
+import time
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from .content_filter import ContentFilter
+
+# 简单的内存缓存
+_categorized_news_cache = {}
+_categorized_news_cache_time = 0
+_CACHE_TTL_SECONDS = 60  # 缓存 60 秒
+
+
+def clear_categorized_news_cache():
+    """清除分类新闻缓存"""
+    global _categorized_news_cache, _categorized_news_cache_time
+    _categorized_news_cache = {}
+    _categorized_news_cache_time = 0
 
 
 def generate_news_id(platform_id: str, title: str) -> str:
@@ -291,7 +304,7 @@ class NewsViewerService:
                     time_str = m.group(1)
                     _sort_dt = _parse_nba_meta_dt(time_str)
                     display_title = _NBA_TIME_PREFIX_RE.sub("", display_title).strip()
-                    display_title = f"{display_title} · {time_str}"
+                    meta = time_str  # 日期显示在标题下方
 
             # 跨平台新闻去重：只在第一个出现的平台显示
             is_cross = title in cross_platform_news
@@ -371,6 +384,9 @@ class NewsViewerService:
                         return datetime.min
 
                     nba["news"] = sorted(list(nba["news"]), key=_key, reverse=True)
+                    # Remove _sort_dt to avoid JSON serialization error
+                    for item in nba["news"]:
+                        item.pop("_sort_dt", None)
 
         # 按预定义顺序排序分类
         def get_order(cat_id):
@@ -411,6 +427,16 @@ class NewsViewerService:
         Returns:
             分类后的新闻数据
         """
+        global _categorized_news_cache, _categorized_news_cache_time
+        
+        # 构建缓存键
+        cache_key = f"{','.join(platforms or [])}:{limit}:{apply_filter}:{filter_mode or ''}"
+        
+        # 检查缓存是否有效
+        now = time.time()
+        if cache_key in _categorized_news_cache and (now - _categorized_news_cache_time) < _CACHE_TTL_SECONDS:
+            return _categorized_news_cache[cache_key]
+        
         # 临时设置过滤模式
         original_mode = None
         if filter_mode and filter_mode in ("strict", "moderate", "off"):
@@ -432,6 +458,10 @@ class NewsViewerService:
             # 分类新闻
             result = self.categorize_news(news_list, apply_filter=apply_filter)
             result["filter_mode"] = self.content_filter.filter_mode
+            
+            # 更新缓存
+            _categorized_news_cache[cache_key] = result
+            _categorized_news_cache_time = now
 
             return result
 

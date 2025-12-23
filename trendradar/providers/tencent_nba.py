@@ -122,13 +122,14 @@ class TencentNbaProvider:
     ) -> ProviderFetchResult:
         started_at = time.time()
 
-        days = int(platform_config.get("days") or 7)
-        max_items = int(platform_config.get("max_items") or 30)
+        past_days = int(platform_config.get("past_days") or 6)  # 今天+过去6天
+        max_items = int(platform_config.get("max_items") or 40)
         timeout_s = int(platform_config.get("timeout_s") or 10)
-        include_tomorrow = bool(platform_config.get("include_tomorrow", True))
 
-        end_day = date.today() + timedelta(days=1) if include_tomorrow else date.today()
-        start_day = end_day - timedelta(days=max(days, 1) - 1)
+        # 只获取今天及过去 past_days 天的数据
+        today = date.today()
+        start_day = today - timedelta(days=past_days)
+        end_day = today
         start_str = start_day.strftime("%Y-%m-%d")
         end_str = end_day.strftime("%Y-%m-%d")
 
@@ -170,11 +171,13 @@ class TencentNbaProvider:
                 )
             )
         else:
+            # 按时间从近到远排序
             sorted_matches = sorted(
                 matches,
                 key=lambda m: _parse_start_time(m.get("startTime")) or datetime.min,
                 reverse=True,
             )
+            
             for idx, m in enumerate(sorted_matches[: max_items], start=1):
                 left = (m.get("leftName") or "").strip()
                 right = (m.get("rightName") or "").strip()

@@ -15,8 +15,10 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 from threading import Lock
 from typing import Optional
+from urllib.parse import unquote
 
 from fastapi import FastAPI, Request, Query
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -37,6 +39,28 @@ from trendradar.storage import convert_crawl_results_to_news_data
 
 # 创建 FastAPI 应用
 app = FastAPI(title="TrendRadar News Viewer", version="1.0.0")
+
+# 启用 Gzip 压缩（响应大于 500 字节时压缩）
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
+# 挂载静态文件目录（带缓存控制）
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+# 静态资源缓存中间件
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    
+    # 为静态资源添加缓存头
+    if path.startswith("/static/"):
+        # CSS/JS 文件缓存 1 小时（开发期间），生产环境可设更长
+        response.headers["Cache-Control"] = "public, max-age=3600"
+    
+    return response
 
 _FETCH_METRICS_MAX = 5000
 _fetch_metrics = deque(maxlen=_FETCH_METRICS_MAX)
@@ -244,23 +268,34 @@ async def fetch_news_data():
             try:
                 from trendradar.providers.runner import build_default_registry, run_provider_ingestion_once
 
-                run_provider_ingestion_once(
+                print(f"[{now.strftime('%H:%M:%S')}] 🔄 运行 Provider Ingestion...")
+                ok, metrics = run_provider_ingestion_once(
                     registry=build_default_registry(),
                     project_root=project_root,
                     config_path=project_root / "config" / "config.yaml",
                     now=now,
                 )
-            except Exception:
-                pass
+                if metrics:
+                    for m in metrics:
+                        pid = m.get("platform_id", "?")
+                        status = m.get("status", "?")
+                        count = m.get("items_count", 0)
+                        print(f"  - {pid}: {status} ({count} items)")
+                else:
+                    print("  - Provider Ingestion: 无配置或已禁用")
+            except Exception as e:
+                print(f"[{now.strftime('%H:%M:%S')}] ⚠️ Provider Ingestion 失败: {e}")
 
             global _viewer_service, _data_service, _last_fetch_time
             _last_fetch_time = datetime.now()
 
             # 清除缓存以加载新数据
             from mcp_server.services.cache_service import get_cache
+            from trendradar.web.news_viewer import clear_categorized_news_cache
 
             cache = get_cache()
             cache.clear()  # 清除所有缓存
+            clear_categorized_news_cache()  # 清除分类新闻缓存
 
             # 重置服务实例
             _viewer_service = None
@@ -400,6 +435,98 @@ def stop_scheduler():
     print("⏹️ 定时任务已停止")
 
 
+def _get_cdn_base_url() -> str:
+    """获取 CDN 基础 URL"""
+    try:
+        import yaml
+        config_path = project_root / "config" / "config.yaml"
+        with open(config_path, "r", encoding="utf-8") as f:
+            full_config = yaml.safe_load(f) or {}
+        viewer_config = full_config.get("viewer", {}) or {}
+        return (viewer_config.get("cdn_base_url") or "").strip()
+    except Exception:
+        return ""
+
+
+def _read_user_config_from_cookie(request: Request) -> Optional[dict]:
+    """从 Cookie 读取用户配置"""
+    try:
+        cookie_value = request.cookies.get("trendradar_config")
+        if not cookie_value:
+            return None
+        
+        # 解码并解析 JSON
+        decoded = unquote(cookie_value)
+        config = json.loads(decoded)
+        
+        # 验证版本
+        if config.get("v") != 1:
+            return None
+        
+        return config
+    except Exception as e:
+        print(f"Failed to read user config from cookie: {e}")
+        return None
+
+
+def _apply_user_config_to_data(data: dict, user_config: dict) -> dict:
+    """应用用户配置到数据"""
+    try:
+        categories = data.get("categories", {})
+        if not categories:
+            return data
+        
+        # 获取配置
+        custom_categories = user_config.get("custom", [])
+        hidden_categories = user_config.get("hidden", [])
+        category_order = user_config.get("order", [])
+        
+        # 构建新的分类字典
+        result_categories = {}
+        
+        # 按照用户定义的顺序处理
+        for cat_id in category_order:
+            # 跳过隐藏的分类
+            if cat_id in hidden_categories:
+                continue
+            
+            # 检查是否是自定义分类
+            custom_cat = next((c for c in custom_categories if c.get("id") == cat_id), None)
+            
+            if custom_cat:
+                # 自定义分类：从所有平台中筛选
+                platforms = {}
+                for platform_id in custom_cat.get("platforms", []):
+                    # 在所有默认分类中查找该平台
+                    for cat in categories.values():
+                        if platform_id in cat.get("platforms", {}):
+                            platforms[platform_id] = cat["platforms"][platform_id]
+                            break
+                
+                if platforms:
+                    result_categories[cat_id] = {
+                        "name": custom_cat.get("name", cat_id),
+                        "icon": "📱",
+                        "platforms": platforms
+                    }
+            elif cat_id in categories:
+                # 默认分类：直接使用
+                result_categories[cat_id] = categories[cat_id]
+        
+        # 添加未在 order 中的默认分类（但不在 hidden 中）
+        for cat_id, cat_data in categories.items():
+            if cat_id not in result_categories and cat_id not in hidden_categories:
+                result_categories[cat_id] = cat_data
+        
+        # 更新数据
+        data["categories"] = result_categories
+        return data
+        
+    except Exception as e:
+        print(f"Failed to apply user config: {e}")
+        return data
+
+
 async def _render_viewer_page(
     request: Request,
     filter: Optional[str],
@@ -419,6 +546,10 @@ async def _render_viewer_page(
             filter_mode=filter,
         )
 
+        # 获取 CDN 配置
+        cdn_base_url = _get_cdn_base_url()
+        static_prefix = cdn_base_url if cdn_base_url else "/static"
+
         return templates.TemplateResponse(
             "viewer.html",
             {
@@ -426,6 +557,7 @@ async def _render_viewer_page(
                 "data": data,
                 "available_filters": ["strict", "moderate", "off"],
                 "current_filter": filter or data.get("filter_mode", "moderate"),
+                "static_prefix": static_prefix,
             },
         )
     except Exception as e:
@@ -665,10 +797,34 @@ async def api_fetch_now():
     return UnicodeJSONResponse(content=result)
 
 
+async def _warmup_cache():
+    """预热缓存：在服务启动时预加载数据"""
+    try:
+        print("🔥 预热缓存中...")
+        start_time = time.time()
+        
+        # 预加载新闻数据到缓存
+        viewer_service, _ = get_services()
+        viewer_service.get_categorized_news(
+            platforms=None,
+            limit=5000,
+            apply_filter=True,
+            filter_mode=None
+        )
+        
+        elapsed = time.time() - start_time
+        print(f"✅ 缓存预热完成 ({elapsed:.2f}s)")
+    except Exception as e:
+        print(f"⚠️ 缓存预热失败: {e}")
+
+
 @app.on_event("startup")
 async def on_startup():
     """服务器启动时的初始化"""
-    # 读取配置决定是否自动启动定时任务
+    # 1. 预热缓存
+    await _warmup_cache()
+    
+    # 2. 读取配置决定是否自动启动定时任务
     try:
         import yaml
         config_path = project_root / "config" / "config.yaml"

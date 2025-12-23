@@ -91,7 +91,8 @@ def _looks_like_caixin_article_url(url: str) -> bool:
         return False
 
     host = (u.netloc or "").lower()
-    if not host.endswith("caixin.com"):
+    # 支持所有 *.caixin.com 子域名（如 finance.caixin.com, opinion.caixin.com 等）
+    if not (host == "caixin.com" or host.endswith(".caixin.com")):
         return False
 
     path = u.path or ""

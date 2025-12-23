@@ -1,0 +1,40 @@
+# TrendRadar with Nginx (HTTP/2 支持)
+# 使用方法: docker-compose -f docker/docker-compose.nginx.yml up -d
+
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # SSL 证书（生产环境启用）
+      # - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - trend-radar-viewer
+    restart: unless-stopped
+    networks:
+      - trendradar
+
+  trend-radar-viewer:
+    image: wantcat/trendradar-viewer:local
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.viewer
+    expose:
+      - "8080"
+    volumes:
+      - ../config:/app/config:ro
+      - ../output:/app/output
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    networks:
+      - trendradar
+
+networks:
+  trendradar:
+    driver: bridge

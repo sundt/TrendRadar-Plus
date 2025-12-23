@@ -14,6 +14,12 @@ viewer:
   # 过滤模式：strict(严格-任意匹配即过滤) | moderate(适中-2+关键词匹配) | off(关闭过滤)
   # 注意：前端已实现用户自定义过滤，建议设为 off
   filter_mode: "off"
+  
+  # CDN 配置（可选）
+  # 如果配置了 cdn_base_url，静态资源将从 CDN 加载
+  # 例如：cdn_base_url: "https://cdn.example.com/trendradar"
+  # 留空则使用本地静态资源
+  cdn_base_url: ""
 
   new_badges:
     categories:
