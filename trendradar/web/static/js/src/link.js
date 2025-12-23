@@ -29,24 +29,35 @@ export const link = {
         const item = el.closest('.news-item');
         if (!item) return;
 
+        const checkbox = item.querySelector('.news-checkbox');
+        if (checkbox && !checkbox.checked) {
+            checkbox.checked = true;
+            if (typeof window.markAsRead === 'function') {
+                window.markAsRead(checkbox);
+            } else if (TR.readState && typeof TR.readState.markAsRead === 'function') {
+                TR.readState.markAsRead(checkbox);
+            }
+        }
+
         if (this.isHoverDevice()) {
-            this.openLink(el);
             return;
         }
 
         const isSame = item.classList.contains('preview');
         if (isSame) {
-            this.openLink(el);
             item.classList.remove('preview');
             return;
         }
 
+        evt.preventDefault();
         this.closeAllPreviews(item);
         item.classList.add('preview');
     },
 
     handleTitleKeydownV2(el, evt) {
-        if (evt.key === 'Enter' || evt.key === ' ') {
+        if (evt.key === 'Enter') {
+            this.handleTitleClickV2(el, evt);
+        } else if (evt.key === ' ') {
             evt.preventDefault();
             this.handleTitleClickV2(el, evt);
         } else if (evt.key === 'Escape') {

@@ -122,7 +122,10 @@ class TencentNbaProvider:
     ) -> ProviderFetchResult:
         started_at = time.time()
 
-        past_days = int(platform_config.get("past_days") or 6)  # 今天+过去6天
+        past_days_raw = platform_config.get("past_days")
+        if past_days_raw is None:
+            past_days_raw = platform_config.get("days")
+        past_days = int(past_days_raw or 6)  # 今天+过去6天
         max_items = int(platform_config.get("max_items") or 40)
         timeout_s = int(platform_config.get("timeout_s") or 10)
 

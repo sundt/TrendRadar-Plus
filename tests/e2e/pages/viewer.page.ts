@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 
 export class ViewerPage {
   readonly page: Page;
@@ -38,10 +38,10 @@ export class ViewerPage {
   }
 
   async goto() {
-    await this.page.goto('/');
-    await this.page.waitForLoadState('networkidle');
-    // 等待栏目区域显示（JS 添加 .categories-ready 类后才显示）
-    await this.page.waitForSelector('body.categories-ready', { timeout: 10000 });
+    const path = process.env.VIEWER_PATH || '/';
+    await this.page.goto(path, { waitUntil: 'domcontentloaded' });
+    await expect(this.page.locator('body')).toHaveClass(/categories-ready/, { timeout: 15000 });
+    await expect(this.page.locator('.category-tabs .category-tab').first()).toBeVisible({ timeout: 15000 });
   }
 
   async getActiveTab(): Promise<Locator> {

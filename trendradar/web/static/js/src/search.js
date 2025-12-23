@@ -21,6 +21,9 @@ export const search = {
         });
 
         TR.counts.updateAllCounts();
+        if (TR.paging && typeof TR.paging.scheduleAutofillActiveTab === 'function') {
+            TR.paging.scheduleAutofillActiveTab();
+        }
     }
 };
 

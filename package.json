@@ -8,6 +8,8 @@
     "test:debug": "playwright test --debug",
     "test:headed": "playwright test --headed",
     "test:report": "playwright show-report",
+    "test:prod": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod",
+    "test:prod:headed": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod --headed",
     "build:js": "esbuild trendradar/web/static/js/src/index.js --bundle --outfile=trendradar/web/static/js/viewer.bundle.js --format=iife --minify",
     "build:js:watch": "esbuild trendradar/web/static/js/src/index.js --bundle --outfile=trendradar/web/static/js/viewer.bundle.js --format=iife --watch"
   },

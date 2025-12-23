@@ -39,6 +39,10 @@ export const tabs = {
         }
 
         TR.filter.applyCategoryFilter(categoryId);
+
+        if (TR.paging && typeof TR.paging.scheduleAutofillActiveTab === 'function') {
+            TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });
+        }
     },
 
     restoreActiveTab() {

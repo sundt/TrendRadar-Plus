@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8090';
+const isLocalBaseUrl = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(baseURL);
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -11,7 +14,7 @@ export default defineConfig({
     ['list']
   ],
   use: {
-    baseURL: process.env.BASE_URL || 'http://127.0.0.1:8090',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -22,7 +25,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: process.env.CI ? undefined : {
+  webServer: process.env.CI || !isLocalBaseUrl ? undefined : {
     command: 'echo "Please ensure Docker container is running on port 8090"',
     url: 'http://127.0.0.1:8090',
     reuseExistingServer: true,

@@ -9,36 +9,6 @@ import { storage } from './storage.js';
 const TAB_STORAGE_KEY = 'trendradar_active_tab';
 const CATEGORY_PAGE_SIZE = 20;
 
-function applyNbaPageToDom() {
-    const card = document.querySelector('.platform-card[data-platform="nba-schedule"]');
-    if (!card) return;
-
-    // 清除旧的 localStorage 值
-    localStorage.removeItem('nba_schedule_mode');
-    
-    const page = parseInt(localStorage.getItem('nba_schedule_page') || '0', 10);
-    const start = page * 20;
-    const end = start + 20;
-
-    // 更新换新按钮文本和提示
-    const toggleBtn = card.querySelector('button[onclick="toggleNbaPage()"]');
-    if (toggleBtn) {
-        const span = toggleBtn.querySelector('span');
-        if (span) {
-            span.textContent = '换新';
-        }
-        toggleBtn.title = page === 0 ? '显示第21-40条' : '显示第1-20条';
-    }
-
-    const items = Array.from(card.querySelectorAll('li.news-item'));
-
-    items.forEach((li, idx) => {
-        const show = idx >= start && idx < end;
-        li.classList.toggle('paged-hidden', !show);
-        li.style.display = show ? '' : 'none';
-    });
-}
-
 let _ajaxRefreshInFlight = false;
 let _ajaxLastRefreshAt = 0;
 let _ajaxRefreshPending = null;
@@ -116,9 +86,6 @@ export const data = {
                 const platformBadge = platform?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(platformId)}">NEW</span>` : '';
                 const news = Array.isArray(platform?.news) ? platform.news : [];
                 const pagingOffset = (platformId && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[platformId])) ? state.pagingOffsets[platformId] : 0;
-                // NBA 赛程特殊处理：使用分页（默认1-20条，换新后21-40条）
-                const isNbaSchedule = platformId === 'nba-schedule';
-                const nbaPage = isNbaSchedule ? parseInt(localStorage.getItem('nba_schedule_page') || '0', 10) : 0;
                 const filteredNews = news;
 
                 const newsItemsHtml = filteredNews.map((n, idx) => {
@@ -133,32 +100,24 @@ export const data = {
                     const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
                     const crossClass = isCross ? 'cross-platform' : '';
                     const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
-                    // NBA 赛程使用自己的分页逻辑
-                    const nbaStart = nbaPage * 20;
-                    const nbaEnd = nbaStart + 20;
-                    const nbaHidden = isNbaSchedule && (idx < nbaStart || idx >= nbaEnd);
-                    const pagedHidden = isNbaSchedule ? (nbaHidden ? ' paged-hidden' : '') : ((idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '');
+                    const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
                     const metaHtml = meta ? `<div class="news-subtitle">${meta}</div>` : '';
+                    const safeHref = url || '#';
                     return `
                         <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                             <div class="news-item-content">
                                 <input type="checkbox" class="news-checkbox" onchange="markAsRead(this)" title="标记已读">
                                 ${indexHtml}
-                                <div class="news-title ${isNbaSchedule ? 'nba-title ' : ''}${crossClass}" onclick="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)" tabindex="0" role="button" data-url="${url}">
+                                <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
                                     ${title}
                                     ${crossBadge}
-                                </div>
+                                </a>
                             </div>
                             ${metaHtml}
                         </li>`;
                 }).join('');
 
-                // NBA 赛程使用换新按钮切换分页
-                const nbaButtonText = '换新';
-                const nbaButtonTitle = nbaPage === 0 ? '显示第21-40条' : '显示第1-20条';
-                const headerButtons = isNbaSchedule
-                    ? `<button class="platform-refresh-btn" type="button" onclick="toggleNbaPage()" title="${nbaButtonTitle}"><span>${nbaButtonText}</span></button>`
-                    : `<button class="platform-refresh-btn" type="button" onclick="refreshPlatform(this)" title="仅刷新本平台，换新（20条)"><span>换新</span></button>`;
+                const headerButtons = '';
 
                 return `
                 <div class="platform-card" data-platform="${escapeHtml(platformId)}">
@@ -231,6 +190,7 @@ export const data = {
         document.querySelectorAll('.platform-card').forEach((card) => {
             const pid = card.dataset.platform;
             const off = (pid && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[pid])) ? state.pagingOffsets[pid] : 0;
+            TR.paging.setCardPageSize(card, TR.paging.PAGE_SIZE);
             TR.paging.applyPagingToCard(card, off);
         });
 
@@ -244,7 +204,7 @@ export const data = {
         if (earlyHide) earlyHide.remove();
         document.body.classList.add('categories-ready');
 
-        applyNbaPageToDom();
+        TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });
     },
 
     async refreshViewerData(opts = {}) {
@@ -344,18 +304,9 @@ export const data = {
     }
 };
 
-// NBA 赛程分页切换（点击换新按钮）
-function toggleNbaPage() {
-    const current = parseInt(localStorage.getItem('nba_schedule_page') || '0', 10);
-    const next = current === 0 ? 1 : 0;
-    localStorage.setItem('nba_schedule_page', String(next));
-    applyNbaPageToDom();
-}
-
 // 全局函数
 window.fetchData = () => data.fetchData();
 window.refreshViewerData = (opts) => data.refreshViewerData(opts);
-window.toggleNbaPage = toggleNbaPage;
 
 TR.data = data;
 
@@ -366,6 +317,4 @@ ready(function() {
         updatedAtEl.textContent = formatUpdatedAt(updatedAtEl.textContent);
     }
     data.setupAjaxAutoRefresh();
-
-    applyNbaPageToDom();
 });
