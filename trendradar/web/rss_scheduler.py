@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import random
 import time
@@ -14,6 +15,8 @@ from trendradar.web.rss_proxy import rss_proxy_fetch_warmup
 
 _project_root = None
 
+logger = logging.getLogger("uvicorn.error")
+
 _rss_warmup_queue: Optional[asyncio.PriorityQueue] = None
 _rss_warmup_worker_task: Optional[asyncio.Task] = None
 _rss_warmup_producer_task: Optional[asyncio.Task] = None
@@ -24,6 +27,8 @@ _rss_warmup_inflight: set = set()
 _rss_warmup_budget_lock = Lock()
 _rss_warmup_budget_window_start: float = 0.0
 _rss_warmup_budget_count: int = 0
+
+_rss_entries_stats_last_log_at: float = 0.0
 
 
 def _now_ts() -> int:
@@ -92,14 +97,38 @@ def _rss_parse_published_ts(published_raw: str) -> int:
         return int(dt.timestamp())
     except Exception:
         pass
+
+
+def _maybe_log_rss_entries_stats(conn) -> None:
+    global _rss_entries_stats_last_log_at
+    now = time.time()
+    if _rss_entries_stats_last_log_at > 0 and (now - _rss_entries_stats_last_log_at) < 60:
+        return
+    _rss_entries_stats_last_log_at = now
+
     try:
-        s2 = s.replace("Z", "+00:00")
-        dt2 = datetime.fromisoformat(s2)
-        if dt2.tzinfo is None:
-            dt2 = dt2.replace(tzinfo=timezone.utc)
-        return int(dt2.timestamp())
+        cur = conn.execute("SELECT COUNT(*) FROM rss_entries")
+        total = int((cur.fetchone() or [0])[0] or 0)
     except Exception:
-        return 0
+        total = -1
+    try:
+        cur = conn.execute("SELECT COUNT(DISTINCT source_id) FROM rss_entries")
+        sources = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        sources = -1
+    try:
+        day = datetime.now().strftime("%Y-%m-%d")
+        start = int(datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        end = start + 24 * 60 * 60
+        cur = conn.execute(
+            "SELECT COUNT(*) FROM rss_entries WHERE created_at >= ? AND created_at < ?",
+            (start, end),
+        )
+        today_new = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        today_new = -1
+
+    logger.info("rss_entries.stats total=%s sources=%s today_new=%s", total, sources, today_new)
 
 
 def _rss_entries_retention_cleanup(conn, source_id: str, now_ts: int) -> None:
@@ -187,8 +216,10 @@ async def rss_enqueue_warmup(source_id: str, priority: int = 10) -> Optional[asy
     if not sid:
         return None
     if _rss_warmup_queue is None:
+        logger.info("rss_warmup.enqueue skip (queue_not_ready) source_id=%s", sid)
         return None
     if not rss_budget_allow(priority):
+        logger.info("rss_warmup.enqueue skip (budget_denied) source_id=%s priority=%s", sid, priority)
         return None
 
     loop = asyncio.get_running_loop()
@@ -196,9 +227,11 @@ async def rss_enqueue_warmup(source_id: str, priority: int = 10) -> Optional[asy
     with _rss_warmup_inflight_lock:
         if sid in _rss_warmup_inflight:
             fut.set_result({"queued": False, "source_id": sid, "reason": "already_inflight"})
+            logger.info("rss_warmup.enqueue skip (already_inflight) source_id=%s priority=%s", sid, priority)
             return fut
         _rss_warmup_inflight.add(sid)
     await _rss_warmup_queue.put((int(priority), float(time.time()), sid, fut))
+    logger.info("rss_warmup.enqueue ok source_id=%s priority=%s", sid, priority)
     return fut
 
 
@@ -215,15 +248,19 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
         return {"ok": False, "source_id": sid, "error": "Source not found"}
     enabled = int(row[2] or 0)
     if enabled != 1:
+        logger.info("rss_warmup.skip source_disabled source_id=%s", sid)
         return {"ok": False, "source_id": sid, "error": "Source disabled"}
     cadence = str(row[3] or "P4")
     if cadence.strip().upper() == "P7":
+        logger.info("rss_warmup.skip cadence_disabled source_id=%s", sid)
         return {"ok": False, "source_id": sid, "error": "Cadence disabled"}
     backoff_until = int(row[7] or 0)
     if backoff_until > 0 and backoff_until > now:
+        logger.info("rss_warmup.skip backoff source_id=%s backoff_until=%s", sid, backoff_until)
         return {"ok": False, "source_id": sid, "error": "Backoff", "backoff_until": backoff_until}
     url = (row[1] or "").strip()
     if not url:
+        logger.info("rss_warmup.skip missing_url source_id=%s", sid)
         return {"ok": False, "source_id": sid, "error": "Missing url"}
 
     try:
@@ -238,6 +275,7 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
     etag = str(row[4] or "")
     last_modified = str(row[5] or "")
     try:
+        logger.info("rss_warmup.fetch start source_id=%s url=%s", sid, url)
         fetched = await asyncio.to_thread(rss_proxy_fetch_warmup, url, etag, last_modified)
 
         try:
@@ -271,6 +309,13 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
                     )
                 _rss_entries_retention_cleanup(conn, sid, now)
                 conn.commit()
+                logger.info(
+                    "rss_warmup.fetch ok source_id=%s entries_in_feed=%s rows_attempted=%s",
+                    sid,
+                    len(entries),
+                    len(rows_to_insert),
+                )
+                _maybe_log_rss_entries_stats(conn)
         except Exception:
             try:
                 conn.rollback()
@@ -285,6 +330,7 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
             (new_etag, new_lm, next_due, sid),
         )
         conn.commit()
+        logger.info("rss_warmup.schedule next source_id=%s next_due_at=%s", sid, next_due)
         return {"ok": True, "source_id": sid, "next_due_at": next_due}
     except Exception as e:
         fail_count = int(row[6] or 0) + 1
@@ -296,6 +342,13 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
             (fail_count, until, reason[:500], sid),
         )
         conn.commit()
+        logger.warning(
+            "rss_warmup.fetch fail source_id=%s fail_count=%s backoff_until=%s error=%s",
+            sid,
+            fail_count,
+            until,
+            reason,
+        )
         return {"ok": False, "source_id": sid, "error": reason, "backoff_until": until}
 
 
@@ -303,14 +356,17 @@ async def _rss_warmup_worker_loop() -> None:
     global _rss_warmup_running
     if _rss_warmup_queue is None:
         return
+    logger.info("rss_warmup.worker_loop start")
     while _rss_warmup_running:
         priority, _, sid, fut = await _rss_warmup_queue.get()
         try:
+            logger.info("rss_warmup.worker start source_id=%s priority=%s", sid, priority)
             if _rss_warmup_global_sem is None:
                 res = await _rss_process_warmup_one(sid)
             else:
                 async with _rss_warmup_global_sem:
                     res = await _rss_process_warmup_one(sid)
+            logger.info("rss_warmup.worker done source_id=%s ok=%s", sid, bool(res.get("ok")) if isinstance(res, dict) else False)
             try:
                 if fut is not None and not fut.done():
                     fut.set_result(res)
@@ -331,6 +387,7 @@ async def _rss_warmup_worker_loop() -> None:
 async def _rss_warmup_producer_loop() -> None:
     if _rss_warmup_queue is None:
         return
+    logger.info("rss_warmup.producer_loop start")
     while _rss_warmup_running:
         try:
             now = _now_ts()
@@ -340,6 +397,8 @@ async def _rss_warmup_producer_loop() -> None:
                 (now, now),
             )
             rows = cur.fetchall() or []
+            if rows:
+                logger.info("rss_warmup.producer due_sources=%s", len(rows))
             for r in rows:
                 sid = (r[0] or "").strip()
                 if not sid:
@@ -416,12 +475,15 @@ async def start(app, project_root) -> None:
         "no",
     }
     if not enabled:
+        logger.info("rss_warmup.disabled TREND_RADAR_RSS_WARMUP_ENABLED=%s", os.environ.get("TREND_RADAR_RSS_WARMUP_ENABLED"))
         return
 
     if _rss_warmup_queue is None:
         _rss_warmup_queue = asyncio.PriorityQueue()
     _rss_warmup_global_sem = asyncio.Semaphore(2)
     _rss_warmup_running = True
+
+    logger.info("rss_warmup.start enabled=%s max_per_hour=%s", enabled, os.environ.get("TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR", "60"))
 
     if _rss_warmup_worker_task is None or _rss_warmup_worker_task.done():
         _rss_warmup_worker_task = asyncio.create_task(_rss_warmup_worker_loop())
@@ -434,6 +496,8 @@ async def stop() -> None:
     global _rss_warmup_running
 
     _rss_warmup_running = False
+
+    logger.info("rss_warmup.stop")
 
     try:
         if _rss_warmup_worker_task is not None:

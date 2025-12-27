@@ -244,6 +244,20 @@ def _call_init_default_sources(request: Request) -> None:
             pass
 
 
+@router.get("/api/rss-sources/warmup")
+async def api_rss_sources_warmup_help():
+    return JSONResponse(
+        content={
+            "detail": "Use POST /api/rss-sources/warmup with JSON body {source_ids: [...], priority: 'high'|'normal'|int}.",
+            "example": {
+                "method": "POST",
+                "url": "/api/rss-sources/warmup?wait_ms=800",
+                "json": {"source_ids": ["<source_id>"], "priority": "high"},
+            },
+        }
+    )
+
+
 @router.post("/api/rss-sources/warmup")
 async def api_rss_sources_warmup(request: Request, wait_ms: int = Query(0)):
     try:

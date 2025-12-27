@@ -946,6 +946,17 @@ body.categories-ready .tab-content-area {
             opacity: 0.9;
         }
 
+        .settings-btn-primary:disabled,
+        .settings-btn-primary[disabled] {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .settings-btn-primary:disabled:hover,
+        .settings-btn-primary[disabled]:hover {
+            opacity: 0.55;
+        }
+
         .settings-btn-secondary {
             padding: 8px 16px;
             background: white;
@@ -957,6 +968,17 @@ body.categories-ready .tab-content-area {
         }
         .settings-btn-secondary:hover {
             background: #f3f4f6;
+        }
+
+        .settings-btn-secondary:disabled,
+        .settings-btn-secondary[disabled] {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .settings-btn-secondary:disabled:hover,
+        .settings-btn-secondary[disabled]:hover {
+            background: white;
         }
 
         /* 栏目编辑面板 */
@@ -1025,8 +1047,32 @@ body.categories-ready .tab-content-area {
             cursor: pointer;
         }
 
+        .platform-select-action-btn.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+
         .platform-select-action-btn:hover {
             background: #f3f4f6;
+        }
+
+        .platform-select-action-btn.primary:hover {
+            opacity: 0.9;
+        }
+
+        .platform-select-action-btn:disabled,
+        .platform-select-action-btn[disabled] {
+            opacity: 0.55;
+            cursor: not-allowed;
+            background: #f9fafb;
+            color: #9ca3af;
+            border-color: #e5e7eb;
+        }
+
+        .platform-select-action-btn:disabled:hover,
+        .platform-select-action-btn[disabled]:hover {
+            background: #f9fafb;
         }
 
         .platform-select-list {

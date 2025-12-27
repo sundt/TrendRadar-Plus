@@ -27,7 +27,7 @@ export default defineConfig({
   ],
   webServer: process.env.CI || !isLocalBaseUrl ? undefined : {
     command: 'echo "Please ensure Docker container is running on port 8090"',
-    url: 'http://127.0.0.1:8090',
+    url: 'http://127.0.0.1:8090/health',
     reuseExistingServer: true,
     timeout: 5000,
   },

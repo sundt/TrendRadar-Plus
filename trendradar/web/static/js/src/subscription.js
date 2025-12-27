@@ -10,6 +10,7 @@ let _rssFeedTitleUserEdited = false;
 let _rssFeedTitleAutoFilled = false;
 
 const _previewStatusBySourceId = new Map();
+const _pendingSyncBySourceId = new Set();
 
 let _pickerOpen = false;
 let _pickerCategory = '';
@@ -54,6 +55,16 @@ function _hasRssPlatformNews(sourceIds) {
         if (items && items.length > 0) return true;
     }
     return false;
+}
+
+function _setPendingSync(sourceIds, pending) {
+    const ids = Array.isArray(sourceIds) ? sourceIds : [];
+    for (const sidRaw of ids) {
+        const sid = String(sidRaw || '').trim();
+        if (!sid) continue;
+        if (pending) _pendingSyncBySourceId.add(sid);
+        else _pendingSyncBySourceId.delete(sid);
+    }
 }
 
 function _getModalEl() {
@@ -574,16 +585,19 @@ function _renderList() {
     }
 
     const html = subs.map((s, idx) => {
+        const sid = String(s?.source_id || s?.rss_source_id || '').trim();
         const url = escapeHtml(s.url || '');
         const title = escapeHtml(s.feed_title || '');
         const column = escapeHtml(s.column || 'RSS');
         const name = title ? `${title}` : url;
+        const pending = sid && _pendingSyncBySourceId.has(sid);
         return `
             <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #e5e7eb;">
                 <div style="min-width:0;flex:1;">
                     <div style="display:flex;gap:8px;align-items:baseline;">
                         <div style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                             <span style="font-weight:700;font-size:0.9rem;color:#111827;">${name}</span>
+                            ${pending ? '<span style="margin-left:8px;font-weight:400;font-size:0.75rem;color:#9ca3af;">同步中...</span>' : ''}
                             <span style="font-weight:400;font-size:0.75rem;color:#9ca3af;"> — </span>
                             <span style="font-weight:400;font-size:0.72rem;color:#6b7280;">${url}</span>
                         </div>
@@ -684,6 +698,7 @@ export const subscription = {
         _rssFeedTitleAutoFilled = false;
         _rssFeedTitleUserEdited = false;
         _previewStatusBySourceId.clear();
+        _pendingSyncBySourceId.clear();
         _renderList();
         const previewEl = _getPreviewEl();
         if (previewEl) previewEl.innerHTML = '';
@@ -722,6 +737,12 @@ export const subscription = {
     removeAt(index) {
         const subs = this.getSubscriptions();
         if (index < 0 || index >= subs.length) return;
+        try {
+            const sid = String(subs[index]?.source_id || subs[index]?.rss_source_id || '').trim();
+            if (sid) _pendingSyncBySourceId.delete(sid);
+        } catch (e) {
+            // ignore
+        }
         subs.splice(index, 1);
         this.setSubscriptions(subs);
         _renderList();
@@ -753,6 +774,11 @@ export const subscription = {
             const newIds = next
                 .map((s) => String(s?.source_id || s?.rss_source_id || '').trim())
                 .filter((sid) => !!sid && !prevSet.has(sid));
+
+            if (newIds.length > 0) {
+                _setPendingSync(newIds, true);
+                _renderList();
+            }
             if (newIds.length > 0) {
                 try {
                     await fetch('/api/rss-sources/warmup?wait_ms=0', {
@@ -786,9 +812,23 @@ export const subscription = {
                     await _sleep(Math.min(d, remaining));
                 }
                 await TR.data.refreshViewerData({ preserveScroll: true });
-                if (newIds.length > 0 && _hasRssPlatformNews(newIds)) {
-                    found = true;
-                    break;
+
+                if (newIds.length > 0) {
+                    const stillPending = [];
+                    for (const sid of newIds) {
+                        if (_pendingSyncBySourceId.has(sid) && _hasRssPlatformNews([sid])) {
+                            _pendingSyncBySourceId.delete(sid);
+                        }
+                        if (_pendingSyncBySourceId.has(sid)) {
+                            stillPending.push(sid);
+                        }
+                    }
+                    if (stillPending.length === 0) {
+                        found = true;
+                        _renderList();
+                        break;
+                    }
+                    _renderList();
                 }
                 if (newIds.length === 0) {
                     found = true;
@@ -799,6 +839,10 @@ export const subscription = {
             if (found) {
                 _setSaveStatus('已获取到内容，即将返回…', { variant: 'success' });
             } else {
+                if (newIds.length > 0) {
+                    _setPendingSync(newIds, false);
+                    _renderList();
+                }
                 _setSaveStatus('已订阅，内容稍后更新', { variant: 'info' });
             }
 

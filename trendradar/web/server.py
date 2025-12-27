@@ -1111,13 +1111,13 @@ async def on_startup():
         _init_default_rss_sources_if_empty()
         rss_scheduler.rss_enforce_high_freq_cap(project_root)
         rss_scheduler.rss_init_schedule_defaults(project_root)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ RSS init failed: {e}")
 
     try:
         await rss_scheduler.start(app, project_root)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ RSS scheduler start failed: {e}")
 
 
 @app.on_event("shutdown")
@@ -1128,8 +1128,8 @@ async def on_shutdown():
         pass
     try:
         await rss_scheduler.stop()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ RSS scheduler stop failed: {e}")
 
 
 def run_server(host: str = "0.0.0.0", port: int = 8080, auto_fetch: bool = False, interval: int = 30):

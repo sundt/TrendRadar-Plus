@@ -204,6 +204,21 @@ test.describe('RSS Subscriptions', () => {
 
     const warmupCalls: Array<{ url: string; body: any }> = [];
 
+    let rssNewsCalls = 0;
+
+    await page.route('**/api/news', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          updated_at: '2030-01-01 00:00:00',
+          categories: {
+            nba: { name: 'NBA', icon: '🏀', platforms: {} },
+          },
+        }),
+      });
+    });
+
     await page.route('**/api/rss-sources/warmup?*', async (route) => {
       const bodyRaw = route.request().postData() || '';
       let parsed: any = null;
@@ -310,6 +325,7 @@ test.describe('RSS Subscriptions', () => {
     });
 
     await page.route('**/api/subscriptions/rss-news', async (route) => {
+      rssNewsCalls += 1;
       const req = route.request();
       const bodyRaw = req.postData() || '';
       let parsed: any = null;
@@ -330,6 +346,17 @@ test.describe('RSS Subscriptions', () => {
       }
 
       expect(subs[0]?.source_id || subs[0]?.rss_source_id).toBe(sourceId);
+
+      // First refresh after saving subscription may happen before warmup writes to DB.
+      // Return empty data once so the UI keeps a visible "同步中..." pending state.
+      if (rssNewsCalls === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
+        });
+        return;
+      }
 
       await route.fulfill({
         status: 200,
@@ -383,6 +410,7 @@ test.describe('RSS Subscriptions', () => {
 
     await page.locator('#rssSubscriptionModal .settings-btn-primary:has-text("保存并刷新")').click();
 
+    await expect(page.locator('#rssSubscriptionList')).toContainText('同步中', { timeout: 5000 });
     await expect(page.locator('#rssSubscriptionSaveStatus')).toContainText('获取', { timeout: 15000 });
     await expect(page.locator('#rssSubscriptionModal')).toBeHidden({ timeout: 15000 });
 
@@ -516,7 +544,9 @@ test.describe('RSS Subscriptions', () => {
 
     await page.locator('#rssSubscriptionModal .settings-btn-primary:has-text("保存并刷新")').click();
 
+    await expect(page.locator('#rssSubscriptionList')).toContainText('同步中', { timeout: 5000 });
     await expect(page.locator('#rssSubscriptionSaveStatus')).toContainText('已订阅，内容稍后更新', { timeout: 9000 });
+    await expect(page.locator('#rssSubscriptionList')).not.toContainText('同步中', { timeout: 9000 });
     await expect(page.locator('#rssSubscriptionModal')).toBeHidden({ timeout: 12000 });
   });
 
