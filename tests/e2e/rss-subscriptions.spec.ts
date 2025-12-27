@@ -10,6 +10,14 @@ test.describe('RSS Subscriptions', () => {
     await page.addInitScript(() => {
       localStorage.removeItem('rss_subscriptions');
     });
+
+    await page.route('**/api/me/rss-subscriptions', async (route) => {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: 'Not allowlisted' }),
+      });
+    });
   });
 
   test('should gate save by requiring preview entries>0 (entries=0 should not stage subscription)', async ({ page }) => {
@@ -87,7 +95,7 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news', async (route) => {
+    await page.route('**/api/subscriptions/rss-news*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -136,7 +144,7 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news', async (route) => {
+    await page.route('**/api/subscriptions/rss-news*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -324,7 +332,7 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news', async (route) => {
+    await page.route('**/api/subscriptions/rss-news*', async (route) => {
       rssNewsCalls += 1;
       const req = route.request();
       const bodyRaw = req.postData() || '';
@@ -520,7 +528,7 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news', async (route) => {
+    await page.route('**/api/subscriptions/rss-news*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -604,7 +612,7 @@ test.describe('RSS Subscriptions', () => {
       });
     });
 
-    await page.route('**/api/subscriptions/rss-news', async (route) => {
+    await page.route('**/api/subscriptions/rss-news*', async (route) => {
       const bodyRaw = route.request().postData() || '';
       let parsed: any = null;
       try {
@@ -623,7 +631,7 @@ test.describe('RSS Subscriptions', () => {
 
     await viewerPage.goto();
 
-    const rssNewsReqPromise = page.waitForRequest('**/api/subscriptions/rss-news');
+    const rssNewsReqPromise = page.waitForRequest('**/api/subscriptions/rss-news*');
     const elapsedPromise = page.evaluate(async () => {
       const t0 = Date.now();
       await (window as any).refreshViewerData({ preserveScroll: true });
@@ -636,5 +644,88 @@ test.describe('RSS Subscriptions', () => {
 
     warmupGateResolve?.();
     await page.waitForResponse('**/api/rss-sources/warmup?*');
+  });
+
+  test('should prefer server mode when allowlisted (mode=server, no payload subscriptions)', async ({ page }) => {
+    await page.unroute('**/api/me/rss-subscriptions');
+    await page.route('**/api/me/rss-subscriptions', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            subscriptions: [
+              { source_id: 'rsssrc-allowlisted', feed_title: 'Allowlisted Feed', column: 'RSS', platform_id: '' },
+            ],
+          }),
+        });
+        return;
+      }
+      if (method === 'PUT') {
+        const bodyRaw = route.request().postData() || '';
+        let parsed: any = null;
+        try { parsed = JSON.parse(bodyRaw); } catch (e) { parsed = null; }
+        const subs = parsed?.subscriptions || [];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ subscriptions: subs }),
+        });
+        return;
+      }
+      await route.fulfill({ status: 405, body: 'Method Not Allowed' });
+    });
+
+    await page.route('**/api/news', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
+      });
+    });
+
+    await page.route('**/api/rss-source-categories', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ categories: [{ id: '', name: '全部', count: 0 }] }),
+      });
+    });
+
+    await page.route('**/api/rss-sources/search?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ sources: [], total: 0, limit: 80, offset: 0, next_offset: null }),
+      });
+    });
+
+    let sawServerMode = false;
+    let sawPayloadSubs = false;
+    await page.route('**/api/subscriptions/rss-news*', async (route) => {
+      const url = route.request().url();
+      const bodyRaw = route.request().postData() || '';
+      sawServerMode = sawServerMode || url.includes('mode=server');
+      sawPayloadSubs = sawPayloadSubs || bodyRaw.includes('subscriptions');
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ updated_at: '2030-01-01 00:00:00', categories: {} }),
+      });
+    });
+
+    await viewerPage.goto();
+
+    const meRespPromise = page.waitForResponse('**/api/me/rss-subscriptions');
+    await page.locator('button.category-settings-btn:has-text("RSS订阅")').click();
+    await meRespPromise;
+
+    await page.evaluate(async () => {
+      await (window as any).refreshViewerData({ preserveScroll: true });
+    });
+
+    expect(sawServerMode).toBeTruthy();
+    expect(sawPayloadSubs).toBeFalsy();
   });
 });

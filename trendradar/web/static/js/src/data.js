@@ -263,10 +263,14 @@ export const data = {
                             // ignore
                         }
                     }
-                    const rssResp = await fetch('/api/subscriptions/rss-news', {
+
+                    const serverEnabled = !!(TR.subscription && TR.subscription._serverEnabled === true);
+                    const rssUrl = serverEnabled ? '/api/subscriptions/rss-news?mode=server' : '/api/subscriptions/rss-news?mode=auto';
+                    const rssBody = serverEnabled ? {} : { subscriptions: subs };
+                    const rssResp = await fetch(rssUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ subscriptions: subs })
+                        body: JSON.stringify(rssBody)
                     });
                     const rssData = await rssResp.json();
                     if (rssResp.ok && rssData && typeof rssData === 'object') {

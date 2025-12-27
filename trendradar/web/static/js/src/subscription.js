@@ -6,6 +6,10 @@ const STORAGE_KEY = 'rss_subscriptions';
 let _selectedSource = null;
 let _subsSnapshot = null;
 
+let _serverEnabled = false;
+let _serverChecked = false;
+let _serverSyncInFlight = false;
+
 let _rssFeedTitleUserEdited = false;
 let _rssFeedTitleAutoFilled = false;
 
@@ -73,6 +77,65 @@ function _getModalEl() {
 
 function _getPickerModalEl() {
     return document.getElementById('rssSourcePickerModal');
+}
+
+function _normalizeSubsForServer(subs) {
+    const arr = Array.isArray(subs) ? subs : [];
+    return arr
+        .filter((s) => s && typeof s === 'object')
+        .map((s) => {
+            return {
+                source_id: String(s.source_id || s.rss_source_id || '').trim(),
+                feed_title: String(s.feed_title || s.display_name || '').trim(),
+                column: String(s.column || 'RSS').trim() || 'RSS',
+                platform_id: String(s.platform_id || '').trim(),
+            };
+        })
+        .filter((s) => !!s.source_id);
+}
+
+async function _syncSubscriptionsFromServer({ showHintOn403 } = {}) {
+    if (_serverSyncInFlight) return;
+    _serverSyncInFlight = true;
+    try {
+        const resp = await fetch('/api/me/rss-subscriptions');
+        if (resp.status === 403) {
+            _serverEnabled = false;
+            _serverChecked = true;
+            try { _syncServerEnabledFlag(); } catch (e) { /* ignore */ }
+            if (showHintOn403) {
+                _setSaveStatus('未开启服务端同步（Not allowlisted），当前使用本地订阅', { variant: 'info' });
+            }
+            return;
+        }
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+            _serverChecked = true;
+            _serverEnabled = false;
+            return;
+        }
+
+        const subs = _normalizeSubsForServer(payload?.subscriptions);
+        _serverChecked = true;
+        _serverEnabled = true;
+        try { _syncServerEnabledFlag(); } catch (e) { /* ignore */ }
+
+        try {
+            subscription.setSubscriptions(subs);
+        } catch (e) {
+            // ignore
+        }
+
+        try {
+            _subsSnapshot = subscription.getSubscriptions();
+        } catch (e) {
+            _subsSnapshot = null;
+        }
+        _renderList();
+        _updateRssGatingUI();
+    } finally {
+        _serverSyncInFlight = false;
+    }
 }
 
 function _getSaveBtnEl() {
@@ -705,6 +768,10 @@ export const subscription = {
         _setSaveStatus('');
         modal.classList.add('show');
         _updateRssGatingUI();
+
+        // Best-effort: if allowlisted, server is the source of truth.
+        // Do not block UI; sync in background and re-render.
+        _syncSubscriptionsFromServer({ showHintOn403: false }).catch(() => {});
     },
 
     close() {
@@ -770,8 +837,34 @@ export const subscription = {
                 return;
             }
 
+            let savedNext = next;
+            try {
+                const resp = await fetch('/api/me/rss-subscriptions', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subscriptions: _normalizeSubsForServer(next) })
+                });
+                if (resp.status === 403) {
+                    _serverChecked = true;
+                    _serverEnabled = false;
+                    try { _syncServerEnabledFlag(); } catch (e) { /* ignore */ }
+                    _setSaveStatus('未开启服务端同步（Not allowlisted），已保存到本地订阅', { variant: 'info' });
+                } else {
+                    const payload = await resp.json().catch(() => ({}));
+                    if (!resp.ok) throw new Error(payload?.detail || 'Save failed');
+                    savedNext = _normalizeSubsForServer(payload?.subscriptions);
+                    _serverChecked = true;
+                    _serverEnabled = true;
+                    try { _syncServerEnabledFlag(); } catch (e) { /* ignore */ }
+                    this.setSubscriptions(savedNext);
+                }
+            } catch (e) {
+                // If server save fails (network/500), keep local behavior.
+                _setSaveStatus(`服务端保存失败，已使用本地订阅：${String(e?.message || e)}`, { variant: 'info' });
+            }
+
             const prevSet = new Set(prev.map((s) => String(s?.source_id || s?.rss_source_id || '').trim()).filter(Boolean));
-            const newIds = next
+            const newIds = savedNext
                 .map((s) => String(s?.source_id || s?.rss_source_id || '').trim())
                 .filter((sid) => !!sid && !prevSet.has(sid));
 
@@ -933,24 +1026,31 @@ window.closeRssSourcePicker = () => closePicker();
 
 TR.subscription = subscription;
 
+TR.subscription._serverEnabled = _serverEnabled;
+
+function _syncServerEnabledFlag() {
+    try { TR.subscription._serverEnabled = !!_serverEnabled; } catch (e) { /* ignore */ }
+}
+
 ready(function() {
     const modal = _getModalEl();
-    if (!modal) return;
 
-    const feedTitleInput = document.getElementById('rssFeedTitle');
-    if (feedTitleInput) {
-        feedTitleInput.addEventListener('input', () => {
-            const v = String(feedTitleInput.value || '').trim();
-            _rssFeedTitleUserEdited = v !== '';
-            _rssFeedTitleAutoFilled = false;
+    if (modal) {
+        const feedTitleInput = document.getElementById('rssFeedTitle');
+        if (feedTitleInput) {
+            feedTitleInput.addEventListener('input', () => {
+                const v = String(feedTitleInput.value || '').trim();
+                _rssFeedTitleUserEdited = v !== '';
+                _rssFeedTitleAutoFilled = false;
+            });
+        }
+
+        modal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                subscription.close();
+            }
         });
     }
-
-    modal.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            subscription.close();
-        }
-    });
 
     const picker = _getPickerModalEl();
     if (picker) {
@@ -983,4 +1083,9 @@ ready(function() {
             }, 250);
         });
     }
+
+    _syncServerEnabledFlag();
+
+    // Attempt server-authoritative subscriptions on page load (allowlisted users).
+    _syncSubscriptionsFromServer({ showHintOn403: false }).catch(() => {});
 });
