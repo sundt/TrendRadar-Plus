@@ -1,4 +1,6 @@
-# TrendRadar-Plus
+# hotnews
+
+ 体验地址：https://hot.uihash.com
  
  面向“热点新闻 + RSS”聚合的轻量栈：
  
