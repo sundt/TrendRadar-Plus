@@ -1,6 +1,6 @@
-# hotnews
+# Hotnews
 
- 体验地址：https://hot.uihash.com
+ 在线地址：https://hot.uihash.com
  
  面向“热点新闻 + RSS”聚合的轻量栈：
  
@@ -43,7 +43,7 @@
  uv run python -m trendradar
  ```
  
- 启动 Viewer（默认端口 8080）：
+ 启动 Viewer（本地脚本 `./start-viewer.sh`，默认端口 `8080`，访问 `/viewer`）：
  
  ```bash
  ./start-viewer.sh
