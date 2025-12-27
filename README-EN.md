@@ -412,11 +412,9 @@ Transform from "algorithm recommendation captivity" to "actively getting the inf
 
 **🐳 Docker Dual-Path HTML Generation Optimization**
 
-- **Bug Fix**: Resolved issue where `index.html` could not sync to host in Docker environment
-- **Dual-Path Generation**: Daily summary HTML is generated to two locations simultaneously
-  - `index.html` (project root): For GitHub Pages access
-  - `output/index.html`: Accessible on host via Docker Volume mount
-- **Compatibility**: Ensures web reports are accessible in Docker, GitHub Actions, and local environments
+- **Bug Fix**: Resolved issue where the latest HTML report could not sync to host in Docker environment
+- **Report Location**: The latest report is available at `output/index.html` (accessible on host via Docker Volume mount)
+- **Compatibility**: Ensures web reports are accessible in Docker and local environments
 
 **🐳 Docker MCP Image Support**
 
@@ -1510,7 +1508,7 @@ For long-term stable operation, we recommend [Docker Deployment](#6-docker-deplo
    3. **Configure to TrendRadar**:
       - **GitHub Actions**: Add URL to GitHub Secrets as `SLACK_WEBHOOK_URL`
       - **Local Testing**: Fill URL in `config/config.yaml` `slack_webhook_url` field
-      - **Docker Deployment**: Add URL to `docker/.env` file as `SLACK_WEBHOOK_URL` variable
+      - **Docker Deployment**: Copy `docker/.env.example` to `docker/.env`, then set `SLACK_WEBHOOK_URL`
 
    ---
 
@@ -2145,8 +2143,11 @@ TrendRadar provides two independent Docker images, deploy according to your need
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/config/frequency_words.txt -P config/
 
    # Download docker compose config
-   wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/.env -P docker/
+   wget https://raw.githubusercontent.com/sundt/TrendRadar-Plus/main/docker/.env.example -P docker/
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/docker-compose.yml -P docker/
+
+   # Create local env file (DO NOT commit)
+   cp docker/.env.example docker/.env
    ```
 
    > 💡 **Note**: Key directory structure required for Docker deployment:
@@ -2353,7 +2354,6 @@ TrendRadar generates daily summary HTML reports to two locations simultaneously:
 | File Location | Access Method | Use Case |
 |--------------|---------------|----------|
 | `output/index.html` | Direct host access | **Docker Deployment** (via Volume mount, visible on host) |
-| `index.html` | Root directory access | **GitHub Pages** (repository root, auto-detected by Pages) |
 | `output/YYYY-MM-DD/html/当日汇总.html` | Historical reports | All environments (archived by date) |
 
 **Local Access Examples**:
@@ -2375,11 +2375,8 @@ xdg-open ./output/index.html         # Linux
 open ./output/2025-xx-xx/html/当日汇总.html
 ```
 
-**Why two index.html files?**
-- `output/index.html`: Docker Volume mounted to host, can be opened locally
-- `index.html`: Pushed to repository by GitHub Actions, auto-deployed by GitHub Pages
-
-> 💡 **Tip**: Both files have identical content, choose either one to access.
+**Note**:
+- `output/index.html` is the canonical latest report file for local/Docker usage.
 
 #### Troubleshooting
 
@@ -2437,7 +2434,10 @@ docker compose up -d
 # Method 2: Download docker-compose.yml separately
 mkdir trendradar && cd trendradar
 wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/docker-compose.yml
-wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/.env
+wget https://raw.githubusercontent.com/sundt/TrendRadar-Plus/main/docker/.env.example
+
+# Create local env file (DO NOT commit)
+cp docker/.env.example docker/.env
 mkdir -p config output
 # Download config files
 wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/config/config.yaml -P config/
@@ -2807,7 +2807,9 @@ NTFY_TOKEN=token1;token2;token3
 
 #### Recommended Method 2: Docker Environment Variables (.env)
 
-**Configuration Location**: `docker/.env` file in project root directory
+**Configuration Template**: `docker/.env.example` (committed)
+
+**Local Configuration File**: `docker/.env` (create it by copying the example; DO NOT commit)
 
 **Basic Configuration Example**:
 ```bash

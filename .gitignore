@@ -36,6 +36,7 @@ workspace/metagpt/
 # Environment
 .env
 .env.local
+docker/.env
 
 # Amazon Q / Copilot
 .amazonq/
@@ -75,6 +76,7 @@ openspec/changes/archive/
 *.tmp
 *.bak
 release.tar.gz
+index.html
 
 # Node.js / Playwright
 node_modules/
