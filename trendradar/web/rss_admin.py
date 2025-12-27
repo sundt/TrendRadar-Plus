@@ -398,6 +398,28 @@ async def api_admin_rss_sources_set_enabled(request: Request, body: Dict[str, An
     return JSONResponse(content={"ok": True, "source_id": source_id, "enabled": int(enabled)})
 
 
+@router.post("/api/admin/rss-sources/bulk-disable")
+async def api_admin_rss_sources_bulk_disable(request: Request):
+    _require_admin(request)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM rss_sources WHERE enabled = 1")
+        to_disable = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        to_disable = 0
+
+    conn.execute(
+        "UPDATE rss_sources SET enabled = 0, updated_at = ? WHERE enabled = 1",
+        (int(now),),
+    )
+    conn.commit()
+
+    return JSONResponse(content={"ok": True, "disabled": int(to_disable)})
+
+
 @router.post("/api/admin/rss-source-requests/{request_id}/approve")
 async def api_admin_approve_rss_source_request(
     request_id: int, request: Request, body: Dict[str, Any] = Body(None)

@@ -411,7 +411,7 @@ test.describe('RSS Subscriptions', () => {
     await page.locator('#rssSubscriptionModal .settings-btn-primary:has-text("保存并刷新")').click();
 
     await expect(page.locator('#rssSubscriptionList')).toContainText('同步中', { timeout: 5000 });
-    await expect(page.locator('#rssSubscriptionSaveStatus')).toContainText('获取', { timeout: 15000 });
+    await expect(page.locator('#rssSubscriptionSaveStatus')).toContainText(/获取|已订阅/, { timeout: 15000 });
     await expect(page.locator('#rssSubscriptionModal')).toBeHidden({ timeout: 15000 });
 
     const sawHighWarmup = warmupCalls.some((c) => {

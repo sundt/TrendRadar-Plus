@@ -143,7 +143,10 @@ ready(() => {
     }, true);
 
     document.addEventListener('wheel', (e) => {
-        const target = normalizeTarget(e.target);
+        const pointEl = (typeof document.elementFromPoint === 'function')
+            ? document.elementFromPoint(e.clientX, e.clientY)
+            : null;
+        const target = normalizeTarget(pointEl || e.target);
         if (!e.shiftKey) return;
         if (!isInTitleArea(target)) return;
         if (document.querySelector('.platform-card.dragging')) return;

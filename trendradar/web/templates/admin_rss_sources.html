@@ -48,6 +48,7 @@
       <div class="row" style="align-items:center;">
         <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
         <button class="btn btn-primary" onclick="commitCsvImport()">Commit</button>
+        <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">Bulk Disable Catalog (All)</button>
         <span class="muted" id="csv-import-status"></span>
       </div>
       <div style="height:10px;"></div>
@@ -364,6 +365,29 @@
       }
       _setCsvImportStatus('Committed');
       location.reload();
+    }
+
+    async function bulkDisableCatalogAll() {
+      const ok = confirm('Disable ALL enabled rss_sources in Catalog (All)?');
+      if (!ok) return;
+      try {
+        _setCsvImportStatus('Disabling...');
+        const resp = await fetch('/api/admin/rss-sources/bulk-disable', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({})
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || 'Bulk disable failed');
+        alert(`Disabled ${Number(payload?.disabled || 0)} source(s).`);
+        location.reload();
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
+      }
     }
 
     async function approveReq(id) {
