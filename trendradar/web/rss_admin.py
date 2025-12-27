@@ -420,6 +420,109 @@ async def api_admin_rss_sources_bulk_disable(request: Request):
     return JSONResponse(content={"ok": True, "disabled": int(to_disable)})
 
 
+@router.post("/api/admin/rss-sources/bulk-enable")
+async def api_admin_rss_sources_bulk_enable(request: Request):
+    _require_admin(request)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM rss_sources WHERE enabled = 0")
+        to_enable = int((cur.fetchone() or [0])[0] or 0)
+    except Exception:
+        to_enable = 0
+
+    conn.execute(
+        "UPDATE rss_sources SET enabled = 1, updated_at = ? WHERE enabled = 0",
+        (int(now),),
+    )
+    conn.commit()
+
+    return JSONResponse(content={"ok": True, "enabled": int(to_enable)})
+
+
+@router.post("/api/admin/rss-sources/bulk-disable-by-urls")
+async def api_admin_rss_sources_bulk_disable_by_urls(request: Request, body: Dict[str, Any] = Body(None)):
+    _require_admin(request)
+
+    if not isinstance(body, dict):
+        body = {}
+    urls_raw = body.get("urls")
+    if not isinstance(urls_raw, list):
+        return JSONResponse(content={"detail": "Invalid urls"}, status_code=400)
+
+    uniq: List[str] = []
+    seen = set()
+    invalid: List[str] = []
+    for u in urls_raw:
+        try:
+            normalized = _validate_and_normalize_url(str(u or ""))
+        except Exception:
+            s = str(u or "").strip()
+            if s:
+                invalid.append(s)
+            continue
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        uniq.append(normalized)
+
+    if not uniq:
+        return JSONResponse(content={"ok": True, "matched": 0, "disabled": 0, "not_found": [], "invalid": invalid})
+
+    cap = 500
+    uniq = uniq[:cap]
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+
+    placeholders = ",".join(["?"] * len(uniq))
+    cur = conn.execute(
+        f"SELECT id, url, enabled FROM rss_sources WHERE url IN ({placeholders})",
+        tuple(uniq),
+    )
+    rows = cur.fetchall() or []
+
+    found_urls = set()
+    ids_to_disable: List[str] = []
+    for r in rows:
+        try:
+            sid = str(r[0] or "").strip()
+            url = str(r[1] or "").strip()
+            enabled = int(r[2] or 0)
+        except Exception:
+            continue
+        if not sid or not url:
+            continue
+        found_urls.add(url)
+        if enabled == 1:
+            ids_to_disable.append(sid)
+
+    not_found = [u for u in uniq if u not in found_urls]
+
+    disabled = 0
+    if ids_to_disable:
+        id_ph = ",".join(["?"] * len(ids_to_disable))
+        conn.execute(
+            f"UPDATE rss_sources SET enabled = 0, updated_at = ? WHERE id IN ({id_ph})",
+            tuple([int(now)] + ids_to_disable),
+        )
+        conn.commit()
+        disabled = len(ids_to_disable)
+
+    return JSONResponse(
+        content={
+            "ok": True,
+            "matched": int(len(found_urls)),
+            "disabled": int(disabled),
+            "not_found": not_found,
+            "invalid": invalid,
+            "capped": int(cap),
+        }
+    )
+
+
 @router.post("/api/admin/rss-source-requests/{request_id}/approve")
 async def api_admin_approve_rss_source_request(
     request_id: int, request: Request, body: Dict[str, Any] = Body(None)

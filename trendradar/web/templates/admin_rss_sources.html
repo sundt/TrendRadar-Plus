@@ -48,6 +48,8 @@
       <div class="row" style="align-items:center;">
         <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
         <button class="btn btn-primary" onclick="commitCsvImport()">Commit</button>
+        <button class="btn btn-danger" onclick="bulkDisableByUrls()">Bulk Disable (From URLs)</button>
+        <button class="btn btn-primary" onclick="bulkEnableCatalogAll()">Bulk Enable Catalog (All)</button>
         <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">Bulk Disable Catalog (All)</button>
         <span class="muted" id="csv-import-status"></span>
       </div>
@@ -228,6 +230,94 @@
         alert(e?.message || String(e));
       } finally {
         try { btn.disabled = false; } catch (e) { /* ignore */ }
+      }
+    }
+
+    async function bulkEnableCatalogAll() {
+      const ok = confirm('Enable ALL disabled rss_sources in Catalog (All)?');
+      if (!ok) return;
+      try {
+        _setCsvImportStatus('Enabling...');
+        const resp = await fetch('/api/admin/rss-sources/bulk-enable', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({})
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || 'Bulk enable failed');
+        alert(`Enabled ${Number(payload?.enabled || 0)} source(s).`);
+        location.reload();
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
+      }
+    }
+
+    function _parseUrlsFromTextareaText(text) {
+      const out = [];
+      const seen = new Set();
+      const lines = String(text || '').split(/\r?\n/);
+      for (const lineRaw of lines) {
+        const line = String(lineRaw || '').trim();
+        if (!line) continue;
+
+        // Support:
+        // 1) plain URL per line
+        // 2) CSV row where 2nd column is URL
+        let candidate = line;
+        if (line.includes(',')) {
+          const parts = line.split(',').map((x) => String(x || '').trim());
+          if (parts.length >= 2 && (parts[1] || '').startsWith('http')) {
+            candidate = parts[1];
+          }
+        }
+        if (!candidate.startsWith('http://') && !candidate.startsWith('https://')) {
+          continue;
+        }
+        if (seen.has(candidate)) continue;
+        seen.add(candidate);
+        out.push(candidate);
+      }
+      return out;
+    }
+
+    async function bulkDisableByUrls() {
+      const text = document.getElementById('csv-import-text')?.value || '';
+      const urls = _parseUrlsFromTextareaText(text);
+      if (!urls.length) {
+        alert('No URL found in textarea. Paste one URL per line, or CSV rows with URL in the 2nd column.');
+        return;
+      }
+      const ok = confirm(`Disable sources matching ${urls.length} URL(s)? (Only matched enabled sources will be disabled)`);
+      if (!ok) return;
+      try {
+        _setCsvImportStatus('Disabling by URLs...');
+        const resp = await fetch('/api/admin/rss-sources/bulk-disable-by-urls', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ urls })
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || 'Bulk disable by URLs failed');
+
+        const disabled = Number(payload?.disabled || 0);
+        const matched = Number(payload?.matched || 0);
+        const notFound = Array.isArray(payload?.not_found) ? payload.not_found : [];
+        const invalid = Array.isArray(payload?.invalid) ? payload.invalid : [];
+        let msg = `Matched ${matched} URL(s), disabled ${disabled} source(s).`;
+        if (invalid.length) msg += `\nInvalid: ${invalid.length}`;
+        if (notFound.length) msg += `\nNot found: ${notFound.length}`;
+        alert(msg);
+        location.reload();
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
       }
     }
 
