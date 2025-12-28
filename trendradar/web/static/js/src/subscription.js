@@ -86,6 +86,7 @@ function _normalizeSubsForServer(subs) {
         .map((s) => {
             return {
                 source_id: String(s.source_id || s.rss_source_id || '').trim(),
+                url: String(s.url || '').trim(),
                 feed_title: String(s.feed_title || s.display_name || '').trim(),
                 column: String(s.column || 'RSS').trim() || 'RSS',
                 platform_id: String(s.platform_id || '').trim(),
@@ -195,12 +196,53 @@ function _setBtnEnabled(btn, enabled) {
     }
 }
 
+function _setBtnAriaDisabled(btn, disabled) {
+    if (!btn) return;
+    const isDisabled = !!disabled;
+    try {
+        if (isDisabled) btn.setAttribute('aria-disabled', 'true');
+        else btn.removeAttribute('aria-disabled');
+    } catch (e) {
+        // ignore
+    }
+    try {
+        if (isDisabled) {
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        } else {
+            btn.style.opacity = '';
+            btn.style.cursor = '';
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
 function _updateRssGatingUI() {
     const previewBtn = _getPreviewBtnEl();
     const saveBtn = _getSaveBtnEl();
 
     const selectedId = _getSelectedSourceId();
-    _setBtnEnabled(previewBtn, !!selectedId);
+    // NOTE: do not use the native `disabled` attr for preview button, because many browsers
+    // will not show hover tooltips on disabled elements.
+    try {
+        if (previewBtn) previewBtn.removeAttribute('disabled');
+    } catch (e) {
+        // ignore
+    }
+    _setBtnAriaDisabled(previewBtn, !selectedId);
+
+    try {
+        if (previewBtn) {
+            if (!selectedId) {
+                previewBtn.setAttribute('title', '请先选择 RSS 源再预览');
+            } else {
+                previewBtn.removeAttribute('title');
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
 
     if (selectedId) {
         const st = _previewStatusBySourceId.get(String(selectedId || '').trim());
@@ -583,9 +625,10 @@ function _renderPickerVirtual() {
         const url = String(s.url || '');
         parts.push(
             `<div class="rss-source-item" data-source-id="${escapeHtml(sid)}" style="position:absolute;left:0;right:0;top:${i * _ROW_H}px;height:${_ROW_H}px;padding:8px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;display:flex;align-items:center;gap:8px;">
-              <div style="min-width:0;flex:1;">
-                <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)}</div>
-                <div style="font-size:0.78rem;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(url)}</div>
+              <div style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                <span style="font-weight:700;font-size:0.9rem;color:#111827;">${escapeHtml(name)}</span>
+                <span style="font-weight:400;font-size:0.75rem;color:#9ca3af;"> — </span>
+                <span style="font-weight:400;font-size:0.72rem;color:#6b7280;">${escapeHtml(url)}</span>
               </div>
             </div>`
         );

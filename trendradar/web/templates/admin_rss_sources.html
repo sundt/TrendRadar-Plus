@@ -51,6 +51,7 @@
         <button class="btn btn-danger" onclick="bulkDisableByUrls()">Bulk Disable (From URLs)</button>
         <button class="btn btn-primary" onclick="bulkEnableCatalogAll()">Bulk Enable Catalog (All)</button>
         <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">Bulk Disable Catalog (All)</button>
+        <button class="btn btn-primary" onclick="exportCatalogAll()">Export Catalog (All)</button>
         <span class="muted" id="csv-import-status"></span>
       </div>
       <div style="height:10px;"></div>
@@ -143,6 +144,10 @@
             <th>ID</th>
             <th>Name</th>
             <th>URL</th>
+            <th>Subscribed</th>
+            <th>Added</th>
+            <th>Entries</th>
+            <th>Latest</th>
             <th>Enabled</th>
             <th>Actions</th>
           </tr>
@@ -153,6 +158,10 @@
             <td class="muted">{{ s.id }}</td>
             <td><b>{{ s.name }}</b></td>
             <td style="max-width:640px; word-break:break-all;" class="muted">{{ s.url }}</td>
+            <td class="muted">{{ s.subscribed_count or 0 }}</td>
+            <td class="muted">{{ s.added_count or 0 }}</td>
+            <td class="muted">{{ s.entries_count or 0 }}</td>
+            <td class="muted">{{ s.latest_entry_time or '' }}</td>
             <td id="src-enabled-{{ s.id }}">{{ 1 if s.enabled else 0 }}</td>
             <td>
               <button class="btn" data-id="{{ s.id }}" data-enabled="{{ 1 if s.enabled else 0 }}" onclick="toggleSourceEnabled(this)">
@@ -230,6 +239,35 @@
         alert(e?.message || String(e));
       } finally {
         try { btn.disabled = false; } catch (e) { /* ignore */ }
+      }
+    }
+
+    async function exportCatalogAll() {
+      try {
+        _setCsvImportStatus('Exporting...');
+        const resp = await fetch('/api/admin/rss-sources/export', {
+          method: 'GET',
+          headers: {
+            'X-Admin-Token': token
+          }
+        });
+        if (!resp.ok) {
+          const payload = await resp.json().catch(() => ({}));
+          throw new Error(payload?.detail || 'Export failed');
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'admin_rss_catalog_all.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        _setCsvImportStatus('Exported');
+      } catch (e) {
+        alert(e?.message || String(e));
+        _setCsvImportStatus('');
       }
     }
 

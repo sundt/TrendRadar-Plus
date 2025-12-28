@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from trendradar.web.db_online import get_online_db_conn
+from trendradar.web.user_db import added_counts, get_user_db_conn, subscriber_counts
 
 
 router = APIRouter()
@@ -785,15 +786,88 @@ async def admin_rss_sources_page(request: Request):
     _call_init_default_sources(request)
 
     conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+    uconn = None
+    try:
+        uconn = get_user_db_conn(project_root=request.app.state.project_root)
+    except Exception:
+        uconn = None
+
+    if uconn is None:
+        subs_map = {}
+        adds_map = {}
+    else:
+        try:
+            subs_map = subscriber_counts(conn=uconn)
+        except Exception:
+            subs_map = {}
+
+        try:
+            uconn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_rss_subscription_adds (
+                    user_id INTEGER NOT NULL,
+                    source_id TEXT NOT NULL,
+                    first_added_at INTEGER NOT NULL,
+                    PRIMARY KEY(user_id, source_id)
+                )
+                """
+            )
+            uconn.execute(
+                """
+                INSERT OR IGNORE INTO user_rss_subscription_adds(user_id, source_id, first_added_at)
+                SELECT user_id, source_id, MIN(created_at)
+                FROM user_rss_subscriptions
+                GROUP BY user_id, source_id
+                """
+            )
+            uconn.commit()
+        except Exception:
+            pass
+
+        try:
+            adds_map = added_counts(conn=uconn)
+        except Exception:
+            adds_map = {}
+
+    try:
+        cur = conn.execute("SELECT source_id, COUNT(*) as c FROM rss_entries GROUP BY source_id")
+        rows = cur.fetchall() or []
+        entries_map = {str(r[0] or "").strip(): int(r[1] or 0) for r in rows if str(r[0] or "").strip()}
+    except Exception:
+        entries_map = {}
+
+    try:
+        cur = conn.execute(
+            """
+            SELECT source_id,
+                   MAX(CASE WHEN published_at > 0 THEN published_at ELSE created_at END) AS t
+            FROM rss_entries
+            GROUP BY source_id
+            """
+        )
+        rows = cur.fetchall() or []
+        latest_map = {str(r[0] or "").strip(): int(r[1] or 0) for r in rows if str(r[0] or "").strip()}
+    except Exception:
+        latest_map = {}
+
     cur = conn.execute(
         "SELECT id, name, url, host, category, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
     )
     src_rows = cur.fetchall() or []
     sources = []
     for r in src_rows:
+        sid = str(r[0] or "").strip()
+        latest_ts = int(latest_map.get(sid, 0) or 0)
+        latest_str = ""
+        if latest_ts > 0:
+            try:
+                latest_str = datetime.fromtimestamp(latest_ts).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                latest_str = str(latest_ts)
         sources.append(
             {
-                "id": str(r[0] or ""),
+                "id": sid,
                 "name": str(r[1] or ""),
                 "url": str(r[2] or ""),
                 "host": str(r[3] or ""),
@@ -801,6 +875,10 @@ async def admin_rss_sources_page(request: Request):
                 "enabled": int(r[5] or 0),
                 "created_at": int(r[6] or 0),
                 "updated_at": int(r[7] or 0),
+                "subscribed_count": int(subs_map.get(sid, 0) or 0),
+                "added_count": int(adds_map.get(sid, 0) or 0),
+                "entries_count": int(entries_map.get(sid, 0) or 0),
+                "latest_entry_time": latest_str,
             }
         )
 
@@ -853,4 +931,99 @@ async def admin_rss_sources_page(request: Request):
             "rejected": rejected,
             "token": token,
         },
+    )
+
+
+@router.get("/api/admin/rss-sources/export")
+async def api_admin_rss_sources_export(request: Request):
+    _require_admin(request)
+    _call_init_default_sources(request)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+    try:
+        uconn = get_user_db_conn(project_root=request.app.state.project_root)
+        subs_map = subscriber_counts(conn=uconn)
+        adds_map = added_counts(conn=uconn)
+    except Exception:
+        subs_map = {}
+        adds_map = {}
+
+    try:
+        cur = conn.execute("SELECT source_id, COUNT(*) as c FROM rss_entries GROUP BY source_id")
+        rows = cur.fetchall() or []
+        entries_map = {str(r[0] or "").strip(): int(r[1] or 0) for r in rows if str(r[0] or "").strip()}
+    except Exception:
+        entries_map = {}
+
+    try:
+        cur = conn.execute(
+            """
+            SELECT source_id,
+                   MAX(CASE WHEN published_at > 0 THEN published_at ELSE created_at END) AS t
+            FROM rss_entries
+            GROUP BY source_id
+            """
+        )
+        rows = cur.fetchall() or []
+        latest_map = {str(r[0] or "").strip(): int(r[1] or 0) for r in rows if str(r[0] or "").strip()}
+    except Exception:
+        latest_map = {}
+
+    cur = conn.execute(
+        "SELECT id, name, url, host, category, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
+    )
+    src_rows = cur.fetchall() or []
+
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(
+        [
+            "id",
+            "name",
+            "url",
+            "host",
+            "category",
+            "enabled",
+            "subscribed_count",
+            "added_count",
+            "entries_count",
+            "latest_entry_time",
+            "created_at",
+            "updated_at",
+        ]
+    )
+    for r in src_rows:
+        sid = str(r[0] or "").strip()
+        latest_ts = int(latest_map.get(sid, 0) or 0)
+        latest_str = ""
+        if latest_ts > 0:
+            try:
+                latest_str = datetime.fromtimestamp(latest_ts).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                latest_str = str(latest_ts)
+        w.writerow(
+            [
+                sid,
+                str(r[1] or ""),
+                str(r[2] or ""),
+                str(r[3] or ""),
+                str(r[4] or ""),
+                int(r[5] or 0),
+                int(subs_map.get(sid, 0) or 0),
+                int(adds_map.get(sid, 0) or 0),
+                int(entries_map.get(sid, 0) or 0),
+                latest_str,
+                int(r[6] or 0),
+                int(r[7] or 0),
+            ]
+        )
+
+    from fastapi.responses import Response
+
+    body = out.getvalue().encode("utf-8")
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=admin_rss_catalog_all.csv"},
     )

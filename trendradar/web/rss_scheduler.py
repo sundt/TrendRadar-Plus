@@ -98,6 +98,8 @@ def _rss_parse_published_ts(published_raw: str) -> int:
     except Exception:
         pass
 
+    return 0
+
 
 def _maybe_log_rss_entries_stats(conn) -> None:
     global _rss_entries_stats_last_log_at

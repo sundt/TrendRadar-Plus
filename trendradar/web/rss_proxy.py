@@ -269,6 +269,70 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
     return {"format": "xml", "feed": {"title": ""}, "entries": []}
 
 
+def _extract_first_n_entries_from_truncated_xml(body: bytes, limit: int) -> Optional[bytes]:
+    """Best-effort: salvage a valid minimal RSS/Atom XML from a truncated upstream response.
+
+    This is used only when upstream response exceeds our max_bytes cap.
+    It attempts to extract the first N <entry> (Atom) or <item> (RSS) blocks and
+    wrap them with a minimal closing tail to make it well-formed for XML parsing.
+    """
+
+    if not body or limit <= 0:
+        return None
+
+    b = body
+    stripped = b.lstrip()
+    if not stripped.startswith(b"<"):
+        return None
+
+    lower = stripped[:4096].lower()
+    is_atom = b"<feed" in lower
+    is_rss = b"<rss" in lower
+
+    if not (is_atom or is_rss):
+        return None
+
+    if is_atom:
+        open_tag = b"<entry"
+        close_tag = b"</entry>"
+        end_tail = b"</feed>"
+    else:
+        open_tag = b"<item"
+        close_tag = b"</item>"
+        end_tail = b"</channel></rss>"
+
+    start = stripped.find(open_tag)
+    if start < 0:
+        return None
+
+    prefix = stripped[:start]
+    items: List[bytes] = []
+    pos = start
+    for _ in range(int(limit)):
+        o = stripped.find(open_tag, pos)
+        if o < 0:
+            break
+        c = stripped.find(close_tag, o)
+        if c < 0:
+            break
+        c_end = c + len(close_tag)
+        items.append(stripped[o:c_end])
+        pos = c_end
+
+    if not items:
+        return None
+
+    # Ensure we have a minimal tail to close the document.
+    # If the truncated body already contains the full tail, keep it.
+    tail_pos = stripped.rfind(end_tail)
+    if tail_pos >= 0:
+        tail = stripped[tail_pos:]
+    else:
+        tail = end_tail
+
+    return prefix + b"".join(items) + tail
+
+
 _rss_host_limit_lock = Lock()
 _rss_host_semaphores: Dict[str, Any] = {}
 _rss_host_recent: Dict[str, deque] = {}
@@ -395,7 +459,35 @@ def rss_proxy_fetch_cached(url: str) -> Dict[str, Any]:
                     pass
                 data = resp.raw.read(max_bytes + 1)
                 if len(data) > max_bytes:
-                    raise ValueError("Response too large")
+                    # Best-effort fallback for huge feeds:
+                    # Attempt to salvage a minimal valid feed from the truncated bytes.
+                    truncated = data[:max_bytes]
+                    parsed = None
+                    for lim in (40, 20):
+                        try:
+                            maybe = _extract_first_n_entries_from_truncated_xml(truncated, lim)
+                            if not maybe:
+                                continue
+                            parsed = parse_feed_content(content_type, maybe)
+                            if isinstance(parsed, dict) and isinstance(parsed.get("entries"), list):
+                                parsed["entries"] = (parsed.get("entries") or [])[:lim]
+                            break
+                        except Exception:
+                            parsed = None
+                            continue
+                    if parsed is None:
+                        raise ValueError("Response too large")
+
+                    result = {
+                        "url": url,
+                        "final_url": current_url,
+                        "content_type": content_type,
+                        "data": parsed,
+                        "etag": (resp.headers.get("ETag") or "").strip(),
+                        "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                    }
+                    cache.set(key, result)
+                    return result
 
                 stripped = data.lstrip()
                 if stripped.startswith(b"<"):

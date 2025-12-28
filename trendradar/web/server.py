@@ -19,7 +19,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Lock, Semaphore
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urljoin, urlparse
 
 from fastapi import FastAPI, Request, Query, Body, HTTPException
@@ -82,6 +82,61 @@ def _parse_rfc822_dt(value: str) -> Optional[datetime]:
         return dt
     except Exception:
         return None
+
+
+def _maybe_mint_rss_uid_cookie(request: Request) -> Tuple[Optional[int], Optional[str]]:
+    tok = (request.cookies.get("rss_uid") or "").strip()
+    if tok:
+        uid = _resolve_anon_user_id(request)
+        return uid, None
+
+    try:
+        tok = secrets.token_urlsafe(32)
+        uid = create_user_with_cookie_identity(conn=_get_user_db_conn(), token=tok)
+        return uid, tok
+    except Exception:
+        return None, None
+
+
+def _enrich_rss_subscriptions(subs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    items = list(subs or [])
+    ids: List[str] = []
+    seen = set()
+    for s in items:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("source_id") or s.get("rss_source_id") or "").strip()
+        if not sid or sid in seen:
+            continue
+        seen.add(sid)
+        ids.append(sid)
+
+    if not ids:
+        return items
+
+    try:
+        conn = _get_online_db_conn()
+        placeholders = ",".join(["?"] * len(ids))
+        cur = conn.execute(
+            f"SELECT id, url FROM rss_sources WHERE id IN ({placeholders})",
+            tuple(ids),
+        )
+        rows = cur.fetchall() or []
+        id_to_url = {str(r[0] or "").strip(): str(r[1] or "").strip() for r in rows}
+    except Exception:
+        id_to_url = {}
+
+    out: List[Dict[str, Any]] = []
+    for s in items:
+        if not isinstance(s, dict):
+            continue
+        sid = str(s.get("source_id") or s.get("rss_source_id") or "").strip()
+        if sid and not str(s.get("url") or "").strip():
+            u = id_to_url.get(sid) or ""
+            if u:
+                s = {**s, "url": u}
+        out.append(s)
+    return out
 
 
 def _normalize_rss_column_to_cat_id(column: str) -> str:
@@ -248,7 +303,14 @@ def _resolve_anon_user_id(request: Request) -> Optional[int]:
     if not tok:
         return None
     try:
-        return resolve_user_id_by_cookie_token(conn=_get_user_db_conn(), token=tok)
+        user_id = resolve_user_id_by_cookie_token(conn=_get_user_db_conn(), token=tok)
+        if user_id:
+            return user_id
+
+        # Legacy compatibility: existing rss_uid cookie may have been minted
+        # client-side (or under old gating) and thus not present in user.db.
+        # For B1, we always allow creating a server identity.
+        return create_user_with_cookie_identity(conn=_get_user_db_conn(), token=tok)
     except Exception:
         return None
 
@@ -561,17 +623,22 @@ async def _render_viewer_page(
 
 
 @app.get("/api/me/rss-subscriptions")
-async def api_me_rss_subscriptions(request: Request):
-    user_id = _resolve_anon_user_id(request)
+async def api_me_rss_subscriptions_get(request: Request):
+    user_id, minted_tok = _maybe_mint_rss_uid_cookie(request)
     if not user_id:
         raise HTTPException(status_code=403, detail="Not allowlisted")
-    subs = list_rss_subscriptions(conn=_get_user_db_conn(), user_id=user_id)
-    return UnicodeJSONResponse(content={"subscriptions": subs})
+    subs = _enrich_rss_subscriptions(
+        list_rss_subscriptions(conn=_get_user_db_conn(), user_id=user_id)
+    )
+    resp = UnicodeJSONResponse(content={"subscriptions": subs})
+    if minted_tok:
+        resp.set_cookie(key="rss_uid", value=minted_tok, httponly=True, samesite="lax", path="/")
+    return resp
 
 
 @app.put("/api/me/rss-subscriptions")
 async def api_me_put_rss_subscriptions(request: Request):
-    user_id = _resolve_anon_user_id(request)
+    user_id, minted_tok = _maybe_mint_rss_uid_cookie(request)
     if not user_id:
         raise HTTPException(status_code=403, detail="Not allowlisted")
 
@@ -587,7 +654,9 @@ async def api_me_put_rss_subscriptions(request: Request):
     subs = body.get("subscriptions") if isinstance(body, dict) else None
     if not isinstance(subs, list):
         raise HTTPException(status_code=400, detail="Invalid subscriptions")
-    saved = replace_rss_subscriptions(conn=_get_user_db_conn(), user_id=user_id, subscriptions=subs)
+    saved = _enrich_rss_subscriptions(
+        replace_rss_subscriptions(conn=_get_user_db_conn(), user_id=user_id, subscriptions=subs)
+    )
 
     try:
         prev_set = set(
@@ -625,7 +694,10 @@ async def api_me_put_rss_subscriptions(request: Request):
                         continue
     except Exception:
         pass
-    return UnicodeJSONResponse(content={"subscriptions": saved})
+    resp = UnicodeJSONResponse(content={"subscriptions": saved})
+    if minted_tok:
+        resp.set_cookie(key="rss_uid", value=minted_tok, httponly=True, samesite="lax", path="/")
+    return resp
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -699,6 +771,61 @@ async def api_news_page(
     pid = (platform_id or "").strip()
     if not pid:
         raise HTTPException(status_code=400, detail="Missing platform_id")
+
+    if pid.startswith("rss-"):
+        sid = pid[len("rss-") :].strip()
+        if not sid:
+            raise HTTPException(status_code=400, detail="Invalid platform_id")
+
+        conn = _get_online_db_conn()
+        try:
+            cur = conn.execute(
+                """
+                SELECT title, url, published_at, published_raw, created_at
+                FROM rss_entries
+                WHERE source_id = ?
+                ORDER BY (CASE WHEN published_at > 0 THEN published_at ELSE created_at END) DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (sid, int(page_size) + 1, int(offset)),
+            )
+            rows = cur.fetchall() or []
+        except Exception:
+            rows = []
+
+        has_more = len(rows) > int(page_size)
+        rows = rows[: int(page_size)]
+        next_offset = (int(offset) + int(page_size)) if has_more else None
+
+        items: List[Dict[str, Any]] = []
+        for r in rows:
+            title = (r[0] or "").strip()
+            link = (r[1] or "").strip()
+            if not title:
+                title = link
+            if not link:
+                continue
+            items.append(
+                {
+                    "title": title,
+                    "display_title": title,
+                    "url": link,
+                    "meta": "",
+                    "stable_id": generate_news_id(pid, title),
+                }
+            )
+
+        return UnicodeJSONResponse(
+            content={
+                "platform_id": pid,
+                "offset": int(offset),
+                "page_size": int(page_size),
+                "next_offset": next_offset,
+                "has_more": has_more,
+                "items": items,
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     safe_limit = min(max(offset + page_size + 1, page_size + 1), 10000)
 
@@ -778,6 +905,59 @@ async def api_news_pages(
     updated_at = None
 
     for pid in cleaned:
+        if pid.startswith("rss-"):
+            sid = pid[len("rss-") :].strip()
+            conn = _get_online_db_conn()
+            try:
+                cur = conn.execute(
+                    """
+                    SELECT title, url, published_at, published_raw, created_at
+                    FROM rss_entries
+                    WHERE source_id = ?
+                    ORDER BY (CASE WHEN published_at > 0 THEN published_at ELSE created_at END) DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (sid, int(page_size) + 1),
+                )
+                rows = cur.fetchall() or []
+            except Exception:
+                rows = []
+
+            has_more = len(rows) > int(page_size)
+            rows = rows[: int(page_size)]
+            next_offset = int(page_size) if has_more else None
+
+            items: List[Dict[str, Any]] = []
+            for r in rows:
+                title = (r[0] or "").strip()
+                link = (r[1] or "").strip()
+                if not title:
+                    title = link
+                if not link:
+                    continue
+                items.append(
+                    {
+                        "title": title,
+                        "display_title": title,
+                        "url": link,
+                        "meta": "",
+                        "stable_id": generate_news_id(pid, title),
+                    }
+                )
+
+            if updated_at is None:
+                updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            results[pid] = {
+                "platform_id": pid,
+                "offset": 0,
+                "page_size": int(page_size),
+                "next_offset": next_offset,
+                "has_more": has_more,
+                "items": items,
+            }
+            continue
+
         data = viewer_service.get_categorized_news(
             platforms=[pid],
             limit=safe_limit,
@@ -919,7 +1099,6 @@ async def api_subscriptions_rss_news(request: Request):
             for r in rows[:30]:
                 title = (r[0] or "").strip()
                 link = (r[1] or "").strip()
-                meta = (r[3] or "").strip()
                 if not title:
                     title = link
                 if not link:
@@ -930,7 +1109,7 @@ async def api_subscriptions_rss_news(request: Request):
                         "title": title,
                         "display_title": title,
                         "url": link,
-                        "meta": meta,
+                        "meta": "",
                         "stable_id": stable_id,
                     }
                 )

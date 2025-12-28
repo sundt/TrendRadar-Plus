@@ -272,6 +272,12 @@ body.categories-ready .tab-content-area {
             }
         }
 
+        @media (max-width: 640px) {
+            .news-title {
+                font-size: 0.95rem;
+            }
+        }
+
         .platform-card:hover {
             border-color: var(--primary-color);
             box-shadow: 0 2px 8px rgba(79, 70, 229, 0.15);

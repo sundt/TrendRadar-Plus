@@ -26,6 +26,20 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     global _user_db_conn
 
     if _user_db_conn is not None:
+        try:
+            _user_db_conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_rss_subscription_adds (
+                    user_id INTEGER NOT NULL,
+                    source_id TEXT NOT NULL,
+                    first_added_at INTEGER NOT NULL,
+                    PRIMARY KEY(user_id, source_id)
+                )
+                """
+            )
+            _user_db_conn.commit()
+        except Exception:
+            pass
         return _user_db_conn
 
     db_path = _user_db_path(project_root)
@@ -67,6 +81,17 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
             column TEXT NOT NULL DEFAULT '',
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
+            PRIMARY KEY(user_id, source_id)
+        )
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_rss_subscription_adds (
+            user_id INTEGER NOT NULL,
+            source_id TEXT NOT NULL,
+            first_added_at INTEGER NOT NULL,
             PRIMARY KEY(user_id, source_id)
         )
         """
@@ -149,9 +174,12 @@ def list_rss_subscriptions(*, conn: sqlite3.Connection, user_id: int) -> List[Di
     rows = cur.fetchall() or []
     out: List[Dict[str, Any]] = []
     for r in rows:
+        sid = str(r[0] or "").strip()
+        if sid.startswith("rss-"):
+            sid = sid[len("rss-") :].strip()
         out.append(
             {
-                "source_id": str(r[0] or "").strip(),
+                "source_id": sid,
                 "feed_title": str(r[1] or "").strip(),
                 "column": str(r[2] or "").strip() or "RSS",
                 "platform_id": "",
@@ -167,11 +195,34 @@ def replace_rss_subscriptions(
     subscriptions: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     now = _now_ts()
+
+    try:
+        cur = conn.execute(
+            "SELECT source_id FROM user_rss_subscriptions WHERE user_id = ?",
+            (int(user_id),),
+        )
+        old_rows = cur.fetchall() or []
+        old_set = set()
+        for r in old_rows:
+            sid0 = str(r[0] or "").strip()
+            if not sid0:
+                continue
+            if sid0.startswith("rss-"):
+                sid0 = sid0[len("rss-") :].strip()
+            if sid0:
+                old_set.add(sid0)
+    except Exception:
+        old_set = set()
+
     normalized: List[Tuple[str, str, str]] = []
     for s in subscriptions or []:
         if not isinstance(s, dict):
             continue
         sid = str(s.get("source_id") or s.get("rss_source_id") or "").strip()
+        if not sid:
+            continue
+        if sid.startswith("rss-"):
+            sid = sid[len("rss-") :].strip()
         if not sid:
             continue
         display_name = str(s.get("feed_title") or s.get("display_name") or "").strip()
@@ -185,6 +236,17 @@ def replace_rss_subscriptions(
             continue
         seen.add(sid)
         uniq.append((sid, dn, col))
+
+    try:
+        new_set = {sid for sid, _, _ in uniq if sid}
+        newly_added = [sid for sid in new_set if sid not in old_set]
+        for sid in newly_added:
+            conn.execute(
+                "INSERT OR IGNORE INTO user_rss_subscription_adds(user_id, source_id, first_added_at) VALUES(?, ?, ?)",
+                (int(user_id), str(sid), int(now)),
+            )
+    except Exception:
+        pass
 
     conn.execute("DELETE FROM user_rss_subscriptions WHERE user_id = ?", (int(user_id),))
     for sid, dn, col in uniq:
@@ -207,5 +269,27 @@ def subscriber_counts(*, conn: sqlite3.Connection) -> Dict[str, int]:
         sid = str(r[0] or "").strip()
         if not sid:
             continue
-        out[sid] = int(r[1] or 0)
+        if sid.startswith("rss-"):
+            sid = sid[len("rss-") :].strip()
+        if not sid:
+            continue
+        out[sid] = out.get(sid, 0) + int(r[1] or 0)
+    return out
+
+
+def added_counts(*, conn: sqlite3.Connection) -> Dict[str, int]:
+    cur = conn.execute(
+        "SELECT source_id, COUNT(*) as c FROM user_rss_subscription_adds GROUP BY source_id"
+    )
+    rows = cur.fetchall() or []
+    out: Dict[str, int] = {}
+    for r in rows:
+        sid = str(r[0] or "").strip()
+        if not sid:
+            continue
+        if sid.startswith("rss-"):
+            sid = sid[len("rss-") :].strip()
+        if not sid:
+            continue
+        out[sid] = out.get(sid, 0) + int(r[1] or 0)
     return out

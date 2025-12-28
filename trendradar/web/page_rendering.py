@@ -158,7 +158,7 @@ async def render_viewer_page(
 
         try:
             has_cookie = bool((request.cookies.get("rss_uid") or "").strip())
-            if not has_cookie and beta_can_mint_identity(request):
+            if not has_cookie:
                 tok = secrets.token_urlsafe(32)
                 create_user_with_cookie_identity(conn=get_user_db_conn(), token=tok)
                 resp.set_cookie(
