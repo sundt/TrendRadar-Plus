@@ -176,9 +176,12 @@
             <td class="muted">{{ s.latest_entry_time or '' }}</td>
             <td id="src-enabled-{{ s.id }}">{{ 1 if s.enabled else 0 }}</td>
             <td>
-              <button class="btn" data-id="{{ s.id }}" data-enabled="{{ 1 if s.enabled else 0 }}" onclick="toggleSourceEnabled(this)">
-                {% if s.enabled %}Disable{% else %}Enable{% endif %}
-              </button>
+              <div class="row">
+                <button class="btn" data-id="{{ s.id }}" onclick="warmupSource(this)">手动抓取</button>
+                <button class="btn" data-id="{{ s.id }}" data-enabled="{{ 1 if s.enabled else 0 }}" onclick="toggleSourceEnabled(this)">
+                  {% if s.enabled %}Disable{% else %}Enable{% endif %}
+                </button>
+              </div>
             </td>
           </tr>
           {% endfor %}
@@ -251,6 +254,71 @@
         alert(e?.message || String(e));
       } finally {
         try { btn.disabled = false; } catch (e) { /* ignore */ }
+      }
+    }
+
+    async function warmupSource(btnOrSourceId) {
+      const btn = (btnOrSourceId && typeof btnOrSourceId === 'object' && 'dataset' in btnOrSourceId) ? btnOrSourceId : null;
+      const sid = btn ? String(btn?.dataset?.id || '').trim() : String(btnOrSourceId || '').trim();
+      if (!sid) return;
+
+      const originalBtnText = btn ? String(btn.textContent || '') : '';
+      try {
+        if (!token) {
+          _setCsvImportStatus('抓取失败: 缺少 admin token');
+          alert('Missing admin token. Use ?token=... to open this page or configure TREND_RADAR_ADMIN_TOKEN.');
+          return;
+        }
+
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '抓取中...';
+        }
+        _setCsvImportStatus(`抓取中: ${sid} ...`);
+
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 15000);
+        const resp = await fetch('/api/rss-sources/warmup?wait_ms=1200', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': token
+          },
+          body: JSON.stringify({ source_ids: [sid], priority: 'high' }),
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(t));
+
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload?.detail || `Failed (${resp.status})`);
+
+        const detail = String(payload?.detail || '').toLowerCase();
+        if (detail.includes('warmup not available')) {
+          throw new Error(String(payload?.detail || 'warmup not available'));
+        }
+        if (Number(payload?.queued || 0) <= 0) {
+          throw new Error(String(payload?.detail || 'No task queued'));
+        }
+
+        const res0 = Array.isArray(payload?.results) ? payload.results[0] : null;
+        if (res0 && res0.ok === false && res0.error) {
+          throw new Error(String(res0.error));
+        }
+
+        _setCsvImportStatus(`抓取完成: ${sid}`);
+        if (btn) btn.textContent = '已触发';
+      } catch (e) {
+        _setCsvImportStatus(`抓取失败: ${sid}`);
+        const name = String(e?.name || '');
+        if (name === 'AbortError') {
+          alert('Request timeout (15s).');
+        } else {
+          alert(e?.message || String(e));
+        }
+        if (btn) btn.textContent = originalBtnText || '手动抓取';
+      } finally {
+        if (btn) {
+          try { btn.disabled = false; } catch (e) { /* ignore */ }
+        }
       }
     }
 
