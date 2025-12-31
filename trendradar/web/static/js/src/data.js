@@ -8,6 +8,7 @@ import { storage } from './storage.js';
 
 const TAB_STORAGE_KEY = 'trendradar_active_tab';
 const CATEGORY_PAGE_SIZE = 20;
+const VISIBLE_PLATFORMS_STORAGE_KEY = 'trendradar_visible_platforms_v1';
 
 let _ajaxRefreshInFlight = false;
 let _ajaxLastRefreshAt = 0;
@@ -15,6 +16,87 @@ let _ajaxRefreshPending = null;
 
 let _latestCategories = null;
 let _platformCloseHandlersAttached = false;
+
+let _visiblePlatformsState = null;
+
+function _getSessionStorage() {
+    try {
+        if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
+    } catch (e) {
+        // ignore
+    }
+    return null;
+}
+
+function _loadVisiblePlatformsState() {
+    if (_visiblePlatformsState) return _visiblePlatformsState;
+    const ss = _getSessionStorage();
+    if (!ss) {
+        _visiblePlatformsState = {};
+        return _visiblePlatformsState;
+    }
+    try {
+        const raw = ss.getItem(VISIBLE_PLATFORMS_STORAGE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            _visiblePlatformsState = (parsed && typeof parsed === 'object') ? parsed : {};
+        } else {
+            _visiblePlatformsState = {};
+        }
+    } catch (e) {
+        _visiblePlatformsState = {};
+    }
+    return _visiblePlatformsState;
+}
+
+function _persistVisiblePlatformsState() {
+    const ss = _getSessionStorage();
+    if (!ss) return;
+    try {
+        ss.setItem(VISIBLE_PLATFORMS_STORAGE_KEY, JSON.stringify(_visiblePlatformsState || {}));
+    } catch (e) {
+        // ignore
+    }
+}
+
+function _setVisiblePlatformsForCategory(catId, ids) {
+    const cid = String(catId || '').trim();
+    if (!cid) return;
+    const arr = (Array.isArray(ids) ? ids : []).map((x) => String(x || '').trim()).filter(Boolean);
+    const state = _loadVisiblePlatformsState();
+    state[cid] = {
+        ids: arr,
+        updatedAt: Date.now(),
+    };
+    _visiblePlatformsState = state;
+    _persistVisiblePlatformsState();
+}
+
+function _getVisiblePlatformsForCategory(catId) {
+    const cid = String(catId || '').trim();
+    if (!cid) return null;
+    const state = _loadVisiblePlatformsState();
+    const item = state?.[cid];
+    const ids = Array.isArray(item?.ids) ? item.ids : null;
+    return ids ? ids.map((x) => String(x || '').trim()).filter(Boolean) : null;
+}
+
+function _getDesiredVisiblePlatformIds(catId, orderedIds) {
+    const ordered = (Array.isArray(orderedIds) ? orderedIds : []).map((x) => String(x || '').trim()).filter(Boolean);
+    const saved = _getVisiblePlatformsForCategory(catId);
+    const base = (Array.isArray(saved) ? saved : []).filter((x) => ordered.includes(x));
+
+    const next = [];
+    for (const x of base) {
+        if (next.length >= 3) break;
+        if (!next.includes(x)) next.push(x);
+    }
+    for (const x of ordered) {
+        if (next.length >= 3) break;
+        if (!next.includes(x)) next.push(x);
+    }
+    return next;
+}
 
 function _getCategoryIdFromCard(card) {
     const pane = card?.closest?.('.tab-pane');
@@ -259,6 +341,13 @@ async function _rotatePlatformCard(cardEl) {
     }
 
     try {
+        const nextVisibleIds = visibleIds.map((x) => (String(x || '').trim() === currentPid ? nextId : x)).filter(Boolean);
+        _setVisiblePlatformsForCategory(catId, nextVisibleIds);
+    } catch (e) {
+        // ignore
+    }
+
+    try {
         if (TR.paging?.setCardPageSize) {
             TR.paging.setCardPageSize(newEl, TR.paging.PAGE_SIZE);
         }
@@ -494,8 +583,9 @@ export const data = {
             const badgeCategory = cat?.is_new ? `<span class="new-badge new-badge-category" data-category="${escapeHtml(catId)}">NEW</span>` : '';
             const badgeSports = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
             const badge = `${badgeCategory}${badgeSports}`;
+            const activeClass = (String(catId) === String(activeTabId)) ? ' active' : '';
             return `
-            <div class="category-tab" data-category="${escapeHtml(catId)}" draggable="false" onclick="switchTab('${escapeHtml(catId)}')">
+            <div class="category-tab${activeClass}" data-category="${escapeHtml(catId)}" draggable="false" onclick="switchTab('${escapeHtml(catId)}')">
                 <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
                 <div class="category-tab-icon">${icon}</div>
                 <div class="category-tab-name">${name}${badge}</div>
@@ -504,6 +594,7 @@ export const data = {
 
         const contentHtml = Object.entries(categories).map(([catId, cat]) => {
             const isActiveCategory = !!activeTabId && String(catId) === String(activeTabId);
+            const paneActiveClass = isActiveCategory ? ' active' : '';
 
             if (String(catId) === 'rsscol-rss') {
                 const btnRow = `
@@ -511,7 +602,7 @@ export const data = {
                         <div id="rssCategoryCarouselStatus" style="color:#6b7280;font-size:0.85rem;flex:1;min-width:200px;"></div>
                     </div>`;
                 return `
-                <div class="tab-pane" id="tab-${escapeHtml(catId)}">
+                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
                     <div class="platform-grid" style="display:flex;flex-direction:column;gap:10px;min-height:0;">
                         ${btnRow}
                         <div id="rssCategoryCarouselGrid" style="display:flex;flex-direction:column;gap:10px;min-height:0;"></div>
@@ -522,13 +613,17 @@ export const data = {
 
             if (String(catId) === 'explore') {
                 return `
-                <div class="tab-pane" id="tab-${escapeHtml(catId)}">
+                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
                     <div class="platform-grid" id="trExploreGrid"></div>
                 </div>`;
             }
 
             const platforms = cat?.platforms || {};
-            const platformCards = Object.entries(platforms).slice(0, 3).map(([platformId, platform]) => {
+            const orderedIds = Object.keys(platforms || {});
+            const visiblePlatformIds = _getDesiredVisiblePlatformIds(catId, orderedIds);
+            const platformCards = visiblePlatformIds.map((platformId) => {
+                const platform = platforms?.[platformId];
+                if (!platform) return '';
                 const platformName = escapeHtml(platform?.name || platformId);
                 const platformBadge = platform?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(platformId)}">NEW</span>` : '';
                 const news = Array.isArray(platform?.news) ? platform.news : [];
@@ -580,10 +675,10 @@ export const data = {
                     </ul>
                     <div class="news-load-sentinel" aria-hidden="true"></div>
                 </div>`;
-            }).join('');
+            }).filter(Boolean).join('');
 
             return `
-            <div class="tab-pane" id="tab-${escapeHtml(catId)}">
+            <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
                 <div class="platform-grid">${platformCards}
                 </div>
                 <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>

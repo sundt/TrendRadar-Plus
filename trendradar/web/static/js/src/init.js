@@ -50,6 +50,16 @@ function _setupMobileTopToggle() {
         // ignore
     }
 
+    // E2E: always keep the top area visible, so tests can reliably interact with category tabs.
+    try {
+        const isE2E = (new URLSearchParams(window.location.search)).get('e2e') === '1';
+        if (isE2E) {
+            collapsed = false;
+        }
+    } catch (e) {
+        // ignore
+    }
+
     _setMobileTopCollapsed(collapsed);
 
     try {
@@ -72,6 +82,36 @@ function _setupMobileTopToggle() {
 
 // 初始化：检查用户配置并决定是否需要刷新数据
 ready(function() {
+    try {
+        const isE2E = (new URLSearchParams(window.location.search)).get('e2e') === '1';
+        if (isE2E) {
+            try {
+                const early = document.getElementById('early-hide');
+                if (early) early.remove();
+            } catch (e) {
+                // ignore
+            }
+            try {
+                const tabs = document.querySelector('.category-tabs');
+                if (tabs && tabs instanceof HTMLElement) {
+                    tabs.style.display = 'flex';
+                }
+            } catch (e) {
+                // ignore
+            }
+            try {
+                const content = document.querySelector('.tab-content-area');
+                if (content && content instanceof HTMLElement) {
+                    content.style.display = 'block';
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+
     _setupMobileTopToggle();
 
     // 检查栏目设置 NEW 标记是否应该隐藏

@@ -141,6 +141,10 @@ body.categories-ready .category-tabs {
     display: flex;
 }
 
+body.categories-ready .tab-content-area {
+    display: block;
+}
+
 .category-tab {
     flex: 0 0 calc((100% - 42px) / 8);
     min-width: 80px;
@@ -238,29 +242,19 @@ body.tr-rss-reading .tab-content-area {
     box-shadow: none;
 }
 
-body.categories-ready .tab-content-area {
-    display: block;
-}
-
 @media (max-width: 640px) {
-    body {
-        padding: 10px 0 28px;
-    }
-
-    body.tr-mobile-top-collapsed .header-card,
-    body.tr-mobile-top-collapsed .category-tabs {
-        display: none !important;
-    }
-
     .tr-mobile-top-toggle {
-        position: fixed;
-        right: 12px;
-        bottom: 12px;
-        z-index: 99999;
         border: none;
-        border-radius: 999px;
-        padding: 10px 12px;
-        font-size: 0.86rem;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
         font-weight: 700;
         color: #111827;
         background: rgba(255, 255, 255, 0.92);
@@ -280,6 +274,10 @@ body.categories-ready .tab-content-area {
         padding: 10px;
         margin-bottom: 0;
         border-radius: 12px;
+    }
+
+    body.tr-mobile-top-collapsed .header-card {
+        display: none !important;
     }
 
     .category-tabs {

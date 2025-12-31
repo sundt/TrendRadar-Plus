@@ -3,6 +3,7 @@ import { TR, ready, escapeHtml } from './core.js';
 const ENTRIES_PER_SOURCE = 15;
 const CATEGORY_ID = 'rsscol-rss';
 const PREFETCH_AHEAD = 3;
+const CURSOR_STORAGE_KEY = 'trendradar_rss_carousel_cursor_v1';
 
 let _open = false;
 let _loading = false;
@@ -23,6 +24,42 @@ let _touchActive = false;
 let _touchStartX = 0;
 let _touchStartY = 0;
 let _touchMode = null;
+
+function _getSessionStorage() {
+    try {
+        return window.sessionStorage;
+    } catch (e) {
+        return null;
+    }
+}
+
+function _loadSavedCursor() {
+    try {
+        const ss = _getSessionStorage();
+        if (!ss) return null;
+        const raw = ss.getItem(CURSOR_STORAGE_KEY);
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 0) return null;
+        return Math.floor(n);
+    } catch (e) {
+        return null;
+    }
+}
+
+function _persistCursor(idx) {
+    try {
+        const ss = _getSessionStorage();
+        if (!ss) return;
+        const n = Number(idx);
+        if (!Number.isFinite(n) || n < 0) {
+            ss.removeItem(CURSOR_STORAGE_KEY);
+            return;
+        }
+        ss.setItem(CURSOR_STORAGE_KEY, String(Math.floor(n)));
+    } catch (e) {
+        // ignore
+    }
+}
 
 function _isMobile() {
     try {
@@ -740,6 +777,7 @@ async function _showAt(index, dir = 1) {
             }
 
             _cursor = idx;
+            _persistCursor(_cursor);
             _currentCard = card;
             _entryPage = 0;
             _renderCard(card);
@@ -831,7 +869,9 @@ function open() {
         // ignore
     }
     _resetState();
-    next();
+    const saved = _loadSavedCursor();
+    const startIdx = saved != null ? saved : 0;
+    _showAt(startIdx, 1).catch((e) => _setStatus(String(e?.message || e), { variant: 'error' }));
 }
 
 function close() {
