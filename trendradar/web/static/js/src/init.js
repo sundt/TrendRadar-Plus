@@ -5,8 +5,75 @@
 
 import { TR, ready } from './core.js';
 
+const MOBILE_TOP_COLLAPSE_STORAGE_KEY = 'trendradar_mobile_top_collapsed_v1';
+const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
+
+function _isMobileNarrowScreen() {
+    try {
+        return !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+    } catch (e) {
+        return false;
+    }
+}
+
+function _setMobileTopCollapsed(collapsed) {
+    const next = !!collapsed;
+    try {
+        document.body.classList.toggle(MOBILE_TOP_COLLAPSE_CLASS, next);
+    } catch (e) {
+        // ignore
+    }
+    try {
+        localStorage.setItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY, next ? '1' : '0');
+    } catch (e) {
+        // ignore
+    }
+    try {
+        const btn = document.getElementById('trMobileTopToggleBtn');
+        if (btn) {
+            btn.textContent = next ? '显示顶部' : '隐藏顶部';
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+function _setupMobileTopToggle() {
+    if (!_isMobileNarrowScreen()) return;
+
+    let collapsed = true;
+    try {
+        const raw = localStorage.getItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY);
+        if (raw === '0') collapsed = false;
+        if (raw === '1') collapsed = true;
+    } catch (e) {
+        // ignore
+    }
+
+    _setMobileTopCollapsed(collapsed);
+
+    try {
+        if (document.getElementById('trMobileTopToggleBtn')) return;
+        const btn = document.createElement('button');
+        btn.id = 'trMobileTopToggleBtn';
+        btn.type = 'button';
+        btn.className = 'tr-mobile-top-toggle';
+        btn.textContent = collapsed ? '显示顶部' : '隐藏顶部';
+        btn.setAttribute('aria-label', '显示或隐藏顶部栏');
+        btn.addEventListener('click', () => {
+            const next = !document.body.classList.contains(MOBILE_TOP_COLLAPSE_CLASS);
+            _setMobileTopCollapsed(next);
+        });
+        document.body.appendChild(btn);
+    } catch (e) {
+        // ignore
+    }
+}
+
 // 初始化：检查用户配置并决定是否需要刷新数据
 ready(function() {
+    _setupMobileTopToggle();
+
     // 检查栏目设置 NEW 标记是否应该隐藏
     if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {
         const badge = document.getElementById('categorySettingsNewBadge');

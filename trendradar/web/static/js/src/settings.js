@@ -426,6 +426,8 @@ export const settings = {
         _settingsHideDefaultCategories = true;
 
         document.getElementById('editCategoryName').value = '';
+        const platformField = document.getElementById('platformSelectField');
+        if (platformField) platformField.style.display = 'none';
         const searchEl = document.getElementById('platformSearchInput');
         if (searchEl) searchEl.value = '';
         _platformSearchQuery = '';
@@ -440,6 +442,9 @@ export const settings = {
     editCategory(catId) {
         _isAddingNew = false;
         _editingCategoryId = catId;
+
+        const platformField = document.getElementById('platformSelectField');
+        if (platformField) platformField.style.display = '';
 
         const config = this.getMergedCategoryConfig();
         const isCustom = config.customCategories.find(c => c.id === catId);

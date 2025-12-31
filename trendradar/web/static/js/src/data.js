@@ -593,10 +593,14 @@ export const data = {
         tabsEl.innerHTML = tabsHtml;
         contentEl.innerHTML = contentHtml;
 
-        // 栏目数量超过 8 个时，自动启用紧凑模式（避免出现滚动条）
         try {
+            const isMobile = !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
             const tabCount = tabsEl.querySelectorAll('.category-tab').length;
-            tabsEl.classList.toggle('compact', tabCount > 8);
+            if (isMobile) {
+                tabsEl.classList.remove('compact');
+            } else {
+                tabsEl.classList.toggle('compact', tabCount > 8);
+            }
         } catch (e) {
             // ignore
         }
