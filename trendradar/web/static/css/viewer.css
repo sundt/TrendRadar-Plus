@@ -305,6 +305,10 @@ body.categories-ready .tab-content-area {
         min-height: 420px;
     }
 
+    #tab-explore {
+        padding: 0;
+    }
+
     .platform-grid {
         gap: 8px;
         padding-bottom: 4px;
@@ -752,6 +756,12 @@ body.categories-ready .tab-content-area {
             position: relative;
             padding: 16px 14px;
             min-height: 100%;
+        }
+
+        @media (max-width: 640px) {
+            #tab-explore {
+                padding: 0 !important;
+            }
         }
 
         #tab-explore #trExploreGrid {
