@@ -1,6 +1,9 @@
 # Hotnews
 
  在线地址：https://hot.uihash.com
+![PC 端截图](trendradar/web/static/images/pc20260101.png)
+
+![移动端截图](trendradar/web/static/images/mobile20260101.jpg)
  
  面向“热点新闻 + RSS”聚合的轻量栈：
  

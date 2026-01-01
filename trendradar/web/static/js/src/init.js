@@ -29,9 +29,9 @@ function _setMobileTopCollapsed(collapsed) {
         // ignore
     }
     try {
-        const btn = document.getElementById('trMobileTopToggleBtn');
-        if (btn) {
-            btn.textContent = next ? '显示顶部' : '隐藏顶部';
+        const link = document.getElementById('trFooterTopToggle');
+        if (link) {
+            link.textContent = next ? '显示顶部' : '隐藏顶部';
         }
     } catch (e) {
         // ignore
@@ -39,8 +39,6 @@ function _setMobileTopCollapsed(collapsed) {
 }
 
 function _setupMobileTopToggle() {
-    if (!_isMobileNarrowScreen()) return;
-
     let collapsed = true;
     try {
         const raw = localStorage.getItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY);
@@ -63,18 +61,23 @@ function _setupMobileTopToggle() {
     _setMobileTopCollapsed(collapsed);
 
     try {
-        if (document.getElementById('trMobileTopToggleBtn')) return;
-        const btn = document.createElement('button');
-        btn.id = 'trMobileTopToggleBtn';
-        btn.type = 'button';
-        btn.className = 'tr-mobile-top-toggle';
-        btn.textContent = collapsed ? '显示顶部' : '隐藏顶部';
-        btn.setAttribute('aria-label', '显示或隐藏顶部栏');
-        btn.addEventListener('click', () => {
+        const link = document.getElementById('trFooterTopToggle');
+        if (!link) return;
+        if (link.dataset.bound === '1') return;
+        link.dataset.bound = '1';
+        link.setAttribute('role', 'button');
+        link.setAttribute('aria-label', '显示或隐藏顶部栏');
+        link.addEventListener('click', () => {
             const next = !document.body.classList.contains(MOBILE_TOP_COLLAPSE_CLASS);
             _setMobileTopCollapsed(next);
+            if (!next) {
+                try {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } catch (e) {
+                    // ignore
+                }
+            }
         });
-        document.body.appendChild(btn);
     } catch (e) {
         // ignore
     }

@@ -474,6 +474,37 @@ async function _deletePlatformCard(cardEl) {
 
     const parent = cardEl.parentNode;
     const nextSibling = cardEl.nextSibling;
+
+    const grid = cardEl.closest('.platform-grid');
+    const categories = _latestCategories;
+    const platforms = (categories && categories[catId] && categories[catId].platforms) ? (categories[catId].platforms || {}) : null;
+    const orderedIds = platforms ? Object.keys(platforms).map((x) => String(x || '').trim()).filter(Boolean) : [];
+    const stateBeforeDelete = (() => {
+        try {
+            return data.snapshotViewerState();
+        } catch (e) {
+            return {};
+        }
+    })();
+    const visibleIdsBeforeDelete = (() => {
+        try {
+            const visible = grid ? Array.from(grid.querySelectorAll('.platform-card[data-platform]')) : [];
+            return visible.map((el) => String(el?.getAttribute?.('data-platform') || '').trim()).filter(Boolean);
+        } catch (e) {
+            return [];
+        }
+    })();
+    const remainingVisibleIds = visibleIdsBeforeDelete.filter((x) => String(x || '').trim() !== pid);
+    let fillPlatformId = null;
+    for (const cand of orderedIds) {
+        const cid = String(cand || '').trim();
+        if (!cid) continue;
+        if (cid === pid) continue;
+        if (remainingVisibleIds.includes(cid)) continue;
+        fillPlatformId = cid;
+        break;
+    }
+
     try {
         if (parent) parent.removeChild(cardEl);
     } catch (e) {
@@ -508,6 +539,41 @@ async function _deletePlatformCard(cardEl) {
             // ignore
         }
         return;
+    }
+
+    try {
+        const nextVisible = [...remainingVisibleIds];
+        if (fillPlatformId) nextVisible.push(fillPlatformId);
+        _setVisiblePlatformsForCategory(catId, nextVisible);
+    } catch (e) {
+        // ignore
+    }
+
+    if (fillPlatformId && platforms && platforms[fillPlatformId] && grid) {
+        try {
+            const newEl = _buildPlatformCardElement(catId, fillPlatformId, platforms[fillPlatformId], stateBeforeDelete, { animateIn: true });
+            if (newEl) {
+                grid.appendChild(newEl);
+                try {
+                    if (TR.paging?.setCardPageSize) {
+                        TR.paging.setCardPageSize(newEl, TR.paging.PAGE_SIZE);
+                    }
+                    if (TR.paging?.applyPagingToCard) {
+                        TR.paging.applyPagingToCard(newEl, 0);
+                    }
+                } catch (e2) {
+                    // ignore
+                }
+                try {
+                    TR.counts?.updateAllCounts?.();
+                    TR.readState?.updateReadCount?.();
+                } catch (e2) {
+                    // ignore
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
     }
 }
 
