@@ -120,7 +120,7 @@ function _renderPlatformHeaderButtonsHtml(catId, platformId) {
     const canDelete = isRss;
     const delBtn = canDelete ? '<button type="button" class="tr-platform-card-delete" data-action="delete-platform">−</button>' : '';
     const hideBtn = !isRss ? '<button type="button" class="tr-platform-card-hide" data-action="hide-platform">🙈</button>' : '';
-    const closeBtn = '<button type="button" class="tr-platform-card-close" data-action="close-platform">×</button>';
+    const closeBtn = '<button type="button" class="tr-platform-card-close" data-action="close-platform">⇄</button>';
     return `${delBtn}${hideBtn}${closeBtn}`;
 }
 
@@ -453,6 +453,17 @@ async function _deletePlatformCard(cardEl) {
 
     const isRss = pid.startsWith('rss-');
     if (!isRss) return;
+
+    try {
+        const ok = await _showCenteredConfirmModal(
+            '确定要删除该 RSS 卡片吗？删除后将取消订阅。',
+            '确认删除',
+            '取消'
+        );
+        if (!ok) return;
+    } catch (e) {
+        // ignore
+    }
 
     try {
         const btn = cardEl.querySelector('button[data-action="delete-platform"]');

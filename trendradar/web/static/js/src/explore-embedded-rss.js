@@ -848,7 +848,7 @@ function _renderBatch(cards) {
                     <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; min-width: 0; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">📱 ${platformName}</div>
                     <div class="platform-header-actions">
                         ${addDropdownHtml}
-                        <button type="button" class="tr-explore-card-close" data-action="close">×</button>
+                        <button type="button" class="tr-explore-card-close" data-action="close">⇄</button>
                     </div>
                 </div>
                 <ul class="news-list">${listHtml}</ul>
@@ -888,7 +888,7 @@ function _renderCardElement(card, opts = {}) {
                 <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; min-width: 0; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">📱 ${platformName}</div>
                 <div class="platform-header-actions">
                     ${addDropdownHtml}
-                    <button type="button" class="tr-explore-card-close" data-action="close">×</button>
+                    <button type="button" class="tr-explore-card-close" data-action="close">⇄</button>
                 </div>
             </div>
             <ul class="news-list">${listHtml}</ul>
