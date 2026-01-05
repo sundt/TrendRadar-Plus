@@ -335,10 +335,18 @@ async def _mb_ai_loop() -> None:
                 batch_size = 20
             batch_size = max(1, min(50, batch_size))
 
+            # 检查间隔（无数据时等待时间，默认30秒）
+            check_interval = 30
+            try:
+                check_interval = int(os.environ.get("TREND_RADAR_MB_AI_CHECK_INTERVAL", "30"))
+            except Exception:
+                check_interval = 30
+            check_interval = max(5, min(300, check_interval))
+
             conn = _get_online_db_conn()
             entries = _mb_ai_select_unlabeled(conn, batch_size)
             if not entries:
-                await asyncio.sleep(5)
+                await asyncio.sleep(check_interval)
                 continue
 
             items_for_llm = []

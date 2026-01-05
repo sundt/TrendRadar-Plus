@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { ViewerPage } from './pages/viewer.page';
 
 function getMorningBriefTabId() {
-  // We keep the category id stable as "knowledge" while display name is "每日早报".
+  // We keep the category id stable as "knowledge" while display name is "每日AI早报".
   return 'knowledge';
 }
 
@@ -35,7 +35,7 @@ test.describe('Morning Brief Three Cards', () => {
         body: JSON.stringify({
           updated_at: '2030-01-01 00:00:00',
           categories: {
-            knowledge: { id: 'knowledge', name: '每日早报', icon: '📚', platforms: {}, news_count: 0, filtered_count: 0, is_new: false },
+            knowledge: { id: 'knowledge', name: '每日AI早报', icon: '📚', platforms: {}, news_count: 0, filtered_count: 0, is_new: false },
             social: { id: 'social', name: '社交娱乐', icon: '🔥', platforms: {}, news_count: 0, filtered_count: 0, is_new: false },
             other: { id: 'other', name: '其他平台', icon: '📋', platforms: {}, news_count: 0, filtered_count: 0, is_new: false },
           },

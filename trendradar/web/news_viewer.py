@@ -97,7 +97,7 @@ PLATFORM_CATEGORIES = {
         ]
     },
     "knowledge": {
-        "name": "每日早报",
+        "name": "每日AI早报",
         "icon": "📚",
         "news_limit": 10,
         "platforms": []
@@ -130,7 +130,7 @@ PLATFORM_CATEGORIES = {
 
 # 分类显示顺序（用户期望的顺序）
 # Note: "explore" is injected by server.py and will always be the first tab.
-CATEGORY_ORDER = ['ai', 'finance', 'tech_news', 'developer', 'social', 'general', 'sports', 'knowledge', 'other']
+CATEGORY_ORDER = ['knowledge', 'ai', 'finance', 'tech_news', 'developer', 'social', 'general', 'sports', 'other']
 
 
 class NewsViewerService:
