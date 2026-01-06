@@ -78,6 +78,9 @@ services:
 
   trend-radar-viewer:
     image: wantcat/trendradar-viewer:${TREND_RADAR_VIEWER_TAG:?set TREND_RADAR_VIEWER_TAG}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.viewer
     container_name: trend-radar-viewer
     restart: unless-stopped
 

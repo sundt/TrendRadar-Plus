@@ -98,12 +98,23 @@
             min-width: 140px !important;
             max-width: 140px !important;
             transition: width 160ms ease, max-width 160ms ease, flex-basis 160ms ease;
+            border: none !important;
+            box-shadow: none !important;
+            background: rgba(0, 0, 0, 0.04) !important;
+        }
+
+        #searchInput:hover {
+            background: rgba(0, 0, 0, 0.06) !important;
         }
 
         #searchInput:focus {
             flex-basis: 320px !important;
             width: 320px !important;
             max-width: 320px !important;
+            border: none !important;
+            outline: none !important;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.22) !important;
+            background: rgba(255, 255, 255, 0.92) !important;
         }
 
 .category-settings-btn {

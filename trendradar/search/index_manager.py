@@ -59,6 +59,9 @@ class SearchIndexManager:
             embedding_model=self.config.embedding_model,
         ) if self.config.vector_enabled else None
 
+        if self.vector_index is not None and not getattr(self.vector_index, "_available", True):
+            self.vector_index = None
+
         # 索引状态
         self._last_update: Optional[datetime] = None
         self._built = False

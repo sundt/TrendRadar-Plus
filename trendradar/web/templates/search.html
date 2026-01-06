@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>搜索</title>
+    <link rel="icon" href="{{ static_prefix }}/images/hxlogo.jpg?v={{ asset_rev }}" type="image/jpeg">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
+    <style>
+        #searchPanels {
+            --tr-search-card-height: clamp(700px, calc(100vh - 260px), 1100px);
+        }
+
+        #searchPanels.platform-grid > .platform-card {
+            flex: 0 0 calc((100% - 20px) / 3);
+            width: calc((100% - 20px) / 3);
+            height: var(--tr-search-card-height);
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        #searchPanels.platform-grid > .platform-card .tr-panel-body {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #searchPanels.platform-grid > .platform-card .news-list {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding-right: 2px;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        #searchPanels.platform-grid > .platform-card .news-list::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+        }
+
+        @media (max-width: 1024px) {
+            #searchPanels.platform-grid > .platform-card {
+                flex: 0 0 calc((100% - 10px) / 2);
+                width: calc((100% - 10px) / 2);
+            }
+        }
+
+        @media (max-width: 640px) {
+            #searchPanels.platform-grid > .platform-card {
+                flex: 0 0 100%;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-card">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <a href="/" class="btn btn-sm btn-outline-secondary">返回</a>
+                <div class="flex-grow-1" style="min-width: 240px;">
+                    <input id="searchQuery" type="text" class="form-control form-control-sm" placeholder="🔍 跨日期搜索..." value="{{ q or '' }}" />
+                </div>
+                <select id="searchMode" class="form-select form-select-sm" style="width: 140px;">
+                    <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>混合</option>
+                    <option value="keyword" {% if mode == 'keyword' %}selected{% endif %}>关键词</option>
+                    <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>语义</option>
+                </select>
+                <button id="searchBtn" class="btn btn-sm btn-primary">搜索</button>
+                <button id="clearBtn" class="btn btn-sm btn-outline-secondary">清空</button>
+            </div>
+            <div class="text-muted" style="margin-top: 8px; font-size: 12px;">
+                查询范围：最近 {{ search_days }} 天，可查询多个关键字，每个关键字一个卡片
+            </div>
+        </div>
+
+        <div id="searchPanels" class="platform-grid"></div>
+    </div>
+
+    <script>
+        (function() {
+            function getParams() {
+                try {
+                    return new URLSearchParams(window.location.search || '');
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function esc(s) {
+                return String(s || '')
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#39;');
+            }
+
+            var panelsEl = document.getElementById('searchPanels');
+            var panelSeq = 1;
+            var STORAGE_KEY = 'trendradar_search_panels_v1';
+            var MAX_SAVED_PANELS = 20;
+            var isRestoring = false;
+
+            function _formatNow() {
+                try {
+                    var d = new Date();
+                    var pad = function(n) { return String(n).padStart(2, '0'); };
+                    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                } catch (e) {
+                    return '';
+                }
+            }
+
+            function _formatTs(ts) {
+                try {
+                    var d = new Date(Number(ts) || Date.now());
+                    var pad = function(n) { return String(n).padStart(2, '0'); };
+                    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                } catch (e) {
+                    return _formatNow();
+                }
+            }
+
+            function _updateUrl(q, mode) {
+                try {
+                    var params = new URLSearchParams();
+                    if (q) params.set('q', q);
+                    if (mode) params.set('mode', mode);
+                    history.replaceState(null, '', '/search' + (params.toString() ? ('?' + params.toString()) : ''));
+                } catch (e) {
+                    // ignore
+                }
+            }
+
+
+            function _persistPanels() {
+                if (isRestoring) return;
+                if (!panelsEl) return;
+                try {
+                    var items = [];
+                    var children = Array.from(panelsEl.children || []);
+                    for (var i = 0; i < children.length; i++) {
+                        var el = children[i];
+                        var q = el?.dataset?.query || '';
+                        var mode = el?.dataset?.mode || '';
+                        var createdAt = el?.dataset?.createdAt || '';
+                        if (!q) continue;
+                        items.push({ q: q, mode: mode || 'hybrid', createdAt: createdAt || String(Date.now()) });
+                        if (items.length >= MAX_SAVED_PANELS) break;
+                    }
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+                } catch (e) {
+                }
+            }
+
+            function _loadPanels() {
+                try {
+                    var raw = localStorage.getItem(STORAGE_KEY);
+                    if (!raw) return [];
+                    var arr = JSON.parse(raw);
+                    return Array.isArray(arr) ? arr : [];
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            function _findExistingPanel(q, mode) {
+                if (!panelsEl) return null;
+                var qq = String(q || '').trim();
+                var mm = String(mode || 'hybrid').trim() || 'hybrid';
+                if (!qq) return null;
+                var children = Array.from(panelsEl.children || []);
+                for (var i = 0; i < children.length; i++) {
+                    var el = children[i];
+                    if (!el || !el.dataset) continue;
+                    if (String(el.dataset.query || '').trim() === qq && String(el.dataset.mode || 'hybrid').trim() === mm) {
+                        return {
+                            wrap: el,
+                            statusEl: el.querySelector('[data-role="status"]'),
+                            listEl: el.querySelector('[data-role="list"]'),
+                        };
+                    }
+                }
+                return null;
+            }
+
+            function _buildShareUrl(q, mode) {
+                try {
+                    var base = (window.location && window.location.origin) ? window.location.origin : '';
+                    return base + '/search?q=' + encodeURIComponent(String(q || '')) + '&mode=' + encodeURIComponent(String(mode || 'hybrid'));
+                } catch (e) {
+                    return '/search?q=' + encodeURIComponent(String(q || '')) + '&mode=' + encodeURIComponent(String(mode || 'hybrid'));
+                }
+            }
+
+            async function _copyText(text) {
+                try {
+                    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    }
+                } catch (e) {
+                }
+
+                try {
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    ta.style.top = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    var ok = false;
+                    try {
+                        ok = document.execCommand('copy');
+                    } catch (e2) {
+                        ok = false;
+                    }
+                    document.body.removeChild(ta);
+                    return ok;
+                } catch (e3) {
+                    return false;
+                }
+            }
+
+            function createPanel(q, mode, opts) {
+                opts = opts || {};
+                if (!panelsEl) return null;
+                var id = 'panel-' + Date.now() + '-' + (panelSeq++);
+                var wrap = document.createElement('div');
+                wrap.className = 'platform-card';
+                wrap.dataset.panelId = id;
+                wrap.dataset.query = String(q || '');
+                wrap.dataset.mode = String(mode || 'hybrid');
+                wrap.dataset.createdAt = String(opts.createdAt != null ? opts.createdAt : Date.now());
+                var timeText = _formatTs(wrap.dataset.createdAt);
+
+                var header = '<div class="platform-header">' +
+                    '<div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: default;">' +
+                    '🔍 ' + esc(q) +
+                    '<span class="header-subtitle" style="margin-left: 10px;">' + esc(mode) + ' · ' + esc(timeText) + '</span>' +
+                    '</div>' +
+                    '<div class="platform-header-actions">' +
+                    '<button type="button" class="btn btn-sm btn-outline-secondary" data-action="share">分享</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-secondary" data-action="toggle">折叠</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger" data-action="remove">删除</button>' +
+                    '</div>' +
+                    '</div>';
+
+                wrap.innerHTML = header +
+                    '<div class="tr-panel-body" data-role="body">' +
+                    '<div class="news-placeholder" data-role="status">搜索中...</div>' +
+                    '<ul class="news-list" data-role="list"></ul>' +
+                    '</div>';
+
+                var removeBtn = wrap.querySelector('[data-action="remove"]');
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', function() {
+                        try { wrap.remove(); } catch (e) {}
+                        _persistPanels();
+                    });
+                }
+
+                var toggleBtn = wrap.querySelector('[data-action="toggle"]');
+                var bodyEl = wrap.querySelector('[data-role="body"]');
+                if (toggleBtn && bodyEl) {
+                    toggleBtn.addEventListener('click', function() {
+                        var collapsed = bodyEl.style.display === 'none';
+                        bodyEl.style.display = collapsed ? '' : 'none';
+                        toggleBtn.textContent = collapsed ? '折叠' : '展开';
+                    });
+                }
+
+                var shareBtn = wrap.querySelector('[data-action="share"]');
+                if (shareBtn) {
+                    shareBtn.addEventListener('click', async function() {
+                        var q2 = wrap?.dataset?.query || '';
+                        var m2 = wrap?.dataset?.mode || 'hybrid';
+                        var url = _buildShareUrl(q2, m2);
+                        var ok = await _copyText(url);
+                        var old = shareBtn.textContent;
+                        shareBtn.textContent = ok ? '已复制' : '复制失败';
+                        window.setTimeout(function() { shareBtn.textContent = old; }, 1200);
+                    });
+                }
+
+                try {
+                    panelsEl.prepend(wrap);
+                } catch (e) {
+                    panelsEl.appendChild(wrap);
+                }
+
+                _persistPanels();
+
+                return {
+                    wrap: wrap,
+                    statusEl: wrap.querySelector('[data-role="status"]'),
+                    listEl: wrap.querySelector('[data-role="list"]'),
+                };
+            }
+
+            async function runSearchIntoPanel(q, mode, panel) {
+                if (!panel) return;
+                var statusEl = panel.statusEl;
+                var listEl = panel.listEl;
+                if (statusEl) statusEl.textContent = '搜索中...';
+                if (listEl) listEl.innerHTML = '';
+
+                var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=200';
+                try {
+                    var resp = await fetch(apiUrl, { method: 'GET' });
+                    var data = await resp.json();
+                    if (!resp.ok) {
+                        throw new Error((data && (data.detail || data.error)) || '请求失败');
+                    }
+
+                    var results = Array.isArray(data.results) ? data.results : [];
+                    if (statusEl) statusEl.textContent = '共 ' + results.length + ' 条结果';
+
+                    if (!listEl) return;
+                    if (!results.length) {
+                        listEl.innerHTML = '<li class="news-placeholder">没有找到匹配结果</li>';
+                        return;
+                    }
+
+                    listEl.innerHTML = results.map(function(r) {
+                        var title = esc(r.title);
+                        var url = esc(r.url);
+                        var meta = esc((r.date || '') + ' · ' + (r.platform_id || ''));
+                        return (
+                            '<li class="news-item">' +
+                            '<div class="news-item-content">' +
+                            '<a class="news-title" href="' + url + '" target="_blank" rel="noopener noreferrer">' + title + '</a>' +
+                            '</div>' +
+                            '<div class="news-subtitle">' + meta + '</div>' +
+                            '</li>'
+                        );
+                    }).join('');
+                } catch (e) {
+                    if (statusEl) statusEl.textContent = '搜索失败：' + (e && e.message ? e.message : String(e));
+                }
+            }
+
+            function triggerSearch(opts) {
+                opts = opts || {};
+                var q = (opts.q != null ? String(opts.q) : (document.getElementById('searchQuery')?.value || '')).trim();
+                var mode = (opts.mode != null ? String(opts.mode) : (document.getElementById('searchMode')?.value || 'hybrid')).trim() || 'hybrid';
+                if (!q) return;
+
+                if (opts.updateUrl !== false) _updateUrl(q, mode);
+                var panel = null;
+                if (opts.reuseExisting) {
+                    panel = _findExistingPanel(q, mode);
+                    if (panel && panelsEl && panel.wrap && panelsEl.firstChild !== panel.wrap) {
+                        try { panelsEl.prepend(panel.wrap); } catch (e) {}
+                        _persistPanels();
+                    }
+                }
+                if (!panel) panel = createPanel(q, mode, { createdAt: opts.createdAt });
+                runSearchIntoPanel(q, mode, panel);
+            }
+
+            function restoreSavedPanels() {
+                if (!panelsEl) return;
+                var saved = _loadPanels();
+                if (!saved.length) return;
+                isRestoring = true;
+                try {
+                    for (var i = saved.length - 1; i >= 0; i--) {
+                        var it = saved[i] || {};
+                        var q = String(it.q || '').trim();
+                        var mode = String(it.mode || 'hybrid').trim() || 'hybrid';
+                        if (!q) continue;
+                        triggerSearch({ q: q, mode: mode, createdAt: it.createdAt, updateUrl: false });
+                    }
+                } finally {
+                    isRestoring = false;
+                    _persistPanels();
+                }
+            }
+
+            async function runSearchFromUrl() {
+                var params = getParams();
+                if (!params) return;
+
+                var q = (params.get('q') || '').trim();
+                var mode = (params.get('mode') || '{{ mode or "hybrid" }}').trim() || 'hybrid';
+
+                var input = document.getElementById('searchQuery');
+                if (input && q && !input.value) input.value = q;
+                if (!q) return;
+
+                triggerSearch({ q: q, mode: mode, updateUrl: false, reuseExisting: true });
+            }
+
+            var btn = document.getElementById('searchBtn');
+            if (btn) btn.addEventListener('click', function() { triggerSearch(); });
+
+            var clearBtn = document.getElementById('clearBtn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    if (!panelsEl) return;
+                    panelsEl.innerHTML = '';
+                    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+                });
+            }
+
+            var input = document.getElementById('searchQuery');
+            if (input) {
+                input.addEventListener('keydown', function(ev) {
+                    if (ev && ev.key === 'Enter') {
+                        ev.preventDefault();
+                        triggerSearch();
+                    }
+                });
+                try { input.focus(); } catch (e) {}
+            }
+
+            restoreSavedPanels();
+            runSearchFromUrl();
+        })();
+    </script>
+</body>
+</html>

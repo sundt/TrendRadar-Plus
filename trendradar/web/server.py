@@ -29,6 +29,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import json
+from dataclasses import asdict
 
 # 添加项目根目录到 Python 路径
 # trendradar/web/server.py -> trendradar/web -> trendradar -> hotnews (项目根目录)
@@ -62,7 +63,7 @@ from trendradar.web.user_db import (
     replace_rss_subscriptions,
     resolve_user_id_by_cookie_token,
 )
-
+from trendradar.search import get_search_manager, get_search_config
 
 def _md5_hex(s: str) -> str:
     return hashlib.md5(s.encode("utf-8")).hexdigest()
@@ -1842,6 +1843,30 @@ async def root(
     return await _render_viewer_page(request, filter=filter, platforms=platforms)
 
 
+@app.get("/search", response_class=HTMLResponse)
+async def search_page(
+    request: Request,
+    q: Optional[str] = Query(None, description="搜索关键词"),
+    mode: str = Query("hybrid", description="搜索模式: hybrid/keyword/semantic"),
+):
+    cdn_base_url = _get_cdn_base_url()
+    static_prefix = cdn_base_url if cdn_base_url else "/static"
+    asset_rev = page_rendering._get_asset_rev(project_root)
+    cfg = get_search_config()
+
+    return templates.TemplateResponse(
+        "search.html",
+        {
+            "request": request,
+            "q": (q or "").strip(),
+            "mode": (mode or "hybrid").strip(),
+            "static_prefix": static_prefix,
+            "asset_rev": asset_rev,
+            "search_days": int(getattr(cfg, "search_days", 30) or 30),
+        },
+    )
+
+
 def _redirect_to_root(request: Request) -> RedirectResponse:
     qs = request.url.query
     url = "/" + (f"?{qs}" if qs else "")
@@ -1917,6 +1942,83 @@ async def api_news(
         pass
 
     return UnicodeJSONResponse(content=data)
+
+
+@app.get("/api/search")
+async def api_search(
+    q: str = Query(..., description="搜索关键词"),
+    mode: str = Query("hybrid", description="搜索模式: hybrid/keyword/semantic"),
+    limit: int = Query(200, ge=1, le=1000),
+):
+    query = (q or "").strip()
+    if not query:
+        raise HTTPException(status_code=400, detail="Missing q")
+
+    m = (mode or "hybrid").strip().lower()
+    if m not in {"hybrid", "keyword", "semantic"}:
+        raise HTTPException(status_code=400, detail="Invalid mode")
+
+    manager = get_search_manager()
+    results = manager.search(query=query, search_mode=m, limit=int(limit))
+    payload = []
+    for r in results or []:
+        try:
+            payload.append(asdict(r))
+        except Exception:
+            payload.append(getattr(r, "__dict__", {}) or {})
+
+    def _parse_dt(val: Any) -> Optional[datetime]:
+        if not val:
+            return None
+        if isinstance(val, datetime):
+            return val
+        if isinstance(val, (int, float)):
+            try:
+                return datetime.fromtimestamp(float(val))
+            except Exception:
+                return None
+        s = str(val).strip()
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s)
+        except Exception:
+            pass
+        try:
+            if len(s) == 10 and s[4] == "-" and s[7] == "-":
+                return datetime.strptime(s, "%Y-%m-%d")
+        except Exception:
+            return None
+        return None
+
+    def _score_val(d: Dict[str, Any]) -> float:
+        try:
+            v = d.get("combined_score")
+            if v is None:
+                v = d.get("score")
+            if v is None:
+                v = d.get("fts_score")
+            if v is None:
+                v = d.get("vector_score")
+            return float(v) if v is not None else 0.0
+        except Exception:
+            return 0.0
+
+    payload.sort(
+        key=lambda d: (
+            _parse_dt(d.get("date")) or datetime.min,
+            _score_val(d),
+        ),
+        reverse=True,
+    )
+
+    return UnicodeJSONResponse(
+        content={
+            "query": query,
+            "mode": m,
+            "results": payload,
+        }
+    )
 
 
 @app.get("/api/news/page")

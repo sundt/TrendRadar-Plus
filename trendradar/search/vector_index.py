@@ -9,9 +9,15 @@ import os
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
-import numpy as np
+# numpy 作为可选依赖（Docker 镜像可能不会预装）
+try:
+    import numpy as np
+    NUMPY_AVAILABLE = True
+except ImportError:
+    np = None
+    NUMPY_AVAILABLE = False
 
 from trendradar.core.logger import get_logger
 from .config import get_search_config
@@ -32,6 +38,9 @@ try:
 except ImportError:
     FAISS_AVAILABLE = False
     logger.warning("faiss 未安装，向量搜索将不可用")
+
+if not NUMPY_AVAILABLE:
+    logger.warning("numpy 未安装，向量搜索将不可用")
 
 
 @dataclass
@@ -67,7 +76,7 @@ class VectorIndex:
             embedding_model: Embedding 模型名称
             vector_size: 向量维度
         """
-        if not FAISS_AVAILABLE or not SENTENCE_TRANSFORMERS_AVAILABLE:
+        if not FAISS_AVAILABLE or not SENTENCE_TRANSFORMERS_AVAILABLE or not NUMPY_AVAILABLE:
             logger.warning("向量索引依赖不可用，将使用模拟实现")
             self._available = False
             return
@@ -152,9 +161,9 @@ class VectorIndex:
     def _ensure_available(self):
         """确保向量索引可用"""
         if not self._available:
-            raise RuntimeError("向量索引依赖不可值。请安装: pip install faiss-cpu sentence-transformers")
+            raise RuntimeError("向量索引依赖不可值。请安装: pip install numpy faiss-cpu sentence-transformers")
 
-    def encode_texts(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
+    def encode_texts(self, texts: List[str], batch_size: int = 32) -> Any:
         """
         将文本编码为向量
 
