@@ -45,11 +45,10 @@ function _fmtTime(tsSec) {
     if (!ts) return '';
     try {
         const d = new Date(ts * 1000);
+        const YYYY = String(d.getFullYear());
         const MM = String(d.getMonth() + 1).padStart(2, '0');
         const DD = String(d.getDate()).padStart(2, '0');
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        return `${MM}-${DD} ${hh}:${mm}`;
+        return `${YYYY}-${MM}-${DD}`;
     } catch (e) {
         return '';
     }
@@ -97,9 +96,7 @@ function _ensureLayout() {
         <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">
             <div class="platform-header">
                 <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🕒 最新 1-50</div>
-                <div class="platform-header-actions">
-                    <button type="button" class="tr-platform-card-close" data-action="mb-refresh" data-target="timeline">↻</button>
-                </div>
+                <div class="platform-header-actions"></div>
             </div>
             <ul class="news-list" data-mb-list="slice1"></ul>
         </div>
@@ -107,9 +104,7 @@ function _ensureLayout() {
         <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-2" data-page-size="50" draggable="false">
             <div class="platform-header">
                 <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">⭐ 最新 51-100</div>
-                <div class="platform-header-actions">
-                    <button type="button" class="tr-platform-card-close" data-action="mb-refresh" data-target="timeline">↻</button>
-                </div>
+                <div class="platform-header-actions"></div>
             </div>
             <ul class="news-list" data-mb-list="slice2"></ul>
         </div>
@@ -117,9 +112,7 @@ function _ensureLayout() {
         <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-3" data-page-size="50" draggable="false">
             <div class="platform-header">
                 <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🧾 最新 101-150</div>
-                <div class="platform-header-actions">
-                    <button type="button" class="tr-platform-card-close" data-action="mb-refresh" data-target="timeline">↻</button>
-                </div>
+                <div class="platform-header-actions"></div>
             </div>
             <ul class="news-list" data-mb-list="slice3"></ul>
         </div>

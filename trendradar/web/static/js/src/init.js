@@ -39,16 +39,13 @@ function _setMobileTopCollapsed(collapsed) {
 }
 
 function _setupMobileTopToggle() {
-    const isNarrow = _isMobileNarrowScreen();
-    let collapsed = isNarrow;
-    if (isNarrow) {
-        try {
-            const raw = localStorage.getItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY);
-            if (raw === '0') collapsed = false;
-            if (raw === '1') collapsed = true;
-        } catch (e) {
-            // ignore
-        }
+    let collapsed = true;
+    try {
+        const raw = localStorage.getItem(MOBILE_TOP_COLLAPSE_STORAGE_KEY);
+        if (raw === '0') collapsed = false;
+        if (raw === '1') collapsed = true;
+    } catch (e) {
+        // ignore
     }
 
     // E2E: always keep the top area visible, so tests can reliably interact with category tabs.
@@ -144,6 +141,45 @@ ready(function() {
         // 有自定义配置，触发数据刷新来应用用户配置
         // renderViewerFromData 完成后会添加 .categories-ready 类
         TR.data.refreshViewerData({ preserveScroll: false });
+
+        try {
+            window.setTimeout(() => {
+                try {
+                    if (document.body.classList.contains('categories-ready')) return;
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    const early = document.getElementById('early-hide');
+                    if (early) early.remove();
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    const tabs = document.querySelector('.category-tabs');
+                    if (tabs && tabs instanceof HTMLElement) {
+                        tabs.style.display = 'flex';
+                    }
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    const content = document.querySelector('.tab-content-area');
+                    if (content && content instanceof HTMLElement) {
+                        content.style.display = 'block';
+                    }
+                } catch (e) {
+                    // ignore
+                }
+                try {
+                    document.body.classList.add('categories-ready');
+                } catch (e) {
+                    // ignore
+                }
+            }, 2500);
+        } catch (e) {
+            // ignore
+        }
     } else {
         // 无自定义配置，直接显示服务端渲染的默认栏目
         document.body.classList.add('categories-ready');
