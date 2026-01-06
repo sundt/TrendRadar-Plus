@@ -108,13 +108,16 @@ def _mb_ai_prompt_text() -> str:
         "• BUSINESS: 融资/公司动态\n"
         "• CONSUMER: 消费电子产品\n"
         "• MARKETING: 营销活动/品牌推广\n"
+        "• FINANCE: 股票/基金/投资理财/证券/行情\n"
         "• OTHER: 其他内容\n\n"
+        "强制排除：股票、基金、证券、行情分析、投资理财类内容一律标记为FINANCE并exclude。\n\n"
         "保留规则：仅当 类别∈[AI_MODEL,DEV_INFRA,HARDWARE_PRO] 且 分数≥75 且 置信度≥0.7 时action=include，否则exclude。\n\n"
         "输出格式（严格JSON数组）：[{\"id\":\"...\",\"category\":\"...\",\"action\":\"include|exclude\",\"score\":0-100,\"confidence\":0.0-1.0,\"reason\":\"<8字\"}]\n"
         "⚠️ 关键：输出数组长度必须与输入完全一致，不得跳过任何条目。\n\n"
         "示例：\n"
         "{\"title\":\"Llama-4训练细节公开\"} → {\"category\":\"AI_MODEL\",\"action\":\"include\",\"score\":88,\"confidence\":0.85,\"reason\":\"训练技术\"}\n"
         "{\"title\":\"某AI公司完成B轮融资\"} → {\"category\":\"BUSINESS\",\"action\":\"exclude\",\"score\":35,\"confidence\":0.92,\"reason\":\"融资新闻\"}\n"
+        "{\"title\":\"A股三大指数收涨\"} → {\"category\":\"FINANCE\",\"action\":\"exclude\",\"score\":10,\"confidence\":0.95,\"reason\":\"股票行情\"}\n"
     )
 
 
