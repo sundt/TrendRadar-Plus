@@ -18,6 +18,20 @@ TrendRadar：多平台热点新闻聚合与 AI 分析工具（抓取、分类查
 - 前端模板：`trendradar/web/templates/`
 - 前端 JS（模块化源码）：`trendradar/web/static/js/src/`
 
+## 数据库与 Schema（SQLite）
+
+数据库文件（运行时产物，通常在 `output/`，不建议提交到仓库）：
+- 热点新闻日库：`output/YYYY-MM-DD/news.db`
+- RSS 在线库：`output/online.db`
+- 用户库：`output/user.db`
+- 搜索索引库：`output/search_indexes/fts_index.db`
+
+Schema/建表/迁移的权威来源（改表/加字段时必须同步更新对应位置）：
+- 热点新闻日库（news.db）：`trendradar/storage/schema.sql`（由 `trendradar/storage/local.py` / `trendradar/storage/remote.py` 执行）
+- RSS 在线库（online.db）：`trendradar/web/db_online.py`（含 `_ensure_column()` 的轻量加字段迁移）
+- 用户库（user.db）：`trendradar/web/user_db.py`
+- 搜索 FTS 索引库（fts_index.db）：`trendradar/search/fts_index.py`
+
 ## 工作方式（最低要求）
 - 进行较大改动/新增能力/规范调整前：先走 OpenSpec（见 `openspec/AGENTS.md`）。
 - 涉及前端行为变更：按 OpenSpec 要求跑 Playwright E2E（`npm test`）。
