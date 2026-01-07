@@ -20,11 +20,38 @@
 
 一般不需要也不建议提交 `.db` 文件；用初始化/迁移代码保证旧库可升级。
 
-## 4. 提交建议（降低多模型协作成本）
+## 4. 大改 Git 工作流（feature 分支 + 验证后合并）
+
+当变更满足任一条件时，视为“大改”：涉及多个模块/目录、涉及数据库 schema、影响线上行为、或需要 OpenSpec proposal。
+
+- 在开始实现前：从 `main` 拉出 `feature/<topic>` 分支。
+- 在合并到 `main` 前：
+  - 必须完成自测与关键验证（例如前端变更需跑 `npm test`）。
+  - 如属于 OpenSpec 范畴：必须先完成 proposal 并获得批准。
+- 合并策略：优先走 PR/MR（便于 review 与回滚），确认无误再合并。
+
+## 5. 防误删与可恢复性规则（强制）
+
+当 AI/脚本可能产生“大范围改动”（例如批量删除/移动文件、重写文档、重构多目录）时，必须满足：
+
+- **禁止直接在 `main` 上做大改**：必须在 `feature/<topic>` 分支操作。
+- **改动前必须做可回滚点（checkpoint）**：
+  - 在开始大改前先提交一次“checkpoint commit”（即便只是当前状态的保存），确保随时可回滚。
+- **大范围删除/移动前必须 review diff**：
+  - 必须先检查变更范围（例如“哪些文件会被删/被改/被移动”），确认无误后才执行。
+- **任何删除都要能恢复**：
+  - 删除/移动文件后必须确保可以用 Git 回滚（例如 `git restore` / `git revert` / `git reset --hard <sha>` 等方式恢复）。
+
+建议（非强制，但推荐）：
+
+- **开启 GitHub 分支保护**：要求 PR review + 必须通过 CI（例如 Playwright E2E）后才能合并到 `main`。
+- **遇到误删的标准恢复路径**：优先通过 Git 回滚恢复（以 commit 为准），不要靠“手工从服务器拷回”。
+
+## 6. 提交建议（降低多模型协作成本）
 - Commit message 尽量写清：范围 + 行为变化 + 关键文件。
 - 对关键决策建议在 `docs/ai/AI_CONTEXT.md` 的“最近变更”里追加一条。
 
-## 5. 快速定位
+## 7. 快速定位
 - 配置加载：`trendradar/core/loader.py`（默认 `config/config.yaml`）
 - Viewer 指南：`docs/guides/viewer.md`
 - RSS AI 分类：`docs/guides/rss-ai-classification.md`
