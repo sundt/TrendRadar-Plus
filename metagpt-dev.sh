@@ -19,7 +19,7 @@ cd "${OUT_DIR}"
 
 if ! command -v metagpt >/dev/null 2>&1; then
   echo "metagpt CLI not found. Please install MetaGPT in a dev-only environment and ensure 'metagpt' is on PATH."
-  echo "See docs/METAGPT_DEV_GUIDE.md"
+  echo "See docs/dev/metagpt.md"
   exit 127
 fi
 

@@ -2,6 +2,12 @@
 
 Instructions for AI coding assistants using OpenSpec for spec-driven development.
 
+## Canonical Project Docs (Read First)
+
+- `docs/ai/AI_CONTEXT.md`
+- `docs/ai/AI_GUIDE.md`
+- `docs/README.md`
+
 ## TL;DR Quick Checklist
 
 - Search existing work: `openspec spec list --long`, `openspec list` (use `rg` only for full-text search)

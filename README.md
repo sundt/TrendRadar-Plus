@@ -14,6 +14,19 @@
  - **Playwright E2E**：Viewer 的端到端测试
  
  ---
+
+ ## AI Assistants（多工具统一入口）
+
+ - `docs/ai/AI_CONTEXT.md`
+ - `docs/ai/AI_GUIDE.md`
+ - `docs/README.md`
+ - `openspec/AGENTS.md`
+
+ 入口文件（不同工具使用不同入口，但都指向同一套 canonical docs）：
+
+ - Claude Code：`CLAUDE.md`
+ - Windsurf：`WINDSURF.md`
+ - VSCode Claude：`CURSOR.md`
  
  ## 快速开始（Docker，推荐）
  

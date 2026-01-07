@@ -59,6 +59,9 @@ openspec/changes/*/
 !openspec/changes/update-category-settings-modal-simplify/
 !openspec/changes/update-category-settings-modal-simplify/**
 
+!openspec/changes/refactor-docs-and-ai-onboarding/
+!openspec/changes/refactor-docs-and-ai-onboarding/**
+
 !openspec/changes/update-rss-subscription-preview-gating/
 !openspec/changes/update-rss-subscription-preview-gating/**
 !openspec/changes/add-admin-rss-request-reopen/
