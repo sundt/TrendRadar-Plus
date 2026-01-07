@@ -208,6 +208,11 @@ run git push "${REMOTE_ORIGIN}" "HEAD:${BRANCH}"
 echo "Pushing to ${REMOTE_GITEE}/${BRANCH}..."
 run git push "${REMOTE_GITEE}" "HEAD:${BRANCH}"
 
+if [ "$DRY_RUN" = "true" ]; then
+  echo "DRY RUN: would SSH to ${SERVER_USER}@${SERVER_HOST}:${SSH_PORT} and rebuild 3 services"
+  exit 0
+fi
+
 ssh_opts=(
   -p "${SSH_PORT}"
   -o ControlMaster=auto
@@ -241,6 +246,23 @@ run() {
 }
 
 verify() {
+  ok=0
+  for i in $(seq 1 60); do
+    if curl -fsS http://127.0.0.1:8090/health >/dev/null 2>&1; then
+      ok=1
+      break
+    fi
+    sleep 1
+  done
+
+  if [ "${ok}" -ne 1 ]; then
+    echo "ERROR: viewer health check failed"
+    docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+    echo "--- viewer logs (tail) ---"
+    docker logs --tail 200 trend-radar-viewer 2>&1 || true
+    exit 1
+  fi
+
   run curl -fsS http://127.0.0.1:8090/health
   if [ "${dry_run}" != "true" ]; then
     echo ""
