@@ -55,6 +55,26 @@
                 width: 100%;
             }
         }
+
+        .tr-newdot {
+            display: none;
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            background: #dc3545;
+            border: 0;
+            padding: 0;
+            margin-right: 6px;
+        }
+
+        .platform-card.tr-has-new .tr-newdot {
+            display: inline-block;
+        }
+
+        .tr-newdot:focus {
+            outline: 2px solid rgba(220, 53, 69, 0.35);
+            outline-offset: 2px;
+        }
     </style>
 </head>
 <body>
@@ -103,8 +123,69 @@
             var panelsEl = document.getElementById('searchPanels');
             var panelSeq = 1;
             var STORAGE_KEY = 'trendradar_search_panels_v1';
+            var SEEN_KEY = 'trendradar_search_seen_v1';
             var MAX_SAVED_PANELS = 20;
+            var MAX_SEEN_PER_PANEL = 400;
+            var CHECK_LIMIT = 30;
+            var CHECK_TICK_MS = 7000;
             var isRestoring = false;
+            var _seenMap = (function() {
+                try {
+                    var raw = localStorage.getItem(SEEN_KEY);
+                    if (!raw) return {};
+                    var obj = JSON.parse(raw);
+                    return obj && typeof obj === 'object' ? obj : {};
+                } catch (e) {
+                    return {};
+                }
+            })();
+
+            function _panelKey(q, mode) {
+                return String(q || '').trim() + '||' + String(mode || 'hybrid').trim();
+            }
+
+            function _persistSeen() {
+                try {
+                    localStorage.setItem(SEEN_KEY, JSON.stringify(_seenMap || {}));
+                } catch (e) {
+                }
+            }
+
+            function _pruneSeenByPanels() {
+                try {
+                    if (!_seenMap || typeof _seenMap !== 'object') _seenMap = {};
+                    var keep = new Set();
+                    var children = Array.from(panelsEl?.children || []);
+                    for (var i = 0; i < children.length; i++) {
+                        var el = children[i];
+                        var q = String(el?.dataset?.query || '').trim();
+                        var m = String(el?.dataset?.mode || 'hybrid').trim() || 'hybrid';
+                        if (!q) continue;
+                        keep.add(_panelKey(q, m));
+                    }
+                    var keys = Object.keys(_seenMap || {});
+                    for (var j = 0; j < keys.length; j++) {
+                        var k = keys[j];
+                        if (!keep.has(k)) {
+                            try { delete _seenMap[k]; } catch (e2) {}
+                        }
+                    }
+                } catch (e) {
+                }
+            }
+
+            function _setPanelHasNew(wrap, hasNew) {
+                if (!wrap) return;
+                try {
+                    if (hasNew) wrap.classList.add('tr-has-new');
+                    else wrap.classList.remove('tr-has-new');
+                } catch (e) {
+                }
+                try {
+                    wrap.dataset.hasNew = hasNew ? '1' : '0';
+                } catch (e) {
+                }
+            }
 
             function _formatNow() {
                 try {
@@ -154,6 +235,8 @@
                         if (items.length >= MAX_SAVED_PANELS) break;
                     }
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+                    _pruneSeenByPanels();
+                    _persistSeen();
                 } catch (e) {
                 }
             }
@@ -189,46 +272,6 @@
                 return null;
             }
 
-            function _buildShareUrl(q, mode) {
-                try {
-                    var base = (window.location && window.location.origin) ? window.location.origin : '';
-                    return base + '/search?q=' + encodeURIComponent(String(q || '')) + '&mode=' + encodeURIComponent(String(mode || 'hybrid'));
-                } catch (e) {
-                    return '/search?q=' + encodeURIComponent(String(q || '')) + '&mode=' + encodeURIComponent(String(mode || 'hybrid'));
-                }
-            }
-
-            async function _copyText(text) {
-                try {
-                    if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-                        await navigator.clipboard.writeText(text);
-                        return true;
-                    }
-                } catch (e) {
-                }
-
-                try {
-                    var ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.setAttribute('readonly', '');
-                    ta.style.position = 'fixed';
-                    ta.style.left = '-9999px';
-                    ta.style.top = '0';
-                    document.body.appendChild(ta);
-                    ta.select();
-                    var ok = false;
-                    try {
-                        ok = document.execCommand('copy');
-                    } catch (e2) {
-                        ok = false;
-                    }
-                    document.body.removeChild(ta);
-                    return ok;
-                } catch (e3) {
-                    return false;
-                }
-            }
-
             function createPanel(q, mode, opts) {
                 opts = opts || {};
                 if (!panelsEl) return null;
@@ -247,8 +290,8 @@
                     '<span class="header-subtitle" style="margin-left: 10px;">' + esc(mode) + ' · ' + esc(timeText) + '</span>' +
                     '</div>' +
                     '<div class="platform-header-actions">' +
-                    '<button type="button" class="btn btn-sm btn-outline-secondary" data-action="share">分享</button>' +
-                    '<button type="button" class="btn btn-sm btn-outline-secondary" data-action="toggle">折叠</button>' +
+                    '<button type="button" class="tr-newdot" data-action="newdot" title="有新结果，点击刷新" aria-label="有新结果"></button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-primary" data-action="refresh">刷新</button>' +
                     '<button type="button" class="btn btn-sm btn-outline-danger" data-action="remove">删除</button>' +
                     '</div>' +
                     '</div>';
@@ -267,26 +310,73 @@
                     });
                 }
 
-                var toggleBtn = wrap.querySelector('[data-action="toggle"]');
-                var bodyEl = wrap.querySelector('[data-role="body"]');
-                if (toggleBtn && bodyEl) {
-                    toggleBtn.addEventListener('click', function() {
-                        var collapsed = bodyEl.style.display === 'none';
-                        bodyEl.style.display = collapsed ? '' : 'none';
-                        toggleBtn.textContent = collapsed ? '折叠' : '展开';
+                var refreshBtn = wrap.querySelector('[data-action="refresh"]');
+                var newDotBtn = wrap.querySelector('[data-action="newdot"]');
+
+                function _triggerPanelRefresh() {
+                    var q2 = wrap?.dataset?.query || '';
+                    var m2 = wrap?.dataset?.mode || 'hybrid';
+                    if (!q2) return;
+                    if (wrap?.dataset?.loading === '1') return;
+
+                    try {
+                        wrap.dataset.loading = '1';
+                    } catch (e) {
+                    }
+
+                    var oldText = refreshBtn ? refreshBtn.textContent : '';
+                    if (refreshBtn) {
+                        refreshBtn.textContent = '刷新中';
+                        try {
+                            refreshBtn.setAttribute('disabled', 'true');
+                        } catch (e) {
+                        }
+                    }
+
+                    if (newDotBtn) {
+                        try {
+                            newDotBtn.setAttribute('disabled', 'true');
+                        } catch (e) {
+                        }
+                    }
+
+                    var panelObj = {
+                        wrap: wrap,
+                        statusEl: wrap.querySelector('[data-role="status"]'),
+                        listEl: wrap.querySelector('[data-role="list"]'),
+                    };
+
+                    Promise.resolve(runSearchIntoPanel(q2, m2, panelObj, { clearList: false }))
+                        .finally(function() {
+                            try {
+                                wrap.dataset.loading = '0';
+                            } catch (e) {
+                            }
+                            if (refreshBtn) {
+                                refreshBtn.textContent = oldText;
+                                try {
+                                    refreshBtn.removeAttribute('disabled');
+                                } catch (e) {
+                                }
+                            }
+                            if (newDotBtn) {
+                                try {
+                                    newDotBtn.removeAttribute('disabled');
+                                } catch (e) {
+                                }
+                            }
+                        });
+                }
+
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', function() {
+                        _triggerPanelRefresh();
                     });
                 }
 
-                var shareBtn = wrap.querySelector('[data-action="share"]');
-                if (shareBtn) {
-                    shareBtn.addEventListener('click', async function() {
-                        var q2 = wrap?.dataset?.query || '';
-                        var m2 = wrap?.dataset?.mode || 'hybrid';
-                        var url = _buildShareUrl(q2, m2);
-                        var ok = await _copyText(url);
-                        var old = shareBtn.textContent;
-                        shareBtn.textContent = ok ? '已复制' : '复制失败';
-                        window.setTimeout(function() { shareBtn.textContent = old; }, 1200);
+                if (newDotBtn) {
+                    newDotBtn.addEventListener('click', function() {
+                        _triggerPanelRefresh();
                     });
                 }
 
@@ -305,12 +395,14 @@
                 };
             }
 
-            async function runSearchIntoPanel(q, mode, panel) {
+            async function runSearchIntoPanel(q, mode, panel, opts) {
+                opts = opts || {};
+                var clearList = opts.clearList !== false;
                 if (!panel) return;
                 var statusEl = panel.statusEl;
                 var listEl = panel.listEl;
-                if (statusEl) statusEl.textContent = '搜索中...';
-                if (listEl) listEl.innerHTML = '';
+                if (statusEl) statusEl.textContent = clearList ? '搜索中...' : '刷新中...';
+                if (clearList && listEl) listEl.innerHTML = '';
 
                 var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=200';
                 try {
@@ -322,6 +414,21 @@
 
                     var results = Array.isArray(data.results) ? data.results : [];
                     if (statusEl) statusEl.textContent = '共 ' + results.length + ' 条结果';
+
+                    try {
+                        var key = _panelKey(q, mode);
+                        var urls = [];
+                        for (var i = 0; i < results.length; i++) {
+                            var u = (results[i] && results[i].url) ? String(results[i].url).trim() : '';
+                            if (!u) continue;
+                            urls.push(u);
+                            if (urls.length >= MAX_SEEN_PER_PANEL) break;
+                        }
+                        _seenMap[key] = urls;
+                        _persistSeen();
+                        _setPanelHasNew(panel.wrap, false);
+                    } catch (e) {
+                    }
 
                     if (!listEl) return;
                     if (!results.length) {
@@ -345,6 +452,89 @@
                 } catch (e) {
                     if (statusEl) statusEl.textContent = '搜索失败：' + (e && e.message ? e.message : String(e));
                 }
+            }
+
+            async function _checkNewForPanel(panel) {
+                try {
+                    if (!panel || !panel.wrap) return;
+                    var wrap = panel.wrap;
+                    if (wrap?.dataset?.loading === '1') return;
+                    if (wrap?.dataset?.checking === '1') return;
+                    if (wrap?.dataset?.hasNew === '1') return;
+
+                    var q = String(wrap?.dataset?.query || '').trim();
+                    var mode = String(wrap?.dataset?.mode || 'hybrid').trim() || 'hybrid';
+                    if (!q) return;
+
+                    var key = _panelKey(q, mode);
+                    var seenArr = Array.isArray(_seenMap[key]) ? _seenMap[key] : [];
+                    var seen = new Set(seenArr);
+
+                    try {
+                        wrap.dataset.checking = '1';
+                    } catch (e0) {
+                    }
+
+                    var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=' + String(CHECK_LIMIT);
+                    var resp = await fetch(apiUrl, { method: 'GET' });
+                    var data = await resp.json();
+                    if (!resp.ok) return;
+
+                    var results = Array.isArray(data.results) ? data.results : [];
+                    for (var i = 0; i < results.length; i++) {
+                        var u = (results[i] && results[i].url) ? String(results[i].url).trim() : '';
+                        if (!u) continue;
+                        if (!seen.has(u)) {
+                            _setPanelHasNew(wrap, true);
+                            break;
+                        }
+                    }
+                } catch (e) {
+                } finally {
+                    try {
+                        if (panel && panel.wrap) panel.wrap.dataset.checking = '0';
+                    } catch (e2) {
+                    }
+                }
+            }
+
+            function _setupNewHintLoop() {
+                var idx = 0;
+                window.setInterval(function() {
+                    try {
+                        if (!panelsEl) return;
+                        if (document.visibilityState !== 'visible') return;
+                        var children = Array.from(panelsEl.children || []);
+                        if (!children.length) return;
+                        var el = children[idx % children.length];
+                        idx++;
+                        if (!el) return;
+                        _checkNewForPanel({
+                            wrap: el,
+                            statusEl: el.querySelector('[data-role="status"]'),
+                            listEl: el.querySelector('[data-role="list"]'),
+                        });
+                    } catch (e) {
+                    }
+                }, CHECK_TICK_MS);
+
+                document.addEventListener('visibilitychange', function() {
+                    try {
+                        if (document.visibilityState !== 'visible') return;
+                        if (!panelsEl) return;
+                        var children = Array.from(panelsEl.children || []);
+                        for (var i = 0; i < Math.min(2, children.length); i++) {
+                            var el = children[i];
+                            if (!el) continue;
+                            _checkNewForPanel({
+                                wrap: el,
+                                statusEl: el.querySelector('[data-role="status"]'),
+                                listEl: el.querySelector('[data-role="list"]'),
+                            });
+                        }
+                    } catch (e) {
+                    }
+                });
             }
 
             function triggerSearch(opts) {
@@ -408,6 +598,8 @@
                     if (!panelsEl) return;
                     panelsEl.innerHTML = '';
                     try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+                    try { localStorage.removeItem(SEEN_KEY); } catch (e) {}
+                    try { _seenMap = {}; } catch (e) {}
                 });
             }
 
@@ -424,6 +616,7 @@
 
             restoreSavedPanels();
             runSearchFromUrl();
+            _setupNewHintLoop();
         })();
     </script>
 </body>
