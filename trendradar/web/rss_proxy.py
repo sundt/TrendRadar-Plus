@@ -982,7 +982,7 @@ async def api_rss_sources_search(
         args2 = list(args)
         args2.extend([int(limit), int(offset)])
         cur = conn.execute(
-            f"SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources WHERE {where_sql} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            f"SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, added_at FROM rss_sources WHERE {where_sql} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
             tuple(args2),
         )
         rows = cur.fetchall() or []

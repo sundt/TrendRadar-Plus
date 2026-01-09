@@ -298,8 +298,8 @@ def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> 
             """
             INSERT OR IGNORE INTO rss_sources(
                 id, name, url, host, category, feed_type, country, language, source, seed_last_updated,
-                enabled, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                enabled, created_at, updated_at, added_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             """,
             (
                 sid,
@@ -312,6 +312,7 @@ def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> 
                 str(item.get("language") or "").strip(),
                 str(item.get("source") or "").strip(),
                 str(item.get("seed_last_updated") or "").strip(),
+                int(now),
                 int(now),
                 int(now),
             ),
@@ -1054,8 +1055,8 @@ async def api_admin_approve_rss_source_request(
     now = _now_ts()
     source_id = f"rsssrc-{_md5_hex(url)[:12]}"
     conn.execute(
-        "INSERT OR REPLACE INTO rss_sources(id, name, url, host, category, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, COALESCE((SELECT category FROM rss_sources WHERE id = ?), ''), 1, ?, ?)",
-        (source_id, name, url, host, source_id, now, now),
+        "INSERT OR REPLACE INTO rss_sources(id, name, url, host, category, enabled, created_at, updated_at, added_at) VALUES (?, ?, ?, ?, COALESCE((SELECT category FROM rss_sources WHERE id = ?), ''), 1, ?, ?, COALESCE((SELECT added_at FROM rss_sources WHERE id = ?), ?))",
+        (source_id, name, url, host, source_id, now, now, source_id, now),
     )
     conn.execute(
         "UPDATE rss_source_requests SET status='approved', reason='', reviewed_at=?, source_id=? WHERE id=?",
@@ -1356,7 +1357,7 @@ async def admin_rss_sources_page(request: Request):
         latest_map = {}
 
     cur = conn.execute(
-        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, fail_count, backoff_until, last_error_reason, last_attempt_at FROM rss_sources ORDER BY updated_at DESC"
+        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, added_at, fail_count, backoff_until, last_error_reason, last_attempt_at FROM rss_sources ORDER BY updated_at DESC"
     )
     src_rows = cur.fetchall() or []
     sources = []
@@ -1393,23 +1394,36 @@ async def admin_rss_sources_page(request: Request):
             except Exception:
                 last_updated_str = str(last_updated_ts)
 
+        added_at = 0
+        try:
+            added_at = int(r[13] or 0)
+        except Exception:
+            added_at = 0
+
+        added_str = ""
+        if added_at > 0:
+            try:
+                added_str = datetime.fromtimestamp(added_at).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                added_str = str(added_at)
+
         fail_count = 0
         try:
-            fail_count = int(r[13] or 0)
+            fail_count = int(r[14] or 0)
         except Exception:
             fail_count = 0
 
         backoff_until = 0
         try:
-            backoff_until = int(r[14] or 0)
+            backoff_until = int(r[15] or 0)
         except Exception:
             backoff_until = 0
 
-        last_error_reason = str(r[15] or "")
+        last_error_reason = str(r[16] or "")
 
         last_attempt_at = 0
         try:
-            last_attempt_at = int(r[16] or 0)
+            last_attempt_at = int(r[17] or 0)
         except Exception:
             last_attempt_at = 0
 
@@ -1467,6 +1481,8 @@ async def admin_rss_sources_page(request: Request):
                 "enabled": enabled,
                 "created_at": int(r[11] or 0),
                 "updated_at": int(r[12] or 0),
+                "added_at": int(added_at),
+                "added_time": added_str,
                 "subscribed_count": int(subs_map.get(sid, 0) or 0),
                 "added_count": int(adds_map.get(sid, 0) or 0),
                 "entries_count": entries_count,
@@ -1580,7 +1596,7 @@ async def api_admin_rss_sources_export(request: Request):
         latest_map = {}
 
     cur = conn.execute(
-        "SELECT id, name, url, host, category, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
+        "SELECT id, name, url, host, category, enabled, created_at, updated_at, added_at FROM rss_sources ORDER BY updated_at DESC"
     )
     src_rows = cur.fetchall() or []
 
@@ -1600,6 +1616,7 @@ async def api_admin_rss_sources_export(request: Request):
             "latest_entry_time",
             "created_at",
             "updated_at",
+            "rss_added_at",
         ]
     )
     for r in src_rows:
@@ -1625,6 +1642,7 @@ async def api_admin_rss_sources_export(request: Request):
                 latest_str,
                 int(r[6] or 0),
                 int(r[7] or 0),
+                int(r[8] or 0),
             ]
         )
 

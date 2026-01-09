@@ -639,8 +639,8 @@ def _init_default_rss_sources_if_empty() -> None:
         host = (urlparse(url).hostname or "").strip().lower() or "-"
         sid = f"rsssrc-{_md5_hex(url)[:12]}"
         conn.execute(
-            "INSERT OR IGNORE INTO rss_sources(id, name, url, host, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
-            (sid, d.get("name") or host, url, host, now, now),
+            "INSERT OR IGNORE INTO rss_sources(id, name, url, host, enabled, created_at, updated_at, added_at) VALUES (?, ?, ?, ?, 1, ?, ?, ?)",
+            (sid, d.get("name") or host, url, host, now, now, now),
         )
     conn.commit()
 
@@ -660,6 +660,7 @@ def _row_to_rss_source(row: sqlite3.Row) -> Dict[str, Any]:
         "enabled": int(row[10]) == 1 if len(row) > 10 else True,
         "created_at": int(row[11]) if len(row) > 11 else 0,
         "updated_at": int(row[12]) if len(row) > 12 else 0,
+        "added_at": int(row[13]) if len(row) > 13 else 0,
     }
 
 
@@ -667,11 +668,11 @@ def _db_list_rss_sources(enabled_only: bool = True) -> List[Dict[str, Any]]:
     conn = _get_online_db_conn()
     if enabled_only:
         cur = conn.execute(
-            "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources WHERE enabled = 1 ORDER BY updated_at DESC"
+            "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, added_at FROM rss_sources WHERE enabled = 1 ORDER BY updated_at DESC"
         )
     else:
         cur = conn.execute(
-            "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources ORDER BY updated_at DESC"
+            "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, added_at FROM rss_sources ORDER BY updated_at DESC"
         )
     rows = cur.fetchall() or []
     return [_row_to_rss_source(r) for r in rows]
@@ -683,7 +684,7 @@ def _db_get_rss_source(source_id: str) -> Optional[Dict[str, Any]]:
         return None
     conn = _get_online_db_conn()
     cur = conn.execute(
-        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources WHERE id = ?",
+        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, added_at FROM rss_sources WHERE id = ?",
         (sid,),
     )
     row = cur.fetchone()
@@ -698,7 +699,7 @@ def _db_find_enabled_source_by_url(url: str) -> Optional[Dict[str, Any]]:
         return None
     conn = _get_online_db_conn()
     cur = conn.execute(
-        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at FROM rss_sources WHERE enabled = 1 AND url = ?",
+        "SELECT id, name, url, host, category, feed_type, country, language, source, seed_last_updated, enabled, created_at, updated_at, added_at FROM rss_sources WHERE enabled = 1 AND url = ?",
         (u,),
     )
     row = cur.fetchone()

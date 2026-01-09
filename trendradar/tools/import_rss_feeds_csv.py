@@ -75,7 +75,8 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
             last_error_reason TEXT NOT NULL DEFAULT '',
             enabled INTEGER DEFAULT 1,
             created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
+            updated_at INTEGER NOT NULL,
+            added_at INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -100,6 +101,12 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     _ensure_column("rss_sources", "language", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("rss_sources", "source", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("rss_sources", "seed_last_updated", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("rss_sources", "added_at", "INTEGER NOT NULL DEFAULT 0")
+
+    try:
+        conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
+    except Exception:
+        pass
 
     conn.commit()
 
@@ -206,8 +213,8 @@ def _upsert_source(
             """
             INSERT OR IGNORE INTO rss_sources(
                 id, name, url, host, category, feed_type, country, language, source, seed_last_updated,
-                enabled, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                enabled, created_at, updated_at, added_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             """,
             (
                 sid,
@@ -220,6 +227,7 @@ def _upsert_source(
                 feed.language,
                 feed.source,
                 feed.seed_last_updated,
+                now,
                 now,
                 now,
             ),
