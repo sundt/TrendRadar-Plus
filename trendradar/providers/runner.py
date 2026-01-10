@@ -40,7 +40,8 @@ def _load_custom_sources(root: Path) -> List[Dict[str, Any]]:
         conn = get_online_db_conn(root)
         # Ensure table exists (in case schema.sql wasn't run separately, though it should be)
         # We rely on schema.sql having been applied, but we can double check or fail gracefully.
-        cur = conn.execute("SELECT id, name, provider_type, config_json, enabled FROM custom_sources WHERE enabled = 1")
+        # Query script_content as well
+        cur = conn.execute("SELECT id, name, provider_type, config_json, enabled, script_content FROM custom_sources WHERE enabled = 1")
         rows = cur.fetchall()
         
         custom_platforms = []
@@ -50,6 +51,7 @@ def _load_custom_sources(root: Path) -> List[Dict[str, Any]]:
                 name = str(r[1] or "").strip()
                 provider = str(r[2] or "").strip()
                 config_str = str(r[3] or "{}")
+                script_content = str(r[5] or "")
                 
                 if not platform_id or not provider:
                     continue
@@ -57,6 +59,10 @@ def _load_custom_sources(root: Path) -> List[Dict[str, Any]]:
                 config = json.loads(config_str)
                 if not isinstance(config, dict):
                     config = {}
+                
+                # Inject script_content if present
+                if script_content:
+                    config["script_content"] = script_content
                 
                 custom_platforms.append({
                     "id": platform_id,
@@ -368,8 +374,17 @@ def build_default_registry() -> ProviderRegistry:
         reg.register(HtmlScraperProvider())
     except Exception:
         pass
+        
+    try:
+        from .dynamic_py import DynamicPyProvider
+        reg.register(DynamicPyProvider())
+    except Exception as e:
+        print(f"Failed to register DynamicPyProvider: {e}")
+        traceback.print_exc()
+        pass
 
     return reg
+
 
 
 def _main() -> int:

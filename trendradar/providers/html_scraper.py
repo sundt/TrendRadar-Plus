@@ -84,8 +84,23 @@ class HtmlScraperProvider:
                 raise
         
         # Handle encoding
+        # Handle encoding
+        # If encoding is Latin-1 (default fallback) or None, try apparent_encoding
         if resp.encoding is None or resp.encoding == 'ISO-8859-1':
             resp.encoding = resp.apparent_encoding
+        
+        # Explicit check for common Mojibake indicators (e.g. è, å, ï)
+        # If content looks like CP1252/Latin-1 but should be UTF-8
+        if 'è' in resp.text and 'ï' in resp.text:
+            try:
+                # Try to re-decode content as UTF-8 ignoring errors or using replace
+                # But safer to just force utf-8 if we detect utf-8 bytes decoded as latin-1
+                # Check directly in content-type header first
+                ct = resp.headers.get('content-type', '').lower()
+                if 'charset' not in ct:
+                    resp.encoding = 'utf-8'
+            except:
+                pass
         
         # Parse HTML
         soup = BeautifulSoup(resp.text, "html.parser")

@@ -164,6 +164,20 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         """
     )
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS platform_categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            icon TEXT DEFAULT '📰',
+            sort_order INTEGER DEFAULT 0,
+            enabled BOOLEAN DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
@@ -198,6 +212,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("custom_sources", "backoff_until", "TEXT DEFAULT ''")
     _ensure_column("custom_sources", "entries_count", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "fail_count", "INTEGER DEFAULT 0")
+    _ensure_column("custom_sources", "script_content", "TEXT DEFAULT ''")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")

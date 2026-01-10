@@ -167,9 +167,83 @@ class NewsViewerService:
 
         # 平台ID到分类的映射
         self._platform_to_category = {}
-        for cat_id, cat_info in PLATFORM_CATEGORIES.items():
-            for platform_id in cat_info["platforms"]:
-                self._platform_to_category[platform_id] = cat_id
+        self._dynamic_categories = None
+        self._reload_platform_config()
+
+    def _reload_platform_config(self):
+        """Reload platform categories and mappings from database."""
+        try:
+            from .db_online import get_online_db_conn
+            conn = get_online_db_conn(self.project_root)
+            
+            # 1. Load Categories
+            categories = {}
+            name_to_id = {}
+            
+            try:
+                cur = conn.execute("SELECT id, name, icon, sort_order FROM platform_categories WHERE enabled=1 ORDER BY sort_order ASC")
+                rows = cur.fetchall()
+                if rows:
+                    for r in rows:
+                        cid, name, icon, sort_order = r
+                        categories[cid] = {
+                            "name": name,
+                            "icon": icon or "📰",
+                            "platforms": [],
+                            "news_limit": 10,
+                            "_sort_order": sort_order
+                        }
+                        name_to_id[name] = cid
+            except Exception:
+                pass
+            
+            # Fallback to defaults (filtered by what might be in DB if partial)
+            if not categories:
+                for k, v in PLATFORM_CATEGORIES.items():
+                    categories[k] = {**v, "platforms": [], "_sort_order": 999}
+                    name_to_id[v["name"]] = k
+
+            # 2. Load Platform Mappings
+            # Helper to assign
+            def assign(pid, cat_val):
+                if not cat_val: return
+                cid = None
+                if cat_val in categories:
+                    cid = cat_val
+                elif cat_val in name_to_id:
+                    cid = name_to_id[cat_val]
+                
+                if cid:
+                    categories[cid]["platforms"].append(pid)
+                    self._platform_to_category[pid] = cid
+
+            # NewsNow
+            try:
+                for r in conn.execute("SELECT id, category FROM newsnow_platforms WHERE enabled=1"):
+                    assign(str(r[0]), r[1])
+            except Exception: pass
+            
+            # Custom Sources
+            try:
+                for r in conn.execute("SELECT id, category FROM custom_sources WHERE enabled=1"):
+                    assign(str(r[0]), r[1])
+            except Exception: pass
+
+            # RSS Sources
+            try:
+                for r in conn.execute("SELECT id, category FROM rss_sources WHERE enabled=1"):
+                    assign(f"rss-{r[0]}", r[1])
+            except Exception: pass
+            
+            self._dynamic_categories = categories
+            
+        except Exception as e:
+            # Fallback to hardcoded
+            print(f"Error loading platform config: {e}")
+            self._dynamic_categories = {k: {**v} for k, v in PLATFORM_CATEGORIES.items()}
+            for cat_id, cat_info in PLATFORM_CATEGORIES.items():
+                for platform_id in cat_info["platforms"]:
+                    self._platform_to_category[platform_id] = cat_id
 
     def _load_viewer_config(self) -> Dict:
         """加载查看器配置"""
@@ -186,6 +260,9 @@ class NewsViewerService:
 
     def get_platform_category(self, platform_id: str) -> str:
         """获取平台所属分类"""
+        # Lazy reload if needed or relying on periodic restarts? 
+        # For now, let's just use what initialized or reloaded manually.
+        # Ideally we might want a TTL here too, but let's stick to simple first.
         return self._platform_to_category.get(platform_id, "other")
 
     def _detect_cross_platform_news(self, news_list: List[Dict]) -> Dict[str, List[str]]:
@@ -291,7 +368,13 @@ class NewsViewerService:
         new_badges = viewer_config.get("new_badges", {}) if isinstance(viewer_config, dict) else {}
         new_platform_ids = set(new_badges.get("platforms", []) or []) if isinstance(new_badges, dict) else set()
         new_category_ids = set(new_badges.get("categories", []) or []) if isinstance(new_badges, dict) else set()
-        for cat_id, cat_info in PLATFORM_CATEGORIES.items():
+        
+        # Use dynamic categories
+        source_cats = self._dynamic_categories or {}
+        if not source_cats:
+             source_cats = PLATFORM_CATEGORIES # Fallback
+             
+        for cat_id, cat_info in source_cats.items():
             categories[cat_id] = {
                 "id": cat_id,
                 "name": cat_info["name"],
@@ -386,7 +469,11 @@ class NewsViewerService:
 
         # Ensure platforms are ordered by configured category platform list.
         for cat_id, cat in list(categories.items()):
-            cat_info = PLATFORM_CATEGORIES.get(cat_id)
+            cat_info = (self._dynamic_categories or {}).get(cat_id)
+            if not cat_info:
+                cat_info = PLATFORM_CATEGORIES.get(cat_id)
+            if not cat_info:
+                continue
             if not cat_info:
                 continue
             desired = cat_info.get("platforms")
@@ -420,12 +507,17 @@ class NewsViewerService:
                     for item in nba["news"]:
                         item.pop("_sort_dt", None)
 
-        # 按预定义顺序排序分类
+        # 按预定义顺序排序分类 (Use sort_order from dynamic config)
         def get_order(cat_id):
+            # Prefer dynamic sort order
+            dcat = (self._dynamic_categories or {}).get(cat_id)
+            if dcat and "_sort_order" in dcat:
+                return dcat["_sort_order"]
+                
             try:
                 return CATEGORY_ORDER.index(cat_id)
             except ValueError:
-                return len(CATEGORY_ORDER)  # 未定义的放最后
+                return 999
         
         sorted_categories = dict(
             sorted(categories.items(), key=lambda x: get_order(x[0]))
@@ -504,6 +596,10 @@ class NewsViewerService:
 
     def get_category_list(self) -> List[Dict]:
         """获取所有分类列表"""
+        cats = self._dynamic_categories or PLATFORM_CATEGORIES
+        # Sort by sort_order
+        sorted_items = sorted(cats.items(), key=lambda x: x[1].get("_sort_order", 0) if isinstance(x[1], dict) else 0)
+        
         return [
             {
                 "id": cat_id,
@@ -511,7 +607,7 @@ class NewsViewerService:
                 "icon": cat_info["icon"],
                 "platform_count": len(cat_info["platforms"])
             }
-            for cat_id, cat_info in PLATFORM_CATEGORIES.items()
+            for cat_id, cat_info in sorted_items
         ]
 
     def get_filter_stats(self) -> Dict:

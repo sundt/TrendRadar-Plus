@@ -25,13 +25,35 @@ class CustomSource(BaseModel):
     category: Optional[str] = ""
     country: Optional[str] = ""
     language: Optional[str] = ""
+    script_content: Optional[str] = ""
 
 class TestSourceRequest(BaseModel):
     provider_type: str
     config_json: str
+    script_content: Optional[str] = None
 
 class DetectRequest(BaseModel):
     url: str
+
+class AutofixRequest(BaseModel):
+    url: str
+    provider_type: str
+    config_json: Optional[str] = None
+    script_content: Optional[str] = None
+    error_message: str
+
+class AIDebugMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+class AIDebugRequest(BaseModel):
+    url: str
+    html_snippet: Optional[str] = None  # Can be fetched if not provided
+    conversation: List[AIDebugMessage] = []
+    current_config: Optional[str] = None
+    current_script: Optional[str] = None
+    current_provider: Optional[str] = None
+    test_error: Optional[str] = None
 
 def _get_project_root(request: Request) -> Path:
     return request.app.state.project_root
@@ -54,7 +76,7 @@ async def list_custom_sources(request: Request, _=Depends(_require_admin)):
     cur = conn.execute("""
         SELECT id, name, provider_type, config_json, enabled, schedule_cron, 
                category, country, language, last_run_at, last_status, last_error, 
-               backoff_until, created_at, updated_at, entries_count, fail_count
+               backoff_until, created_at, updated_at, entries_count, fail_count, script_content
         FROM custom_sources 
         ORDER BY updated_at DESC
     """)
@@ -114,6 +136,7 @@ async def list_custom_sources(request: Request, _=Depends(_require_admin)):
             "category": r[6] or "",
             "country": r[7] or "",
             "language": r[8] or "",
+            "script_content": r[17] or "",
             "last_run_at": r[9],
             "last_status": r[10],
             "last_error": r[11],
@@ -141,10 +164,10 @@ async def create_custom_source(source: CustomSource, request: Request, _=Depends
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         conn.execute(
             """
-            INSERT INTO custom_sources (id, name, provider_type, config_json, enabled, schedule_cron, category, country, language, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO custom_sources (id, name, provider_type, config_json, enabled, schedule_cron, category, country, language, script_content, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (source.id, source.name, source.provider_type, source.config_json, source.enabled, source.schedule_cron, source.category, source.country, source.language, now, now)
+            (source.id, source.name, source.provider_type, source.config_json, source.enabled, source.schedule_cron, source.category, source.country, source.language, source.script_content or '', now, now)
         )
         conn.commit()
         return {"success": True}
@@ -166,10 +189,10 @@ async def update_custom_source(source_id: str, source: CustomSource, request: Re
         conn.execute(
             """
             UPDATE custom_sources
-            SET name = ?, provider_type = ?, config_json = ?, enabled = ?, schedule_cron = ?, category = ?, country = ?, language = ?, updated_at = ?
+            SET name = ?, provider_type = ?, config_json = ?, enabled = ?, schedule_cron = ?, category = ?, country = ?, language = ?, script_content = ?, updated_at = ?
             WHERE id = ?
             """,
-            (source.name, source.provider_type, source.config_json, source.enabled, source.schedule_cron, source.category, source.country, source.language, now, source_id)
+            (source.name, source.provider_type, source.config_json, source.enabled, source.schedule_cron, source.category, source.country, source.language, source.script_content or '', now, source_id)
         )
         conn.commit()
         return {"success": True}
@@ -191,8 +214,8 @@ async def run_custom_source(source_id: str, request: Request, _=Depends(_require
     """Trigger immediate run for a source."""
     conn = _get_conn(request)
     
-    # Load config from DB
-    cur = conn.execute("SELECT name, config_json, provider_type, entries_count, fail_count FROM custom_sources WHERE id = ?", (source_id,))
+    # Load config from DB - include script_content
+    cur = conn.execute("SELECT name, config_json, provider_type, entries_count, fail_count, script_content FROM custom_sources WHERE id = ?", (source_id,))
     row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Source not found")
@@ -202,11 +225,16 @@ async def run_custom_source(source_id: str, request: Request, _=Depends(_require
     provider_type = row[2]
     current_entries = row[3] or 0
     current_fails = row[4] or 0
+    script_content = row[5] or ""
     
     try:
         config = json.loads(config_json)
     except:
         raise HTTPException(status_code=500, detail="Invalid config JSON in DB")
+    
+    # Add script_content to config for dynamic_py provider
+    if provider_type == "dynamic_py" and script_content:
+        config["script_content"] = script_content
 
     registry = build_default_registry()
     try:
@@ -373,9 +401,13 @@ async def get_custom_source_items(source_id: str, request: Request, _=Depends(_r
 @router.post("/test")
 async def test_custom_source(payload: TestSourceRequest, request: Request, _=Depends(_require_admin)):
     """Dry run a provider configuration effectively."""
+    print(f"DEBUG: test_custom_source payload: {payload}")
     try:
         config = json.loads(payload.config_json)
-    except Exception:
+        if payload.script_content:
+             config["script_content"] = payload.script_content
+    except Exception as e:
+        print(f"DEBUG: JSON load failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON config")
 
     provider_id = payload.provider_type
@@ -666,21 +698,35 @@ CRITICAL REQUIREMENTS:
 7. For "link", prefer the selector that gives you the article URL (usually an <a> tag wrapping or inside the title).
 
 Output strict JSON only, no markdown code blocks, no explanation.
-Format:
+Format 1 (Simple HTML - Preferred):
 {{
+  "type": "json_scraper",
   "scrape_rules": {{
-      "items": "CSS selector for the repeating article container (must match 5+ elements)",
-      "title": "CSS selector for title (relative to items container)",
-      "link": "CSS selector for link (relative to items container)",
-      "date": "CSS selector for date (relative to items container, optional)"
+      "items": "CSS selector for article container",
+      "title": "CSS selector for title",
+      "link": "CSS selector for link",
+      "date": "CSS selector for date"
   }},
   "metadata": {{
-      "category": "One of: News, Tech, Finance, Business, Other",
-      "country": "Country code (e.g. CN, US, JP)",
-      "language": "Language code (e.g. zh, en, ja)",
-      "name": "Suggested source name"
+      "category": "...",
+      "country": "...",
+      "language": "...",
+      "name": "..."
   }}
 }}
+
+Format 2 (Complex/Script - Use if logic needed):
+{{
+  "type": "python_script",
+  "script_content": "def fetch(config, ctx):\\n    import requests\\n    import bs4\\n    # Full python code implementation extracting items as list of dicts with title, url, crawl_time\\n    # Must handle parsing manually. Use response = requests.get(config['url']) inside.\\n    return items",
+  "metadata": {{ ... }}
+}}
+
+Choose 'python_script' if:
+- Standard CSS selectors match nothing reliably.
+- Data is in a script tag or JSON blob inside HTML.
+- Complex transformation is needed.
+Otherwise use 'json_scraper'.
 
 HTML Snippet (truncated, cleaned):
 {html_content[:50000]}
@@ -756,6 +802,20 @@ HTML Snippet (truncated, cleaned):
                 "link": "a"
             }
         
+        if ai_result.get("type") == "python_script":
+            script_content = ai_result.get("script_content", "")
+            return {
+                "provider_type": "dynamic_py",
+                "config_json": json.dumps({"url": url}, indent=2),
+                "script_content": script_content,
+                "name_suggestion": metadata.get("name") or page_title,
+                "id_suggestion": generated_id,
+                "category_suggestion": metadata.get("category") or category,
+                "country_suggestion": metadata.get("country") or country,
+                "language_suggestion": metadata.get("language") or lang,
+                "cron_suggestion": common_cron
+            }
+
         # Validate and fix selectors - check match count
         try:
             soup = BeautifulSoup(page_content, "html.parser")
@@ -766,7 +826,7 @@ HTML Snippet (truncated, cleaned):
             if len(matched) < 3:
                 fallback_selectors = [
                     "article", "article.post", ".post", ".entry", ".card", 
-                    ".item", ".news-item", "li.post", "div.post", 
+                    "div.item", "div.card", "li.post", "div.post", 
                     "div.article", "div.entry", "li"
                 ]
                 for fallback in fallback_selectors:
@@ -815,3 +875,433 @@ HTML Snippet (truncated, cleaned):
             "language_suggestion": lang,
             "cron_suggestion": common_cron
         }
+
+@router.post("/autofix")
+async def autofix_custom_source(payload: AutofixRequest, _=Depends(_require_admin)):
+    """Auto-fix a failing configuration using AI."""
+    url = payload.url
+    error_msg = payload.error_message
+    
+    # 1. Fetch content for context
+    import requests
+    from bs4 import BeautifulSoup
+    import os
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        res = requests.get(url, headers=headers, timeout=15)
+        if res.status_code == 403:
+             # Try scraper api if avail
+             scraper_key = os.environ.get("SCRAPERAPI_KEY")
+             if scraper_key:
+                 res = requests.get(f"http://api.scraperapi.com?api_key={scraper_key}&url={url}", timeout=30)
+        
+        # Encoding
+        if res.encoding is None or res.encoding == 'ISO-8859-1':
+            res.encoding = res.apparent_encoding
+            
+        page_content = res.text
+    except Exception as e:
+        page_content = f"Failed to fetch page content: {e}"
+
+    # Clean HTML
+    try:
+        soup = BeautifulSoup(page_content, "html.parser")
+        for tag in soup(["script", "style", "svg", "meta", "link", "noscript"]):
+            tag.decompose()
+        # retain structure
+        html_snippet = str(soup)[:40000] 
+    except:
+        html_snippet = page_content[:10000]
+
+    # 2. Call AI
+    api_key = (os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="No AI API Key configured")
+
+    endpoint = (os.environ.get("TREND_RADAR_MB_AI_ENDPOINT") or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
+    model = (os.environ.get("TREND_RADAR_SCRAPER_AI_MODEL") or os.environ.get("TREND_RADAR_MB_AI_MODEL") or "qwen-plus").strip()
+
+    current_code = payload.script_content if payload.provider_type == 'dynamic_py' else payload.config_json
+    
+    prompt = f"""
+You are an expert web scraper debugger.
+The user is trying to scrape: {url}
+Current Mode: {payload.provider_type}
+
+The current configuration/code failed with this error:
+{error_msg}
+
+Current Code:
+{current_code}
+
+Page HTML Snippet (truncated):
+{html_snippet}
+
+TASK:
+Analyze the error and the HTML.
+Fix the code to resolve the error. 
+If the error assumes a certain HTML structure that is different from the snippet, adjust the selectors.
+If the current mode (e.g. JSON) is insufficient for the complexity (e.g. dynamic content needing logic), switch to 'python_script'.
+
+Output strict JSON:
+Format 1 (Fixed JSON):
+{{
+  "type": "json_scraper",
+  "scrape_rules": {{
+      "items": "...",
+      "title": "...",
+      "link": "...",
+      "date": "..."
+  }},
+  "reason": "Explanation of fix"
+}}
+
+Format 2 (Fixed/Switched to Python):
+{{
+  "type": "python_script",
+  "script_content": "def fetch(config, ctx):\\n ...",
+  "reason": "Explanation of fix"
+}}
+"""
+    try:
+        req_body = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1
+        }
+        headers_ai = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        
+        # Proxy
+        proxies = {"http": None, "https": None}
+        if os.environ.get("TREND_RADAR_MB_AI_USE_PROXY", "").strip().lower() in {"1", "true", "yes"}:
+            proxies = None
+
+        ai_res = requests.post(endpoint, headers=headers_ai, json=req_body, timeout=45, proxies=proxies)
+        if ai_res.status_code != 200:
+             raise HTTPException(status_code=500, detail=f"AI Error: {ai_res.text}")
+             
+        data = ai_res.json()
+        content = data["choices"][0]["message"]["content"]
+        
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+            
+        result = json.loads(content.strip())
+        
+        # Normalize result for frontend
+        ret = {}
+        if result.get("type") == "python_script":
+            ret["provider_type"] = "dynamic_py"
+            ret["script_content"] = result.get("script_content")
+            ret["config_json"] = json.dumps({"url": url}, indent=2)
+        else:
+            ret["provider_type"] = "html_scraper"
+            cfg = {"url": url, "scrape_rules": result.get("scrape_rules")}
+            ret["config_json"] = json.dumps(cfg, indent=2, ensure_ascii=False)
+            
+        ret["reason"] = result.get("reason", "Fixed by AI")
+        return ret
+        
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Autofix failed: {str(e)}")
+
+
+@router.post("/ai_debug")
+async def ai_debug_conversation(payload: AIDebugRequest, _=Depends(_require_admin)):
+    """
+    Conversational AI debugging endpoint.
+    Maintains conversation history for smarter, iterative debugging.
+    """
+    import requests
+    from bs4 import BeautifulSoup
+    import os
+    
+    url = payload.url
+    
+    # 1. Fetch content and detect type (JSON API vs HTML)
+    html_snippet = payload.html_snippet
+    is_json_api = False
+    json_response = None
+    content_type = ""
+    
+    if not html_snippet:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        }
+        try:
+            res = requests.get(url, headers=headers, timeout=15)
+            if res.status_code == 403:
+                scraper_key = os.environ.get("SCRAPERAPI_KEY")
+                if scraper_key:
+                    res = requests.get(f"http://api.scraperapi.com?api_key={scraper_key}&url={url}", timeout=30)
+            
+            if res.encoding is None or res.encoding == 'ISO-8859-1':
+                res.encoding = res.apparent_encoding
+            
+            # Explicit check for common Mojibake indicators (e.g. è, å, ï, or garbled sequence)
+            # If content looks like CP1252/Latin-1 but should be UTF-8
+            if 'è' in res.text and 'ï' in res.text:
+                try:
+                    # Check directly in content-type header
+                    ct = res.headers.get('content-type', '').lower()
+                    if 'charset' not in ct:
+                        res.encoding = 'utf-8'
+                except:
+                    pass
+            
+            content_type = res.headers.get("Content-Type", "").lower()
+            
+            # Check if it's a JSON API
+            if "application/json" in content_type or "text/json" in content_type:
+                is_json_api = True
+                try:
+                    json_response = res.json()
+                    html_snippet = f"JSON API Response (truncated):\n{json.dumps(json_response, ensure_ascii=False, indent=2)[:30000]}"
+                except:
+                    html_snippet = res.text[:30000]
+            else:
+                # Check if content looks like JSON even without proper content-type
+                text = res.text.strip()
+                if text.startswith("{") or text.startswith("["):
+                    try:
+                        json_response = json.loads(text)
+                        is_json_api = True
+                        html_snippet = f"JSON API Response (truncated):\n{json.dumps(json_response, ensure_ascii=False, indent=2)[:30000]}"
+                    except:
+                        pass
+                
+                if not is_json_api:
+                    soup = BeautifulSoup(res.text, "html.parser")
+                    for tag in soup(["script", "style", "svg", "meta", "link", "noscript"]):
+                        tag.decompose()
+                    html_snippet = str(soup)[:35000]
+        except Exception as e:
+            html_snippet = f"Failed to fetch: {e}"
+    
+    # 2. Build conversation messages for LLM
+    api_key = (os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="No AI API Key configured")
+    
+    endpoint = (os.environ.get("TREND_RADAR_MB_AI_ENDPOINT") or 
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
+    model = (os.environ.get("TREND_RADAR_SCRAPER_AI_MODEL") or 
+             os.environ.get("TREND_RADAR_MB_AI_MODEL") or "qwen-plus").strip()
+    
+    # System prompt - conditionally different for JSON API vs HTML
+    if is_json_api:
+        # Check if API returned an error
+        api_error_msg = ""
+        if json_response and isinstance(json_response, dict):
+            # Common error patterns
+            status = json_response.get("result", {}).get("status", {})
+            if status.get("code") and status.get("code") != 0:
+                api_error_msg = f"API returned error: code={status.get('code')}, msg={status.get('msg')}"
+            elif json_response.get("error"):
+                api_error_msg = f"API error: {json_response.get('error')}"
+            elif json_response.get("message") and not json_response.get("data"):
+                api_error_msg = f"API message: {json_response.get('message')}"
+        
+        system_prompt = f"""You are an expert API configuration assistant.
+You are helping to create a working scraper for a JSON API: {url}
+
+THIS IS A JSON API, NOT AN HTML PAGE.
+
+{"**API ERROR DETECTED**: " + api_error_msg + '''
+
+The API returned an error, likely because required parameters are missing.
+ANALYZE the error message and ADD NECESSARY PARAMETERS to the URL.
+Common API parameters include: page, num, limit, count, lid, pageid, category, type, etc.
+Look at the error message for hints about what parameters are needed.
+''' if api_error_msg else ''}
+
+AVAILABLE MODES:
+- http_json - Use path-based field mapping for JSON APIs (PREFERRED for APIs)
+- dynamic_py - Write Python script if the JSON structure is complex
+
+ANALYZE THE JSON RESPONSE:
+1. If the API returned an error, figure out what parameters are missing
+2. Find the array that contains the news items (e.g., "result.data", "data.list", "items")
+3. For each item in the array, identify the field names for: title, url, time
+4. Use dot notation for nested paths (e.g., "article.title", "meta.publishedAt")
+
+RESPONSE FORMAT (strict JSON):
+{{
+  "thinking": "The API needs parameters. Based on error 'param lid illegal', I need to add lid parameter. Common values for Sina API are lid=2509 (finance), pageid=153, num=50...",
+  "type": "http_json",
+  "config": {{
+    "url": "{url}?pageid=153&lid=2509&num=50&page=1",
+    "response_path": "result.data",
+    "field_mapping": {{
+      "title": "title",
+      "url": "url", 
+      "time": "ctime",
+      "content": "intro",
+      "source": "media_name"
+    }}
+  }},
+  "name_suggestion": "新浪财经 - 滚动新闻",
+  "confidence": 1-10
+}}
+
+OR for complex cases use Python:
+{{
+  "thinking": "The JSON structure is complex, needs custom parsing...",
+  "type": "dynamic_py",
+  "script_content": "def fetch(config, ctx):\\n    import requests\\n    from datetime import datetime\\n    resp = requests.get(config['url'])\\n    data = resp.json()\\n    items = []\\n    for item in data['result']['data']:\\n        items.append({{'title': item['title'], 'url': item['url'], 'crawl_time': datetime.now().strftime('%Y-%m-%d %H:%M')}})\\n    return items",
+  "confidence": 1-10
+}}
+
+JSON API Response:
+{html_snippet[:25000]}
+"""
+    else:
+        system_prompt = f"""You are an expert web scraper debugging assistant with deep knowledge of HTML parsing.
+You are helping to create a working scraper for: {url}
+
+SCRAPER MODES:
+1. html_scraper - Use CSS selectors for simple HTML pages
+2. dynamic_py - Write custom Python code for complex pages
+
+THINK STEP BY STEP:
+1. First, analyze the HTML structure - what patterns exist?
+2. Identify where the news items are - look for <article>, <li>, <div> with repeated classes
+3. For each item, find: title (usually in h1-h6 or a), link (a href), date (time, span)
+4. Consider: Is data loaded via JavaScript? Is it in JSON inside a <script> tag?
+5. If CSS selectors keep failing, switch to Python and parse the page differently
+
+CRITICAL RULES:
+- NEVER repeat a failed approach - if CSS selectors returned 0 items twice, use Python
+- In Python scripts, use requests.get() to fetch the page, then parse with BeautifulSoup
+- Items selector must match MULTIPLE elements (5+), not just one
+- Return items as list of dicts with 'title', 'url', 'crawl_time' keys
+- For crawl_time, use: datetime.now().strftime("%Y-%m-%d %H:%M")
+- Handle encoding: resp.encoding = resp.apparent_encoding if resp.encoding == 'ISO-8859-1' else resp.encoding
+
+RESPONSE FORMAT (strict JSON):
+{{
+  "thinking": "Your detailed step-by-step analysis:\\n1. First I noticed...\\n2. The structure shows...\\n3. My approach is...",
+  "type": "html_scraper" or "dynamic_py",
+  "config": {{"url": "...", "scrape_rules": {{"items": "...", "title": "...", "link": "...", "date": "..."}}}},
+  "script_content": "def fetch(config, ctx):\\n    from datetime import datetime\\n    import requests\\n    from bs4 import BeautifulSoup\\n    ...\\n    return items",
+  "name_suggestion": "网站名称 - 频道/栏目",
+  "confidence": 1-10
+}}
+
+HTML (truncated to first 25000 chars):
+{html_snippet[:25000]}
+"""
+    
+    # Build messages array
+    messages = [{"role": "system", "content": system_prompt}]
+    
+    # Add conversation history
+    for msg in payload.conversation:
+        messages.append({"role": msg.role, "content": msg.content})
+    
+    # Add current state if this is a retry
+    if payload.test_error:
+        current_code = payload.current_script if payload.current_provider == "dynamic_py" else payload.current_config
+        user_msg = f"""The previous attempt failed.
+
+Current Provider: {payload.current_provider or 'unknown'}
+Current Code:
+{current_code or 'None'}
+
+Test Error:
+{payload.test_error}
+
+Please analyze what went wrong and provide a FIXED version. Remember what you tried before and don't repeat the same approach if it failed."""
+        messages.append({"role": "user", "content": user_msg})
+    else:
+        # First attempt
+        messages.append({"role": "user", "content": "Please generate an initial scraper configuration for this page. Analyze the HTML structure carefully."})
+    
+    # 3. Call LLM
+    try:
+        req_body = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2
+        }
+        headers_ai = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        
+        proxies = {"http": None, "https": None}
+        if os.environ.get("TREND_RADAR_MB_AI_USE_PROXY", "").strip().lower() in {"1", "true", "yes"}:
+            proxies = None
+        
+        ai_res = requests.post(endpoint, headers=headers_ai, json=req_body, timeout=60, proxies=proxies)
+        if ai_res.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"AI Error: {ai_res.text}")
+        
+        data = ai_res.json()
+        content = data["choices"][0]["message"]["content"]
+        
+        # Clean markdown
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0]
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0]
+        
+        # Clean control characters that break JSON parsing
+        import re
+        # Replace actual newlines/tabs in string values with escaped versions
+        # First, try to parse as-is
+        try:
+            result = json.loads(content.strip())
+        except json.JSONDecodeError:
+            # Try cleaning control characters
+            # Remove control chars except for standard JSON whitespace
+            cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', content)
+            # Also try to fix unescaped newlines in strings
+            # This is a heuristic - replace actual newlines with \n
+            cleaned = cleaned.replace('\n', '\\n').replace('\t', '\\t').replace('\r', '\\r')
+            # But we need to restore proper JSON structure newlines
+            # A better approach: use strict=False
+            try:
+                result = json.loads(content.strip(), strict=False)
+            except json.JSONDecodeError:
+                # Last resort: try cleaned version
+                result = json.loads(cleaned.strip())
+        
+        # Build response
+        ret = {
+            "thinking": result.get("thinking", ""),
+            "confidence": result.get("confidence", 5),
+            "html_snippet": html_snippet[:5000],  # Return truncated for frontend caching
+            "name_suggestion": result.get("name_suggestion", ""),
+        }
+        
+        if result.get("type") == "dynamic_py":
+            ret["provider_type"] = "dynamic_py"
+            ret["script_content"] = result.get("script_content", "")
+            ret["config_json"] = json.dumps({"url": url}, indent=2)
+        elif result.get("type") == "http_json":
+            ret["provider_type"] = "http_json"
+            config = result.get("config") or {}
+            if "url" not in config:
+                config["url"] = url
+            ret["config_json"] = json.dumps(config, indent=2, ensure_ascii=False)
+        else:
+            ret["provider_type"] = "html_scraper"
+            config = result.get("config") or {"url": url, "scrape_rules": result.get("scrape_rules", {})}
+            if "url" not in config:
+                config["url"] = url
+            ret["config_json"] = json.dumps(config, indent=2, ensure_ascii=False)
+        
+        # Return the assistant's response for history tracking
+        ret["assistant_message"] = content
+        
+        return ret
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"AI returned invalid JSON: {str(e)}")
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"AI Debug failed: {str(e)}")

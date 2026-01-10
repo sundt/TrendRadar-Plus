@@ -454,6 +454,9 @@ app.state.project_root = project_root
 # 启用 Gzip 压缩（响应大于 500 字节时压缩）
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+from trendradar.web.newsnow_admin import router as _newsnow_router
+from trendradar.web.platform_admin import router as _platform_admin_router
+
 app.include_router(_rss_admin_router)
 app.include_router(_rss_usage_router)
 app.include_router(_rss_proxy_router)
@@ -464,6 +467,7 @@ app.include_router(_fetch_metrics_router)
 app.include_router(_system_router)
 app.include_router(_custom_source_router)
 app.include_router(_newsnow_router)
+app.include_router(_platform_admin_router)
 
 # 挂载静态文件目录（带缓存控制）
 static_dir = Path(__file__).parent / "static"
@@ -771,6 +775,37 @@ def _init_newsnow_platforms_if_empty() -> None:
     except Exception as e:
         print(f"Warning: Failed to initialize newsnow_platforms: {e}")
 
+
+def _init_default_categories_if_empty() -> None:
+    """Initialize platform_categories if empty."""
+    conn = _get_online_db_conn()
+    cur = conn.execute("SELECT COUNT(*) FROM platform_categories")
+    row = cur.fetchone()
+    if row and int(row[0]) > 0:
+        return
+        
+    from trendradar.web.news_viewer import PLATFORM_CATEGORIES
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Use explicit order if available or infer
+    order_map = {
+        'explore': 0, 'knowledge': 10, 'ai': 20, 'finance': 30, 
+        'tech_news': 40, 'developer': 50, 'social': 60, 'general': 70, 'sports': 80
+    }
+    
+    for cid, cdata in PLATFORM_CATEGORIES.items():
+        name = cdata.get("name")
+        icon = cdata.get("icon", "📰")
+        order = order_map.get(cid, 999)
+        
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO platform_categories (id, name, icon, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
+                (cid, name, icon, order, now, now)
+            )
+        except Exception:
+            pass
+    conn.commit()
 
 
 app.state.require_admin = _require_admin
@@ -2618,6 +2653,7 @@ async def on_startup():
         _get_online_db_conn()
         _init_default_rss_sources_if_empty()
         _init_newsnow_platforms_if_empty()
+        _init_default_categories_if_empty()
         rss_scheduler.rss_enforce_high_freq_cap(project_root)
         rss_scheduler.rss_init_schedule_defaults(project_root)
     except Exception as e:
