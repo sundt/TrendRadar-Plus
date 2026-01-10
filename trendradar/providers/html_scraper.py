@@ -57,12 +57,31 @@ class HtmlScraperProvider:
         })
         timeout = platform_config.get("timeout", 30)
 
+        import os
+        scraper_api_key = platform_config.get("scraper_api_key") or os.environ.get("SCRAPERAPI_KEY")
+        
         # Fetch the page
         # Some sites have bad SSL certs, so we disable verification by default for scraper
         # In production this should be configurable, but for scraper it's usually fine
         verify_ssl = platform_config.get("verify_ssl", False)
-        resp = requests.get(url, headers=headers, timeout=timeout, verify=verify_ssl)
-        resp.raise_for_status()
+        
+        # Try direct request first
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout, verify=verify_ssl)
+            resp.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            # If 403 and we have ScraperAPI key, retry with proxy
+            if e.response is not None and e.response.status_code == 403 and scraper_api_key:
+                api_url = "http://api.scraperapi.com"
+                params = {
+                    "api_key": scraper_api_key,
+                    "url": url,
+                    "render": platform_config.get("render", "false"),
+                }
+                resp = requests.get(api_url, params=params, timeout=timeout + 30)
+                resp.raise_for_status()
+            else:
+                raise
         
         # Handle encoding
         if resp.encoding is None or resp.encoding == 'ISO-8859-1':

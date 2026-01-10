@@ -1,5 +1,6 @@
 # coding=utf-8
 import json
+import os
 import sqlite3
 import traceback
 from datetime import datetime
@@ -59,11 +60,53 @@ async def list_custom_sources(request: Request, _=Depends(_require_admin)):
     """)
     rows = cur.fetchall()
     
+    # Get counts from today's news.db
+    real_counts = {}
+    try:
+        root = _get_project_root(request)
+        news_conn = _get_news_db_conn(root)
+        if news_conn:
+            try:
+                # Count items per platform for today
+                cur_news = news_conn.execute("SELECT platform_id, COUNT(*) FROM news_items GROUP BY platform_id")
+                for r in cur_news.fetchall():
+                    real_counts[r[0]] = r[1]
+            finally:
+                news_conn.close()
+    except Exception as e:
+        print(f"Error querying news.db counts: {e}")
+    
     results = []
     for r in rows:
+        source_id = r[0]
+        # Use real count from news.db if available, otherwise fallback to stats
+        real_count = real_counts.get(source_id, 0)
+        
+        # Parse config to get URL
+        url = ""
+        scrape_rules_json = ""
+        try:
+             import json
+             config = json.loads(r[3])
+             url = config.get("url", "")
+             # If scrape_rules is a dict, json dump it for the data attribute
+             rules = config.get("scrape_rules", {})
+             if isinstance(rules, dict):
+                 scrape_rules_json = json.dumps(rules)
+             else:
+                 scrape_rules_json = str(rules)
+        except:
+             pass
+        
         results.append({
-            "id": r[0],
+            "id": source_id,
             "name": r[1],
+            "url": url,  # Add extracted URL
+            "provider_type": r[2],
+            "config_json": r[3],
+            "scrape_rules": scrape_rules_json, # Add rules for edit modal
+            "enabled": bool(r[4]),
+
             "provider_type": r[2],
             "config_json": r[3],
             "enabled": bool(r[4]),
@@ -78,9 +121,9 @@ async def list_custom_sources(request: Request, _=Depends(_require_admin)):
             "created_at": r[13],
             "updated_at": r[14],
             "stats": {
-                "entries": r[15] or 0,
+                "entries": real_count, # Use real DB count
                 "fails": r[16] or 0,
-                "last_update": r[9]  # Use last_run_at as last_update
+                "last_update": r[9]
             }
         })
     return results
@@ -392,7 +435,8 @@ async def test_custom_source(payload: TestSourceRequest, request: Request, _=Dep
             "success": True,
             "items_count": len(items),
             "items": items[:20], # limit preview
-            "metric": result.metric
+            "metric": result.metric,
+            "warning": "选择器可能需要调整：只抓到少量数据，建议检查 items 选择器是否正确匹配了页面上的多个元素" if len(items) <= 2 else None
         }
         
     except Exception as e:
@@ -452,7 +496,23 @@ async def detect_custom_source(req: DetectRequest, request: Request, _=Depends(_
             res = requests.get(url, headers=headers, timeout=10)
         except requests.exceptions.SSLError:
             res = requests.get(url, headers=headers, timeout=10, verify=False)
-
+        except Exception as e:
+            # Check for 403 specifically
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 403:
+                raise HTTPException(status_code=403, detail="Target site blocked access (403). You might need ScraperAPI.")
+            raise e
+            
+        if res.status_code == 403:
+            # Try once more with ScraperAPI if ENV exists
+            scraper_key = os.environ.get("SCRAPERAPI_KEY")
+            if scraper_key:
+                api_url = f"http://api.scraperapi.com?api_key={scraper_key}&url={url}"
+                res = requests.get(api_url, timeout=20)
+            else:
+                raise HTTPException(status_code=403, detail="Target site blocked access (403). Try adding a ScraperAPI key.")
+        
+        res.raise_for_status()
+        
         # Handle encoding
         if res.encoding is None or res.encoding == 'ISO-8859-1':
             res.encoding = res.apparent_encoding
@@ -586,7 +646,9 @@ async def detect_custom_source(req: DetectRequest, request: Request, _=Depends(_
              if not api_key:
                  return {}
 
-             model = (os.environ.get("TREND_RADAR_MB_AI_MODEL") or "qwen-plus").strip() or "qwen-plus"
+             # Use dedicated scraper model if set, otherwise fall back to general MB AI model
+             model = (os.environ.get("TREND_RADAR_SCRAPER_AI_MODEL") or 
+                      os.environ.get("TREND_RADAR_MB_AI_MODEL") or "qwen-plus").strip() or "qwen-plus"
              endpoint = (os.environ.get("TREND_RADAR_MB_AI_ENDPOINT") or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
              
              prompt = f"""
@@ -594,16 +656,20 @@ You are an expert web scraper configuration generator.
 Analyze the following HTML snippet from {url} and generate a JSON configuration for scraping news articles.
 The goal is to extract a list of news items with title, link, date, and content.
 
-Important:
-1. Identify the recurring HTML element that represents a single news item (e.g., <article>, <div class="post">).
-2. Avoid using IDs for the "items" selector if they look unique per post (e.g. "post-123"). Use classes instead.
-3. Selectors for title, link, etc. must be RELATIVE to the "items" selector.
+CRITICAL REQUIREMENTS:
+1. The "items" selector MUST match at least 5 or more repeating elements on the page. Look for patterns like multiple <article> tags, multiple <div> with the same class, or multiple <li> in a list.
+2. DO NOT use IDs (like #post-123) for the "items" selector because IDs are unique. Use class-based selectors instead.
+3. Prefer simple, common selectors: article, .post, .entry, .card, .item, li, etc.
+4. DO NOT use classes that contain colons (like dark:bg-white or hover:text-blue). These are Tailwind CSS utility classes and break CSS selector parsing.
+5. Keep selectors SHORT and SIMPLE. Avoid long chains of multiple classes.
+6. The "title" and "link" selectors must be RELATIVE to each item container.
+7. For "link", prefer the selector that gives you the article URL (usually an <a> tag wrapping or inside the title).
 
-Output strict JSON only, no markdown code blocks.
+Output strict JSON only, no markdown code blocks, no explanation.
 Format:
 {{
   "scrape_rules": {{
-      "items": "CSS selector for the article container (e.g. article, .post, .news-item)",
+      "items": "CSS selector for the repeating article container (must match 5+ elements)",
       "title": "CSS selector for title (relative to items container)",
       "link": "CSS selector for link (relative to items container)",
       "date": "CSS selector for date (relative to items container, optional)"
@@ -690,9 +756,27 @@ HTML Snippet (truncated, cleaned):
                 "link": "a"
             }
         
-        # Validate and fix selectors
+        # Validate and fix selectors - check match count
         try:
             soup = BeautifulSoup(page_content, "html.parser")
+            items_sel = scrape_rules.get("items", "article")
+            matched = soup.select(items_sel)
+            
+            # If AI selector matches less than 3 elements, try common fallbacks
+            if len(matched) < 3:
+                fallback_selectors = [
+                    "article", "article.post", ".post", ".entry", ".card", 
+                    ".item", ".news-item", "li.post", "div.post", 
+                    "div.article", "div.entry", "li"
+                ]
+                for fallback in fallback_selectors:
+                    fallback_matched = soup.select(fallback)
+                    if len(fallback_matched) >= 3:
+                        scrape_rules["items"] = fallback
+                        matched = fallback_matched
+                        break
+            
+            # Now validate/fix title and link selectors within the found items
             scrape_rules = validate_and_fix_selectors(soup, scrape_rules)
         except:
             pass

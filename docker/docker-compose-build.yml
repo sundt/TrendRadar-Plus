@@ -127,9 +127,11 @@ services:
       - TREND_RADAR_MB_AI_BATCH_SIZE=${TREND_RADAR_MB_AI_BATCH_SIZE:-20}
       - TREND_RADAR_MB_AI_MAX_PER_HOUR=${TREND_RADAR_MB_AI_MAX_PER_HOUR:-200}
       - TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR=${TREND_RADAR_RSS_WARMUP_MAX_PER_HOUR:-120}
+      - SCRAPERAPI_KEY=${SCRAPERAPI_KEY:-}
+      - TREND_RADAR_SCRAPER_AI_MODEL=${TREND_RADAR_SCRAPER_AI_MODEL:-}
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
       interval: 10s
       timeout: 5s
       retries: 6

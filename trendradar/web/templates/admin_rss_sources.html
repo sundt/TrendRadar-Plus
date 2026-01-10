@@ -3270,6 +3270,13 @@
               <strong style="color:#059669;">✓ 测试成功</strong> - 抓取到 <strong>${count}</strong> 条数据
             </div>`;
 
+            // Show warning if present
+            if (data.warning) {
+              html += `<div style="margin-bottom:10px; padding:8px; background:#fef3c7; border-left:3px solid #f59e0b; color:#92400e; font-size:11px;">
+                ⚠️ ${_escapeHtml(data.warning)}
+              </div>`;
+            }
+
             if (items.length > 0) {
               html += '<div style="font-weight:600; margin-top:10px; margin-bottom:6px;">前 ' + Math.min(5, items.length) + ' 条示例：</div>';
               html += '<div style="border-left:2px solid #2563eb; padding-left:10px;">';
