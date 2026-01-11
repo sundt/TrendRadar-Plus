@@ -17,6 +17,7 @@ import './paging.js';
 
 // 依赖基础模块的功能
 import './read-state.js';
+import './theme.js';
 import './settings.js';
 import './filter.js';
 import './tabs.js';

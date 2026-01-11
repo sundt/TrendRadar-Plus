@@ -8,7 +8,6 @@ import { storage } from './storage.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const CATEGORY_PAGE_SIZE = 20;
-const VISIBLE_PLATFORMS_STORAGE_KEY = 'hotnews_visible_platforms_v1';
 
 let _ajaxRefreshInFlight = false;
 let _ajaxLastRefreshAt = 0;
@@ -17,86 +16,7 @@ let _ajaxRefreshPending = null;
 let _latestCategories = null;
 let _platformCloseHandlersAttached = false;
 
-let _visiblePlatformsState = null;
-
-function _getSessionStorage() {
-    try {
-        if (typeof window !== 'undefined' && window.sessionStorage) return window.sessionStorage;
-    } catch (e) {
-        // ignore
-    }
-    return null;
-}
-
-function _loadVisiblePlatformsState() {
-    if (_visiblePlatformsState) return _visiblePlatformsState;
-    const ss = _getSessionStorage();
-    if (!ss) {
-        _visiblePlatformsState = {};
-        return _visiblePlatformsState;
-    }
-    try {
-        const raw = ss.getItem(VISIBLE_PLATFORMS_STORAGE_KEY);
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            _visiblePlatformsState = (parsed && typeof parsed === 'object') ? parsed : {};
-        } else {
-            _visiblePlatformsState = {};
-        }
-    } catch (e) {
-        _visiblePlatformsState = {};
-    }
-    return _visiblePlatformsState;
-}
-
-function _persistVisiblePlatformsState() {
-    const ss = _getSessionStorage();
-    if (!ss) return;
-    try {
-        ss.setItem(VISIBLE_PLATFORMS_STORAGE_KEY, JSON.stringify(_visiblePlatformsState || {}));
-    } catch (e) {
-        // ignore
-    }
-}
-
-function _setVisiblePlatformsForCategory(catId, ids) {
-    const cid = String(catId || '').trim();
-    if (!cid) return;
-    const arr = (Array.isArray(ids) ? ids : []).map((x) => String(x || '').trim()).filter(Boolean);
-    const state = _loadVisiblePlatformsState();
-    state[cid] = {
-        ids: arr,
-        updatedAt: Date.now(),
-    };
-    _visiblePlatformsState = state;
-    _persistVisiblePlatformsState();
-}
-
-function _getVisiblePlatformsForCategory(catId) {
-    const cid = String(catId || '').trim();
-    if (!cid) return null;
-    const state = _loadVisiblePlatformsState();
-    const item = state?.[cid];
-    const ids = Array.isArray(item?.ids) ? item.ids : null;
-    return ids ? ids.map((x) => String(x || '').trim()).filter(Boolean) : null;
-}
-
-function _getDesiredVisiblePlatformIds(catId, orderedIds) {
-    const ordered = (Array.isArray(orderedIds) ? orderedIds : []).map((x) => String(x || '').trim()).filter(Boolean);
-    const saved = _getVisiblePlatformsForCategory(catId);
-    const base = (Array.isArray(saved) ? saved : []).filter((x) => ordered.includes(x));
-
-    const next = [];
-    for (const x of base) {
-        if (next.length >= 3) break;
-        if (!next.includes(x)) next.push(x);
-    }
-    for (const x of ordered) {
-        if (next.length >= 3) break;
-        if (!next.includes(x)) next.push(x);
-    }
-    return next;
-}
+let _lazyPlatformObserver = null;
 
 function _getCategoryIdFromCard(card) {
     const pane = card?.closest?.('.tab-pane');
@@ -120,8 +40,186 @@ function _renderPlatformHeaderButtonsHtml(catId, platformId) {
     const canDelete = isRss;
     const delBtn = canDelete ? '<button type="button" class="tr-platform-card-delete" data-action="delete-platform">−</button>' : '';
     const hideBtn = !isRss ? '<button type="button" class="tr-platform-card-hide" data-action="hide-platform">🙈</button>' : '';
-    const closeBtn = '<button type="button" class="tr-platform-card-close" data-action="close-platform">⇄</button>';
-    return `${delBtn}${hideBtn}${closeBtn}`;
+    return `${delBtn}${hideBtn}`;
+}
+
+function _renderSkeletonNewsItemsHtml(count) {
+    const n = Math.max(0, Number(count || 0) || 0);
+    let html = '';
+    for (let i = 0; i < n; i++) {
+        html += '<li class="tr-news-skeleton" aria-hidden="true"><div class="tr-news-skeleton-line"></div></li>';
+    }
+    return html;
+}
+
+function _createNewsLi(n, idx, platformId) {
+    const li = document.createElement('li');
+    li.className = 'news-item';
+    li.dataset.newsId = String(n?.stable_id || '');
+    li.dataset.newsTitle = String(n?.display_title || n?.title || '');
+
+    const content = document.createElement('div');
+    content.className = 'news-item-content';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'news-checkbox';
+    cb.title = '标记已读';
+    cb.addEventListener('change', () => {
+        try { window.markAsRead(cb); } catch (e) { /* ignore */ }
+    });
+
+    const indexSpan = document.createElement('span');
+    indexSpan.className = 'news-index';
+    indexSpan.textContent = String(idx);
+
+    const a = document.createElement('a');
+    a.className = 'news-title';
+    if (n?.is_cross_platform) a.classList.add('cross-platform');
+    a.href = String(n?.url || '#');
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.setAttribute('onclick', 'handleTitleClickV2(this, event)');
+    a.setAttribute('onauxclick', 'handleTitleClickV2(this, event)');
+    a.setAttribute('oncontextmenu', 'handleTitleClickV2(this, event)');
+    a.setAttribute('onkeydown', 'handleTitleKeydownV2(this, event)');
+    a.textContent = String(n?.display_title || n?.title || '');
+
+    if (n?.is_cross_platform) {
+        const cps = Array.isArray(n?.cross_platforms) ? n.cross_platforms : [];
+        const badge = document.createElement('span');
+        badge.className = 'cross-platform-badge';
+        badge.title = `同时出现在: ${cps.join(', ')}`;
+        badge.textContent = `🔥 ${String(n?.cross_platform_count ?? '')}`;
+        a.appendChild(document.createTextNode(' '));
+        a.appendChild(badge);
+    }
+
+    content.appendChild(cb);
+    content.appendChild(indexSpan);
+    content.appendChild(a);
+    li.appendChild(content);
+
+    const meta = String(n?.meta || '').trim();
+    const isRssPlatform = String(platformId || '').startsWith('rss-');
+    if (meta && !isRssPlatform) {
+        const sub = document.createElement('div');
+        sub.className = 'news-subtitle';
+        sub.textContent = meta;
+        li.appendChild(sub);
+    }
+
+    try {
+        const reads = TR.readState?.getReadNews?.() || {};
+        if (li.dataset.newsId && reads[li.dataset.newsId]) {
+            li.classList.add('read');
+            cb.checked = true;
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    return li;
+}
+
+async function _hydrateLazyPlatformCard(card) {
+    if (!card || !(card instanceof Element)) return;
+    if (String(card?.dataset?.lazy || '') !== '1') return;
+    if (String(card?.dataset?.loading || '') === '1') return;
+
+    const pane = card.closest('.tab-pane');
+    if (!pane || !pane.classList.contains('active')) return;
+
+    const pid = String(card.dataset.platform || '').trim();
+    if (!pid) return;
+
+    card.dataset.loading = '1';
+    try {
+        const url = `/api/news/page?platform_id=${encodeURIComponent(pid)}&offset=0&page_size=${encodeURIComponent(String(CATEGORY_PAGE_SIZE))}`;
+        const resp = await fetch(url);
+        if (!resp.ok) return;
+        const payload = await resp.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
+
+        const list = card.querySelector('.news-list');
+        if (!list) return;
+
+        list.querySelectorAll('.tr-news-skeleton').forEach((el) => el.remove());
+        list.querySelectorAll('.news-placeholder').forEach((el) => el.remove());
+        list.querySelectorAll('.news-item').forEach((el) => el.remove());
+
+        const capped = items.slice(0, CATEGORY_PAGE_SIZE);
+        for (let i = 0; i < capped.length; i++) {
+            list.appendChild(_createNewsLi(capped[i], i + 1, pid));
+        }
+
+        const loadedCount = list.querySelectorAll('.news-item').length;
+        card.dataset.loadedCount = String(loadedCount);
+        card.dataset.hasMore = '0';
+        card.dataset.loadedDone = '1';
+        card.dataset.lazy = '0';
+
+        try {
+            if (TR.paging) {
+                TR.paging.setCardPageSize(card, Math.min(CATEGORY_PAGE_SIZE, Math.max(1, loadedCount || CATEGORY_PAGE_SIZE)));
+                TR.paging.applyPagingToCard(card, 0);
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        try {
+            if (TR.counts?.updatePlatformCount) TR.counts.updatePlatformCount(card);
+            if (TR.counts?.updateAllCounts) TR.counts.updateAllCounts();
+        } catch (e) {
+            // ignore
+        }
+
+        try {
+            TR.search?.searchNews?.();
+        } catch (e) {
+            // ignore
+        }
+
+        try {
+            const activeTab = TR.tabs?.getActiveTabId?.() || null;
+            if (activeTab) TR.filter?.applyCategoryFilter?.(activeTab);
+        } catch (e) {
+            // ignore
+        }
+    } catch (e) {
+        // ignore
+    } finally {
+        card.dataset.loading = '0';
+    }
+}
+
+function _attachLazyPlatformObservers() {
+    try {
+        if (_lazyPlatformObserver) {
+            _lazyPlatformObserver.disconnect();
+            _lazyPlatformObserver = null;
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    _lazyPlatformObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const card = entry.target;
+            if (!card || !(card instanceof Element)) continue;
+            if (String(card?.dataset?.lazy || '') !== '1') {
+                try { _lazyPlatformObserver?.unobserve?.(card); } catch (e) { /* ignore */ }
+                continue;
+            }
+            _hydrateLazyPlatformCard(card).catch(() => {});
+        }
+    }, { root: null, rootMargin: '0px 200px 0px 200px', threshold: 0.15 });
+
+    document.querySelectorAll('.platform-card[data-lazy="1"]').forEach((card) => {
+        try { _lazyPlatformObserver.observe(card); } catch (e) { /* ignore */ }
+    });
 }
 
 function _waitAnimationEnd(el, timeoutMs) {
@@ -263,7 +361,7 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
     const animateIn = opts && opts.animateIn ? ' tr-explore-flip-in' : '';
 
     const html = `
-        <div class="platform-card${animateIn}" data-platform="${escapeHtml(pid)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" draggable="false" data-rotatable-category="${escapeHtml(catId)}">
+        <div class="platform-card${animateIn}" data-platform="${escapeHtml(pid)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" draggable="false">
             <div class="platform-header">
                 ${dragHandle}
                 <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;" onclick="dismissNewPlatformBadge('${escapeHtml(pid)}')">📱 ${platformName}${platformBadge}</div>
@@ -279,103 +377,8 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
     return wrap.firstElementChild;
 }
 
-async function _rotatePlatformCard(cardEl) {
-    if (!cardEl || !(cardEl instanceof Element)) return;
-    const catId = _getCategoryIdFromCard(cardEl);
-    if (!catId || catId === 'explore' || catId === 'rsscol-rss') return;
-    const categories = _latestCategories;
-    if (!categories || !categories[catId] || !categories[catId].platforms) return;
-
-    const platforms = categories[catId].platforms || {};
-    const orderedIds = Object.keys(platforms);
-    if (orderedIds.length <= 0) return;
-
-    const grid = cardEl.closest('.platform-grid');
-    const visible = grid ? Array.from(grid.querySelectorAll('.platform-card[data-platform]')) : [];
-    const visibleIds = visible.map((el) => String(el?.getAttribute?.('data-platform') || '').trim()).filter(Boolean);
-    if (orderedIds.length <= visibleIds.length) return;
-
-    const currentPid = String(cardEl.getAttribute('data-platform') || '').trim();
-    const lastVisibleId = String(visibleIds[visibleIds.length - 1] || '').trim();
-    let startIdx = orderedIds.findIndex((x) => String(x || '').trim() === lastVisibleId);
-    if (startIdx < 0) startIdx = orderedIds.findIndex((x) => String(x || '').trim() === currentPid);
-    if (startIdx < 0) startIdx = 0;
-
-    let nextId = null;
-    for (let i = 1; i <= orderedIds.length; i += 1) {
-        const cand = orderedIds[(startIdx + i) % orderedIds.length];
-        const candId = String(cand || '').trim();
-        if (!candId) continue;
-        if (visibleIds.includes(candId)) continue;
-        nextId = candId;
-        break;
-    }
-    if (!nextId) return;
-
-    const state = data.snapshotViewerState();
-    const nextPlatform = platforms[nextId];
-    if (!nextPlatform) return;
-
-    try {
-        const btn = cardEl.querySelector('button[data-action="close-platform"]');
-        if (btn) btn.setAttribute('disabled', 'true');
-    } catch (e) {
-        // ignore
-    }
-
-    try {
-        cardEl.classList.remove('tr-explore-flip-in');
-        cardEl.classList.add('tr-explore-flip-out');
-    } catch (e) {
-        // ignore
-    }
-    await _waitAnimationEnd(cardEl, 360);
-
-    const newEl = _buildPlatformCardElement(catId, nextId, nextPlatform, state, { animateIn: true });
-    if (!newEl) return;
-
-    try {
-        if (cardEl && cardEl.parentNode) {
-            cardEl.parentNode.replaceChild(newEl, cardEl);
-        }
-    } catch (e) {
-        // ignore
-    }
-
-    try {
-        const nextVisibleIds = visibleIds.map((x) => (String(x || '').trim() === currentPid ? nextId : x)).filter(Boolean);
-        _setVisiblePlatformsForCategory(catId, nextVisibleIds);
-    } catch (e) {
-        // ignore
-    }
-
-    try {
-        if (TR.paging?.setCardPageSize) {
-            TR.paging.setCardPageSize(newEl, TR.paging.PAGE_SIZE);
-        }
-        if (TR.paging?.applyPagingToCard) {
-            TR.paging.applyPagingToCard(newEl, 0);
-        }
-    } catch (e) {
-        // ignore
-    }
-
-    try {
-        TR.counts?.updateAllCounts?.();
-        TR.readState?.updateReadCount?.();
-    } catch (e) {
-        // ignore
-    }
-}
-
 async function _deletePlatformFromCustomCategory(catId, platformId) {
-    const cid = String(catId || '').trim();
-    const pid = String(platformId || '').trim();
-    if (!cid || !pid) return false;
-    if (!_isCustomCategoryId(cid)) return false;
-
-    const config = TR.settings?.getCategoryConfig ? (TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig()) : null;
-    if (!config) return false;
+    // ... (no changes)
     const custom = Array.isArray(config.customCategories) ? config.customCategories : [];
     const idx = custom.findIndex((c) => String(c?.id || '').trim() === cid);
     if (idx < 0) return false;
@@ -496,36 +499,6 @@ async function _deletePlatformCard(cardEl) {
     const parent = cardEl.parentNode;
     const nextSibling = cardEl.nextSibling;
 
-    const grid = cardEl.closest('.platform-grid');
-    const categories = _latestCategories;
-    const platforms = (categories && categories[catId] && categories[catId].platforms) ? (categories[catId].platforms || {}) : null;
-    const orderedIds = platforms ? Object.keys(platforms).map((x) => String(x || '').trim()).filter(Boolean) : [];
-    const stateBeforeDelete = (() => {
-        try {
-            return data.snapshotViewerState();
-        } catch (e) {
-            return {};
-        }
-    })();
-    const visibleIdsBeforeDelete = (() => {
-        try {
-            const visible = grid ? Array.from(grid.querySelectorAll('.platform-card[data-platform]')) : [];
-            return visible.map((el) => String(el?.getAttribute?.('data-platform') || '').trim()).filter(Boolean);
-        } catch (e) {
-            return [];
-        }
-    })();
-    const remainingVisibleIds = visibleIdsBeforeDelete.filter((x) => String(x || '').trim() !== pid);
-    let fillPlatformId = null;
-    for (const cand of orderedIds) {
-        const cid = String(cand || '').trim();
-        if (!cid) continue;
-        if (cid === pid) continue;
-        if (remainingVisibleIds.includes(cid)) continue;
-        fillPlatformId = cid;
-        break;
-    }
-
     try {
         if (parent) parent.removeChild(cardEl);
     } catch (e) {
@@ -563,38 +536,10 @@ async function _deletePlatformCard(cardEl) {
     }
 
     try {
-        const nextVisible = [...remainingVisibleIds];
-        if (fillPlatformId) nextVisible.push(fillPlatformId);
-        _setVisiblePlatformsForCategory(catId, nextVisible);
+        TR.counts?.updateAllCounts?.();
+        TR.readState?.updateReadCount?.();
     } catch (e) {
         // ignore
-    }
-
-    if (fillPlatformId && platforms && platforms[fillPlatformId] && grid) {
-        try {
-            const newEl = _buildPlatformCardElement(catId, fillPlatformId, platforms[fillPlatformId], stateBeforeDelete, { animateIn: true });
-            if (newEl) {
-                grid.appendChild(newEl);
-                try {
-                    if (TR.paging?.setCardPageSize) {
-                        TR.paging.setCardPageSize(newEl, TR.paging.PAGE_SIZE);
-                    }
-                    if (TR.paging?.applyPagingToCard) {
-                        TR.paging.applyPagingToCard(newEl, 0);
-                    }
-                } catch (e2) {
-                    // ignore
-                }
-                try {
-                    TR.counts?.updateAllCounts?.();
-                    TR.readState?.updateReadCount?.();
-                } catch (e2) {
-                    // ignore
-                }
-            }
-        } catch (e) {
-            // ignore
-        }
     }
 }
 
@@ -769,36 +714,39 @@ export const data = {
 
             const platforms = cat?.platforms || {};
             const orderedIds = Object.keys(platforms || {});
-            const visiblePlatformIds = _getDesiredVisiblePlatformIds(catId, orderedIds);
-            const platformCards = visiblePlatformIds.map((platformId) => {
+            const platformCards = orderedIds.map((platformId, idx0) => {
                 const platform = platforms?.[platformId];
                 if (!platform) return '';
                 const platformName = escapeHtml(platform?.name || platformId);
                 const platformBadge = platform?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(platformId)}">NEW</span>` : '';
                 const news = Array.isArray(platform?.news) ? platform.news : [];
                 const totalCount = news.length;
-                const initialCount = isActiveCategory ? Math.min(totalCount, CATEGORY_PAGE_SIZE) : 0;
+                const shouldHydrate = isActiveCategory && idx0 < 3;
+                const isLazy = !shouldHydrate;
+                const initialCount = shouldHydrate ? Math.min(totalCount, CATEGORY_PAGE_SIZE) : 0;
                 const pagingOffset = (platformId && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[platformId])) ? state.pagingOffsets[platformId] : 0;
                 const filteredNews = news.slice(0, initialCount);
 
-                const newsItemsHtml = filteredNews.map((n, idx) => {
-                    const stableId = escapeHtml(n?.stable_id || '');
-                    const title = escapeHtml(n?.display_title || n?.title || '');
-                    const url = escapeHtml(n?.url || '');
-                    const meta = escapeHtml(n?.meta || '');
-                    const isRssPlatform = String(platformId || '').startsWith('rss-');
-                    const isCross = !!n?.is_cross_platform;
-                    const crossPlatforms = Array.isArray(n?.cross_platforms) ? n.cross_platforms : [];
-                    const crossTitle = escapeHtml(crossPlatforms.join(', '));
-                    const crossCount = escapeHtml(n?.cross_platform_count ?? '');
-                    const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
-                    const crossClass = isCross ? 'cross-platform' : '';
-                    const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" onchange="markAsRead(this)" />';
-                    const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
-                    const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
-                    const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
-                    const safeHref = url || '#';
-                    return `
+                const newsItemsHtml = isLazy
+                    ? _renderSkeletonNewsItemsHtml(8)
+                    : (filteredNews.map((n, idx) => {
+                        const stableId = escapeHtml(n?.stable_id || '');
+                        const title = escapeHtml(n?.display_title || n?.title || '');
+                        const url = escapeHtml(n?.url || '');
+                        const meta = escapeHtml(n?.meta || '');
+                        const isRssPlatform = String(platformId || '').startsWith('rss-');
+                        const isCross = !!n?.is_cross_platform;
+                        const crossPlatforms = Array.isArray(n?.cross_platforms) ? n.cross_platforms : [];
+                        const crossTitle = escapeHtml(crossPlatforms.join(', '));
+                        const crossCount = escapeHtml(n?.cross_platform_count ?? '');
+                        const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
+                        const crossClass = isCross ? 'cross-platform' : '';
+                        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" onchange="markAsRead(this)" />';
+                        const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
+                        const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
+                        const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
+                        const safeHref = url || '#';
+                        return `
                         <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                             <div class="news-item-content">
                                 ${checkboxHtml}
@@ -810,13 +758,13 @@ export const data = {
                             </div>
                             ${metaHtml}
                         </li>`;
-                }).join('') || (!isActiveCategory ? '<li class="news-placeholder" aria-hidden="true">待加载...</li>' : '');
+                    }).join(''));
 
                 const headerButtons = _renderPlatformHeaderButtonsHtml(catId, platformId);
                 const dragHandle = `<span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>`;
 
                 return `
-                <div class="platform-card" data-platform="${escapeHtml(platformId)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" draggable="false">
+                <div class="platform-card" data-platform="${escapeHtml(platformId)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" data-lazy="${isLazy ? '1' : '0'}" data-loaded-done="${isLazy ? '0' : '1'}" draggable="false">
                     <div class="platform-header">
                         ${dragHandle}
                         <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;" onclick="dismissNewPlatformBadge('${escapeHtml(platformId)}')">📱 ${platformName}${platformBadge}</div>
@@ -908,6 +856,8 @@ export const data = {
         document.body.classList.add('categories-ready');
 
         TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });
+
+        _attachLazyPlatformObservers();
 
         try {
             if (TR.infiniteScroll && typeof TR.infiniteScroll.attach === 'function') {
@@ -1035,18 +985,6 @@ ready(function() {
         document.addEventListener('click', (e) => {
             const t = e?.target;
             if (!t || !(t instanceof Element)) return;
-            const btn = t.closest('button[data-action="close-platform"]');
-            if (!btn) return;
-            const card = btn.closest('.platform-card');
-            if (!card) return;
-            const catId = _getCategoryIdFromCard(card);
-            if (!catId || catId === 'explore' || catId === 'rsscol-rss') return;
-            _rotatePlatformCard(card).catch(() => {});
-        });
-
-        document.addEventListener('click', (e) => {
-            const t = e?.target;
-            if (!t || !(t instanceof Element)) return;
             const btn = t.closest('button[data-action="delete-platform"]');
             if (!btn) return;
             const card = btn.closest('.platform-card');
@@ -1081,4 +1019,6 @@ ready(function() {
             }
         });
     }
+
+    _attachLazyPlatformObservers();
 });
