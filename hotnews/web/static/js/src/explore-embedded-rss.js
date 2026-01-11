@@ -2,9 +2,10 @@ import { TR, ready, escapeHtml } from './core.js';
 import { storage } from './storage.js';
 
 const EXPLORE_TAB_ID = 'explore';
+const ENTRIES_PER_SOURCE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 
-const ENTRIES_PER_SOURCE = 20;
-const BATCH_SIZE = 4;
+const BATCH_SIZE = 6; // Initial batch size (reduced for 2C2G server)
+const LOAD_MORE_SIZE = 4; // Size of subsequent loads when scrolling
 
 const PREVIEW_CONCURRENCY = 6;
 const PREVIEW_CACHE_TTL_MS = 3 * 60 * 1000;
@@ -294,7 +295,7 @@ async function _pickFirstValidCardFromCandidates(candidates) {
     };
 
     const k = Math.max(1, Math.min(PREVIEW_CONCURRENCY, queue.length));
-    const workers = Array.from({ length: k }).map(() => worker().catch(() => {}));
+    const workers = Array.from({ length: k }).map(() => worker().catch(() => { }));
     await Promise.race([Promise.all(workers), done]);
     return found;
 }
@@ -375,7 +376,7 @@ async function _loadNextValidCards(maxCount) {
         };
 
         const k = Math.max(1, Math.min(PREVIEW_CONCURRENCY, queue.length));
-        const workers = Array.from({ length: k }).map(() => worker().catch(() => {}));
+        const workers = Array.from({ length: k }).map(() => worker().catch(() => { }));
         await Promise.race([Promise.all(workers), done]);
 
         if (picked.length >= want) break;
@@ -613,7 +614,7 @@ async function _addMetaToCategory(meta, pickedCategory) {
         _setStatus(String(e?.message || e), { variant: 'error' });
         try {
             TR.toast?.show?.(`保存失败：${String(e?.message || e)}`, { variant: 'error', durationMs: 2500 });
-        } catch (_) {}
+        } catch (_) { }
         return;
     }
 
@@ -630,7 +631,7 @@ async function _addMetaToCategory(meta, pickedCategory) {
     }
 
     try {
-        _warmupSourceIds([meta.source_id], 'high').catch(() => {});
+        _warmupSourceIds([meta.source_id], 'high').catch(() => { });
     } catch (e) {
         // ignore
     }
@@ -805,16 +806,21 @@ function _safeNameFromSource(src) {
 function _renderAddCategoryDropdownHtml(card) {
     const c = card || {};
     const disabled = c?.already_added ? 'disabled' : '';
-    const placeholder = c?.already_added ? '已加入' : '加入栏目';
+    const placeholder = c?.already_added ? '✓' : '+';
     const options = _collectCategoryOptions();
     const dropdownOptionsHtml = options.map((o) => {
         const kind = o?.isCustom ? 'custom' : 'default';
         const val = `${kind}:${String(o?.id || '').trim()}`;
-        return `<option value="${escapeHtml(val)}">${escapeHtml(String(o?.icon || '📁'))} ${escapeHtml(String(o?.name || o?.id || ''))}</option>`;
+        return `<option value="${escapeHtml(val)}" style="font-size:0.8rem;">${escapeHtml(String(o?.icon || '📁'))} ${escapeHtml(String(o?.name || o?.id || ''))}</option>`;
     }).join('');
+    // Compact circular button - subtle/light style
     return `
-        <select class="platform-select-action-btn" data-action="add-category" ${disabled} style="padding:6px 10px;">
-            <option value="" selected>${escapeHtml(placeholder)}</option>
+        <select class="tr-explore-add-btn" data-action="add-category" ${disabled} 
+            style="width:28px;height:28px;padding:0;font-size:1rem;font-weight:normal;border-radius:50%;
+            border:1px solid #e5e7eb;background:#f9fafb;color:#9ca3af;
+            cursor:pointer;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;" 
+            title="${c?.already_added ? '已加入' : '加入栏目'}">
+            <option value="" selected hidden>${escapeHtml(placeholder)}</option>
             ${dropdownOptionsHtml}
         </select>`;
 }
@@ -865,12 +871,11 @@ function _renderBatch(cards) {
         }).join('');
 
         return `
-            <div class="platform-card" data-rss-source-id="${escapeHtml(sid)}" style="margin:0;">
+            <div class="platform-card" data-rss-source-id="${escapeHtml(sid)}">
                 <div class="platform-header">
-                    <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; min-width: 0; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">📱 ${platformName}</div>
+                    <div class="platform-name">${platformName}</div>
                     <div class="platform-header-actions">
                         ${addDropdownHtml}
-                        <button type="button" class="tr-explore-card-close" data-action="close">⇄</button>
                     </div>
                 </div>
                 <ul class="news-list">${listHtml}</ul>
@@ -880,6 +885,8 @@ function _renderBatch(cards) {
     if (html) {
         grid.innerHTML = html;
         _applyReadStateToExploreRoot(grid);
+        // Attach scroll listener after grid has content
+        requestAnimationFrame(() => _attachScrollListener());
         return;
     }
     _renderGridMessage('暂无可预览源', { retry: true });
@@ -907,12 +914,11 @@ function _renderCardElement(card, opts = {}) {
 
     const extraClass = opts.animateIn ? ' tr-explore-flip-in' : '';
     const html = `
-        <div class="platform-card${extraClass}" data-rss-source-id="${escapeHtml(sid)}" style="margin:0;">
+        <div class="platform-card${extraClass}" data-rss-source-id="${escapeHtml(sid)}">
             <div class="platform-header">
-                <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; flex: 1; min-width: 0; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">📱 ${platformName}</div>
+                <div class="platform-name">${platformName}</div>
                 <div class="platform-header-actions">
                     ${addDropdownHtml}
-                    <button type="button" class="tr-explore-card-close" data-action="close">⇄</button>
                 </div>
             </div>
             <ul class="news-list">${listHtml}</ul>
@@ -1032,7 +1038,7 @@ function _markReadFromTitleClickTarget(t) {
         try {
             const item = t?.closest?.('.news-item');
             if (item) item.classList.add('read');
-        } catch (_) {}
+        } catch (_) { }
         return true;
     }
 }
@@ -1133,12 +1139,12 @@ function _attachHandlers() {
                 if (firstOpt) firstOpt.textContent = '已加入';
                 selectEl.value = '';
                 selectEl.setAttribute('disabled', 'true');
-            } catch (_) {}
+            } catch (_) { }
 
         }).catch(() => {
             try {
                 selectEl.value = '';
-            } catch (_) {}
+            } catch (_) { }
         });
     });
 }
@@ -1148,7 +1154,7 @@ function _wrapTabsSwitchIfAny() {
         if (!TR.tabs || typeof TR.tabs.switchTab !== 'function') return;
         if (TR.tabs.__trExploreEmbeddedWrapped) return;
         const orig = TR.tabs.switchTab;
-        TR.tabs.switchTab = function(categoryId) {
+        TR.tabs.switchTab = function (categoryId) {
             const ret = orig.call(TR.tabs, categoryId);
             try {
                 if (String(categoryId) === EXPLORE_TAB_ID) {
@@ -1179,9 +1185,102 @@ function _wrapTabsSwitchIfAny() {
     }
 }
 
-ready(function() {
+// ======================================
+// Horizontal Scroll Progressive Loading
+// ======================================
+let _scrollListenerAttached = false;
+let _loadingMore = false;
+
+async function _loadMoreCards() {
+    if (_loadingMore || _loading) return;
+
+    const pane = _getPaneEl();
+    const grid = _getGridEl();
+    if (!pane || !grid) return;
+    if (!pane.classList.contains('active')) return;
+
+    _loadingMore = true;
+
+    try {
+        // Show loading indicator at the end
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'tr-explore-loading';
+        loadingIndicator.style.cssText = 'padding:20px;text-align:center;color:#6b7280;font-size:0.9rem;';
+        loadingIndicator.textContent = '加载中...';
+        grid.appendChild(loadingIndicator);
+
+        // Try to load from API cache first
+        const cached = await _tryFetchExploreCards(LOAD_MORE_SIZE);
+        if (cached.length) {
+            _currentBatch = [..._currentBatch, ...cached];
+            _renderBatch(_currentBatch);
+            loadingIndicator.remove();
+            return;
+        }
+
+        // Fall back to progressive load
+        const newCards = await _loadNextValidCards(LOAD_MORE_SIZE);
+        if (newCards.length) {
+            _currentBatch = [..._currentBatch, ...newCards];
+            _renderBatch(_currentBatch);
+        }
+
+        loadingIndicator.remove();
+
+        if (_cursor != null) {
+            _persistCursor(_cursor);
+        }
+    } catch (e) {
+        console.error('Load more failed:', e);
+    } finally {
+        _loadingMore = false;
+    }
+}
+
+function _attachScrollListener() {
+    const grid = _getGridEl();
+    if (!grid) return;
+
+    // Only attach once per grid element
+    if (grid.dataset.trScrollAttached === '1') return;
+    grid.dataset.trScrollAttached = '1';
+
+    let scrollTimeout = null;
+
+    const onScroll = () => {
+        if (scrollTimeout) {
+            clearTimeout(scrollTimeout);
+        }
+
+        scrollTimeout = setTimeout(() => {
+            scrollTimeout = null;
+
+            const scrollLeft = grid.scrollLeft || 0;
+            const scrollWidth = grid.scrollWidth || 0;
+            const clientWidth = grid.clientWidth || 0;
+            const maxScrollLeft = Math.max(0, scrollWidth - clientWidth);
+
+            // Load more when scrolled to 70% of the way
+            const scrollPercent = maxScrollLeft > 0 ? scrollLeft / maxScrollLeft : 0;
+
+            console.log('[Explore] Scroll:', scrollPercent.toFixed(2), 'maxScrollLeft:', maxScrollLeft);
+
+            if (scrollPercent >= 0.7 && !_loadingMore && !_loading) {
+                console.log('[Explore] Triggering load more...');
+                _loadMoreCards().catch(() => { });
+            }
+        }, 150); // Debounce scroll events
+    };
+
+    grid.addEventListener('scroll', onScroll, { passive: true });
+    console.log('[Explore] Scroll listener attached');
+}
+
+
+ready(function () {
     _attachHandlers();
     _wrapTabsSwitchIfAny();
+    _attachScrollListener(); // Enable progressive loading on scroll
 
     try {
         if (TR.tabs?.getActiveTabId && String(TR.tabs.getActiveTabId()) === EXPLORE_TAB_ID) {

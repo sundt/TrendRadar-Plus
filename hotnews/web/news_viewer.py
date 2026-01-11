@@ -383,7 +383,8 @@ class NewsViewerService:
             removed_news = [n for n in removed_news if str(n.get("platform") or "").strip() not in disabled_set]
 
         # 检测跨平台新闻
-        cross_platform_news = self._detect_cross_platform_news(filtered_news)
+        # cross_platform_news = self._detect_cross_platform_news(filtered_news)
+        cross_platform_news = {}
 
         # 按分类组织新闻
         categories = {}

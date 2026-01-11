@@ -375,12 +375,25 @@
             flex-wrap: nowrap;
             gap: 10px;
             overflow-x: auto;
-            overflow-x: auto;
             overflow-anchor: auto;
-            /* Revert to auto or unset to see if it helps, though usually none is better for scroll snap. Let's try removing it or setting to auto. Actually, for swipe carousels, 'none' is often recommended, but let's try removing the property if it conflicts. */
             padding-bottom: 8px;
             scroll-snap-type: x mandatory;
             scroll-behavior: smooth;
+            /* Performance optimizations for smoother scrolling */
+            will-change: scroll-position;
+            transform: translateZ(0);
+            /* GPU acceleration */
+            contain: layout style;
+            /* Reduce repaints */
+            -webkit-overflow-scrolling: touch;
+            /* iOS momentum scrolling */
+        }
+
+        /* Disable smooth scroll during drag for instant response */
+        body.tr-platform-title-dragging .platform-grid {
+            scroll-behavior: auto;
+            scroll-snap-type: none;
+            /* Disable snap during drag */
         }
 
         .platform-grid {
@@ -389,6 +402,7 @@
             -ms-overflow-style: none;
             /* IE/Edge Legacy */
         }
+
 
         .platform-grid::-webkit-scrollbar {
             height: 0;
@@ -504,12 +518,25 @@
         .platform-header,
         .platform-name {
             touch-action: pan-y;
+            cursor: grab;
+            /* Indicate draggable */
+        }
+
+        .platform-header:active,
+        .platform-name:active {
+            cursor: grabbing;
+        }
+
+        body.tr-platform-title-dragging .platform-header,
+        body.tr-platform-title-dragging .platform-name {
+            cursor: grabbing;
         }
 
         body.tr-platform-title-dragging,
         body.tr-platform-title-dragging * {
             user-select: none;
         }
+
 
         .news-list {
             list-style: none;
@@ -863,7 +890,7 @@
 
         #tab-explore {
             position: relative;
-            padding: 16px 14px;
+            padding: 0;
             min-height: 100%;
         }
 

@@ -177,6 +177,18 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         )
         """
     )
+    
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_learning_lessons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            domain TEXT NOT NULL UNIQUE,
+            lesson TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
 
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:

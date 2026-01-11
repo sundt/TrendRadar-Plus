@@ -5,14 +5,16 @@ const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
-const AUTO_REFRESH_TICK_MS = 5000;
 
-const TIMELINE_LIMIT = 150;
-const SLICE_SIZE = 50;
+const ITEMS_PER_CARD = 50;
+const INITIAL_CARDS = 3; // First load 3 cards (150 items)
 
-let _timelineInFlight = false;
-let _timelineLastRefreshAt = 0;
+let _mbInFlight = false;
+let _mbLastRefreshAt = 0;
 let _tabSwitchDebounceTimer = null;
+let _mbOffset = 0;
+let _mbObserver = null;
+let _mbFinished = false;
 
 function _getActiveTabId() {
     try {
@@ -22,19 +24,10 @@ function _getActiveTabId() {
     }
 }
 
-function _applyPagingToBriefCards() {
+function _applyPagingToCard(card) {
     try {
-        const pane = _getPane();
-        if (!pane) return;
-        const cards = Array.from(pane.querySelectorAll('.platform-card.tr-morning-brief-card'));
-        for (const card of cards) {
-            try {
-                TR.paging?.setCardPageSize?.(card, 50);
-                TR.paging?.applyPagingToCard?.(card, 0);
-            } catch (e) {
-                // ignore
-            }
-        }
+        TR.paging?.setCardPageSize?.(card, 50);
+        TR.paging?.applyPagingToCard?.(card, 0);
     } catch (e) {
         // ignore
     }
@@ -83,56 +76,33 @@ function _getPane() {
     return document.getElementById(`tab-${MORNING_BRIEF_CATEGORY_ID}`);
 }
 
+function _getGrid() {
+    const pane = _getPane();
+    return pane ? pane.querySelector('.platform-grid') : null;
+}
+
 function _ensureLayout() {
     const pane = _getPane();
     if (!pane) return false;
 
-    const grid = pane.querySelector('.platform-grid');
-    if (!grid) return false;
-
-    try {
-        if (grid.dataset && grid.dataset.mbInjected === '1') return true;
-        if (grid.getAttribute && grid.getAttribute('data-mb-injected') === '1') {
-            if (grid.dataset) grid.dataset.mbInjected = '1';
-            return true;
-        }
-    } catch (e) {
-        // ignore
+    // Ensure grid exists
+    let grid = pane.querySelector('.platform-grid');
+    if (!grid) {
+        grid = document.createElement('div');
+        grid.className = 'platform-grid';
+        // Force horizontal scroll if not already applied by CSS
+        grid.style.display = 'flex';
+        grid.style.flexDirection = 'row';
+        grid.style.overflowX = 'auto';
+        grid.style.overflowY = 'hidden';
+        grid.style.alignItems = 'flex-start'; // Align items to top
+        pane.appendChild(grid);
     }
 
-    if (grid.dataset && grid.dataset.mbInjected === '1') return true;
-
-    grid.innerHTML = `
-        <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🕒 最新 1-50</div>
-                <div class="platform-header-actions"></div>
-            </div>
-            <ul class="news-list" data-mb-list="slice1"></ul>
-        </div>
-
-        <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-2" data-page-size="50" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">⭐ 最新 51-100</div>
-                <div class="platform-header-actions"></div>
-            </div>
-            <ul class="news-list" data-mb-list="slice2"></ul>
-        </div>
-
-        <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-3" data-page-size="50" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🧾 最新 101-150</div>
-                <div class="platform-header-actions"></div>
-            </div>
-            <ul class="news-list" data-mb-list="slice3"></ul>
-        </div>
-    `;
-
+    // Mark as injected
     try {
         if (grid.dataset) grid.dataset.mbInjected = '1';
-    } catch (e) {
-        // ignore
-    }
+    } catch (e) { }
 
     return true;
 }
@@ -143,168 +113,213 @@ async function _fetchJson(url) {
     return await resp.json();
 }
 
-function _loadSince() {
-    try {
-        const raw = localStorage.getItem(SINCE_STORAGE_KEY);
-        const n = parseInt(raw || '', 10);
-        if (Number.isFinite(n) && n > 0) return n;
-    } catch (e) {
-        // ignore
-    }
-    const now = Math.floor(Date.now() / 1000);
-    return now - 2 * 3600;
+/**
+ * Fetch a batch of items (limit/offset).
+ */
+async function _fetchTimelineBatch(limit, offset) {
+    const url = `/api/rss/brief/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`;
+    const payload = await _fetchJson(url);
+    return Array.isArray(payload?.items) ? payload.items : [];
 }
 
-function _saveSince(ts) {
-    const n = Number(ts || 0) || 0;
-    if (!n) return;
-    try {
-        localStorage.setItem(SINCE_STORAGE_KEY, String(Math.floor(n)));
-    } catch (e) {
-        // ignore
+/**
+ * Add a card to the grid
+ */
+function _appendCard(items, startIdx, endIdx, container) {
+    if (!items || !items.length) return;
+
+    const card = document.createElement('div');
+    card.className = 'platform-card tr-morning-brief-card';
+    card.style.minWidth = '360px'; // Ensure cards have width
+    card.dataset.platform = `mb-slice-${startIdx}`;
+    card.draggable = false;
+
+    // Adjust logic to correctly display range like 1-50, 51-100
+    // startIdx is 0-based offset, so display is startIdx+1
+    const displayStart = startIdx + 1;
+    const displayEnd = startIdx + items.length;
+
+    card.innerHTML = `
+        <div class="platform-header">
+            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                🕒 最新 ${displayStart}-${displayEnd}
+            </div>
+            <div class="platform-header-actions"></div>
+        </div>
+        <ul class="news-list" data-mb-list="slice-${startIdx}">
+            ${_buildNewsItemsHtml(items, { emptyText: '暂无内容' })}
+        </ul>
+    `;
+
+    // Convert rendered indices to continue from the offset
+    // _buildNewsItemsHtml uses 0-based index + 1. 
+    // We need to shift these indices.
+    const indices = card.querySelectorAll('.news-index');
+    indices.forEach((el, i) => {
+        el.textContent = String(displayStart + i);
+    });
+
+    // Insert before sentinel if exists
+    const sentinel = container.querySelector('#mb-load-sentinel');
+    if (sentinel) {
+        container.insertBefore(card, sentinel);
+    } else {
+        container.appendChild(card);
     }
+
+    _applyPagingToCard(card);
 }
 
-function _getListEl(kind) {
+function _createSentinel(container) {
+    // Remove existing if any
+    const existing = container.querySelector('#mb-load-sentinel');
+    if (existing) existing.remove();
+
+    const sentinel = document.createElement('div');
+    sentinel.id = 'mb-load-sentinel';
+    sentinel.style.minWidth = '20px'; // Small width
+    sentinel.style.height = '100%';
+    sentinel.style.flexShrink = '0';
+    sentinel.innerHTML = '<div style="width:20px;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">⏳</div>';
+    container.appendChild(sentinel);
+    return sentinel;
+}
+
+function _attachObserver() {
+    if (_mbObserver) {
+        _mbObserver.disconnect();
+        _mbObserver = null;
+    }
+
     const pane = _getPane();
-    if (!pane) return null;
-    return pane.querySelector(`.news-list[data-mb-list="${kind}"]`);
-}
+    if (!pane) return;
 
-function _renderList(kind, html) {
-    const el = _getListEl(kind);
-    if (!el) return;
-    el.innerHTML = html;
-    try {
-        TR.readState?.restoreReadState?.();
-        TR.counts?.updateAllCounts?.();
-    } catch (e) {
-        // ignore
-    }
-}
-
-function _isDocumentVisible() {
-    try {
-        return document.visibilityState === 'visible';
-    } catch (e) {
-        return true;
-    }
-}
-
-function _timelineNeedsHydrate() {
-    try {
-        const pane = _getPane();
-        if (!pane) return true;
-        const lists = Array.from(pane.querySelectorAll('.news-list[data-mb-list]'));
-        if (!lists.length) return true;
-        for (const el of lists) {
-            const hasItem = !!el.querySelector('.news-item');
-            if (hasItem) return false;
-            const hasPlaceholder = !!el.querySelector('.news-placeholder');
-            if (hasPlaceholder) continue;
-            const hasEmpty = !!el.querySelector('.tr-mb-empty');
-            if (hasEmpty) continue;
-            const txt = String(el.textContent || '').trim();
-            if (txt) continue;
+    _mbObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (entry.isIntersecting) {
+                _loadNextBatch().catch(() => { });
+            }
         }
-        return true;
+    }, {
+        root: pane.querySelector('.platform-grid'), // The scrolling container
+        rootMargin: '200px', // Preload when close
+        threshold: 0.01
+    });
+
+    const sentinel = pane.querySelector('#mb-load-sentinel');
+    if (sentinel) {
+        _mbObserver.observe(sentinel);
+    }
+}
+
+/**
+ * Infinite scroll step
+ */
+async function _loadNextBatch() {
+    if (_mbInFlight || _mbFinished) return;
+
+    _mbInFlight = true;
+    try {
+        // Fetch next page
+        const limit = ITEMS_PER_CARD;
+        const items = await _fetchTimelineBatch(limit, _mbOffset);
+
+        if (!items.length) {
+            _mbFinished = true;
+            // Remove sentinel
+            const s = document.getElementById('mb-load-sentinel');
+            if (s) {
+                s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已显示全部内容</div>';
+                s.style.width = '40px';
+            }
+            return;
+        }
+
+        const grid = _getGrid();
+        if (grid) {
+            _appendCard(items, _mbOffset, _mbOffset + items.length, grid);
+        }
+
+        _mbOffset += items.length;
+
+        if (items.length < limit) {
+            _mbFinished = true;
+            const s = document.getElementById('mb-load-sentinel');
+            if (s) s.remove();
+        }
+
     } catch (e) {
-        return true;
+        // Error
+    } finally {
+        _mbInFlight = false;
+    }
+}
+
+/**
+ * Initial Full Reload
+ */
+async function _loadTimeline() {
+    const grid = _getGrid();
+    if (!grid) return;
+
+    // Reset state
+    _mbOffset = 0;
+    _mbFinished = false;
+    grid.innerHTML = ''; // Clear all
+
+    // Create Sentinel immediately so we can insert before it
+    _createSentinel(grid);
+
+    // Fetch Initial Batch (3 cards = 150 items)
+    const initialLimit = ITEMS_PER_CARD * INITIAL_CARDS;
+    const items = await _fetchTimelineBatch(initialLimit, 0);
+
+    if (!items.length) {
+        grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+        return;
+    }
+
+    // Chunk into cards
+    for (let i = 0; i < items.length; i += ITEMS_PER_CARD) {
+        const chunk = items.slice(i, i + ITEMS_PER_CARD);
+        _appendCard(chunk, i, i + chunk.length, grid); // i is the offset
+    }
+
+    _mbOffset = items.length;
+
+    if (items.length < initialLimit) {
+        // No more data
+        _mbFinished = true;
+        const s = document.getElementById('mb-load-sentinel');
+        if (s) s.remove();
+    } else {
+        // Setup observer for next batches
+        _attachObserver();
     }
 }
 
 async function _refreshTimelineIfNeeded(opts = {}) {
     const force = opts.force === true;
     if (_getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
-    if (!_isDocumentVisible()) return false;
-    if (_timelineInFlight) return false;
 
-    const needsHydrate = _timelineNeedsHydrate();
+    // Simple cooldown if not forced
     const now = Date.now();
-    if (!force && !needsHydrate && _timelineLastRefreshAt > 0 && (now - _timelineLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
-        try {
-            _applyPagingToBriefCards();
-        } catch (e) {
-        }
+    if (!force && _mbLastRefreshAt > 0 && (now - _mbLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
         return false;
     }
-    if (!_ensureLayout()) return false;
-    _attachHandlersOnce();
 
-    _timelineInFlight = true;
+    if (!_ensureLayout()) return false;
+
+    _mbInFlight = true;
     try {
         await _loadTimeline();
-        _timelineLastRefreshAt = Date.now();
+        _mbLastRefreshAt = Date.now();
         return true;
     } catch (e) {
         return false;
     } finally {
-        _timelineInFlight = false;
+        _mbInFlight = false;
     }
-}
-
-async function _loadTimeline() {
-    const payload = await _fetchJson(`/api/rss/brief/timeline?limit=${encodeURIComponent(String(TIMELINE_LIMIT))}&offset=0`);
-    const items = Array.isArray(payload?.items) ? payload.items : [];
-
-    const s1 = items.slice(0, SLICE_SIZE);
-    const s2 = items.slice(SLICE_SIZE, SLICE_SIZE * 2);
-    const s3 = items.slice(SLICE_SIZE * 2, SLICE_SIZE * 3);
-
-    _renderList('slice1', _buildNewsItemsHtml(s1, { emptyText: '暂无内容' }));
-    _renderList('slice2', _buildNewsItemsHtml(s2, { emptyText: '暂无内容' }));
-    _renderList('slice3', _buildNewsItemsHtml(s3, { emptyText: '暂无内容' }));
-
-    _applyPagingToBriefCards();
-}
-
-async function _loadLatestIncremental(forceReset) {
-    let since = TR.morningBrief?.since || 0;
-    if (forceReset) {
-        // Baseline load: always show recent items instead of pure incremental since last visit.
-        const now = Math.floor(Date.now() / 1000);
-        since = Math.max(0, now - LATEST_BASELINE_WINDOW_SEC);
-        try {
-            TR.morningBrief = {
-                ...(TR.morningBrief || {}),
-                since,
-                latestItems: [],
-            };
-        } catch (e) {
-            // ignore
-        }
-    } else if (!since) {
-        since = _loadSince();
-    }
-
-    const payload = await _fetchJson(`/api/rss/brief/latest?since=${encodeURIComponent(String(since))}&limit=50`);
-    const items = Array.isArray(payload?.items) ? payload.items : [];
-    const nextSince = Number(payload?.next_since || since) || since;
-
-    const st = TR.morningBrief || {};
-    const existing = Array.isArray(st.latestItems) ? st.latestItems : [];
-
-    // Keep existing items; prepend new items; dedupe by url (first occurrence wins).
-    const merged = [];
-    const seen = new Set();
-    for (const x of [...items, ...existing]) {
-        const u = String(x?.url || '').trim();
-        if (!u) continue;
-        if (seen.has(u)) continue;
-        seen.add(u);
-        merged.push(x);
-    }
-
-    const capped = merged.slice(0, 20);
-
-    TR.morningBrief = {
-        ...(TR.morningBrief || {}),
-        since: nextSince,
-        latestItems: capped,
-    };
-
-    _saveSince(nextSince);
-    _renderList('latest', _buildNewsItemsHtml(capped, { emptyText: '最近暂无上新' }));
 }
 
 function _attachHandlersOnce() {
@@ -319,67 +334,50 @@ function _attachHandlersOnce() {
         const refresh = t.closest('[data-action="mb-refresh"]');
         if (refresh) {
             e.preventDefault();
-            const target = refresh.getAttribute('data-target') || '';
-            if (target === 'timeline') {
-                _refreshTimelineIfNeeded({ force: true }).catch(() => {
-                    try { TR.toast?.show('刷新失败', { variant: 'error', durationMs: 2000 }); } catch (_) {}
-                });
-                return;
-            }
+            // Just reload timeline
+            _refreshTimelineIfNeeded({ force: true }).catch(() => {
+                try { TR.toast?.show('刷新失败', { variant: 'error', durationMs: 2000 }); } catch (_) { }
+            });
         }
     });
 
     try {
         if (pane.dataset) pane.dataset.mbBound = '1';
-    } catch (e) {
-        // ignore
-    }
+    } catch (e) { }
 }
 
 async function _initialLoad() {
     if (!_ensureLayout()) return;
     _attachHandlersOnce();
-
-    // Initial load once.
-    await Promise.allSettled([
-        _refreshTimelineIfNeeded({ force: false }),
-    ]);
+    await _refreshTimelineIfNeeded({ force: false });
 }
 
 function _ensurePolling() {
-    if (TR.morningBrief && TR.morningBrief._pollTimer) return;
-
-    TR.morningBrief = {
-        ...(TR.morningBrief || {}),
-        _pollTimer: 1,
-    };
-
     try {
         window.addEventListener(TAB_SWITCHED_EVENT, (ev) => {
             const cid = String(ev?.detail?.categoryId || '').trim();
             if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
+            // When switching to this tab, attach observer again if needed (observers sometimes disconnect if hidden)
+            if (!_mbFinished) _attachObserver();
+
             clearTimeout(_tabSwitchDebounceTimer);
             _tabSwitchDebounceTimer = setTimeout(() => {
-                _refreshTimelineIfNeeded({ force: false }).catch(() => {});
+                _refreshTimelineIfNeeded({ force: false }).catch(() => { });
             }, 120);
         });
-    } catch (e) {}
+    } catch (e) { }
 }
 
 function _patchRenderHook() {
     if (TR.morningBrief && TR.morningBrief._patched === true) return;
-
-    // TR.data may not be ready at module evaluation time.
     const orig = TR.data?.renderViewerFromData;
     if (typeof orig !== 'function') return;
 
     TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
         orig.call(TR.data, data, state);
         try {
-            _initialLoad().catch(() => {});
-        } catch (e) {
-            // ignore
-        }
+            _initialLoad().catch(() => { });
+        } catch (e) { }
     };
 
     TR.morningBrief = {
@@ -388,13 +386,8 @@ function _patchRenderHook() {
     };
 }
 
-ready(function() {
-    // Patch after TR.data is attached.
+ready(function () {
     _patchRenderHook();
-
-    // When no custom config exists, server-rendered DOM is used and TR.data.renderViewerFromData
-    // may not run. Ensure initial render happens.
-    _initialLoad().catch(() => {});
-
+    _initialLoad().catch(() => { });
     _ensurePolling();
 });

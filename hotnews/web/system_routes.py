@@ -74,24 +74,48 @@ async def api_stop_scheduler():
 
 @router.get("/api/scheduler/status")
 async def api_scheduler_status():
-    if not auto_fetch_scheduler:
-        return UnicodeJSONResponse(
-            content={
-                "running": False,
-                "interval_minutes": 0,
-                "last_fetch_time": None,
-                "detail": "Scheduler module not available"
-            }
-        )
-    st = auto_fetch_scheduler.status()
-    last_dt = st.get("last_fetch_time")
-    return UnicodeJSONResponse(
-        content={
+    status = {
+        "auto_fetch": {
+            "available": False,
+            "running": False,
+            "interval_minutes": 0,
+            "last_fetch_time": None
+        },
+        "internal_tasks": {},
+        "system_cron": {
+            "crontab_content": "",
+            "environment_schedule": os.environ.get("CRON_SCHEDULE", "")
+        }
+    }
+
+    # 1. Auto Fetch Scheduler Status
+    if auto_fetch_scheduler:
+        st = auto_fetch_scheduler.status()
+        last_dt = st.get("last_fetch_time")
+        status["auto_fetch"] = {
+            "available": True,
             "running": bool(st.get("running")),
             "interval_minutes": int(st.get("interval_minutes") or 0),
             "last_fetch_time": last_dt.isoformat() if last_dt else None,
         }
-    )
+
+    # 2. Internal Tasks Status (from rss_scheduler)
+    try:
+        from hotnews.kernel.scheduler import rss_scheduler
+        if rss_scheduler:
+            status["internal_tasks"] = rss_scheduler.get_all_tasks_status()
+    except Exception:
+        pass
+
+    # 3. System Cron Status (read /tmp/crontab)
+    try:
+        if os.path.exists("/tmp/crontab"):
+            with open("/tmp/crontab", "r") as f:
+                status["system_cron"]["crontab_content"] = f.read().strip()
+    except Exception:
+        pass
+
+    return UnicodeJSONResponse(content=status)
 
 
 @router.post("/api/fetch")

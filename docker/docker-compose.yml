@@ -57,6 +57,7 @@ services:
       # AI分类配置
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - HOTNEWS_MB_AI_ENABLED=${HOTNEWS_MB_AI_ENABLED:-}
+      - HOTNEWS_RSS_SOURCE_AI_ENABLED=${HOTNEWS_RSS_SOURCE_AI_ENABLED:-false}
       - HOTNEWS_MB_AI_MODEL=${HOTNEWS_MB_AI_MODEL:-qwen-plus}
       - HOTNEWS_MB_AI_TIMEOUT_S=${HOTNEWS_MB_AI_TIMEOUT_S:-60}
       # 存储配置
@@ -113,6 +114,7 @@ services:
       - HOTNEWS_MB_AI_BATCH_SIZE=${HOTNEWS_MB_AI_BATCH_SIZE:-20}
       - HOTNEWS_MB_AI_MAX_PER_HOUR=${HOTNEWS_MB_AI_MAX_PER_HOUR:-200}
       - HOTNEWS_MB_AI_CHECK_INTERVAL=${HOTNEWS_MB_AI_CHECK_INTERVAL:-30}
+      - HOTNEWS_RSS_SOURCE_AI_ENABLED=${HOTNEWS_RSS_SOURCE_AI_ENABLED:-false}
       - HOTNEWS_RSS_WARMUP_MAX_PER_HOUR=${HOTNEWS_RSS_WARMUP_MAX_PER_HOUR:-120}
       # 性能优化
       - WORKER_CONNECTIONS=${WORKER_CONNECTIONS:-1000}
@@ -129,7 +131,7 @@ services:
           memory: 512M
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()"]
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
       interval: 10s
       timeout: 5s
       retries: 6

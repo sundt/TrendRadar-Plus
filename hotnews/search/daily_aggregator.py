@@ -221,15 +221,78 @@ class DailyDataAggregator:
 
         return updated_dates
 
-    def get_all_data_for_indexing(self) -> List[Tuple[str, str, str, str, int]]:
+    def read_rss_entries(self) -> List[Tuple[str, str, str, str, int]]:
         """
-        获取所有用于建立索引的数据
+        从 online.db 读取 RSS 条目数据
 
         Returns:
             [(title, url, platform_id, date, id), ...]
         """
+        online_db_path = self.data_dir / "online.db"
+        if not online_db_path.exists():
+            logger.warning(f"online.db 不存在: {online_db_path}")
+            return []
+
+        try:
+            conn = sqlite3.connect(str(online_db_path))
+            cursor = conn.cursor()
+
+            # 读取 rss_entries 表中的数据
+            cursor.execute("""
+                SELECT id, title, url, source_id, published_at
+                FROM rss_entries
+                WHERE title IS NOT NULL AND title != ''
+                ORDER BY id DESC
+            """)
+
+            items = []
+            for row in cursor.fetchall():
+                entry_id, title, url, source_id, published_at = row
+                # 使用 rss-{source_id} 作为 platform_id
+                platform_id = f"rss-{source_id}" if source_id else "rss-unknown"
+                # 从 published_at 提取日期，如果没有则使用今天
+                if published_at:
+                    try:
+                        date = published_at[:10]  # YYYY-MM-DD
+                    except Exception:
+                        date = datetime.now().strftime("%Y-%m-%d")
+                else:
+                    date = datetime.now().strftime("%Y-%m-%d")
+
+                # 使用负数 ID 来区分 RSS 条目（避免与 news_items 冲突）
+                items.append((title, url or "", platform_id, date, -entry_id))
+
+            conn.close()
+            logger.info(f"从 RSS 读取到 {len(items)} 条数据用于索引")
+            return items
+
+        except Exception as e:
+            logger.error(f"读取 RSS 条目失败: {e}")
+            return []
+
+    def get_all_data_for_indexing(self) -> List[Tuple[str, str, str, str, int]]:
+        """
+        获取所有用于建立索引的数据（包括热榜和 RSS）
+
+        Returns:
+            [(title, url, platform_id, date, id), ...]
+        """
+        # 1. 聚合热榜数据
         data = self.aggregate_all()
-        return [
+        result = [
             (item.title, item.url, item.platform_id, item.date, item.id)
             for item in data.items
         ]
+
+        # 2. 追加 RSS 条目数据
+        rss_items = self.read_rss_entries()
+        
+        # 按 URL 去重（RSS 可能与热榜重复）
+        seen_urls = {item[1] for item in result if item[1]}  # 已有的 URL
+        for rss_item in rss_items:
+            if rss_item[1] and rss_item[1] not in seen_urls:
+                result.append(rss_item)
+                seen_urls.add(rss_item[1])
+
+        logger.info(f"索引数据总计: {len(result)} 条 (热榜: {len(data.items)}, RSS: {len(rss_items)})")
+        return result

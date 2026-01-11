@@ -1,8 +1,8 @@
 import { TR, ready } from './core.js';
 
-const STEP = 20;
+const STEP = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const ROOT_MARGIN = '240px 0px 240px 0px';
-const MAX_ITEMS_PER_PLATFORM = 20;
+const MAX_ITEMS_PER_PLATFORM = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 
 let _observer = null;
 let _armed = false;
@@ -69,7 +69,7 @@ function scheduleEnsureCategoryLoaded(categoryId, opts = {}) {
     const signal = _ensureAbort.signal;
     _ensureTimer = setTimeout(() => {
         _ensureTimer = null;
-        ensureCategoryLoaded(categoryId, { ...opts, signal }).catch(() => {});
+        ensureCategoryLoaded(categoryId, { ...opts, signal }).catch(() => { });
     }, ENSURE_DEBOUNCE_MS);
 }
 
@@ -272,7 +272,7 @@ function scheduleBulkLoadCategory(categoryId, opts = {}) {
     const signal = _bulkAbort.signal;
     _bulkTimer = setTimeout(() => {
         _bulkTimer = null;
-        bulkLoadCategory(categoryId, { ...opts, signal }).catch(() => {});
+        bulkLoadCategory(categoryId, { ...opts, signal }).catch(() => { });
     }, BULK_DEBOUNCE_MS);
 }
 
@@ -560,7 +560,7 @@ function attach() {
             const sentinel = entry.target;
             const card = sentinel?.closest?.('.platform-card');
             if (!card) continue;
-            expandIfNeeded(card).catch(() => {});
+            expandIfNeeded(card).catch(() => { });
         }
     }, { root: null, rootMargin: ROOT_MARGIN, threshold: 0.01 });
 
@@ -569,7 +569,7 @@ function attach() {
 
 TR.infiniteScroll = { attach, ensureCategoryLoaded, scheduleEnsureCategoryLoaded, cancelEnsureCategoryLoaded, bulkLoadCategory, scheduleBulkLoadCategory, cancelBulkLoadCategory };
 
-ready(function() {
+ready(function () {
     // Avoid triggering loads immediately on first paint. Arm only after user/page scroll.
     try {
         window.addEventListener('scroll', () => {

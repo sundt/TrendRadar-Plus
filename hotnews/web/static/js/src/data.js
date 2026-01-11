@@ -7,7 +7,7 @@ import { TR, ready, escapeHtml, formatUpdatedAt } from './core.js';
 import { storage } from './storage.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
-const CATEGORY_PAGE_SIZE = 20;
+const CATEGORY_PAGE_SIZE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 
 let _ajaxRefreshInFlight = false;
 let _ajaxLastRefreshAt = 0;
@@ -213,7 +213,7 @@ function _attachLazyPlatformObservers() {
                 try { _lazyPlatformObserver?.unobserve?.(card); } catch (e) { /* ignore */ }
                 continue;
             }
-            _hydrateLazyPlatformCard(card).catch(() => {});
+            _hydrateLazyPlatformCard(card).catch(() => { });
         }
     }, { root: null, rootMargin: '0px 200px 0px 200px', threshold: 0.15 });
 
@@ -973,7 +973,7 @@ window.refreshViewerData = (opts) => data.refreshViewerData(opts);
 TR.data = data;
 
 // 初始化
-ready(function() {
+ready(function () {
     const updatedAtEl = document.getElementById('updatedAt');
     if (updatedAtEl && updatedAtEl.textContent) {
         updatedAtEl.textContent = formatUpdatedAt(updatedAtEl.textContent);
@@ -989,7 +989,7 @@ ready(function() {
             if (!btn) return;
             const card = btn.closest('.platform-card');
             if (!card) return;
-            _deletePlatformCard(card).catch(() => {});
+            _deletePlatformCard(card).catch(() => { });
         });
 
         document.addEventListener('click', async (e) => {

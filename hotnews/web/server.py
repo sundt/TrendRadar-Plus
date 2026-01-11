@@ -49,6 +49,7 @@ _rss_usage_router = None
 _custom_source_router = None
 _newsnow_router = None
 _platform_admin_router = None
+_settings_admin_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
 
@@ -65,6 +66,9 @@ try:
     
     from hotnews.kernel.admin import platform_admin
     _platform_admin_router = platform_admin.router
+    
+    from hotnews.kernel.admin import settings_admin
+    _settings_admin_router = settings_admin.router
     
     from hotnews.kernel.scheduler import rss_scheduler
     from hotnews.kernel.scheduler import auto_fetch_scheduler
@@ -495,6 +499,7 @@ app.include_router(_system_router)
 if _custom_source_router: app.include_router(_custom_source_router)
 if _newsnow_router: app.include_router(_newsnow_router)
 if _platform_admin_router: app.include_router(_platform_admin_router)
+if _settings_admin_router: app.include_router(_settings_admin_router)
 
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
@@ -1589,12 +1594,16 @@ async def api_rss_brief_timeline(
     rules = _mb_load_rules(conn)
 
     lim = int(limit or 150)
+    # Allow larger limits for deep paging (up from 500 to 2000)
+    if lim > 2000:
+        lim = 2000
     off = int(offset or 0)
 
     drop_zero = bool(rules.get("drop_published_at_zero", True))
     if drop_published_at_zero is not None:
         drop_zero = int(drop_published_at_zero or 0) == 1
 
+    # Fetch slightly more to account for post-filtering
     raw_fetch = max(5000, int((off + lim) * 20))
     raw_fetch = min(20000, raw_fetch)
 
@@ -1602,7 +1611,7 @@ async def api_rss_brief_timeline(
 
     try:
         if ai_mode:
-            cats = ("AI_MODEL", "DEV_INFRA", "HARDWARE_PRO")
+            # [MODIFIED] Removed hardcoded category restriction. Fetch all 'include' items.
             if drop_zero:
                 cur = conn.execute(
                     """
@@ -1615,11 +1624,10 @@ async def api_rss_brief_timeline(
                       AND l.action = 'include'
                       AND l.score >= 75
                       AND l.confidence >= 0.70
-                      AND l.category IN (?, ?, ?)
                     ORDER BY e.published_at DESC, e.id DESC
                     LIMIT ?
                     """,
-                    (*cats, raw_fetch),
+                    (raw_fetch,),
                 )
             else:
                 cur = conn.execute(
@@ -1632,11 +1640,10 @@ async def api_rss_brief_timeline(
                     WHERE l.action = 'include'
                       AND l.score >= 75
                       AND l.confidence >= 0.70
-                      AND l.category IN (?, ?, ?)
                     ORDER BY e.published_at DESC, e.id DESC
                     LIMIT ?
                     """,
-                    (*cats, raw_fetch),
+                    (raw_fetch,),
                 )
         else:
             if drop_zero:

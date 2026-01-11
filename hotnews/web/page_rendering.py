@@ -265,6 +265,11 @@ async def render_viewer_page(
 
         asset_rev = _get_asset_rev(project_root)
 
+        # Load system settings
+        from hotnews.kernel.admin.settings_admin import get_system_settings
+        sys_settings = get_system_settings(project_root)
+        items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
+
         resp = templates.TemplateResponse(
             "viewer.html",
             {
@@ -274,6 +279,8 @@ async def render_viewer_page(
                 "current_filter": filter or data.get("filter_mode", "moderate"),
                 "static_prefix": static_prefix,
                 "asset_rev": asset_rev,
+                "items_per_card": items_per_card,
+                "sys_settings": sys_settings,
             },
         )
 

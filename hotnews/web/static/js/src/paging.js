@@ -5,9 +5,9 @@
 
 import { TR, ready } from './core.js';
 
-const CATEGORY_PAGE_SIZE = 20;
+const CATEGORY_PAGE_SIZE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const MORNING_BRIEF_PAGE_SIZE = 50;
-const AUTOFILL_STEP = 20;
+const AUTOFILL_STEP = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const AUTOFILL_MIN_VISIBLE = 10;
 const AUTOFILL_MAX_STEPS = 8;
 const AUTOFILL_GAP_PX = 80;
@@ -194,7 +194,7 @@ window.refreshPlatform = (btn) => paging.refreshPlatform(btn);
 TR.paging = paging;
 
 // 初始化
-ready(function() {
+ready(function () {
     paging.initPaging();
     paging.attachAutofillScrollListener();
     paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });

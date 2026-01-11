@@ -29,7 +29,7 @@ function isInTitleArea(t) {
 }
 
 ready(() => {
-    const DRAG_THRESHOLD_PX = 6;
+    const DRAG_THRESHOLD_PX = 4; // Lowered for quicker response
 
     let activePointerId = null;
     let activeIsMouse = false;
@@ -39,14 +39,188 @@ ready(() => {
     let didDrag = false;
     let suppressClickUntil = 0;
 
+    // ======================================
+    // Momentum Scrolling Implementation
+    // ======================================
+    let momentumAnimationFrame = null;
+    let momentumVelocity = 0;
+    let lastMoveTime = 0;
+    let lastMoveX = 0;
+    const FRICTION = 0.92; // Friction coefficient (lower = faster stop)
+    const MIN_VELOCITY = 0.5; // Stop threshold
+
+    function stopMomentum() {
+        if (momentumAnimationFrame) {
+            cancelAnimationFrame(momentumAnimationFrame);
+            momentumAnimationFrame = null;
+        }
+        momentumVelocity = 0;
+    }
+
+    // ======================================
+    // Snap to Nearest Card
+    // ======================================
+    function findNearestCardPosition(grid) {
+        if (!grid) return null;
+
+        const cards = Array.from(grid.querySelectorAll('.platform-card'));
+        if (cards.length === 0) return null;
+
+        const gridRect = grid.getBoundingClientRect();
+        const gridLeft = gridRect.left;
+        const scrollLeft = grid.scrollLeft || 0;
+
+        let nearestCard = null;
+        let minDistance = Infinity;
+
+        for (const card of cards) {
+            const cardRect = card.getBoundingClientRect();
+            const cardLeft = cardRect.left;
+
+            // Calculate distance from card's left edge to grid's left edge
+            const distance = Math.abs(cardLeft - gridLeft);
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestCard = card;
+            }
+        }
+
+        if (!nearestCard) return null;
+
+        // Calculate the scroll position needed to align this card
+        const cardOffsetLeft = nearestCard.offsetLeft || 0;
+        return cardOffsetLeft;
+    }
+
+    function snapToNearestCard(grid) {
+        if (!grid) return;
+
+        const targetPosition = findNearestCardPosition(grid);
+        if (targetPosition === null) return;
+
+        const maxScrollLeft = Math.max(0, (grid.scrollWidth || 0) - (grid.clientWidth || 0));
+        const clampedPosition = Math.max(0, Math.min(maxScrollLeft, targetPosition));
+
+        // Smoothly scroll to the nearest card
+        grid.scrollTo({
+            left: clampedPosition,
+            behavior: 'smooth'
+        });
+    }
+
+    function applyMomentumScroll(grid, velocity) {
+        if (!grid || !isScrollableX(grid)) return;
+        stopMomentum();
+        momentumVelocity = velocity;
+
+        function animate() {
+            if (Math.abs(momentumVelocity) < MIN_VELOCITY) {
+                stopMomentum();
+                // Snap to nearest card after momentum ends
+                setTimeout(() => snapToNearestCard(grid), 100);
+                return;
+            }
+
+            momentumVelocity *= FRICTION;
+            const maxScrollLeft = Math.max(0, (grid.scrollWidth || 0) - (grid.clientWidth || 0));
+            const current = grid.scrollLeft || 0;
+            const next = Math.max(0, Math.min(maxScrollLeft, current + momentumVelocity));
+
+            // Use scrollTo for smoother animation
+            grid.scrollTo({
+                left: next,
+                behavior: 'auto' // 'auto' for direct control during momentum
+            });
+
+            // Check if we hit the edge
+            if (next <= 0 || next >= maxScrollLeft) {
+                stopMomentum();
+                // Snap to nearest card when hitting edge
+                setTimeout(() => snapToNearestCard(grid), 100);
+                return;
+            }
+
+            momentumAnimationFrame = requestAnimationFrame(animate);
+        }
+
+        momentumAnimationFrame = requestAnimationFrame(animate);
+    }
+
+    // ======================================
+    // Wheel Event Optimization
+    // ======================================
+    let wheelRAFPending = false;
+    let wheelTargetGrid = null;
+    let wheelAccumulatedDelta = 0;
+    let wheelStopTimer = null;
+
+    function processWheelScroll() {
+        wheelRAFPending = false;
+        if (!wheelTargetGrid || !isScrollableX(wheelTargetGrid)) {
+            wheelAccumulatedDelta = 0;
+            return;
+        }
+
+        const delta = wheelAccumulatedDelta;
+        wheelAccumulatedDelta = 0;
+
+        if (!delta) return;
+
+        const maxScrollLeft = Math.max(0, (wheelTargetGrid.scrollWidth || 0) - (wheelTargetGrid.clientWidth || 0));
+        const current = wheelTargetGrid.scrollLeft || 0;
+        const next = Math.max(0, Math.min(maxScrollLeft, current + delta));
+
+        // Use scrollTo with smooth behavior for wheel events
+        wheelTargetGrid.scrollTo({
+            left: next,
+            behavior: 'smooth'
+        });
+
+        // Clear previous timer and set new one to detect scroll end
+        if (wheelStopTimer) {
+            clearTimeout(wheelStopTimer);
+        }
+        wheelStopTimer = setTimeout(() => {
+            wheelStopTimer = null;
+            // Snap to nearest card after wheel scrolling stops
+            snapToNearestCard(wheelTargetGrid);
+        }, 150); // Wait 150ms after last wheel event
+    }
+
+    // ======================================
+    // Drag State Management
+    // ======================================
     const clear = () => {
+        // Calculate velocity before clearing state
+        const now = performance.now();
+        const dt = now - lastMoveTime;
+        let velocity = 0;
+
+        if (didDrag && activeGrid && dt > 0 && dt < 100) {
+            // Calculate velocity based on recent movement
+            const recentDx = lastMoveX - startX;
+            velocity = -recentDx / (dt / 16); // Convert to per-frame velocity
+            velocity = Math.max(-50, Math.min(50, velocity)); // Clamp velocity
+        }
+
+        const grid = activeGrid;
+
         activePointerId = null;
         activeIsMouse = false;
         activeGrid = null;
         startX = 0;
         startScrollLeft = 0;
         didDrag = false;
-        try { document.body.classList.remove('tr-platform-title-dragging'); } catch (_) {}
+        lastMoveTime = 0;
+        lastMoveX = 0;
+
+        try { document.body.classList.remove('tr-platform-title-dragging'); } catch (_) { }
+
+        // Apply momentum scrolling after drag ends
+        if (grid && Math.abs(velocity) > 2) {
+            applyMomentumScroll(grid, velocity);
+        }
     };
 
     const beginDrag = (target, clientX) => {
@@ -56,11 +230,17 @@ ready(() => {
         const grid = findPlatformGridFromTarget(target);
         if (!grid || !isScrollableX(grid)) return false;
 
+        // Stop any ongoing momentum when starting new drag
+        stopMomentum();
+
         activeGrid = grid;
         startX = clientX;
         startScrollLeft = grid.scrollLeft || 0;
         didDrag = false;
-        try { document.body.classList.add('tr-platform-title-dragging'); } catch (_) {}
+        lastMoveTime = performance.now();
+        lastMoveX = clientX;
+
+        try { document.body.classList.add('tr-platform-title-dragging'); } catch (_) { }
         return true;
     };
 
@@ -91,11 +271,20 @@ ready(() => {
         if (!didDrag && Math.abs(dx) < DRAG_THRESHOLD_PX) return;
 
         didDrag = true;
-        try { e.preventDefault(); } catch (_) {}
+        try { e.preventDefault(); } catch (_) { }
+
+        // Track for velocity calculation
+        lastMoveTime = performance.now();
+        lastMoveX = e.clientX;
 
         const maxScrollLeft = Math.max(0, (activeGrid.scrollWidth || 0) - (activeGrid.clientWidth || 0));
         const next = Math.max(0, Math.min(maxScrollLeft, startScrollLeft - dx));
-        activeGrid.scrollLeft = next;
+
+        // Use scrollTo for consistent behavior
+        activeGrid.scrollTo({
+            left: next,
+            behavior: 'auto' // instant during drag for responsiveness
+        });
     }, { passive: false });
 
     document.addEventListener('mousemove', (e) => {
@@ -110,11 +299,20 @@ ready(() => {
         if (!didDrag && Math.abs(dx) < DRAG_THRESHOLD_PX) return;
 
         didDrag = true;
-        try { e.preventDefault(); } catch (_) {}
+        try { e.preventDefault(); } catch (_) { }
+
+        // Track for velocity calculation
+        lastMoveTime = performance.now();
+        lastMoveX = e.clientX;
 
         const maxScrollLeft = Math.max(0, (activeGrid.scrollWidth || 0) - (activeGrid.clientWidth || 0));
         const next = Math.max(0, Math.min(maxScrollLeft, startScrollLeft - dx));
-        activeGrid.scrollLeft = next;
+
+        // Use scrollTo for consistent behavior
+        activeGrid.scrollTo({
+            left: next,
+            behavior: 'auto'
+        });
     }, { passive: false });
 
     const onPointerEnd = () => {
@@ -137,11 +335,14 @@ ready(() => {
         if (now > suppressClickUntil) return;
         const target = normalizeTarget(e.target);
         if (!isInTitleArea(target)) return;
-        try { e.preventDefault(); } catch (_) {}
-        try { e.stopPropagation(); } catch (_) {}
-        try { e.stopImmediatePropagation(); } catch (_) {}
+        try { e.preventDefault(); } catch (_) { }
+        try { e.stopPropagation(); } catch (_) { }
+        try { e.stopImmediatePropagation(); } catch (_) { }
     }, true);
 
+    // ======================================
+    // Optimized Wheel Event Handler
+    // ======================================
     document.addEventListener('wheel', (e) => {
         const pointEl = (typeof document.elementFromPoint === 'function')
             ? document.elementFromPoint(e.clientX, e.clientY)
@@ -154,13 +355,29 @@ ready(() => {
         const grid = findPlatformGridFromTarget(target);
         if (!grid || !isScrollableX(grid)) return;
 
-        const delta = (typeof e.deltaX === 'number' && e.deltaX !== 0) ? e.deltaX : e.deltaY;
+        // Stop any ongoing momentum
+        stopMomentum();
+
+        // Normalize delta based on deltaMode
+        let delta = (typeof e.deltaX === 'number' && e.deltaX !== 0) ? e.deltaX : e.deltaY;
+
+        if (e.deltaMode === 1) { // DOM_DELTA_LINE
+            delta *= 20; // Approximate pixels per line
+        } else if (e.deltaMode === 2) { // DOM_DELTA_PAGE
+            delta *= (grid.clientWidth || 100);
+        }
+
         if (!delta) return;
 
-        try { e.preventDefault(); } catch (_) {}
+        try { e.preventDefault(); } catch (_) { }
 
-        const maxScrollLeft = Math.max(0, (grid.scrollWidth || 0) - (grid.clientWidth || 0));
-        const next = Math.max(0, Math.min(maxScrollLeft, (grid.scrollLeft || 0) + delta));
-        grid.scrollLeft = next;
+        // Accumulate delta and schedule RAF-throttled update
+        wheelTargetGrid = grid;
+        wheelAccumulatedDelta += delta;
+
+        if (!wheelRAFPending) {
+            wheelRAFPending = true;
+            requestAnimationFrame(processWheelScroll);
+        }
     }, { passive: false });
 });

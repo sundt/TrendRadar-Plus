@@ -1,7 +1,7 @@
 import { TR, ready, escapeHtml } from './core.js';
 import { storage } from './storage.js';
 
-const ENTRIES_PER_SOURCE = 15;
+const ENTRIES_PER_SOURCE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const PREFETCH_AHEAD = 3;
 
 const EXPLORE_SEEN_STORAGE_KEY = 'hotnews_explore_seen_sources_v1';
@@ -441,13 +441,13 @@ function _prefetchAround(index) {
 
     try {
         if (typeof window.requestIdleCallback === 'function') {
-            window.requestIdleCallback(() => runner().catch(() => {}), { timeout: 1200 });
+            window.requestIdleCallback(() => runner().catch(() => { }), { timeout: 1200 });
             return;
         }
     } catch (e) {
         // ignore
     }
-    setTimeout(() => runner().catch(() => {}), 0);
+    setTimeout(() => runner().catch(() => { }), 0);
 }
 
 function _getPickerEl() {
@@ -638,7 +638,7 @@ async function _addCurrentToCategory(pickedCategory) {
         _setStatus(String(e?.message || e), { variant: 'error' });
         try {
             TR.toast?.show?.(`保存失败：${String(e?.message || e)}`, { variant: 'error', durationMs: 2500 });
-        } catch (_) {}
+        } catch (_) { }
         return;
     }
 
@@ -657,7 +657,7 @@ async function _addCurrentToCategory(pickedCategory) {
     }
 
     try {
-        _warmupSourceIds([_currentCard.source_id], 'high').catch(() => {});
+        _warmupSourceIds([_currentCard.source_id], 'high').catch(() => { });
     } catch (e) {
         // ignore
     }
@@ -703,8 +703,8 @@ function _renderCard(card) {
     const placeholderCount = Math.max(0, ENTRIES_PER_SOURCE - pageItems.length);
     const placeholderHtml = placeholderCount
         ? Array.from({ length: placeholderCount }).map((_, i) => {
-              const n = start + pageItems.length + i + 1;
-              return `
+            const n = start + pageItems.length + i + 1;
+            return `
             <li class="news-item rss-entry-placeholder" data-news-id="">
                 <div class="news-item-content">
                     <span class="news-index">${String(n)}</span>
@@ -712,7 +712,7 @@ function _renderCard(card) {
                     <span class="rss-entry-date" style="display:none;">&nbsp;</span>
                 </div>
             </li>`;
-          }).join('')
+        }).join('')
         : '';
 
     grid.innerHTML = `
@@ -854,7 +854,7 @@ async function _showAt(index, dir = 1) {
             }
 
             try {
-                _warmupSourceIds([card.source_id], 'normal').catch(() => {});
+                _warmupSourceIds([card.source_id], 'normal').catch(() => { });
             } catch (e) {
                 // ignore
             }
@@ -1025,7 +1025,7 @@ TR.rssCatalogPreview = {
     saveAndRefresh
 };
 
-ready(function() {
+ready(function () {
     const modal = _getModalEl();
     if (!modal) return;
 

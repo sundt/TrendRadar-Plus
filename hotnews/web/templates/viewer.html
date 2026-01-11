@@ -14,9 +14,9 @@
     <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}" as="script">
-    <!-- 早期隐藏脚本：在 DOM 解析前检测用户配置，防止栏目闪烁 -->
     <script>
         (function () { try { try { var p = new URLSearchParams(location.search || ''); if (p.get('e2e') === '1') return; } catch (e2) { } var r = localStorage.getItem('hotnews_categories_config'); if (r) { var c = JSON.parse(r); if ((c.customCategories && c.customCategories.length > 0) || (c.hiddenDefaultCategories && c.hiddenDefaultCategories.length > 0)) { document.write('<style id="early-hide">.category-tabs,.tab-content-area{display:none!important}</style>'); } } } catch (e) { } })();
+        window.SYSTEM_SETTINGS = {{ sys_settings | tojson }};
     </script>
     <script type="text/javascript">
         (function (c, l, a, r, i, t, y) {
@@ -208,12 +208,10 @@
                 {% else %}
                 <div class="platform-grid">
                     {% for platform_id, platform in (category.platforms.items()|list) %}
-                    {% set is_real_card = is_active_category and loop.index0 < 3 %}
-                    <div class="platform-card" data-platform="{{ platform_id }}"
-                        data-total-count="{{ platform.news|length }}"
-                        data-loaded-count="{% if is_real_card %}{{ [platform.news|length, 20]|min }}{% else %}0{% endif %}"
-                        data-lazy="{% if is_real_card %}0{% else %}1{% endif %}"
-                        draggable="false">
+                    {% set is_real_card = is_active_category and loop.index0 < 3 %} <div class="platform-card"
+                        data-platform="{{ platform_id }}" data-total-count="{{ platform.news|length }}"
+                        data-loaded-count="{% if is_real_card %}{{ [platform.news|length, items_per_card]|min }}{% else %}0{% endif %}"
+                        data-lazy="{% if is_real_card %}0{% else %}1{% endif %}" draggable="false">
                         <div class="platform-header">
                             <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
                             <div class="platform-name"
@@ -227,7 +225,7 @@
                         </div>
                         <ul class="news-list">
                             {% if is_real_card %}
-                            {% for news in platform.news[:20] %}
+                            {% for news in platform.news[:items_per_card] %}
                             <li class="news-item" data-news-id="{{ news.stable_id }}"
                                 data-news-title="{{ news.display_title or news.title }}">
                                 <div class="news-item-content">
@@ -255,19 +253,21 @@
                             {% endfor %}
                             {% else %}
                             {% for _ in range(0, 8) %}
-                            <li class="tr-news-skeleton" aria-hidden="true"><div class="tr-news-skeleton-line"></div></li>
+                            <li class="tr-news-skeleton" aria-hidden="true">
+                                <div class="tr-news-skeleton-line"></div>
+                            </li>
                             {% endfor %}
                             {% endif %}
                         </ul>
                         <div class="news-load-sentinel" aria-hidden="true"></div>
-                    </div>
-                    {% endfor %}
                 </div>
-                <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
-                {% endif %}
+                {% endfor %}
             </div>
-            {% endfor %}
+            <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
+            {% endif %}
         </div>
+        {% endfor %}
+    </div>
     </div>
 
     {% include "_viewer_modals.html" %}
