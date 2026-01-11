@@ -2038,10 +2038,21 @@
         body.eye-protection-mode .platform-card {
             box-shadow: none;
             border-color: #373a40;
+            border-radius: 12px;
+            /* Ensure consistent rounded corners */
         }
 
         body.eye-protection-mode .platform-card:hover {
             border-color: #4f46e5;
+        }
+
+        /* Mobile: Ensure rounded corners on top in eye protection mode */
+        @media (max-width: 640px) {
+            body.eye-protection-mode .tab-content-area .platform-grid>.platform-card {
+                border-radius: 12px 12px 0 0;
+                border: 1px solid #373a40;
+                border-bottom: 1px solid #373a40;
+            }
         }
 
         body.eye-protection-mode #searchInput {
