@@ -233,6 +233,10 @@ if [ -z "${remote_path_expanded}" ]; then
   exit 1
 fi
 
+echo "Syncing private kernel directory to server..."
+rsync -az --delete -e "ssh -p ${SSH_PORT}" \
+  hotnews/kernel/ "${remote}:${remote_path_expanded}/hotnews/kernel/"
+
 echo "Rebuilding on server..."
 
 ssh "${ssh_opts[@]}" "$remote" bash -s -- "${remote_path_expanded}" "${BRANCH}" "${DRY_RUN}" <<'ENDSSH'
@@ -348,7 +352,8 @@ run git checkout -q "${branch}"
 old_head=$(git rev-parse HEAD)
 
 run git pull --ff-only origin "${branch}"
-run git submodule update --init --recursive
+# Skip submodule update errors - kernel is synced via rsync before this script
+git submodule update --init --recursive 2>/dev/null || echo "Note: git submodule update skipped (kernel synced via rsync)"
 
 rebuild_all
 verify
