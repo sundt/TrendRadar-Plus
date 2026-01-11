@@ -340,11 +340,16 @@ trap on_err ERR
 
 cd "${remote_path}"
 
-if [ -n "$(git status --porcelain)" ]; then
+# Check for modifications, excluding kernel (synced via rsync)
+other_changes=$(git status --porcelain | grep -v '^.* hotnews/kernel$' | grep -v '^.. hotnews/kernel$' || true)
+if [ -n "${other_changes}" ]; then
   echo "ERROR: Server repo has local modifications. Please clean it before deploy."
-  git status --porcelain
+  echo "${other_changes}"
   exit 1
 fi
+
+# Reset kernel submodule state to avoid git conflicts
+git checkout -- hotnews/kernel 2>/dev/null || true
 
 run git fetch --all --prune
 run git checkout -q "${branch}"
