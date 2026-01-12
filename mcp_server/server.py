@@ -16,6 +16,7 @@ from .tools.search_tools import SearchTools
 from .tools.config_mgmt import ConfigManagementTools
 from .tools.system import SystemManagementTools
 from .tools.storage_sync import StorageSyncTools
+from .tools.scraper_generator import ScraperGeneratorTools
 from .utils.date_parser import DateParser
 from .utils.errors import MCPError
 
@@ -36,6 +37,7 @@ def _get_tools(project_root: Optional[str] = None):
         _tools_instances['config'] = ConfigManagementTools(project_root)
         _tools_instances['system'] = SystemManagementTools(project_root)
         _tools_instances['storage'] = StorageSyncTools(project_root)
+        _tools_instances['scraper'] = ScraperGeneratorTools(project_root)
     return _tools_instances
 
 
@@ -777,6 +779,41 @@ async def list_available_dates(
     """
     tools = _get_tools()
     result = tools['storage'].list_available_dates(source=source)
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
+# ==================== 抓取脚本生成工具 ====================
+
+@mcp.tool
+async def generate_scraper_script(
+    url: str,
+    objective: Optional[str] = None
+) -> str:
+    """
+    为网页URL生成抓取Python脚本
+    
+    使用AI分析网页结构，自动生成可用的抓取脚本，可直接用于HotNews自定义源。
+    网站后端可调用此工具来辅助AI脚本生成。
+    
+    Args:
+        url: 目标网页URL
+        objective: 抓取目标描述（可选），如"获取新闻标题和链接"、"抓取文章发布时间"
+    
+    Returns:
+        JSON格式的脚本配置，包含:
+        - success: 是否生成成功
+        - provider_type: 提供者类型 (dynamic_py/html_scraper/http_json)
+        - script: Python脚本内容 (当type为dynamic_py时)
+        - config: 配置JSON
+        - name_suggestion: 建议的源名称
+        - explanation: AI分析说明
+    
+    Examples:
+        - generate_scraper_script(url="https://news.sina.com.cn")
+        - generate_scraper_script(url="https://example.com/news", objective="获取新闻标题和发布时间")
+    """
+    tools = _get_tools()
+    result = tools['scraper'].generate_scraper_script(url=url, objective=objective)
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 

@@ -13,6 +13,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../output:/app/output
+      - ../hotnews:/app/hotnews
 
     environment:
       - TZ=Asia/Shanghai

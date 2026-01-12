@@ -960,6 +960,9 @@ export const data = {
 
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
+                // 复用相同的间隔判断，避免频繁刷新导致的滚动跳动
+                const now = Date.now();
+                if (now - _ajaxLastRefreshAt < intervalMs - 5000) return;
                 this.refreshViewerData({ preserveScroll: true });
             }
         });

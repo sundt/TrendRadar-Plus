@@ -74,7 +74,7 @@ def _rss_user_agent() -> str:
         ua = (os.environ.get("HOTNEWS_RSS_USER_AGENT", "") or "").strip()
     except Exception:
         ua = ""
-    return ua or "Hotnews/1.0"
+    return ua or "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Hotnews/1.0"
 
 
 def _rss_accept_language() -> str:
