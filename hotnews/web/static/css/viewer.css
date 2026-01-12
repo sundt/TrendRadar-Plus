@@ -396,6 +396,13 @@
             /* Disable snap during drag */
         }
 
+        /* Disable scroll-snap when page is hidden to prevent jump on return */
+        body.tr-page-hidden .platform-grid,
+        body.tr-snap-paused .platform-grid {
+            scroll-snap-type: none;
+            scroll-behavior: auto;
+        }
+
         .platform-grid {
             scrollbar-width: none;
             /* Firefox */

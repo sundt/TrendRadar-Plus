@@ -673,7 +673,34 @@ def _now_ts() -> int:
 
 
 def _require_admin(request: Request) -> str:
-    token = (os.environ.get("HOTNEWS_ADMIN_TOKEN") or "").strip()
+    """
+    Verify admin authentication via session cookie or token.
+    
+    Priority:
+    1. If password auth is enabled -> ONLY accept session cookie
+    2. If password auth is disabled -> fall back to token auth (legacy)
+    
+    Security: Once password auth is enabled, token auth is completely disabled.
+    """
+    from hotnews.kernel.admin.admin_auth import (
+        is_password_auth_enabled,
+        verify_admin_session,
+        get_session_cookie_name,
+        get_admin_token,
+    )
+    
+    # 1. Password auth mode (secure)
+    if is_password_auth_enabled():
+        session_token = request.cookies.get(get_session_cookie_name(), "")
+        if session_token:
+            is_valid, error = verify_admin_session(session_token)
+            if is_valid:
+                return "session"
+        # Password auth is enabled but session is invalid
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    # 2. Token auth mode (legacy, only when password is not set)
+    token = get_admin_token()
     if not token:
         raise HTTPException(status_code=403, detail="Admin not configured")
 

@@ -108,3 +108,8 @@ hotnews/kernel/
 docs/
 deploy-rebuild.sh
 scripts/rsync-sync.sh
+
+# AI Rules (Local only)
+.cursorrules
+.windsurfrules
+CLAUDE.md

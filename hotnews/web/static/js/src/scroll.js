@@ -3,7 +3,7 @@
  * 平台滚动持久化
  */
 
-import { TR } from './core.js';
+import { TR, ready } from './core.js';
 import { storage } from './storage.js';
 
 const PLATFORM_GRID_SCROLL_STORAGE_KEY = 'hotnews_platform_grid_scroll_v1';
@@ -96,7 +96,7 @@ export const scroll = {
                     grid.dataset.trRestoring = '1';
                     grid.scrollLeft = (anchorCard.offsetLeft || 0) + offsetX;
                     requestAnimationFrame(() => {
-                        try { delete grid.dataset.trRestoring; } catch (_) {}
+                        try { delete grid.dataset.trRestoring; } catch (_) { }
                     });
                     return;
                 }
@@ -105,7 +105,7 @@ export const scroll = {
             grid.dataset.trRestoring = '1';
             grid.scrollLeft = left;
             requestAnimationFrame(() => {
-                try { delete grid.dataset.trRestoring; } catch (_) {}
+                try { delete grid.dataset.trRestoring; } catch (_) { }
             });
         };
 
@@ -117,7 +117,53 @@ export const scroll = {
                 setTimeout(applyOnce, 600);
             });
         });
+    },
+
+    /**
+     * Pause scroll-snap to prevent jump when returning from external link
+     */
+    pauseScrollSnap() {
+        document.body.classList.add('tr-snap-paused');
+    },
+
+    /**
+     * Resume scroll-snap after a short delay
+     */
+    resumeScrollSnap() {
+        // Use a small delay to let the browser settle before re-enabling snap
+        setTimeout(() => {
+            document.body.classList.remove('tr-snap-paused');
+        }, 100);
+    },
+
+    /**
+     * Setup visibility change handlers to prevent scroll jump
+     */
+    setupVisibilityScrollFix() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                // Page is being hidden (user clicked a link, switched tab, etc.)
+                document.body.classList.add('tr-page-hidden');
+                this.pauseScrollSnap();
+            } else if (document.visibilityState === 'visible') {
+                // Page is becoming visible again
+                document.body.classList.remove('tr-page-hidden');
+                // Resume scroll-snap after a short delay to prevent jump
+                this.resumeScrollSnap();
+            }
+        });
+
+        // Also handle beforeunload for immediate link clicks
+        window.addEventListener('beforeunload', () => {
+            this.pauseScrollSnap();
+        });
     }
 };
 
 TR.scroll = scroll;
+
+// Initialize visibility scroll fix
+ready(function () {
+    scroll.setupVisibilityScrollFix();
+});
+
