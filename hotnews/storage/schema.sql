@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS news_items (
     url TEXT DEFAULT '',
     mobile_url TEXT DEFAULT '',
     content TEXT DEFAULT '',       -- 新闻正文/摘要
+    published_at INTEGER DEFAULT 0,      -- 新闻发布时间（Unix时间戳）
     first_crawl_time TEXT NOT NULL,      -- 首次抓取时间
     last_crawl_time TEXT NOT NULL,       -- 最后抓取时间
     crawl_count INTEGER DEFAULT 1,       -- 抓取次数

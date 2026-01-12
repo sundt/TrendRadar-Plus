@@ -127,6 +127,17 @@ class LocalStorageBackend(StorageBackend):
         except Exception as e:
             print(f"[本地存储] 检查/添加 content 列失败: {e}")
 
+    def _ensure_published_at_column(self, conn: sqlite3.Connection) -> None:
+        """Ensure published_at column exists in news_items table"""
+        try:
+            cursor = conn.execute("PRAGMA table_info(news_items)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "published_at" not in columns:
+                conn.execute("ALTER TABLE news_items ADD COLUMN published_at INTEGER DEFAULT 0")
+                conn.commit()
+        except Exception as e:
+            print(f"[本地存储] 检查/添加 published_at 列失败: {e}")
+
     def save_news_data(self, data: NewsData) -> bool:
         """
         保存新闻数据到 SQLite（以 URL 为唯一标识，支持标题更新检测）
@@ -139,8 +150,9 @@ class LocalStorageBackend(StorageBackend):
         """
         try:
             conn = self._get_connection(data.date)
-            # Ensure content column exists
+            # Ensure content and published_at columns exist
             self._ensure_content_column(conn)
+            self._ensure_published_at_column(conn)
             cursor = conn.cursor()
 
             # 获取配置时区的当前时间
@@ -203,23 +215,25 @@ class LocalStorageBackend(StorageBackend):
                                         rank = ?,
                                         mobile_url = ?,
                                         content = ?,
+                                        published_at = CASE WHEN ? > 0 THEN ? ELSE published_at END,
                                         last_crawl_time = ?,
                                         crawl_count = crawl_count + 1,
                                         updated_at = ?
                                     WHERE id = ?
                                 """, (item.title, item.rank, item.mobile_url, item.content,
+                                      item.published_at, item.published_at,
                                       data.crawl_time, now_str, existing_id))
                                 updated_count += 1
                             else:
                                 # 不存在，插入新记录
                                 cursor.execute("""
                                     INSERT INTO news_items
-                                    (title, platform_id, rank, url, mobile_url, content,
+                                    (title, platform_id, rank, url, mobile_url, content, published_at,
                                      first_crawl_time, last_crawl_time, crawl_count,
                                      created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                                 """, (item.title, source_id, item.rank, item.url,
-                                      item.mobile_url, item.content, data.crawl_time, data.crawl_time,
+                                      item.mobile_url, item.content, item.published_at, data.crawl_time, data.crawl_time,
                                       now_str, now_str))
                                 new_id = cursor.lastrowid
                                 # 记录初始排名
@@ -233,12 +247,12 @@ class LocalStorageBackend(StorageBackend):
                             # URL 为空的情况，直接插入（不做去重）
                             cursor.execute("""
                                 INSERT INTO news_items
-                                (title, platform_id, rank, url, mobile_url, content,
+                                (title, platform_id, rank, url, mobile_url, content, published_at,
                                  first_crawl_time, last_crawl_time, crawl_count,
                                  created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                             """, (item.title, source_id, item.rank, item.url,
-                                  item.mobile_url, item.content, data.crawl_time, data.crawl_time,
+                                  item.mobile_url, item.content, item.published_at, data.crawl_time, data.crawl_time,
                                   now_str, now_str))
                             new_id = cursor.lastrowid
                             # 记录初始排名
@@ -329,7 +343,7 @@ class LocalStorageBackend(StorageBackend):
             cursor.execute("""
                 SELECT n.id, n.title, n.platform_id, p.name as platform_name,
                        n.rank, n.url, n.mobile_url,
-                       n.first_crawl_time, n.last_crawl_time, n.crawl_count, n.content
+                       n.first_crawl_time, n.last_crawl_time, n.crawl_count, n.content, n.published_at
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
                 ORDER BY n.platform_id, n.last_crawl_time
@@ -385,6 +399,7 @@ class LocalStorageBackend(StorageBackend):
                     url=row[5] or "",
                     mobile_url=row[6] or "",
                     content=row[10] or "", # Added content
+                    published_at=row[11] if len(row) > 11 else 0, # Added published_at
                     crawl_time=row[8],  # last_crawl_time
                     ranks=ranks,
                     first_time=row[7],  # first_crawl_time
@@ -460,7 +475,7 @@ class LocalStorageBackend(StorageBackend):
             cursor.execute("""
                 SELECT n.id, n.title, n.platform_id, p.name as platform_name,
                        n.rank, n.url, n.mobile_url,
-                       n.first_crawl_time, n.last_crawl_time, n.crawl_count, n.content
+                       n.first_crawl_time, n.last_crawl_time, n.crawl_count, n.content, n.published_at
                 FROM news_items n
                 LEFT JOIN platforms p ON n.platform_id = p.id
                 WHERE n.last_crawl_time = ?

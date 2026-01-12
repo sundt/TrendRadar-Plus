@@ -3,7 +3,7 @@
  * 数据获取、渲染、自动刷新
  */
 
-import { TR, ready, escapeHtml, formatUpdatedAt } from './core.js';
+import { TR, ready, escapeHtml, formatUpdatedAt, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
@@ -98,6 +98,20 @@ function _createNewsLi(n, idx, platformId) {
     content.appendChild(cb);
     content.appendChild(indexSpan);
     content.appendChild(a);
+
+    // Add date display if timestamp is available
+    const dateStr = formatNewsDate(n?.timestamp);
+    if (dateStr) {
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'tr-news-date';
+        dateSpan.style.marginLeft = '8px';
+        dateSpan.style.color = '#9ca3af';
+        dateSpan.style.fontSize = '12px';
+        dateSpan.style.whiteSpace = 'nowrap';
+        dateSpan.textContent = dateStr;
+        content.appendChild(dateSpan);
+    }
+
     li.appendChild(content);
 
     const meta = String(n?.meta || '').trim();
@@ -342,6 +356,8 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
         const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
         const safeHref = url || '#';
+        const dateStr = formatNewsDate(n?.timestamp);
+        const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
         return `
             <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">
@@ -351,6 +367,7 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
                         ${title}
                         ${crossBadge}
                     </a>
+                    ${dateHtml}
                 </div>
                 ${metaHtml}
             </li>`;
@@ -746,6 +763,8 @@ export const data = {
                         const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
                         const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
                         const safeHref = url || '#';
+                        const dateStr = formatNewsDate(n?.timestamp);
+                        const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
                         return `
                         <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
                             <div class="news-item-content">
@@ -755,6 +774,7 @@ export const data = {
                                     ${title}
                                     ${crossBadge}
                                 </a>
+                                ${dateHtml}
                             </div>
                             ${metaHtml}
                         </li>`;

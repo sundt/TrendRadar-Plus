@@ -364,22 +364,30 @@ class ParserService:
                 return None
 
             # 构建查询
+            # 检查字段是否存在
+            cursor.execute("PRAGMA table_info(news_items)")
+            columns = {row['name'] for row in cursor.fetchall()}
+            has_published_at = 'published_at' in columns
+
+            # 构建查询
+            pub_col = ", n.published_at" if has_published_at else ""
+            
             if platform_ids:
                 placeholders = ','.join(['?' for _ in platform_ids])
                 query = f"""
                     SELECT n.id, n.platform_id, p.name as platform_name, n.title,
                            n.rank, n.url, n.mobile_url,
-                           n.first_crawl_time, n.last_crawl_time, n.crawl_count
+                           n.first_crawl_time, n.last_crawl_time, n.crawl_count{pub_col}
                     FROM news_items n
                     LEFT JOIN platforms p ON n.platform_id = p.id
                     WHERE n.platform_id IN ({placeholders})
                 """
                 cursor.execute(query, platform_ids)
             else:
-                cursor.execute("""
+                cursor.execute(f"""
                     SELECT n.id, n.platform_id, p.name as platform_name, n.title,
                            n.rank, n.url, n.mobile_url,
-                           n.first_crawl_time, n.last_crawl_time, n.crawl_count
+                           n.first_crawl_time, n.last_crawl_time, n.crawl_count{pub_col}
                     FROM news_items n
                     LEFT JOIN platforms p ON n.platform_id = p.id
                 """)
@@ -428,7 +436,8 @@ class ParserService:
                 ranks = rank_history_map.get(news_id, [row['rank']])
 
                 # 直接使用数据（已去重）
-                all_titles[platform_id][title] = {
+                # 直接使用数据（已去重）
+                item_data = {
                     "ranks": ranks,
                     "url": row['url'] or "",
                     "mobileUrl": row['mobile_url'] or "",
@@ -436,6 +445,10 @@ class ParserService:
                     "last_time": row['last_crawl_time'] or "",
                     "count": row['crawl_count'] or 1,
                 }
+                if has_published_at:
+                    item_data["published_at"] = row['published_at'] or 0
+                
+                all_titles[platform_id][title] = item_data
 
             # 获取抓取时间作为 timestamps
             cursor.execute("""

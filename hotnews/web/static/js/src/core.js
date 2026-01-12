@@ -18,7 +18,7 @@ export function ready(handler) {
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     isReady = true;
     readyHandlers.forEach(h => {
         try { h(); } catch (e) { console.error('Ready handler error:', e); }
@@ -52,6 +52,41 @@ export function formatUpdatedAt(value) {
 TR.ready = ready;
 TR.escapeHtml = escapeHtml;
 TR.formatUpdatedAt = formatUpdatedAt;
+
+/**
+ * Format a news timestamp to YYYY-MM-DD for display.
+ * @param {string|number} ts - Timestamp string (YYYY-MM-DD HH:MM:SS) or unix seconds
+ * @returns {string} Formatted date or empty string
+ */
+export function formatNewsDate(ts) {
+    if (ts == null || ts === '') return '';
+    try {
+        // Try unix timestamp (seconds)
+        const num = Number(ts);
+        if (Number.isFinite(num) && num > 0) {
+            // Heuristic: if > 1e12, it's milliseconds
+            const ms = num > 1e12 ? num : num * 1000;
+            const d = new Date(ms);
+            if (!isNaN(d.getTime())) {
+                const YYYY = String(d.getFullYear());
+                const MM = String(d.getMonth() + 1).padStart(2, '0');
+                const DD = String(d.getDate()).padStart(2, '0');
+                return `${YYYY}-${MM}-${DD}`;
+            }
+        }
+        // Try parsing string like "2026-01-12 19:30:00"
+        const s = String(ts || '').trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) {
+            return `${m[1]}-${m[2]}-${m[3]}`;
+        }
+    } catch (e) {
+        // ignore
+    }
+    return '';
+}
+
+TR.formatNewsDate = formatNewsDate;
 
 const _toastState = {
     container: null,

@@ -247,6 +247,11 @@
                                         </span>
                                         {% endif %}
                                     </a>
+                                    {% if news.timestamp %}
+                                    <span class="tr-news-date"
+                                        style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">{{
+                                        news.timestamp[:10] }}</span>
+                                    {% endif %}
                                 </div>
                                 {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{
                                     news.meta }}</div>{% endif %}

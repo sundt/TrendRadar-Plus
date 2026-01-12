@@ -87,12 +87,20 @@ class DataService:
                 # 取第一个排名
                 rank = info["ranks"][0] if info["ranks"] else 0
 
+                # 优先使用 published_at
+                ts = fetch_time.strftime("%Y-%m-%d %H:%M:%S")
+                if info.get("published_at"):
+                    try:
+                        ts = datetime.fromtimestamp(int(info["published_at"])).strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        pass
+
                 news_item = {
                     "title": title,
                     "platform": platform_id,
                     "platform_name": platform_name,
                     "rank": rank,
-                    "timestamp": fetch_time.strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": ts
                 }
 
                 # 条件性添加 URL 字段
@@ -165,6 +173,14 @@ class DataService:
                 # 计算平均排名
                 avg_rank = sum(info["ranks"]) / len(info["ranks"]) if info["ranks"] else 0
 
+                # 计算时间戳
+                ts = f"{date_str} 00:00:00"
+                if info.get("published_at"):
+                    try:
+                        ts = datetime.fromtimestamp(int(info["published_at"])).strftime("%Y-%m-%d %H:%M:%S")
+                    except:
+                        pass
+
                 news_item = {
                     "title": title,
                     "platform": platform_id,
@@ -172,7 +188,8 @@ class DataService:
                     "rank": info["ranks"][0] if info["ranks"] else 0,
                     "avg_rank": round(avg_rank, 2),
                     "count": len(info["ranks"]),
-                    "date": date_str
+                    "date": date_str,
+                    "timestamp": ts
                 }
 
                 # 条件性添加 URL 字段
@@ -244,6 +261,14 @@ class DataService:
                             # 计算平均排名
                             avg_rank = sum(info["ranks"]) / len(info["ranks"]) if info["ranks"] else 0
 
+                            # 计算时间戳
+                            ts = current_date.strftime("%Y-%m-%d 00:00:00")
+                            if info.get("published_at"):
+                                try:
+                                    ts = datetime.fromtimestamp(int(info["published_at"])).strftime("%Y-%m-%d %H:%M:%S")
+                                except:
+                                    pass
+
                             results.append({
                                 "title": title,
                                 "platform": platform_id,
@@ -253,7 +278,8 @@ class DataService:
                                 "avg_rank": round(avg_rank, 2),
                                 "url": info.get("url", ""),
                                 "mobileUrl": info.get("mobileUrl", ""),
-                                "date": current_date.strftime("%Y-%m-%d")
+                                "date": current_date.strftime("%Y-%m-%d"),
+                                "timestamp": ts
                             })
 
                             platform_distribution[platform_id] += 1

@@ -200,17 +200,6 @@ def _normalize_rss_column_to_cat_id(column: str) -> str:
     return f"rsscol-{slug}"
 
 
-def _is_ai_rss_source_category(raw: Any) -> bool:
-    s = str(raw or "").strip().lower()
-    if not s:
-        return False
-    if "人工智能" in s:
-        return True
-    if "ai" in s:
-        return True
-    return False
-
-
 def _pick_target_category_id(*, base_categories: Dict[str, Any], rss_cat_id: str) -> Optional[str]:
     if not rss_cat_id or not isinstance(rss_cat_id, str):
         return None
@@ -262,10 +251,7 @@ def _build_rss_categories_from_subscriptions_db(
 
         column = (sub.get("column") or "").strip()
         if not column:
-            if _is_ai_rss_source_category(source.get("category")):
-                column = "AI资讯"
-            else:
-                column = "RSS"
+            column = "RSS"
         rss_cat_id = _normalize_rss_column_to_cat_id(column)
         cat = categories.get(rss_cat_id)
         if cat is None:
@@ -308,6 +294,9 @@ def _build_rss_categories_from_subscriptions_db(
         for r in rows[: max(0, int(per_feed_limit))]:
             title = (r[0] or "").strip()
             link = (r[1] or "").strip()
+            published_at = int(r[2] or 0)
+            created_at = int(r[4] or 0)
+            ts = published_at if published_at > 0 else created_at
             if not title:
                 title = link
             if not link:
@@ -320,6 +309,7 @@ def _build_rss_categories_from_subscriptions_db(
                     "url": link,
                     "meta": "",
                     "stable_id": stable_id,
+                    "timestamp": ts,
                 }
             )
 
@@ -352,121 +342,6 @@ def _merge_rss_categories_into_news_data(*, data: Dict[str, Any], rss_categories
         base_categories[target_id] = {**base_cat, "platforms": {**rss_platforms, **base_platforms}}
 
     data["categories"] = {**base_categories}
-    return data
-
-
-def _build_ai_rss_platforms_from_sources_db(*, max_sources: int = 12, per_feed_limit: int = 20) -> Dict[str, Any]:
-    conn = _get_online_db_conn()
-    lim = max(0, int(max_sources))
-    if lim <= 0:
-        return {}
-
-    try:
-        cur = conn.execute(
-            """
-            SELECT id, name, url, category
-            FROM rss_sources
-            WHERE enabled = 1
-              AND (
-                category LIKE '%人工智能%'
-                OR lower(category) LIKE '%ai%'
-              )
-            ORDER BY updated_at DESC
-            LIMIT ?
-            """,
-            (lim,),
-        )
-        rows = cur.fetchall() or []
-    except Exception:
-        rows = []
-
-    platforms: Dict[str, Any] = {}
-    for r in rows:
-        try:
-            sid = str(r[0] or "").strip()
-            name = str(r[1] or "").strip()
-        except Exception:
-            continue
-        if not sid:
-            continue
-        pid = f"rss-{sid}"
-        if not name:
-            name = pid
-
-        try:
-            cur2 = conn.execute(
-                """
-                SELECT title, url, published_at, published_raw, created_at
-                FROM rss_entries
-                WHERE source_id = ?
-                ORDER BY (CASE WHEN published_at > 0 THEN published_at ELSE created_at END) DESC, id DESC
-                LIMIT 50
-                """,
-                (sid,),
-            )
-            ent_rows = cur2.fetchall() or []
-        except Exception:
-            ent_rows = []
-
-        news_items: List[Dict[str, Any]] = []
-        for er in ent_rows[: max(0, int(per_feed_limit))]:
-            title = (er[0] or "").strip()
-            link = (er[1] or "").strip()
-            if not title:
-                title = link
-            if not link:
-                continue
-            news_items.append(
-                {
-                    "title": title,
-                    "display_title": title,
-                    "url": link,
-                    "meta": "",
-                    "stable_id": generate_news_id(pid, title),
-                }
-            )
-
-        if not news_items:
-            continue
-
-        platforms[pid] = {
-            "id": pid,
-            "name": name,
-            "news": news_items,
-            "is_new": False,
-        }
-
-    return platforms
-
-
-def _inject_ai_rss_sources_into_data(*, data: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(data, dict):
-        return data
-    cats = data.get("categories")
-    if not isinstance(cats, dict):
-        return data
-
-    platforms = _build_ai_rss_platforms_from_sources_db(max_sources=12, per_feed_limit=20)
-    if not platforms:
-        return data
-
-    ai_cat = cats.get("ai")
-    if not isinstance(ai_cat, dict):
-        ai_cat = {
-            "id": "ai",
-            "name": "AI资讯",
-            "icon": "🤖",
-            "platforms": {},
-            "news_count": 0,
-            "filtered_count": 0,
-            "is_new": False,
-        }
-
-    existing = ai_cat.get("platforms") if isinstance(ai_cat.get("platforms"), dict) else {}
-    merged = {**platforms, **existing}
-    ai_cat = {**ai_cat, "platforms": merged}
-    cats["ai"] = ai_cat
-    data["categories"] = {**cats}
     return data
 
 
@@ -2120,11 +1995,6 @@ async def api_news(
                 "is_new": False,
             }
             data["categories"] = {"explore": explore, **cats}
-    except Exception:
-        pass
-
-    try:
-        data = _inject_ai_rss_sources_into_data(data=data)
     except Exception:
         pass
 

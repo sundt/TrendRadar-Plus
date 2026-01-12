@@ -1,4 +1,4 @@
-import { TR, ready, escapeHtml } from './core.js';
+import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
 
 const EXPLORE_TAB_ID = 'explore';
@@ -861,11 +861,14 @@ function _renderBatch(cards) {
             const title = escapeHtml(e?.title || '');
             const link = escapeHtml(e?.link || '#');
             const newsId = escapeHtml(`rssx:${sid}:${e?.link || ''}`);
+            const dateStr = formatNewsDate(e?.published || e?.ts || 0);
+            const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
             return `
                 <li class="news-item" data-news-id="${newsId}" data-news-title="${title}">
                     <div class="news-item-content">
                         <span class="news-index">${String(idx + 1)}</span>
                         <a class="news-title" href="${link}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">${title}</a>
+                        ${dateHtml}
                     </div>
                 </li>`;
         }).join('');
@@ -903,11 +906,14 @@ function _renderCardElement(card, opts = {}) {
         const title = escapeHtml(e?.title || '');
         const link = escapeHtml(e?.link || '#');
         const newsId = escapeHtml(`rssx:${sid}:${e?.link || ''}`);
+        const dateStr = formatNewsDate(e?.published || e?.ts || 0);
+        const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
         return `
             <li class="news-item" data-news-id="${newsId}" data-news-title="${title}">
                 <div class="news-item-content">
                     <span class="news-index">${String(idx + 1)}</span>
                     <a class="news-title" href="${link}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">${title}</a>
+                    ${dateHtml}
                 </div>
             </li>`;
     }).join('');

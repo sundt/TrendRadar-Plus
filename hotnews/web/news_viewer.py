@@ -71,12 +71,6 @@ PLATFORM_CATEGORIES = {
             "cankaoxiaoxi", "zaobao", "tencent-hot"
         ]
     },
-    "ai": {
-        "name": "AI资讯",
-        "icon": "🤖",
-        "news_limit": 10,
-        "platforms": [],
-    },
     "finance": {
         "name": "财经投资",
         "icon": "💰",

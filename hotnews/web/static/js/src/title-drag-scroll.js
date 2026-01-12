@@ -127,11 +127,8 @@ ready(() => {
             const current = grid.scrollLeft || 0;
             const next = Math.max(0, Math.min(maxScrollLeft, current + momentumVelocity));
 
-            // Use scrollTo for smoother animation
-            grid.scrollTo({
-                left: next,
-                behavior: 'auto' // 'auto' for direct control during momentum
-            });
+            // Direct assignment for smooth momentum
+            grid.scrollLeft = next;
 
             // Check if we hit the edge
             if (next <= 0 || next >= maxScrollLeft) {
@@ -171,11 +168,8 @@ ready(() => {
         const current = wheelTargetGrid.scrollLeft || 0;
         const next = Math.max(0, Math.min(maxScrollLeft, current + delta));
 
-        // Use scrollTo with smooth behavior for wheel events
-        wheelTargetGrid.scrollTo({
-            left: next,
-            behavior: 'smooth'
-        });
+        // Use direct scrollLeft assignment for instant response (no stuttering)
+        wheelTargetGrid.scrollLeft = next;
 
         // Clear previous timer and set new one to detect scroll end
         if (wheelStopTimer) {
@@ -223,7 +217,26 @@ ready(() => {
         }
     };
 
-    const beginDrag = (target, clientX) => {
+    const beginDrag = (target, clientX, fromMiddleButton = false) => {
+        // For middle button, allow drag from anywhere in the card
+        if (fromMiddleButton) {
+            const card = normalizeTarget(target)?.closest?.('.platform-card');
+            if (!card) return false;
+            const grid = card.closest('.platform-grid');
+            if (!grid || !isScrollableX(grid)) return false;
+
+            stopMomentum();
+            activeGrid = grid;
+            startX = clientX;
+            startScrollLeft = grid.scrollLeft || 0;
+            didDrag = false;
+            lastMoveTime = performance.now();
+            lastMoveX = clientX;
+            try { document.body.classList.add('tr-platform-title-dragging'); } catch (_) { }
+            return true;
+        }
+
+        // Left button: require title area
         if (!isInTitleArea(target)) return false;
         if (document.querySelector('.platform-card.dragging')) return false;
 
@@ -245,19 +258,29 @@ ready(() => {
     };
 
     document.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 && e.button !== 1) return;
         const target = normalizeTarget(e.target);
-        if (!beginDrag(target, e.clientX)) return;
+        const isMiddle = e.button === 1;
+        if (!beginDrag(target, e.clientX, isMiddle)) return;
         activePointerId = e.pointerId;
-    }, { passive: true });
+        // Prevent middle-click autoscroll
+        if (isMiddle) {
+            try { e.preventDefault(); } catch (_) { }
+        }
+    }, { passive: false });
 
     document.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 && e.button !== 1) return;
         if (activePointerId !== null) return;
         const target = normalizeTarget(e.target);
-        if (!beginDrag(target, e.clientX)) return;
+        const isMiddle = e.button === 1;
+        if (!beginDrag(target, e.clientX, isMiddle)) return;
         activeIsMouse = true;
-    }, { passive: true });
+        // Prevent middle-click autoscroll
+        if (isMiddle) {
+            try { e.preventDefault(); } catch (_) { }
+        }
+    }, { passive: false });
 
     document.addEventListener('pointermove', (e) => {
         if (activePointerId === null || e.pointerId !== activePointerId) return;
@@ -280,11 +303,8 @@ ready(() => {
         const maxScrollLeft = Math.max(0, (activeGrid.scrollWidth || 0) - (activeGrid.clientWidth || 0));
         const next = Math.max(0, Math.min(maxScrollLeft, startScrollLeft - dx));
 
-        // Use scrollTo for consistent behavior
-        activeGrid.scrollTo({
-            left: next,
-            behavior: 'auto' // instant during drag for responsiveness
-        });
+        // Direct assignment for instant response
+        activeGrid.scrollLeft = next;
     }, { passive: false });
 
     document.addEventListener('mousemove', (e) => {
@@ -308,11 +328,8 @@ ready(() => {
         const maxScrollLeft = Math.max(0, (activeGrid.scrollWidth || 0) - (activeGrid.clientWidth || 0));
         const next = Math.max(0, Math.min(maxScrollLeft, startScrollLeft - dx));
 
-        // Use scrollTo for consistent behavior
-        activeGrid.scrollTo({
-            left: next,
-            behavior: 'auto'
-        });
+        // Direct assignment for instant response
+        activeGrid.scrollLeft = next;
     }, { passive: false });
 
     const onPointerEnd = () => {
@@ -380,4 +397,96 @@ ready(() => {
             requestAnimationFrame(processWheelScroll);
         }
     }, { passive: false });
+
+    // ======================================
+    // Keyboard Arrow Navigation
+    // ======================================
+    function navigateToCard(grid, direction) {
+        if (!grid) return;
+
+        const cards = Array.from(grid.querySelectorAll('.platform-card'));
+        if (cards.length === 0) return;
+
+        const gridRect = grid.getBoundingClientRect();
+        const gridLeft = gridRect.left;
+        const scrollLeft = grid.scrollLeft || 0;
+
+        // Find current visible card (closest to left edge)
+        let currentIndex = 0;
+        let minDistance = Infinity;
+
+        cards.forEach((card, idx) => {
+            const cardRect = card.getBoundingClientRect();
+            const distance = Math.abs(cardRect.left - gridLeft);
+            if (distance < minDistance) {
+                minDistance = distance;
+                currentIndex = idx;
+            }
+        });
+
+        // Calculate target index
+        const targetIndex = Math.max(0, Math.min(cards.length - 1, currentIndex + direction));
+        if (targetIndex === currentIndex && minDistance < 10) {
+            // Already at edge, try to go one more
+            const nextIdx = Math.max(0, Math.min(cards.length - 1, currentIndex + direction));
+            if (nextIdx !== currentIndex) {
+                const targetCard = cards[nextIdx];
+                if (targetCard) {
+                    stopMomentum();
+                    grid.scrollTo({
+                        left: targetCard.offsetLeft || 0,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+            return;
+        }
+
+        const targetCard = cards[targetIndex];
+        if (!targetCard) return;
+
+        stopMomentum();
+        grid.scrollTo({
+            left: targetCard.offsetLeft || 0,
+            behavior: 'smooth'
+        });
+    }
+
+    function getActiveGrid() {
+        // Find the active tab pane
+        const activePane = document.querySelector('.tab-pane.active');
+        if (!activePane) return null;
+
+        // Skip if RSS carousel tab is active (has its own keyboard nav)
+        const paneId = activePane.id || '';
+        if (paneId === 'tab-rsscol-rss') return null;
+
+        const grid = activePane.querySelector('.platform-grid');
+        if (!grid || !isScrollableX(grid)) return null;
+
+        return grid;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        // Skip if in input/textarea/select
+        const target = e.target;
+        if (target && target instanceof Element) {
+            if (target.closest('input,textarea,select')) return;
+        }
+
+        // Skip if modal is open
+        if (document.querySelector('.settings-modal-overlay.show')) return;
+
+        // Skip if RSS catalog preview modal is open
+        if (document.getElementById('rssCatalogPreviewModal')?.classList.contains('show')) return;
+
+        // Only handle arrow keys
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+        const grid = getActiveGrid();
+        if (!grid) return;
+
+        e.preventDefault();
+        navigateToCard(grid, e.key === 'ArrowRight' ? 1 : -1);
+    });
 });

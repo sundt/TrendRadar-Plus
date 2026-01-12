@@ -1,4 +1,4 @@
-import { TR, ready } from './core.js';
+import { TR, ready, formatNewsDate, escapeHtml } from './core.js';
 
 const STEP = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const ROOT_MARGIN = '240px 0px 240px 0px';
@@ -128,6 +128,20 @@ function createNewsLi(n, idx, platformId) {
     content.appendChild(cb);
     content.appendChild(indexSpan);
     content.appendChild(a);
+
+    // Add date display if timestamp is available
+    const dateStr = formatNewsDate(n?.timestamp);
+    if (dateStr) {
+        const dateSpan = document.createElement('span');
+        dateSpan.className = 'tr-news-date';
+        dateSpan.style.marginLeft = '8px';
+        dateSpan.style.color = '#9ca3af';
+        dateSpan.style.fontSize = '12px';
+        dateSpan.style.whiteSpace = 'nowrap';
+        dateSpan.textContent = dateStr;
+        content.appendChild(dateSpan);
+    }
+
     li.appendChild(content);
 
     const meta = String(n?.meta || '').trim();
@@ -488,6 +502,20 @@ async function fetchNextPage(card, neededTotal, opts = {}) {
             content.appendChild(cb);
             content.appendChild(indexSpan);
             content.appendChild(a);
+
+            // Add date display if timestamp is available
+            const dateStr = formatNewsDate(n.timestamp);
+            if (dateStr) {
+                const dateSpan = document.createElement('span');
+                dateSpan.className = 'tr-news-date';
+                dateSpan.style.marginLeft = '8px';
+                dateSpan.style.color = '#9ca3af';
+                dateSpan.style.fontSize = '12px';
+                dateSpan.style.whiteSpace = 'nowrap';
+                dateSpan.textContent = dateStr;
+                content.appendChild(dateSpan);
+            }
+
             li.appendChild(content);
 
             const meta = String(n.meta || '').trim();
