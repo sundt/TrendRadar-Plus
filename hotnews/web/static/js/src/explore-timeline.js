@@ -1,37 +1,23 @@
 import { TR, ready, escapeHtml } from './core.js';
 
-const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
-const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
-const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
+const EXPLORE_TAB_ID = 'explore';
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
-const AUTO_REFRESH_INTERVAL_MS = 300000;
-const INITIAL_CARDS = 1; // Only load 1 card initially to avoid clutter
+const INITIAL_CARDS = 1; // Load 1 card initially
 
 function getItemsPerCard() {
-    return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.morning_brief_items) || 50;
+    return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.items_per_card) || 50;
 }
 
-let _mbInFlight = false;
-let _mbLastRefreshAt = 0;
-let _tabSwitchDebounceTimer = null;
-let _mbOffset = 0;
-let _mbObserver = null;
-let _mbFinished = false;
+let _exploreInFlight = false;
+let _exploreOffset = 0;
+let _exploreObserver = null;
+let _exploreFinished = false;
 
 function _getActiveTabId() {
     try {
         return document.querySelector('.category-tabs .category-tab.active')?.dataset?.category || null;
     } catch (e) {
         return null;
-    }
-}
-
-function _applyPagingToCard(card) {
-    try {
-        TR.paging?.setCardPageSize?.(card, 50);
-        TR.paging?.applyPagingToCard?.(card, 0);
-    } catch (e) {
-        // ignore
     }
 }
 
@@ -53,14 +39,14 @@ function _buildNewsItemsHtml(items, opts = {}) {
     const arr = Array.isArray(items) ? items : [];
     if (!arr.length) {
         const emptyText = escapeHtml(opts.emptyText || '暂无内容');
-        return `<li class="tr-mb-empty" aria-hidden="true">${emptyText}</li>`;
+        return `<li class="tr-explore-empty" aria-hidden="true">${emptyText}</li>`;
     }
     return arr.map((n, idx) => {
         const stableId = escapeHtml(n?.stable_id || '');
         const title = escapeHtml(n?.display_title || n?.title || '');
         const url = escapeHtml(n?.url || '#');
         const t = _fmtTime(n?.published_at || n?.created_at);
-        const timeHtml = t ? `<span class="tr-mb-time" style="margin-left:8px;color:#9ca3af;font-size:12px;">${escapeHtml(t)}</span>` : '';
+        const timeHtml = t ? `<span class="tr-explore-time" style="margin-left:8px;color:#9ca3af;font-size:12px;">${escapeHtml(t)}</span>` : '';
         return `
             <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">
@@ -75,7 +61,7 @@ function _buildNewsItemsHtml(items, opts = {}) {
 }
 
 function _getPane() {
-    return document.getElementById(`tab-${MORNING_BRIEF_CATEGORY_ID}`);
+    return document.getElementById(`tab-${EXPLORE_TAB_ID}`);
 }
 
 function _getGrid() {
@@ -87,28 +73,23 @@ function _ensureLayout() {
     const pane = _getPane();
     if (!pane) return false;
 
-    // Ensure grid exists
     let grid = pane.querySelector('.platform-grid');
     if (!grid) {
         grid = document.createElement('div');
         grid.className = 'platform-grid';
-        // Force horizontal scroll if not already applied by CSS
         grid.style.display = 'flex';
         grid.style.flexDirection = 'row';
         grid.style.overflowX = 'auto';
         grid.style.overflowY = 'hidden';
-        grid.style.alignItems = 'flex-start'; // Align items to top
-        // Prevent scroll from bubbling to page when at container boundaries
+        grid.style.alignItems = 'flex-start';
         grid.style.overscrollBehavior = 'contain';
         pane.appendChild(grid);
     } else {
-        // Ensure overscroll behavior is set even if grid already exists
         grid.style.overscrollBehavior = 'contain';
     }
 
-    // Mark as injected
     try {
-        if (grid.dataset) grid.dataset.mbInjected = '1';
+        if (grid.dataset) grid.dataset.exploreInjected = '1';
     } catch (e) { }
 
     return true;
@@ -120,32 +101,21 @@ async function _fetchJson(url) {
     return await resp.json();
 }
 
-/**
- * Fetch a batch of items (limit/offset).
- * Added drop_published_at_zero=0 to include items without published date
- */
 async function _fetchTimelineBatch(limit, offset) {
-    const url = `/api/rss/brief/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}&drop_published_at_zero=0`;
+    const url = `/api/rss/explore/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`;
     const payload = await _fetchJson(url);
     return Array.isArray(payload?.items) ? payload.items : [];
 }
 
-/**
- * Add a card to the grid
- * @param {Array} items - The items to display in this card
- * @param {number} cardIndex - The 0-based card index (0 = first card, 1 = second card, etc.)
- * @param {HTMLElement} container - The grid container
- */
 function _appendCard(items, cardIndex, container) {
     if (!items || !items.length) return;
 
     const card = document.createElement('div');
-    card.className = 'platform-card tr-morning-brief-card';
-    card.style.minWidth = '360px'; // Ensure cards have width
-    card.dataset.platform = `mb-slice-${cardIndex}`;
+    card.className = 'platform-card tr-explore-card';
+    card.style.minWidth = '360px';
+    card.dataset.platform = `explore-slice-${cardIndex}`;
     card.draggable = false;
 
-    // Calculate display range: cardIndex 0 = 1-50, cardIndex 1 = 51-100, etc.
     const limit = getItemsPerCard();
     const displayStart = cardIndex * limit + 1;
     const displayEnd = cardIndex * limit + items.length;
@@ -153,40 +123,35 @@ function _appendCard(items, cardIndex, container) {
     card.innerHTML = `
         <div class="platform-header">
             <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
-                🕒 最新 ${displayStart}-${displayEnd}
+                📰 最新 ${displayStart}-${displayEnd}
             </div>
             <div class="platform-header-actions"></div>
         </div>
-        <ul class="news-list" data-mb-list="slice-${cardIndex}">
+        <ul class="news-list" data-explore-list="slice-${cardIndex}">
             ${_buildNewsItemsHtml(items, { emptyText: '暂无内容' })}
         </ul>
     `;
 
-    // Update indices to reflect global position (not local 1, 2, 3... but global 1, 2... 51, 52...)
     const indices = card.querySelectorAll('.news-index');
     indices.forEach((el, i) => {
         el.textContent = String(displayStart + i);
     });
 
-    // Always append to end (before sentinel if it exists)
-    const sentinel = container.querySelector('#mb-load-sentinel');
+    const sentinel = container.querySelector('#explore-load-sentinel');
     if (sentinel) {
         container.insertBefore(card, sentinel);
     } else {
         container.appendChild(card);
     }
-
-    _applyPagingToCard(card);
 }
 
 function _createSentinel(container) {
-    // Remove existing if any
-    const existing = container.querySelector('#mb-load-sentinel');
+    const existing = container.querySelector('#explore-load-sentinel');
     if (existing) existing.remove();
 
     const sentinel = document.createElement('div');
-    sentinel.id = 'mb-load-sentinel';
-    sentinel.style.minWidth = '20px'; // Small width
+    sentinel.id = 'explore-load-sentinel';
+    sentinel.style.minWidth = '20px';
     sentinel.style.height = '100%';
     sentinel.style.flexShrink = '0';
     sentinel.innerHTML = '<div style="width:20px;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">⏳</div>';
@@ -195,48 +160,43 @@ function _createSentinel(container) {
 }
 
 function _attachObserver() {
-    if (_mbObserver) {
-        _mbObserver.disconnect();
-        _mbObserver = null;
+    if (_exploreObserver) {
+        _exploreObserver.disconnect();
+        _exploreObserver = null;
     }
 
     const pane = _getPane();
     if (!pane) return;
 
-    _mbObserver = new IntersectionObserver((entries) => {
+    _exploreObserver = new IntersectionObserver((entries) => {
         for (const entry of entries) {
             if (entry.isIntersecting) {
                 _loadNextBatch().catch(() => { });
             }
         }
     }, {
-        root: pane.querySelector('.platform-grid'), // The scrolling container
-        rootMargin: '200px', // Preload when close
+        root: pane.querySelector('.platform-grid'),
+        rootMargin: '200px',
         threshold: 0.01
     });
 
-    const sentinel = pane.querySelector('#mb-load-sentinel');
+    const sentinel = pane.querySelector('#explore-load-sentinel');
     if (sentinel) {
-        _mbObserver.observe(sentinel);
+        _exploreObserver.observe(sentinel);
     }
 }
 
-/**
- * Infinite scroll step
- */
 async function _loadNextBatch() {
-    if (_mbInFlight || _mbFinished) return;
+    if (_exploreInFlight || _exploreFinished) return;
 
-    _mbInFlight = true;
+    _exploreInFlight = true;
     try {
-        // Fetch next page
         const limit = getItemsPerCard();
-        const items = await _fetchTimelineBatch(limit, _mbOffset);
+        const items = await _fetchTimelineBatch(limit, _exploreOffset);
 
         if (!items.length) {
-            _mbFinished = true;
-            // Remove sentinel
-            const s = document.getElementById('mb-load-sentinel');
+            _exploreFinished = true;
+            const s = document.getElementById('explore-load-sentinel');
             if (s) {
                 s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已显示全部内容</div>';
                 s.style.width = '40px';
@@ -246,42 +206,35 @@ async function _loadNextBatch() {
 
         const grid = _getGrid();
         if (grid) {
-            // Calculate which card number this is (0-based)
-            const cardIndex = Math.floor(_mbOffset / getItemsPerCard());
+            const cardIndex = Math.floor(_exploreOffset / getItemsPerCard());
             _appendCard(items, cardIndex, grid);
         }
 
-        _mbOffset += items.length;
+        _exploreOffset += items.length;
 
         if (items.length < limit) {
-            _mbFinished = true;
-            const s = document.getElementById('mb-load-sentinel');
+            _exploreFinished = true;
+            const s = document.getElementById('explore-load-sentinel');
             if (s) s.remove();
         }
 
     } catch (e) {
-        // Error
+        console.error('Explore load error:', e);
     } finally {
-        _mbInFlight = false;
+        _exploreInFlight = false;
     }
 }
 
-/**
- * Initial Full Reload
- */
 async function _loadTimeline() {
     const grid = _getGrid();
     if (!grid) return;
 
-    // Reset state
-    _mbOffset = 0;
-    _mbFinished = false;
-    grid.innerHTML = ''; // Clear all
+    _exploreOffset = 0;
+    _exploreFinished = false;
+    grid.innerHTML = '';
 
-    // Create Sentinel immediately so we can insert before it
     _createSentinel(grid);
 
-    // Fetch Initial Batch (3 cards = 150 items)
     const limit = getItemsPerCard();
     const initialLimit = limit * INITIAL_CARDS;
     const items = await _fetchTimelineBatch(initialLimit, 0);
@@ -291,98 +244,57 @@ async function _loadTimeline() {
         return;
     }
 
-    // Chunk into cards
     for (let i = 0; i < items.length; i += limit) {
         const chunk = items.slice(i, i + limit);
-        const cardIndex = Math.floor(i / limit); // 0, 1, 2, ...
+        const cardIndex = Math.floor(i / limit);
         _appendCard(chunk, cardIndex, grid);
     }
 
-    _mbOffset = items.length;
+    _exploreOffset = items.length;
 
     if (items.length < initialLimit) {
-        // No more data
-        _mbFinished = true;
-        const s = document.getElementById('mb-load-sentinel');
+        _exploreFinished = true;
+        const s = document.getElementById('explore-load-sentinel');
         if (s) s.remove();
     } else {
-        // Setup observer for next batches
         _attachObserver();
     }
 }
 
-async function _refreshTimelineIfNeeded(opts = {}) {
-    const force = opts.force === true;
-    if (_getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
-
-    // Simple cooldown if not forced
-    const now = Date.now();
-    if (!force && _mbLastRefreshAt > 0 && (now - _mbLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
-        return false;
-    }
-
+async function _refreshTimelineIfNeeded() {
+    if (_getActiveTabId() !== EXPLORE_TAB_ID) return false;
     if (!_ensureLayout()) return false;
 
-    _mbInFlight = true;
+    _exploreInFlight = true;
     try {
         await _loadTimeline();
-        _mbLastRefreshAt = Date.now();
         return true;
     } catch (e) {
+        console.error('Explore refresh error:', e);
         return false;
     } finally {
-        _mbInFlight = false;
+        _exploreInFlight = false;
     }
-}
-
-function _attachHandlersOnce() {
-    const pane = _getPane();
-    if (!pane) return;
-    if (pane.dataset && pane.dataset.mbBound === '1') return;
-
-    pane.addEventListener('click', (e) => {
-        const t = e.target;
-        if (!t || !(t instanceof Element)) return;
-
-        const refresh = t.closest('[data-action="mb-refresh"]');
-        if (refresh) {
-            e.preventDefault();
-            // Just reload timeline
-            _refreshTimelineIfNeeded({ force: true }).catch(() => {
-                try { TR.toast?.show('刷新失败', { variant: 'error', durationMs: 2000 }); } catch (_) { }
-            });
-        }
-    });
-
-    try {
-        if (pane.dataset) pane.dataset.mbBound = '1';
-    } catch (e) { }
 }
 
 async function _initialLoad() {
     if (!_ensureLayout()) return;
-    _attachHandlersOnce();
-    await _refreshTimelineIfNeeded({ force: false });
+    await _refreshTimelineIfNeeded();
 }
 
 function _ensurePolling() {
     try {
         window.addEventListener(TAB_SWITCHED_EVENT, (ev) => {
             const cid = String(ev?.detail?.categoryId || '').trim();
-            if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
-            // When switching to this tab, attach observer again if needed (observers sometimes disconnect if hidden)
-            if (!_mbFinished) _attachObserver();
-
-            clearTimeout(_tabSwitchDebounceTimer);
-            _tabSwitchDebounceTimer = setTimeout(() => {
-                _refreshTimelineIfNeeded({ force: false }).catch(() => { });
-            }, 120);
+            if (cid !== EXPLORE_TAB_ID) return;
+            if (!_exploreFinished) _attachObserver();
+            _refreshTimelineIfNeeded().catch(() => { });
         });
     } catch (e) { }
 }
 
 function _patchRenderHook() {
-    if (TR.morningBrief && TR.morningBrief._patched === true) return;
+    if (TR.exploreTimeline && TR.exploreTimeline._patched === true) return;
     const orig = TR.data?.renderViewerFromData;
     if (typeof orig !== 'function') return;
 
@@ -393,8 +305,8 @@ function _patchRenderHook() {
         } catch (e) { }
     };
 
-    TR.morningBrief = {
-        ...(TR.morningBrief || {}),
+    TR.exploreTimeline = {
+        ...(TR.exploreTimeline || {}),
         _patched: true,
     };
 }

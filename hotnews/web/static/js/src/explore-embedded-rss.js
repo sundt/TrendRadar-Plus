@@ -1,6 +1,9 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
 
+// FEATURE FLAG: Disable old source-based Explore in favor of timeline-based
+const ENABLE_OLD_EXPLORE = false;
+
 const EXPLORE_TAB_ID = 'explore';
 const ENTRIES_PER_SOURCE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 
@@ -1284,6 +1287,11 @@ function _attachScrollListener() {
 
 
 ready(function () {
+    // Feature flag check - if disabled, let explore-timeline.js handle this tab
+    if (!ENABLE_OLD_EXPLORE) {
+        return;
+    }
+
     _attachHandlers();
     _wrapTabsSwitchIfAny();
     _attachScrollListener(); // Enable progressive loading on scroll

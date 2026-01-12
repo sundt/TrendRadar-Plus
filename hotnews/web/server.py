@@ -1646,6 +1646,67 @@ async def api_rss_brief_timeline(
     )
 
 
+@app.get("/api/rss/explore/timeline")
+async def api_rss_explore_timeline(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """API: Explore timeline - all RSS entries sorted by published_at DESC."""
+    conn = _get_online_db_conn()
+    
+    lim = min(int(limit or 50), 500)
+    off = int(offset or 0)
+    
+    try:
+        cur = conn.execute(
+            """
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at, COALESCE(s.name, '')
+            FROM rss_entries e
+            LEFT JOIN rss_sources s ON s.id = e.source_id
+            WHERE e.published_at > 0
+            ORDER BY e.published_at DESC, e.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (lim, off),
+        )
+        rows = cur.fetchall() or []
+    except Exception:
+        rows = []
+    
+    items: List[Dict[str, Any]] = []
+    for r in rows:
+        sid = str(r[0] or "").strip()
+        title = str(r[1] or "")
+        url = str(r[2] or "")
+        created_at = int(r[3] or 0)
+        published_at = int(r[4] or 0)
+        sname = str(r[5] or "")
+        
+        if not url.strip():
+            continue
+            
+        pid = f"rss-{sid}" if sid else "rss-unknown"
+        it = _rss_row_to_item(
+            platform_id=pid,
+            source_id=sid,
+            source_name=sname,
+            title=title,
+            url=url,
+            created_at=created_at,
+        )
+        it["published_at"] = published_at
+        items.append(it)
+    
+    return UnicodeJSONResponse(
+        content={
+            "offset": off,
+            "limit": lim,
+            "items": items,
+            "total_returned": len(items),
+        }
+    )
+
+
 @app.get("/api/rss/brief/recent")
 async def api_rss_brief_recent(
     hours: int = Query(48, ge=1, le=24 * 7),

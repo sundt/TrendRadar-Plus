@@ -28,6 +28,7 @@ import './category-tab-reorder.js';
 import './subscription.js';
 import './rss-catalog-preview-parity.js';
 import './explore-embedded-rss.js';
+import './explore-timeline.js';
 import './rss-category-carousel.js';
 import './title-drag-scroll.js';
 import './morning-brief.js';
