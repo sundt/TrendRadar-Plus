@@ -16,6 +16,7 @@ import './badges.js';
 import './paging.js';
 
 // 依赖基础模块的功能
+// 依赖基础模块的功能
 import './read-state.js';
 import './theme.js';
 import './settings.js';
@@ -23,15 +24,17 @@ import './filter.js';
 import './tabs.js';
 import './data.js';
 import './infinite-scroll.js';
-import './platform-reorder.js';
 import './category-tab-reorder.js';
-import './subscription.js';
-import './rss-catalog-preview-parity.js';
-import './explore-embedded-rss.js';
 import './explore-timeline.js';
 import './rss-category-carousel.js';
 import './title-drag-scroll.js';
 import './morning-brief.js';
+
+// 异步加载非关键 heavy 模块 (Code Splitting)
+import('./platform-reorder.js');
+import('./subscription.js');
+import('./rss-catalog-preview-parity.js');
+import('./explore-embedded-rss.js');
 
 // 初始化模块（必须最后导入）
 import './init.js';

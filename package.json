@@ -10,8 +10,8 @@
     "test:report": "playwright show-report",
     "test:prod": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod",
     "test:prod:headed": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod --headed",
-    "build:js": "esbuild hotnews/web/static/js/src/index.js --bundle --outfile=hotnews/web/static/js/viewer.bundle.js --format=iife --minify",
-    "build:js:watch": "esbuild hotnews/web/static/js/src/index.js --bundle --outfile=hotnews/web/static/js/viewer.bundle.js --format=iife --watch"
+    "build:js": "esbuild hotnews/web/static/js/src/index.js --bundle --splitting --format=esm --outdir=hotnews/web/static/js --minify",
+    "build:js:watch": "esbuild hotnews/web/static/js/src/index.js --bundle --splitting --format=esm --outdir=hotnews/web/static/js --watch"
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0",
