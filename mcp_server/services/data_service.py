@@ -193,8 +193,11 @@ class DataService:
         # (10, -1) > (10, -10). So A comes before B. Correct.
         news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
 
-        # 限制返回数量
-        result = news_list[:limit]
+        # NOTE: We intentionally do NOT truncate here with news_list[:limit]
+        # because categorize_news() handles per-platform limits.
+        # Truncating here would cause some platforms (e.g. NewsNow) to be
+        # completely excluded when RSS sources have more recent timestamps.
+        result = news_list
 
         # 缓存结果
         self.cache.set(cache_key, result)
