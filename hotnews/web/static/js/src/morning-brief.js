@@ -5,9 +5,11 @@ const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
+const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
 
-const ITEMS_PER_CARD = 50;
-const INITIAL_CARDS = 3; // First load 3 cards (150 items)
+function getItemsPerCard() {
+    return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.morning_brief_items) || 50;
+}
 
 let _mbInFlight = false;
 let _mbLastRefreshAt = 0;
@@ -144,8 +146,9 @@ function _appendCard(items, cardIndex, container) {
     card.draggable = false;
 
     // Calculate display range: cardIndex 0 = 1-50, cardIndex 1 = 51-100, etc.
-    const displayStart = cardIndex * ITEMS_PER_CARD + 1;
-    const displayEnd = cardIndex * ITEMS_PER_CARD + items.length;
+    const limit = getItemsPerCard();
+    const displayStart = cardIndex * limit + 1;
+    const displayEnd = cardIndex * limit + items.length;
 
     card.innerHTML = `
         <div class="platform-header">
@@ -227,7 +230,7 @@ async function _loadNextBatch() {
     _mbInFlight = true;
     try {
         // Fetch next page
-        const limit = ITEMS_PER_CARD;
+        const limit = getItemsPerCard();
         const items = await _fetchTimelineBatch(limit, _mbOffset);
 
         if (!items.length) {
@@ -244,7 +247,7 @@ async function _loadNextBatch() {
         const grid = _getGrid();
         if (grid) {
             // Calculate which card number this is (0-based)
-            const cardIndex = Math.floor(_mbOffset / ITEMS_PER_CARD);
+            const cardIndex = Math.floor(_mbOffset / getItemsPerCard());
             _appendCard(items, cardIndex, grid);
         }
 
@@ -279,7 +282,8 @@ async function _loadTimeline() {
     _createSentinel(grid);
 
     // Fetch Initial Batch (3 cards = 150 items)
-    const initialLimit = ITEMS_PER_CARD * INITIAL_CARDS;
+    const limit = getItemsPerCard();
+    const initialLimit = limit * INITIAL_CARDS;
     const items = await _fetchTimelineBatch(initialLimit, 0);
 
     if (!items.length) {
@@ -288,9 +292,9 @@ async function _loadTimeline() {
     }
 
     // Chunk into cards
-    for (let i = 0; i < items.length; i += ITEMS_PER_CARD) {
-        const chunk = items.slice(i, i + ITEMS_PER_CARD);
-        const cardIndex = Math.floor(i / ITEMS_PER_CARD); // 0, 1, 2, ...
+    for (let i = 0; i < items.length; i += limit) {
+        const chunk = items.slice(i, i + limit);
+        const cardIndex = Math.floor(i / limit); // 0, 1, 2, ...
         _appendCard(chunk, cardIndex, grid);
     }
 
