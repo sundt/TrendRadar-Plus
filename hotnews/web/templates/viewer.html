@@ -13,7 +13,7 @@
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" as="style">
-    <link rel="preload" href="{{ static_prefix }}/js/viewer.bundle.js?v={{ asset_rev }}" as="script">
+    <link rel="modulepreload" href="{{ static_prefix }}/js/index.js?v={{ asset_rev }}">
     <script id="system-settings-json" type="application/json">{{ sys_settings | tojson }}</script>
     <script>
         (function () { try { try { var p = new URLSearchParams(location.search || ''); if (p.get('e2e') === '1') return; } catch (e2) { } var r = localStorage.getItem('hotnews_categories_config'); if (r) { var c = JSON.parse(r); if ((c.customCategories && c.customCategories.length > 0) || (c.hiddenDefaultCategories && c.hiddenDefaultCategories.length > 0)) { document.write('<style id="early-hide">.category-tabs,.tab-content-area{display:none!important}</style>'); } } } catch (e) { } })();
