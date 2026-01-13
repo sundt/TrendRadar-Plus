@@ -115,6 +115,10 @@ class DataService:
                 news_list.append(news_item)
 
         # [Inject RSS Data]
+        # Strategy: Fetch limited items per RSS source to balance coverage and performance
+        # Without limit, we'd fetch 24K+ RSS items which would displace NewsNow data
+        RSS_ITEMS_PER_SOURCE = 50  # Limit per RSS source to keep total reasonable
+        
         try:
             from hotnews.web.db_online import get_online_db_conn
             # Determine if we should fetch RSS
@@ -125,10 +129,7 @@ class DataService:
                 # Extract rss-* IDs
                 rss_ids = [p[4:] for p in platforms if p.startswith("rss-")]
                 if not rss_ids and len(platforms) > 0:
-                    # Specific platforms requested, but none are RSS (and we must respect filter)
-                    # However, if platforms=['tech'], this is a category? No, API expects IDs.
-                    # If user passed non-RSS IDs, we strictly don't fetch RSS.
-                    # But wait, if platforms list contains NO rss- IDs, we skip RSS.
+                    # Specific platforms requested, but none are RSS
                     should_fetch_rss = False
                 elif rss_ids:
                     rss_source_filter = rss_ids
@@ -137,67 +138,60 @@ class DataService:
                 # Use project_root from self.parser
                 conn = get_online_db_conn(self.parser.project_root)
                 
-                # Build SQL
-                sql_parts = [
-                    "SELECT e.source_id, e.title, e.url, e.published_at, s.name FROM rss_entries e JOIN rss_sources s ON s.id = e.source_id WHERE s.enabled = 1"
-                ]
-                sql_args = []
-                
+                # Get list of enabled RSS sources
                 if rss_source_filter:
                     placeholders = ",".join(["?"] * len(rss_source_filter))
-                    sql_parts.append(f"AND s.id IN ({placeholders})")
-                    sql_args.extend(rss_source_filter)
+                    sources_sql = f"SELECT id, name FROM rss_sources WHERE enabled = 1 AND id IN ({placeholders})"
+                    sources_cur = conn.execute(sources_sql, tuple(rss_source_filter))
+                else:
+                    sources_cur = conn.execute("SELECT id, name FROM rss_sources WHERE enabled = 1")
                 
-                # Fetch recent items. For mixed view, we want fresh stuff.
-                # Use limit to avoid huge fetch.
-                sql_parts.append("ORDER BY e.published_at DESC LIMIT ?")
-                sql_args.append(limit)
+                sources = sources_cur.fetchall()
                 
-                cur = conn.execute(" ".join(sql_parts), tuple(sql_args))
-                rows = cur.fetchall()
-                
-                for r in rows:
-                    sid, title, url, pub, sname = r
-                    rss_pid = f"rss-{sid}"
-                    try:
-                        ts_str = datetime.fromtimestamp(pub).strftime("%Y-%m-%d %H:%M:%S")
-                    except:
-                        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                    item = {
-                        "title": title,
-                        "platform": rss_pid,
-                        "platform_name": sname or "RSS Source",
-                        "rank": 0, # RSS has no rank
-                        "timestamp": ts_str
-                    }
-                    if include_url:
-                        item["url"] = url
-                        item["mobileUrl"] = ""
-                        
-                    news_list.append(item)
+                # Fetch top N items per source
+                for source_id, source_name in sources:
+                    entries_sql = """
+                        SELECT e.title, e.url, e.published_at 
+                        FROM rss_entries e 
+                        WHERE e.source_id = ?
+                        ORDER BY e.published_at DESC 
+                        LIMIT ?
+                    """
+                    entries_cur = conn.execute(entries_sql, (source_id, RSS_ITEMS_PER_SOURCE))
+                    entries = entries_cur.fetchall()
+                    
+                    for title, url, pub in entries:
+                        rss_pid = f"rss-{source_id}"
+                        try:
+                            ts_str = datetime.fromtimestamp(pub).strftime("%Y-%m-%d %H:%M:%S")
+                        except:
+                            ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            
+                        item = {
+                            "title": title,
+                            "platform": rss_pid,
+                            "platform_name": source_name or "RSS Source",
+                            "rank": 0,  # RSS has no rank
+                            "timestamp": ts_str
+                        }
+                        if include_url:
+                            item["url"] = url
+                            item["mobileUrl"] = ""
+                            
+                        news_list.append(item)
                     
         except ImportError:
-            pass # Ignore if module not found (e.g. strict isolation)
+            pass  # Ignore if module not found
         except Exception as e:
             # Silently ignore DB errors to avoid breaking the view
             pass
 
-        # 按排名排序 (Original logic sorted by rank. Now we have mixed data.)
-        # New Sort: Timestamp DESC (Newest first), then Rank ASC (High rank first, 1 is better than 10)
-        # Note: We sort DESC, so to get Rank 1 before Rank 10, we need to negate rank (or use inverse logic).
-        # (Ts=High, Rank=Low) -> Key (Ts, -Rank).
-        # Example: T=10
-        # A: Rank 1 -> Key (10, -1)
-        # B: Rank 10 -> Key (10, -10)
-        # (10, -1) > (10, -10). So A comes before B. Correct.
+        # Sort by timestamp (newest first), then by rank (lower is better)
         news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
 
-        # NOTE: We intentionally do NOT truncate here with news_list[:limit]
-        # because categorize_news() handles per-platform limits.
-        # Truncating here would cause some platforms (e.g. NewsNow) to be
-        # completely excluded when RSS sources have more recent timestamps.
-        result = news_list
+        # Apply limit to final result
+        # Now with per-source RSS limits, NewsNow data won't be completely displaced
+        result = news_list[:limit]
 
         # 缓存结果
         self.cache.set(cache_key, result)
