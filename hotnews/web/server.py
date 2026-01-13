@@ -411,8 +411,14 @@ async def add_cache_headers(request: Request, call_next):
     
     # 为静态资源添加缓存头
     if path.startswith("/static/"):
-        # CSS/JS 文件缓存 1 小时（开发期间），生产环境可设更长
-        response.headers["Cache-Control"] = "public, max-age=3600"
+        # 检查是否带版本号参数 (?v=...)
+        if "?v=" in str(request.url):
+            # 带版本号的资源：长期缓存（1年）+ immutable
+            # 因为版本号变化时 URL 会变，所以可以安全地长期缓存
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            # 不带版本号的资源：短期缓存（1小时）
+            response.headers["Cache-Control"] = "public, max-age=3600"
     
     return response
 
