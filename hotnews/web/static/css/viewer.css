@@ -2171,3 +2171,54 @@
             margin-right: 4px;
             /* Small spacing */
         }
+
+        /* CLS Optimization: Skeleton Loader Styles */
+        .tr-news-skeleton {
+            padding: 8px 0;
+            border-bottom: 1px solid #f3f4f6;
+            min-height: calc(1.4em + 8px);
+            /* Match .news-item height */
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            contain: content;
+            /* Isolate rendering */
+        }
+
+        .tr-news-skeleton-line {
+            height: 14px;
+            width: 80%;
+            background: #e5e7eb;
+            border-radius: 4px;
+            animation: tr-skeleton-pulse 1.5s infinite ease-in-out;
+        }
+
+        @keyframes tr-skeleton-pulse {
+            0% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+
+            100% {
+                opacity: 0.6;
+            }
+        }
+
+        /* CLS Optimization: Card Containment */
+        .platform-card {
+            contain: content;
+            min-height: 100px;
+            /* Ensure non-zero height before content loads */
+        }
+
+        /* Dark Mode support for skeletons */
+        body.eye-protection-mode .tr-news-skeleton {
+            border-bottom-color: #373a40;
+        }
+
+        body.eye-protection-mode .tr-news-skeleton-line {
+            background: #373a40;
+        }
