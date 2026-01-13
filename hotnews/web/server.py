@@ -1665,17 +1665,19 @@ async def api_rss_explore_timeline(
     max_timestamp = int(time.time()) + (365 * 24 * 3600)  # Current + 1 year
     
     try:
-        # Optimized query: fetch entries first without JOIN
+        # Optimized query: fetch entries with join to filter disabled sources
         # Fetch extra records to account for deduplication
         fetch_limit = lim * 2  # Over-fetch to account for duplicates
         cur = conn.execute(
             """
-            SELECT source_id, title, url, created_at, published_at
-            FROM rss_entries
-            WHERE published_at > 0
-              AND published_at >= ?
-              AND published_at <= ?
-            ORDER BY published_at DESC, id DESC
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
+            FROM rss_entries e
+            JOIN rss_sources s ON e.source_id = s.id
+            WHERE e.published_at > 0
+              AND s.enabled = 1
+              AND e.published_at >= ?
+              AND e.published_at <= ?
+            ORDER BY e.published_at DESC, e.id DESC
             LIMIT ? OFFSET ?
             """,
             (min_timestamp, max_timestamp, fetch_limit, off),
