@@ -92,7 +92,7 @@ from hotnews.web.misc_routes import router as _misc_router
 from hotnews.web.online_routes import router as _online_router
 from hotnews.kernel.admin.platform_admin import router as platform_admin_router
 from hotnews.kernel.admin.settings_admin import router as settings_admin_router, get_system_settings
-from hotnews.kernel.rss.rss_admin import router as rss_admin_router
+from hotnews.kernel.admin.rss_admin import router as rss_admin_router
 from hotnews.web.user_db import (
     create_user_with_cookie_identity,
     get_user_db_conn,
