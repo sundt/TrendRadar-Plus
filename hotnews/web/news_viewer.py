@@ -62,6 +62,12 @@ def _parse_nba_meta_dt(meta: str) -> Optional[datetime]:
 
 # 平台分类定义（6类）
 PLATFORM_CATEGORIES = {
+    "ai": {
+        "name": "AI 资讯",
+        "icon": "🤖",
+        "news_limit": 10,
+        "platforms": []
+    },
     "general": {
         "name": "综合新闻",
         "icon": "📰",
@@ -214,10 +220,24 @@ class NewsViewerService:
             def assign(pid, cat_val):
                 if not cat_val: return
                 cid = None
+                
+                # Try exact match
                 if cat_val in categories:
                     cid = cat_val
                 elif cat_val in name_to_id:
                     cid = name_to_id[cat_val]
+                
+                # Try case-insensitive match if not found
+                if not cid:
+                    cat_val_lower = cat_val.lower()
+                    if cat_val_lower in categories:
+                        cid = cat_val_lower
+                    # Also try matching by name case-insensitively
+                    elif not cid:
+                        for k, v in categories.items():
+                             if v["name"].lower() == cat_val_lower:
+                                 cid = k
+                                 break
                 
                 if cid:
                     categories[cid]["platforms"].append(pid)
