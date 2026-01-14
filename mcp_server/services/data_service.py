@@ -97,7 +97,15 @@ class DataService:
                         pass
                 elif info.get("last_time"):
                     # 使用最后抓取时间作为 fallback
-                    ts = str(info["last_time"])
+                    ts_raw = str(info["last_time"]).strip()
+                    # Fix short timestamps (e.g. "15:19" or "15-04")
+                    # Matches "HH:MM" or "HH-MM"
+                    if len(ts_raw) <= 5 and (":" in ts_raw or "-" in ts_raw):
+                         date_prefix = fetch_time.strftime('%Y-%m-%d')
+                         time_part = ts_raw.replace('-', ':')
+                         ts = f"{date_prefix} {time_part}:00"
+                    else:
+                         ts = ts_raw
 
                 news_item = {
                     "title": title,
