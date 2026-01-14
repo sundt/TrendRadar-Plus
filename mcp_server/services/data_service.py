@@ -200,28 +200,31 @@ class DataService:
         
         try:
             from hotnews.web.db_online import get_online_db_conn
-            conn = get_online_db_conn(self.project_root)
+            conn_online = get_online_db_conn(self.project_root)
             
             # Get enabled Custom sources
-            sources_cur = conn.execute("SELECT id, name FROM custom_sources WHERE enabled = 1")
+            sources_cur = conn_online.execute("SELECT id, name FROM custom_sources WHERE enabled = 1")
             custom_sources = sources_cur.fetchall()
             
-            # Fetch top N items per Custom source
+            # Use the existing daily DB connection (conn) to fetch items
+            # conn is already opened at the start of get_latest_news
+            
             for source_id, source_name in custom_sources:
                 items_sql = """
-                    SELECT title, url, crawl_time
-                    FROM custom_items
-                    WHERE source_id = ?
-                    ORDER BY crawl_time DESC
+                    SELECT title, url, publish_time
+                    FROM news_items
+                    WHERE platform_id = ?
+                    ORDER BY publish_time DESC
                     LIMIT ?
                 """
+                # conn is the daily news.db connection
                 items_cur = conn.execute(items_sql, (source_id, CUSTOM_ITEMS_PER_SOURCE))
                 items = items_cur.fetchall()
                 
-                for title, url, crawl_time in items:
+                for title, url, publish_time in items:
                     try:
-                        # crawl_time is a string like "2026-01-14 10:30:00"
-                        ts_str = crawl_time if crawl_time else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        # publish_time is a string like "2026-01-14 10:30:00"
+                        ts_str = publish_time if publish_time else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     except:
                         ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
