@@ -237,16 +237,31 @@ class DataService:
                     for title, url, published_at, last_crawl_time in items:
                         ts_str = ""
                         
-                        # 1. Try published_at if it looks valid (e.g. year > 2000)
-                        if published_at and isinstance(published_at, int) and published_at > 946684800:
+                        # 1. Prioritize last_crawl_time (Discovery Time)
+                        # This ensures newly crawled items appear at the top, even if the content is old
+                        if last_crawl_time:
+                            lc_str = str(last_crawl_time).strip()
+                            if len(lc_str) <= 5 and (":" in lc_str or "-" in lc_str):
+                                # Fix short timestamp "HH:MM" -> "YYYY-MM-DD HH:MM:00"
+                                try:
+                                    today_prefix = datetime.now().strftime('%Y-%m-%d')
+                                    time_part = lc_str.replace('-', ':')
+                                    # Ensure it looks like time
+                                    if len(time_part.split(':')) >= 2:
+                                        ts_str = f"{today_prefix} {time_part}:00"
+                                    else:
+                                        ts_str = lc_str
+                                except:
+                                    ts_str = lc_str
+                            else:
+                                ts_str = lc_str
+
+                        # 2. Fallback to published_at if no crawl time
+                        if not ts_str and published_at and isinstance(published_at, int) and published_at > 946684800:
                             try:
                                 ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
                             except:
                                 pass
-                        
-                        # 2. Fallback to last_crawl_time (string)
-                        if not ts_str and last_crawl_time:
-                            ts_str = str(last_crawl_time)
                             
                         # 3. Final fallback to now
                         if not ts_str:
