@@ -56,6 +56,12 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     echo "   [Remote] Creating containers..."
     docker compose -f ${DC_FILE} up -d --force-recreate $SERVICES
     
+    echo "   [Remote] Running Database Migration..."
+    # Wait for container to be ready
+    sleep 5
+    docker cp scripts/migrate_add_use_scraperapi.py hotnews-viewer:/tmp/migrate_db.py
+    docker exec hotnews-viewer python /tmp/migrate_db.py
+    
     echo "   ✅ Remote steps completed."
 EOF
 
