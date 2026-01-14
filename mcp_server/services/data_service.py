@@ -167,6 +167,7 @@ class DataService:
                 rss_sources = cur.fetchall()
                 
                 for source_id, source_name in rss_sources:
+                    print(f"DEBUG: Processing RSS source: {source_id} - {source_name}")
                     # Fetch entries from online.db rss_entries
                     # Use the requested 'limit' to ensure we don't truncate if user wants 50+ items
                     cur = conn.execute("""
