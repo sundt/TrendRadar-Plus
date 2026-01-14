@@ -43,11 +43,10 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     echo "   [Remote] cd ${SERVER_PROJECT_ROOT}..."
     cd ${SERVER_PROJECT_ROOT}
     
-    # Ensure no binary conflict (remove untracked one if exists)
-    rm -f docker/supercronic-linux-amd64
-    
-    echo "   [Remote] git pull..."
-    git pull origin main
+    # Force sync with remote to ensure all files (including binaries) are present
+    echo "   [Remote] Force syncing..."
+    git fetch origin
+    git reset --hard origin/main
     
     echo "   [Remote] Updating submodules..."
     git submodule update --init --recursive
