@@ -137,6 +137,9 @@ class DataService:
                     news_item["mobileUrl"] = info.get("mobileUrl", "")
 
                 news_list.append(news_item)
+                
+        print(f"DEBUG: news_list size after Main Data: {len(news_list)}")
+        if len(news_list) > 0: print(f"DEBUG: Sample: {news_list[0].get('platform')}")
 
         # [Inject RSS Data]
         # Strategy: Fetch items per RSS source up to the requested limit
@@ -223,6 +226,8 @@ class DataService:
         except Exception as e:
             # Silently ignore DB errors to avoid breaking the view
             pass
+            
+        print(f"DEBUG: news_list size after RSS: {len(news_list)}")
 
         # [Inject Custom Source Data]
         # Strategy: Fetch items per Custom source up to the requested limit
@@ -316,6 +321,8 @@ class DataService:
         except Exception as e:
             # Silently ignore DB errors to avoid breaking the view
             pass
+
+        print(f"DEBUG: news_list size after Custom: {len(news_list)}")
 
         # Sort by timestamp (newest first), then by rank (lower is better)
         news_list.sort(key=lambda x: (x.get("timestamp", ""), -int(x.get("rank", 0))), reverse=True)
