@@ -168,32 +168,29 @@ class DataService:
                 rss_sources = cur.fetchall()
                 
                 for source_id, source_name in rss_sources:
-                    print(f"DEBUG: Processing RSS source: {source_id} - {source_name}")
                     # Fetch entries from online.db rss_entries
                     # Use the requested 'limit' to ensure we don't truncate if user wants 50+ items
                     try:
                         cur = conn.execute("""
-                            SELECT title, link, published, summary, created_at 
+                            SELECT title, url, published_raw, created_at 
                             FROM rss_entries 
                             WHERE source_id = ? 
                             ORDER BY created_at DESC 
                             LIMIT ?
                         """, (source_id, limit))
                         entries = cur.fetchall()
-                        print(f"DEBUG: Entries found: {len(entries)}")
-                    except Exception as e:
-                        print(f"DEBUG: Query Failed: {e}")
+                    except Exception:
                         entries = []
                     
-                    for title, link, published, summary, created_at in entries:
+                    for title, url, published_raw, created_at in entries:
                         ts_str = ""
                         # Try to parse published date
-                        if published:
+                        if published_raw:
                             try:
                                 # Try common formats
                                 for fmt in ["%a, %d %b %Y %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"]:
                                     try:
-                                         dt = datetime.strptime(published, fmt)
+                                         dt = datetime.strptime(published_raw, fmt)
                                          ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
                                          break
                                     except:
@@ -214,11 +211,11 @@ class DataService:
                             "platform_name": source_name,
                             "rank": 0,
                             "timestamp": ts_str,
-                            "summary": summary or ""
+                            "summary": ""
                         }
                         if include_url:
-                            item["url"] = link
-                            item["mobileUrl"] = link
+                            item["url"] = url
+                            item["mobileUrl"] = url
                             
                         news_list.append(item)
 
