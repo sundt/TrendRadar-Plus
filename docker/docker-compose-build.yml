@@ -108,6 +108,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../output:/app/output
+      - ../hotnews:/app/hotnews
 
     environment:
       - TZ=Asia/Shanghai
@@ -159,6 +160,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../output:/app/output
+      - ../mcp_server:/app/mcp_server
 
     environment:
       - TZ=Asia/Shanghai
