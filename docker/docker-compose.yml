@@ -95,6 +95,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../output:/app/output
+      - ../hotnews:/app/hotnews
 
     environment:
       - TZ=Asia/Shanghai
@@ -112,6 +113,7 @@ services:
       - HOTNEWS_SESSION_SECRET=${HOTNEWS_SESSION_SECRET:-} # 建议设置随机字符串以保持 Session 持久化
       # AI分类配置 (Morning Brief)
       - HOTNEWS_MB_AI_ENABLED=${HOTNEWS_MB_AI_ENABLED:-}
+      - SCRAPERAPI_KEY=${SCRAPERAPI_KEY:-}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
       - HOTNEWS_MB_AI_MODEL=${HOTNEWS_MB_AI_MODEL:-qwen-flash}
       - HOTNEWS_MB_AI_ENDPOINT=${HOTNEWS_MB_AI_ENDPOINT:-}
@@ -152,6 +154,7 @@ services:
     volumes:
       - ../config:/app/config:ro
       - ../output:/app/output
+      - ../mcp_server:/app/mcp_server
 
     environment:
       - TZ=Asia/Shanghai
