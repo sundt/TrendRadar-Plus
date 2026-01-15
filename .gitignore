@@ -124,3 +124,7 @@ debug_*.py
 temp_logs.txt
 *.xml
 uv.lock
+
+# Deployment Scripts
+deploy-*.sh
+rebuild_only.sh
