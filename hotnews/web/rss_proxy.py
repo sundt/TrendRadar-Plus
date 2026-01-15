@@ -475,10 +475,13 @@ _rss_host_async_semaphores: Dict[str, asyncio.Semaphore] = {}
 
 async def get_rss_host_async_semaphore(host: str) -> asyncio.Semaphore:
     global _rss_host_async_lock
+    logger.info(f"DEBUG: get_semaphore enter host={host} pid={os.getpid()}")
     if _rss_host_async_lock is None:
+        logger.info("DEBUG: get_semaphore creating lock")
         _rss_host_async_lock = asyncio.Lock()
     
     h = (host or "").strip().lower() or "_"
+    logger.info(f"DEBUG: get_semaphore acquiring lock h={h}")
     async with _rss_host_async_lock:
         sem = _rss_host_async_semaphores.get(h)
         if sem is None:
@@ -489,6 +492,8 @@ async def get_rss_host_async_semaphore(host: str) -> asyncio.Semaphore:
                 max_conc = 1
             sem = asyncio.Semaphore(max_conc)
             _rss_host_async_semaphores[h] = sem
+            logger.info(f"DEBUG: get_semaphore created new sem h={h} max={max_conc}")
+        logger.info(f"DEBUG: get_semaphore returning sem h={h}")
         return sem
 
 
@@ -1016,7 +1021,9 @@ async def rss_proxy_fetch_warmup_async(
                 proxy = proxies.get(scheme) or proxies.get("http")
 
             try:
+                logger.info(f"DEBUG: fetch_async calling aiohttp url={request_url}")
                 async with aiohttp.ClientSession() as session:
+                    logger.info(f"DEBUG: fetch_async session created")
                     async with session.get(
                         request_url,
                         headers=headers,
@@ -1024,6 +1031,7 @@ async def rss_proxy_fetch_warmup_async(
                         allow_redirects=False,
                         proxy=proxy
                     ) as resp:
+                        logger.info(f"DEBUG: fetch_async got response status={resp.status}")
                         
                         # Handle Redirects
                         if resp.status in {301, 302, 303, 307, 308}:
@@ -1077,8 +1085,10 @@ async def rss_proxy_fetch_warmup_async(
                         max_bytes = _rss_http_max_bytes()
                         
                         try:
+                            logger.info(f"DEBUG: fetch_async reading body")
                             # Use aiohttp's default read which reads full body
                             data = await resp.read()
+                            logger.info(f"DEBUG: fetch_async read {len(data)} bytes")
                         except Exception as e:
                             raise ValueError(f"Read error: {e}")
 
@@ -1113,12 +1123,15 @@ async def rss_proxy_fetch_warmup_async(
                                 raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
 
                         try:
+                            logger.info(f"DEBUG: fetch_async parsing feed")
                             # Feed parsing is CPU bound, offload to thread with timeout to prevent hangs
                             parsed = await asyncio.wait_for(
                                 asyncio.to_thread(parse_feed_content, content_type, data),
                                 timeout=20.0
                             )
+                            logger.info(f"DEBUG: fetch_async parsed feed ok")
                         except asyncio.TimeoutError:
+                            logger.info(f"DEBUG: fetch_async parse TIMEOUT")
                             raise ValueError("Feed parsing timeout")
                         except Exception as e:
                             if stripped[:2] == b"\x1f\x8b":
@@ -1134,9 +1147,11 @@ async def rss_proxy_fetch_warmup_async(
                             "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
                         }
                         cache.set(key, result)
+                        logger.info(f"DEBUG: fetch_async SUCCESS returning")
                         return result
             
             except (asyncio.TimeoutError, aiohttp.ClientError, socket.gaierror) as e:
+                logger.info(f"DEBUG: fetch_async caught exception: {type(e).__name__}: {e}")
                 attempts += 1
                 if attempts >= 3:
                     raise ValueError(f"Upstream timeout/error: {e}") from e
@@ -1163,10 +1178,13 @@ async def rss_proxy_fetch_warmup_async(
                     
                     await asyncio.sleep(sleep_s)
                     continue
+                logger.info(f"DEBUG: fetch_async re-raising ValueError")
                 raise
 
     finally:
+        logger.info(f"DEBUG: fetch_async FINALLY releasing sem")
         sem.release()
+        logger.info(f"DEBUG: fetch_async FINALLY released sem")
 
 
 @router.get("/api/rss-sources/explore-cards")
