@@ -23,7 +23,7 @@ from threading import Lock, Semaphore
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urljoin, urlparse
 
-from fastapi import FastAPI, Request, Query, Body, HTTPException
+from fastapi import FastAPI, Request, Query, Body, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -2497,7 +2497,7 @@ async def api_news_pages(
 
 
 @app.post("/api/admin/reload-cache")
-async def api_admin_reload_cache(request: Request, _: str = Depends(verify_admin)):
+async def api_admin_reload_cache(request: Request, _: str = Depends(_require_admin)):
     """
     API: 手动刷新平台和分类缓存（管理员专用）
     
