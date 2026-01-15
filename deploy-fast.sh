@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e
 
-# Configuration
-SERVER_USER="${HOTNEWS_SSH_USER:-root}"
-SERVER_HOST="${HOTNEWS_SSH_HOST:-120.77.222.205}"
-SERVER_PORT="${HOTNEWS_SSH_PORT:-52222}"
+# Load .env if it exists
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
+# Configuration - 必须通过环境变量设置
+SERVER_USER="${HOTNEWS_SSH_USER:?请设置 HOTNEWS_SSH_USER 环境变量}"
+SERVER_HOST="${HOTNEWS_SSH_HOST:?请设置 HOTNEWS_SSH_HOST 环境变量}"
+SERVER_PORT="${HOTNEWS_SSH_PORT:-22}"
 SERVER_PROJECT_ROOT="${HOTNEWS_REMOTE_ROOT:-~/hotnews}"
 
 echo "========================================"
@@ -42,7 +47,7 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     
     echo "   [Remote] Restarting containers (no rebuild)..."
     cd docker
-    docker compose restart hotnews hotnews-viewer hotnews-mcp
+    docker compose -f docker-compose-build.yml restart hotnews hotnews-viewer hotnews-mcp
     
     echo "   ✅ Containers restarted."
 EOF

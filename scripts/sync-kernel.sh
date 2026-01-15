@@ -8,9 +8,9 @@ set -e
 
 # Default config (can be overridden by env vars)
 # Compliant with AI_CONTEXT.md "Config Standards": Prefer os.environ
-SERVER_USER="${HOTNEWS_SSH_USER:-root}"
-SERVER_HOST="${HOTNEWS_SSH_HOST:-120.77.222.205}"
-SERVER_PORT="${HOTNEWS_SSH_PORT:-52222}"
+SERVER_USER="${HOTNEWS_SSH_USER:?请设置 HOTNEWS_SSH_USER 环境变量}"
+SERVER_HOST="${HOTNEWS_SSH_HOST:?请设置 HOTNEWS_SSH_HOST 环境变量}"
+SERVER_PORT="${HOTNEWS_SSH_PORT:-22}"
 # Project root on server is ~/hotnews, so kernel path is ~/hotnews/hotnews/kernel/
 SERVER_PROJECT_ROOT="${HOTNEWS_REMOTE_ROOT:-~/hotnews}"
 SERVER_PATH="${SERVER_PROJECT_ROOT}/hotnews/kernel/"
