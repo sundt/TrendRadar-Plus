@@ -50,8 +50,8 @@ storage:
   # 数据格式选项
   formats:
     sqlite: true       # 主存储（必须启用）
-    txt: false         # 是否生成 TXT 快照
-    html: false        # 是否生成 HTML 报告（ 邮件推送必须设为 true，否则会报错）
+    txt: false         # 是否生成 TXT 快照 (已禁用)
+    html: false        # 是否生成 HTML 报告 (已禁用，注意：如果启用邮件推送需开启此项)
 
   # 本地存储配置
   local:

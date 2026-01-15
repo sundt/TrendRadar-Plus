@@ -620,12 +620,20 @@ class NewsViewerService:
         try:
             # 获取新闻数据
             if self.data_service:
-                news_list = self.data_service.get_latest_news(
-                    platforms=platforms,
-                    limit=limit,
-                    include_url=True,
-                    per_platform_limit=per_platform_limit
-                )
+                try:
+                    news_list = self.data_service.get_latest_news(
+                        platforms=platforms,
+                        limit=limit,
+                        include_url=True,
+                        per_platform_limit=per_platform_limit
+                    )
+                except TypeError:
+                    # Fallback for older DataService versions
+                    news_list = self.data_service.get_latest_news(
+                        platforms=platforms,
+                        limit=limit,
+                        include_url=True
+                    )
             else:
                 # 如果没有数据服务，返回空数据
                 news_list = []
