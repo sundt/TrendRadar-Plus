@@ -1118,26 +1118,26 @@ async def rss_proxy_fetch_warmup_async(
                             raise ValueError(f"Upstream returned HTML, not a feed: {snippet[:240]}")
 
                     try:
-                            # Feed parsing is CPU bound, offload to thread with timeout to prevent hangs
-                            parsed = await asyncio.wait_for(
-                                asyncio.to_thread(parse_feed_content, content_type, data),
-                                timeout=20.0
-                            )
-                        except asyncio.TimeoutError:
-                            raise ValueError("Feed parsing timeout")
-                        except Exception as e:
-                            if stripped[:2] == b"\x1f\x8b":
-                                raise ValueError("Upstream returned gzip-compressed bytes") from e
-                            raise ValueError(f"Feed parse error: {e}") from e
+                        # Feed parsing is CPU bound, offload to thread with timeout to prevent hangs
+                        parsed = await asyncio.wait_for(
+                            asyncio.to_thread(parse_feed_content, content_type, data),
+                            timeout=20.0
+                        )
+                    except asyncio.TimeoutError:
+                        raise ValueError("Feed parsing timeout")
+                    except Exception as e:
+                        if stripped[:2] == b"\x1f\x8b":
+                            raise ValueError("Upstream returned gzip-compressed bytes") from e
+                        raise ValueError(f"Feed parse error: {e}") from e
 
-                        result = {
-                            "url": url,
-                            "final_url": current_url,
-                            "content_type": content_type,
-                            "data": parsed,
-                            "etag": (resp.headers.get("ETag") or "").strip(),
-                            "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
-                        }
+                    result = {
+                        "url": url,
+                        "final_url": current_url,
+                        "content_type": content_type,
+                        "data": parsed,
+                        "etag": (resp.headers.get("ETag") or "").strip(),
+                        "last_modified": (resp.headers.get("Last-Modified") or "").strip(),
+                    }
                         cache.set(key, result)
                         return result
             
