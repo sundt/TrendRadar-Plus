@@ -468,11 +468,16 @@ def get_rss_host_semaphore(host: str):
         return sem
 
 
-_rss_host_async_lock = asyncio.Lock()
+# Async primitives must be initialized lazily per event loop
+_rss_host_async_lock = None
 _rss_host_async_semaphores: Dict[str, asyncio.Semaphore] = {}
 
 
 async def get_rss_host_async_semaphore(host: str) -> asyncio.Semaphore:
+    global _rss_host_async_lock
+    if _rss_host_async_lock is None:
+        _rss_host_async_lock = asyncio.Lock()
+    
     h = (host or "").strip().lower() or "_"
     async with _rss_host_async_lock:
         sem = _rss_host_async_semaphores.get(h)
