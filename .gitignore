@@ -111,6 +111,7 @@ docs/
 scripts/rsync-sync.sh
 
 # AI Rules (Local only)
+.agent/
 .cursorrules
 .windsurfrules
 CLAUDE.md
