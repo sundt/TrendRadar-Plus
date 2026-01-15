@@ -1089,6 +1089,7 @@ async def rss_proxy_fetch_warmup_async(
                             is_html = (b"<html" in head) or (b"<!doctype html" in head)
                             if is_html:
                                 if scrape_rules:
+                                    try:
                                         parsed = await asyncio.to_thread(parse_html_content, data, scrape_rules)
                                         result = {
                                             "url": url,
