@@ -43,42 +43,8 @@ docker/.env
 .amazonq/
 .claude/
 
-# OpenSpec changes
-# Default: ignore change proposals, but allow specific approved ones to be committed.
-openspec/changes/*/
-!openspec/changes/harden-deployment-safety-rails/
-!openspec/changes/harden-deployment-safety-rails/**
-!openspec/changes/add-real-sports-and-game-rankings/
-!openspec/changes/add-real-sports-and-game-rankings/**
-!openspec/changes/add-deploy-fast-paths/
-!openspec/changes/add-deploy-fast-paths/**
-!openspec/changes/add-fetch-metrics-change-detection/
-!openspec/changes/add-fetch-metrics-change-detection/**
-!openspec/changes/refactor-provider-ingestion/
-!openspec/changes/refactor-provider-ingestion/**
-!openspec/changes/update-category-settings-ux/
-!openspec/changes/update-category-settings-ux/**
-!openspec/changes/update-category-settings-modal-simplify/
-!openspec/changes/update-category-settings-modal-simplify/**
-
-!openspec/changes/refactor-docs-and-ai-onboarding/
-!openspec/changes/refactor-docs-and-ai-onboarding/**
-
-!openspec/changes/update-rss-subscription-preview-gating/
-!openspec/changes/update-rss-subscription-preview-gating/**
-!openspec/changes/add-admin-rss-request-reopen/
-!openspec/changes/add-admin-rss-request-reopen/**
-!openspec/changes/update-rss-proxy-fetch-stability/
-!openspec/changes/update-rss-proxy-fetch-stability/**
-
-!openspec/changes/update-admin-rss-catalog-health-dashboard/
-!openspec/changes/update-admin-rss-catalog-health-dashboard/**
-
-!openspec/changes/add-one-click-full-rebuild-deploy/
-!openspec/changes/add-one-click-full-rebuild-deploy/**
-
-# OpenSpec archive
-openspec/changes/archive/
+# OpenSpec
+openspec/
 
 # Local validation markers
 .local_validation_ok
