@@ -1,8 +1,8 @@
 """
-新浪科技滚动新闻抓取脚本
-Custom Source Script for Sina Tech Rolling News
-
-API: https://feed.mix.sina.com.cn/api/roll/get?pageid=372&lid=2431&k=&num=50&page=1
+新浪科技滚动新闻 - JSON API 带参数示例
+来源: custom_sources.id = 'custom_54vwdau'
+成功条目: 100+
+特点: 带参数的 API 请求、Unix 时间戳转换
 """
 
 def fetch(platform_config, ctx):
@@ -27,7 +27,7 @@ def fetch(platform_config, ctx):
     }
     
     headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
         "Referer": "https://tech.sina.com.cn/"
     }
     
@@ -71,16 +71,3 @@ def fetch(platform_config, ctx):
         })
     
     return news_list
-
-
-# 本地测试
-if __name__ == "__main__":
-    import requests
-    import json
-    
-    # 模拟 Dynamic Python 环境
-    result = fetch({}, None)
-    print(f"获取到 {len(result)} 条新闻:\n")
-    for i, news in enumerate(result[:10], 1):
-        print(f"{i}. [{news['time']}] {news['title']}")
-        print(f"   {news['url']}\n")
