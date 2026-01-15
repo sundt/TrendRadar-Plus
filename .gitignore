@@ -75,7 +75,8 @@ hotnews/kernel/
 # Documentation
 docs/
 
-scripts/rsync-sync.sh
+# Scripts / Tools (Local Only)
+scripts/
 
 # AI Rules (Local only)
 .agent/
