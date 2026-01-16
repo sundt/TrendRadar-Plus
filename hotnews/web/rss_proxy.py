@@ -740,7 +740,7 @@ def rss_proxy_cache_get_any_ttl(url: str, ttl: int) -> Optional[Dict[str, Any]]:
     return cached if isinstance(cached, dict) else None
 
 
-def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", scrape_rules: str = "", use_scraperapi: bool = False) -> Dict[str, Any]:
+def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", scrape_rules: str = "", use_scraperapi: bool = False, use_socks_proxy: bool = False) -> Dict[str, Any]:
     cache = get_cache()
     key = f"rssproxy:{_md5_hex(url)}"
 
@@ -779,13 +779,21 @@ def rss_proxy_fetch_warmup(url: str, etag: str = "", last_modified: str = "", sc
                         request_url = f"http://api.scraperapi.com?api_key={scraper_api_key}&url={current_url}"
                         logger.info(f"Using ScraperAPI for RSS feed: {current_url}")
                 
+                # Determine proxy configuration
+                proxies = _rss_http_proxies()
+                if use_socks_proxy and not use_scraperapi:
+                    socks_proxy = os.environ.get("HOTNEWS_SOCKS_PROXY", "socks5h://172.17.0.1:7891").strip()
+                    if socks_proxy:
+                        proxies = {"http": socks_proxy, "https": socks_proxy}
+                        logger.info(f"Using SOCKS5 proxy for RSS feed: {current_url}")
+                
                 resp = requests.get(
                     request_url,
                     headers=headers,
                     timeout=timeout,
                     allow_redirects=False,
                     stream=True,
-                    proxies=_rss_http_proxies(),
+                    proxies=proxies,
                 )
 
                 if resp.status_code in {301, 302, 303, 307, 308}:
@@ -954,6 +962,7 @@ async def rss_proxy_fetch_warmup_async(
     last_modified: str = "",
     scrape_rules: str = "",
     use_scraperapi: bool = False,
+    use_socks_proxy: bool = False,
 ) -> Dict[str, Any]:
     """Async version of rss_proxy_fetch_warmup using aiohttp."""
     # Note: Cache operations are currently sync, but they are fast enough for now.
@@ -1020,7 +1029,13 @@ async def rss_proxy_fetch_warmup_async(
 
             proxy = None
             proxies = _rss_http_proxies()
-            if proxies:
+            # Use SOCKS5 proxy if enabled (takes precedence over default proxies)
+            if use_socks_proxy and not use_scraperapi:
+                socks_proxy = os.environ.get("HOTNEWS_SOCKS_PROXY", "socks5h://172.17.0.1:7891").strip()
+                if socks_proxy:
+                    proxy = socks_proxy
+                    logger.info(f"Using SOCKS5 proxy for RSS feed (async): {current_url}")
+            elif proxies:
                 scheme = urlparse(request_url).scheme
                 proxy = proxies.get(scheme) or proxies.get("http")
 

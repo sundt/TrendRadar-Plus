@@ -266,6 +266,12 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # Smart scheduling fields for custom sources (like RSS)
     _ensure_column("custom_sources", "cadence", "TEXT DEFAULT 'P2'")
     _ensure_column("custom_sources", "next_due_at", "INTEGER DEFAULT 0")
+    
+    # Proxy support fields
+    _ensure_column("rss_sources", "use_scraperapi", "INTEGER DEFAULT 0")
+    _ensure_column("rss_sources", "use_socks_proxy", "INTEGER DEFAULT 0")
+    _ensure_column("custom_sources", "use_scraperapi", "INTEGER DEFAULT 0")
+    _ensure_column("custom_sources", "use_socks_proxy", "INTEGER DEFAULT 0")
 
     # NewsNow platform category override for manual assignment
     _ensure_column("newsnow_platforms", "category_override", "TEXT DEFAULT ''")
