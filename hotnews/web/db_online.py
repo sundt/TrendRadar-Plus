@@ -100,6 +100,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub ON rss_entries(published_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub_id ON rss_entries(published_at DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_created ON rss_entries(source_id, created_at DESC)")
+    # Indexes for data lifecycle management and custom source queries
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_fetched_at ON rss_entries(fetched_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_fetched ON rss_entries(source_id, fetched_at DESC)")
 
     conn.execute(
         """
@@ -226,6 +229,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("custom_sources", "entries_count", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "fail_count", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "script_content", "TEXT DEFAULT ''")
+    # Smart scheduling fields for custom sources (like RSS)
+    _ensure_column("custom_sources", "cadence", "TEXT DEFAULT 'P2'")
+    _ensure_column("custom_sources", "next_due_at", "INTEGER DEFAULT 0")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
