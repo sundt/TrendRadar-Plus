@@ -250,8 +250,18 @@ class NewsViewerService:
 
             # NewsNow
             try:
-                for r in conn.execute("SELECT id, category FROM newsnow_platforms WHERE enabled=1"):
-                    assign(str(r[0]), r[1])
+                from hotnews.kernel.admin.category_rules import get_category_for_platform
+                for r in conn.execute("SELECT id, name, category_override FROM newsnow_platforms WHERE enabled=1"):
+                    platform_id = str(r[0])
+                    platform_name = str(r[1])
+                    category_override = r[2]
+                    
+                    # Use override if set, otherwise use rule engine
+                    if category_override:
+                        assign(platform_id, category_override)
+                    else:
+                        auto_category = get_category_for_platform(conn, platform_id, platform_name)
+                        assign(platform_id, auto_category)
             except Exception: pass
             
             # Custom Sources

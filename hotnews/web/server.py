@@ -51,6 +51,7 @@ _custom_source_router = None
 _newsnow_router = None
 _platform_admin_router = None
 _settings_admin_router = None
+_category_rules_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
 
@@ -70,6 +71,9 @@ try:
     
     from hotnews.kernel.admin import settings_admin
     _settings_admin_router = settings_admin.router
+    
+    from hotnews.kernel.admin import category_rules_admin
+    _category_rules_router = category_rules_admin.router
     
     from hotnews.kernel.scheduler import rss_scheduler
     from hotnews.kernel.scheduler import auto_fetch_scheduler
@@ -394,6 +398,7 @@ if _custom_source_router: app.include_router(_custom_source_router)
 if _newsnow_router: app.include_router(_newsnow_router)
 if _platform_admin_router: app.include_router(_platform_admin_router)
 if _settings_admin_router: app.include_router(_settings_admin_router)
+if _category_rules_router: app.include_router(_category_rules_router)
 
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"

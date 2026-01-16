@@ -181,6 +181,22 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         )
         """
     )
+
+    # Platform category rules for regex-based automatic category assignment
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS platform_category_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern TEXT NOT NULL,
+            category_id TEXT NOT NULL,
+            priority INTEGER DEFAULT 0,
+            enabled INTEGER DEFAULT 1,
+            description TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
     
     conn.execute(
         """
@@ -250,6 +266,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # Smart scheduling fields for custom sources (like RSS)
     _ensure_column("custom_sources", "cadence", "TEXT DEFAULT 'P2'")
     _ensure_column("custom_sources", "next_due_at", "INTEGER DEFAULT 0")
+
+    # NewsNow platform category override for manual assignment
+    _ensure_column("newsnow_platforms", "category_override", "TEXT DEFAULT ''")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
