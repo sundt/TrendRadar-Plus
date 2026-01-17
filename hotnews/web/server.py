@@ -1240,11 +1240,8 @@ def _mb_load_rules(conn: sqlite3.Connection) -> Dict[str, Any]:
 
 
 def _mb_ai_enabled() -> bool:
-    try:
-        enabled = (os.environ.get("HOTNEWS_MB_AI_ENABLED") or "0").strip().lower() in {"1", "true", "yes"}
-        return bool(enabled)
-    except Exception:
-        return False
+    # Always enable AI mode for Morning Brief
+    return True
 
 
 def _mb_extract_domain(url: str) -> str:
