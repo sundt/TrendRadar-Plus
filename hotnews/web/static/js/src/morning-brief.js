@@ -29,17 +29,21 @@ function _getActiveTabId() {
     }
 }
 
-function _getLastVisit() {
-    const map = storage.get(LAST_VISIT_KEY, {});
-    return Number(map[MORNING_BRIEF_CATEGORY_ID]) || 0;
+// Session start timestamp for red dot logic
+const SESSION_START_TIME = Math.floor(Date.now() / 1000);
+let morningBriefViewed = false;
+
+function _markMorningBriefViewed() {
+    morningBriefViewed = true;
 }
 
 function _isNewContent(publishedAt) {
     const ts = Number(publishedAt) || 0;
     if (!ts) return false;
-    const now = Math.floor(Date.now() / 1000);
-    const lastVisit = _getLastVisit();
-    return ts > lastVisit && (now - ts) < NEW_CONTENT_WINDOW_SEC;
+
+    // Only show red dot if morning brief was already viewed AND item is newer than session start
+    if (!morningBriefViewed) return false;
+    return ts > SESSION_START_TIME;
 }
 
 function _applyPagingToCard(card) {

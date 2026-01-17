@@ -1,53 +1,51 @@
 /**
  * Click Tracker Module
- * - Tracks last visit time per category
- * - Shows red dots for new content
+ * - Shows red dots for new content arriving DURING current session
+ * - Red dots only appear for content newer than session start time
+ * - Refreshing page resets session, so no red dots on fresh load
  * - Reports clicks to backend for analytics
  */
 import { TR, ready, escapeHtml } from './core.js';
-import { storage } from './storage.js';
 
-const LAST_VISIT_KEY = 'tr_category_last_visit_v1';
-const NEW_CONTENT_WINDOW_SEC = 24 * 3600; // 24 hours
+// Session start timestamp (in seconds) - set once when page loads
+// This is NOT stored in localStorage, so it resets on refresh
+const SESSION_START_TIME = Math.floor(Date.now() / 1000);
 
-/**
- * Get last visit timestamps for all categories
- */
-function getLastVisitMap() {
-    return storage.get(LAST_VISIT_KEY, {});
-}
+// Track which categories have been viewed this session
+const viewedCategories = new Set();
 
 /**
- * Update last visit time for a category
- */
-function updateLastVisit(categoryId) {
-    if (!categoryId) return;
-    const map = getLastVisitMap();
-    map[categoryId] = Math.floor(Date.now() / 1000);
-    storage.set(LAST_VISIT_KEY, map);
-}
-
-/**
- * Get last visit time for a specific category (in seconds)
- */
-function getLastVisit(categoryId) {
-    if (!categoryId) return 0;
-    const map = getLastVisitMap();
-    return Number(map[categoryId]) || 0;
-}
-
-/**
- * Check if a news item is "new" based on published_at and last visit
+ * Check if a news item is "new" based on published_at and session start
+ * Only returns true if the item was published AFTER session started
+ * AND the category has been viewed at least once (to detect updates)
  */
 function isNewContent(publishedAt, categoryId) {
     const ts = Number(publishedAt) || 0;
     if (!ts) return false;
 
-    const now = Math.floor(Date.now() / 1000);
-    const lastVisit = getLastVisit(categoryId);
+    // Only show red dot if:
+    // 1. Category was already viewed (meaning user has been here before in this session)
+    // 2. Item was published after session started
+    if (!viewedCategories.has(categoryId)) {
+        return false;
+    }
 
-    // Must be newer than last visit AND within 24 hours
-    return ts > lastVisit && (now - ts) < NEW_CONTENT_WINDOW_SEC;
+    return ts > SESSION_START_TIME;
+}
+
+/**
+ * Mark a category as viewed in this session
+ */
+function markCategoryViewed(categoryId) {
+    if (!categoryId) return;
+    viewedCategories.add(categoryId);
+}
+
+/**
+ * Get session start time
+ */
+function getSessionStartTime() {
+    return SESSION_START_TIME;
 }
 
 /**
@@ -115,24 +113,24 @@ function attachClickListeners() {
 }
 
 /**
- * Update last visit time when switching to a category tab
+ * Mark category as viewed when switching tabs
  */
 function attachTabSwitchListener() {
     window.addEventListener('tr_tab_switched', (ev) => {
         const categoryId = String(ev?.detail?.categoryId || '').trim();
         if (categoryId) {
-            // Delay update slightly to not affect current render
+            // Mark as viewed after a short delay (after initial render completes)
             setTimeout(() => {
-                updateLastVisit(categoryId);
-            }, 1000);
+                markCategoryViewed(categoryId);
+            }, 2000);
         }
     });
 }
 
 // Export for other modules
 TR.clickTracker = {
-    getLastVisit,
-    updateLastVisit,
+    getSessionStartTime,
+    markCategoryViewed,
     isNewContent,
     reportClick,
     handleNewsClick
@@ -141,4 +139,12 @@ TR.clickTracker = {
 ready(function () {
     attachClickListeners();
     attachTabSwitchListener();
+
+    // Mark initial category as viewed after page fully loads
+    setTimeout(() => {
+        const activePane = document.querySelector('.tab-pane.active');
+        if (activePane && activePane.id?.startsWith('tab-')) {
+            markCategoryViewed(activePane.id.slice(4));
+        }
+    }, 3000);
 });

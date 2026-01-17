@@ -24,18 +24,21 @@ function getActiveCategoryId() {
     return document.querySelector('.category-tabs .category-tab.active')?.dataset?.category || null;
 }
 
-function getLastVisit(categoryId) {
-    if (!categoryId) return 0;
-    const map = storage.get(LAST_VISIT_KEY, {});
-    return Number(map[categoryId]) || 0;
+// Session start timestamp for red dot logic
+const SESSION_START_TIME = Math.floor(Date.now() / 1000);
+const viewedCategories = new Set();
+
+function markCategoryViewed(categoryId) {
+    if (categoryId) viewedCategories.add(categoryId);
 }
 
 function isNewContent(publishedAt, categoryId) {
     const ts = Number(publishedAt) || 0;
     if (!ts) return false;
-    const now = Math.floor(Date.now() / 1000);
-    const lastVisit = getLastVisit(categoryId);
-    return ts > lastVisit && (now - ts) < NEW_CONTENT_WINDOW_SEC;
+
+    // Only show red dot if category was already viewed AND item is newer than session start
+    if (!viewedCategories.has(categoryId)) return false;
+    return ts > SESSION_START_TIME;
 }
 
 function setPlaceholderText(card, text) {
@@ -549,7 +552,7 @@ function attach() {
     document.querySelectorAll('.news-load-sentinel').forEach((el) => _observer.observe(el));
 }
 
-TR.infiniteScroll = { attach, ensureCategoryLoaded, scheduleEnsureCategoryLoaded, cancelEnsureCategoryLoaded, bulkLoadCategory, scheduleBulkLoadCategory, cancelBulkLoadCategory };
+TR.infiniteScroll = { attach, ensureCategoryLoaded, scheduleEnsureCategoryLoaded, cancelEnsureCategoryLoaded, bulkLoadCategory, scheduleBulkLoadCategory, cancelBulkLoadCategory, markCategoryViewed };
 
 ready(function () {
     // Avoid triggering loads immediately on first paint. Arm only after user/page scroll.
@@ -567,4 +570,21 @@ ready(function () {
     }, 1200);
 
     attach();
+
+    // Mark initial category as viewed after a delay (for red dot logic)
+    // This delay ensures first render completes without red dots
+    setTimeout(() => {
+        const activeTab = document.querySelector('.category-tabs .category-tab.active');
+        if (activeTab && activeTab.dataset.category) {
+            markCategoryViewed(activeTab.dataset.category);
+        }
+    }, 3000);
+
+    // Listen for tab switches to mark new categories as viewed
+    window.addEventListener('tr_tab_switched', (ev) => {
+        const categoryId = String(ev?.detail?.categoryId || '').trim();
+        if (categoryId) {
+            setTimeout(() => markCategoryViewed(categoryId), 2000);
+        }
+    });
 });
