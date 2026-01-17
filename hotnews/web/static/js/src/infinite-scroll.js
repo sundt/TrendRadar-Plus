@@ -32,9 +32,15 @@ function markCategoryViewed(categoryId) {
     if (categoryId) viewedCategories.add(categoryId);
 }
 
+// Categories that should never show red dots (special data sources with unreliable timestamps)
+const NO_RED_DOT_CATEGORIES = ['explore', 'knowledge'];
+
 function isNewContent(publishedAt, categoryId) {
     const ts = Number(publishedAt) || 0;
     if (!ts) return false;
+
+    // Disable red dots for specific categories
+    if (NO_RED_DOT_CATEGORIES.includes(categoryId)) return false;
 
     // Only show red dot if category was already viewed AND item is newer than session start
     if (!viewedCategories.has(categoryId)) return false;

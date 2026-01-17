@@ -38,12 +38,9 @@ function _markMorningBriefViewed() {
 }
 
 function _isNewContent(publishedAt) {
-    const ts = Number(publishedAt) || 0;
-    if (!ts) return false;
-
-    // Only show red dot if morning brief was already viewed AND item is newer than session start
-    if (!morningBriefViewed) return false;
-    return ts > SESSION_START_TIME;
+    // Morning brief (knowledge category) always returns false for red dots
+    // This category has unreliable timestamps causing false positive red dots
+    return false;
 }
 
 function _applyPagingToCard(card) {
