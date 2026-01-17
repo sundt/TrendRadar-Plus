@@ -8,11 +8,13 @@ Hotnews Web Viewer Server
 import asyncio
 import hashlib
 import ipaddress
-import random
-import os
 import re
 import secrets
 import socket
+import sqlite3
+import sys
+import time
+import traceback
 import sqlite3
 import sys
 import time
@@ -44,6 +46,8 @@ from hotnews.crawler import DataFetcher
 from hotnews.core import load_config
 from hotnews.storage import convert_crawl_results_to_news_data
 from hotnews.web.db_online import get_online_db_conn
+from hotnews.kernel.ai.manager import AIModelManager
+
 # [KERNEL] Dynamic Loading of Admin Modules
 _rss_admin_router = None
 _rss_usage_router = None
@@ -3029,6 +3033,130 @@ def run_server(host: str = "0.0.0.0", port: int = 8080, auto_fetch: bool = False
     print("=" * 60)
     print()
     
+# =========================================================
+# AI Manager APIs (Admin)
+# =========================================================
+
+@app.get("/api/admin/ai/config", response_class=JSONResponse)
+async def api_admin_ai_config_get(request: Request):
+    """Get entire AI configuration (providers + models)"""
+    _verify_admin_cookie(request)
+    mgr = AIModelManager.get_instance()
+    if mgr._project_root is None:
+        mgr.set_project_root(project_root)
+        
+    return {
+        "ok": True, 
+        "providers": mgr.get_providers(),
+        "models": mgr.get_models()
+    }
+
+@app.post("/api/admin/ai/providers", response_class=JSONResponse)
+async def api_admin_ai_providers_save(request: Request, payload: Dict[str, Any] = Body(...)):
+    """Save providers list (Full Replace)"""
+    _verify_admin_cookie(request)
+    providers = payload.get("providers")
+    if not isinstance(providers, list):
+        raise HTTPException(status_code=400, detail="Invalid providers format")
+        
+    mgr = AIModelManager.get_instance()
+    if mgr._project_root is None:
+        mgr.set_project_root(project_root)
+        
+    mgr.save_providers(providers)
+    return {"ok": True}
+
+@app.post("/api/admin/ai/models", response_class=JSONResponse)
+async def api_admin_ai_models_save(request: Request, payload: Dict[str, Any] = Body(...)):
+    """Save models list (Full Replace)"""
+    _verify_admin_cookie(request)
+    models = payload.get("models")
+    if not isinstance(models, list):
+        raise HTTPException(status_code=400, detail="Invalid models format")
+        
+    mgr = AIModelManager.get_instance()
+    if mgr._project_root is None:
+        mgr.set_project_root(project_root)
+        
+    mgr.save_models(models)
+    return {"ok": True}
+
+@app.post("/api/admin/ai/models/batch_import", response_class=JSONResponse)
+async def api_admin_ai_models_import(request: Request, payload: Dict[str, Any] = Body(...)):
+    """Parse text and merge into existing models
+    Format: ProviderName | ModelName | Priority | Expires
+    """
+    _verify_admin_cookie(request)
+    text = payload.get("text", "")
+    mode = payload.get("mode", "append") # append or replace
+    
+    mgr = AIModelManager.get_instance()
+    if mgr._project_root is None:
+        mgr.set_project_root(project_root)
+        
+    current_models = mgr.get_models() if mode == "append" else []
+    
+    # Simple line parser
+    lines = text.split('\n')
+    added_count = 0
+    
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+            
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) < 2:
+            continue
+            
+        # provider_id | name | priority | expires
+        pid = parts[0]
+        name = parts[1]
+        priority = 50
+        expires = ""
+        
+        if len(parts) > 2 and parts[2]:
+            try:
+                priority = int(parts[2])
+            except:
+                pass
+                
+        if len(parts) > 3:
+            expires = parts[3]
+            
+        # Create new model entry
+        new_model = {
+            "id": f"gen_{int(time.time())}_{random.randint(1000,9999)}",
+            "name": name,
+            "provider_id": pid,
+            "priority": priority,
+            "expires": expires,
+            "enabled": True
+        }
+        current_models.append(new_model)
+        added_count += 1
+        
+    mgr.save_models(current_models)
+    return {"ok": True, "added": added_count, "total": len(current_models)}
+
+@app.post("/api/admin/ai/rotation_test", response_class=JSONResponse)
+async def api_admin_ai_test_rotation(request: Request):
+    """Simulate rotation logic and return which model would be picked first"""
+    _verify_admin_cookie(request)
+    mgr = AIModelManager.get_instance()
+    if mgr._project_root is None:
+        mgr.set_project_root(project_root)
+        
+    candidates = mgr.get_active_rotation_list()
+    if not candidates:
+        return {"ok": False, "detail": "No active models found"}
+        
+    return {
+        "ok": True,
+        "selected_model": candidates[0],
+        "all_candidates": candidates
+    }
+
     uvicorn.run(app, host=host, port=port)
 
 

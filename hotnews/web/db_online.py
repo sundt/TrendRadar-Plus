@@ -12,6 +12,10 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     if _online_db_conn is not None:
         return _online_db_conn
 
+    # Ensure project_root is a Path object
+    if not isinstance(project_root, Path):
+        project_root = Path(project_root)
+
     output_dir = project_root / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
     db_path = output_dir / "online.db"
