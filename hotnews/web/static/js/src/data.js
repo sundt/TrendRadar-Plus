@@ -1026,6 +1026,10 @@ export const data = {
     },
 
     showCategoryUpdateDot(categoryId) {
+        // Categories that should never show update dots (unreliable timestamps)
+        const NO_UPDATE_DOT_CATEGORIES = ['explore', 'knowledge'];
+        if (NO_UPDATE_DOT_CATEGORIES.includes(categoryId)) return;
+
         const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
         if (!tab) return;
 
