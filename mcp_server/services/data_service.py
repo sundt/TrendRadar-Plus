@@ -137,7 +137,7 @@ class DataService:
                 news_list.append(news_item)
                 
         # [Inject RSS Data]
-        # Strategy: Fetch items per RSS source up to the requested limit
+        # Strategy: Batch fetch all RSS entries in a single query (optimized)
         
         try:
             from hotnews.web.db_online import get_online_db_conn
@@ -155,11 +155,9 @@ class DataService:
                     rss_source_filter = rss_ids
             
             if should_fetch_rss:
-                # Use project_root from self.parser
-                print(f"DEBUG: Project Root: {self.parser.project_root}")
                 conn = get_online_db_conn(self.parser.project_root)
                 
-                # Get list of enabled RSS sources
+                # Get list of enabled RSS sources with names
                 if rss_source_filter:
                     placeholders = ','.join(['?'] * len(rss_source_filter))
                     cur = conn.execute(f"SELECT id, name FROM rss_sources WHERE enabled = 1 AND id IN ({placeholders})", rss_source_filter)
@@ -167,49 +165,67 @@ class DataService:
                     cur = conn.execute("SELECT id, name FROM rss_sources WHERE enabled = 1")
                 
                 rss_sources = cur.fetchall()
+                source_id_to_name = {r[0]: r[1] for r in rss_sources}
+                source_ids = list(source_id_to_name.keys())
                 
-                for source_id, source_name in rss_sources:
-                    # Fetch entries from online.db rss_entries
-                    # Use the requested 'limit' to ensure we don't truncate if user wants 50+ items
+                if source_ids:
+                    # Batch query: fetch top N entries per source using window function
+                    # This reduces 467 queries to 1 query
+                    placeholders = ','.join(['?'] * len(source_ids))
+                    batch_sql = f"""
+                        SELECT source_id, title, url, published_raw, published_at, created_at
+                        FROM (
+                            SELECT source_id, title, url, published_raw, published_at, created_at,
+                                   ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) as rn
+                            FROM rss_entries
+                            WHERE source_id IN ({placeholders})
+                        )
+                        WHERE rn <= ?
+                    """
                     try:
-                        cur = conn.execute("""
-                            SELECT title, url, published_raw, created_at 
-                            FROM rss_entries 
-                            WHERE source_id = ? 
-                            ORDER BY created_at DESC 
-                            LIMIT ?
-                        """, (source_id, limit))
-                        entries = cur.fetchall()
+                        cur = conn.execute(batch_sql, source_ids + [per_platform_limit])
+                        all_entries = cur.fetchall()
                     except Exception:
-                        entries = []
+                        all_entries = []
                     
-                    for title, url, published_raw, created_at in entries:
+                    for source_id, title, url, published_raw, published_at, created_at in all_entries:
                         ts_str = ""
-                        # Try to parse published date
-                        if published_raw:
+                        
+                        # 1. Try published_at (Unix timestamp)
+                        if published_at and isinstance(published_at, int) and published_at > 946684800:
                             try:
-                                # Try common formats
+                                ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
+                            except:
+                                pass
+                        
+                        # 2. Try to parse published_raw date string
+                        if not ts_str and published_raw:
+                            try:
                                 for fmt in ["%a, %d %b %Y %H:%M:%S %z", "%Y-%m-%d %H:%M:%S"]:
                                     try:
-                                         dt = datetime.strptime(published_raw, fmt)
-                                         ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                                         break
+                                        dt = datetime.strptime(published_raw, fmt)
+                                        ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                                        break
                                     except:
                                         pass
                             except:
                                 pass
                         
+                        # 3. Fallback to created_at
                         if not ts_str and created_at:
-                            ts_str = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
+                            try:
+                                ts_str = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
+                            except:
+                                pass
                             
-                        # Fallback to now
+                        # 4. Final fallback to now
                         if not ts_str:
-                             ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                              
                         item = {
                             "title": title,
                             "platform": f"rss-{source_id}",
-                            "platform_name": source_name,
+                            "platform_name": source_id_to_name.get(source_id, source_id),
                             "rank": 0,
                             "timestamp": ts_str,
                             "summary": ""
@@ -228,8 +244,7 @@ class DataService:
 
 
         # [Inject Custom Source Data]
-        # Strategy: Fetch items per Custom source from rss_entries table (online.db)
-        # Custom sources now store data in rss_entries, not daily news.db
+        # Strategy: Batch fetch all custom source entries in a single query (optimized)
         
         try:
             from hotnews.web.db_online import get_online_db_conn
@@ -244,21 +259,29 @@ class DataService:
                 requested_ids = set(platforms)
                 custom_sources = [s for s in custom_sources if s[0] in requested_ids]
             
-            # 2. Fetch items from rss_entries table (same table as RSS sources)
-            for source_id, source_name in custom_sources:
+            source_id_to_name = {s[0]: s[1] for s in custom_sources}
+            source_ids = list(source_id_to_name.keys())
+            
+            if source_ids:
+                # 2. Batch query: fetch top N entries per source using window function
+                placeholders = ','.join(['?'] * len(source_ids))
+                batch_sql = f"""
+                    SELECT source_id, title, url, published_at, created_at
+                    FROM (
+                        SELECT source_id, title, url, published_at, created_at,
+                               ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) as rn
+                        FROM rss_entries
+                        WHERE source_id IN ({placeholders})
+                    )
+                    WHERE rn <= ?
+                """
                 try:
-                    items_cur = conn_online.execute("""
-                        SELECT title, url, published_at, created_at 
-                        FROM rss_entries 
-                        WHERE source_id = ? 
-                        ORDER BY created_at DESC 
-                        LIMIT ?
-                    """, (source_id, per_platform_limit))
-                    entries = items_cur.fetchall()
+                    items_cur = conn_online.execute(batch_sql, source_ids + [per_platform_limit])
+                    all_entries = items_cur.fetchall()
                 except Exception:
-                    entries = []
+                    all_entries = []
                 
-                for title, url, published_at, created_at in entries:
+                for source_id, title, url, published_at, created_at in all_entries:
                     ts_str = ""
                     
                     # 1. Try to use published_at (Unix timestamp)
@@ -280,12 +303,12 @@ class DataService:
                         
                     # 3. Final fallback to now
                     if not ts_str:
-                         ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        ts_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
                     item = {
                         "title": title,
                         "platform": source_id,  # Use source_id directly as platform_id
-                        "platform_name": source_name or "Custom Source",
+                        "platform_name": source_id_to_name.get(source_id, "Custom Source"),
                         "rank": 0,  # Custom sources have no rank
                         "timestamp": ts_str
                     }
