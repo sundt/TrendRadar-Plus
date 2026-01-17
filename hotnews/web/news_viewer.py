@@ -598,7 +598,7 @@ class NewsViewerService:
     def get_categorized_news(
         self,
         platforms: Optional[List[str]] = None,
-        limit: int = 500,
+        limit: int = 2000,
         apply_filter: bool = True,
         filter_mode: Optional[str] = None,
         per_platform_limit: int = 50
