@@ -5,10 +5,12 @@
 统一管理全文索引和向量索引，提供构建、更新、搜索等接口。
 """
 
+import hashlib
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from hotnews.core.logger import get_logger
 from .config import SearchConfig, get_search_config
@@ -65,6 +67,11 @@ class SearchIndexManager:
         # 索引状态
         self._last_update: Optional[datetime] = None
         self._built = False
+
+        # 搜索缓存: {cache_key: (timestamp, results)}
+        self._search_cache: Dict[str, tuple] = {}
+        self._cache_ttl = 300  # 5 分钟
+        self._cache_max_size = 2000
 
     def build_all_indexes(self, force: bool = False) -> Dict[str, int]:
         """
@@ -168,7 +175,22 @@ class SearchIndexManager:
             logger.warning("索引未构建，自动构建中...")
             self.build_all_indexes()
 
-        return unified_search(
+        # 生成缓存键
+        cache_key = self._make_cache_key(query, search_mode, limit, platform_filter, date_filter)
+
+        # 检查缓存
+        now = time.time()
+        if cache_key in self._search_cache:
+            cached_time, cached_results = self._search_cache[cache_key]
+            if now - cached_time < self._cache_ttl:
+                logger.debug(f"搜索缓存命中: {query[:20]}...")
+                return cached_results
+            else:
+                # 过期，删除
+                del self._search_cache[cache_key]
+
+        # 执行搜索
+        results = unified_search(
             query=query,
             fts_index=self.fts_index,
             vector_index=self.vector_index,
@@ -177,6 +199,42 @@ class SearchIndexManager:
             platform_filter=platform_filter,
             date_filter=date_filter or self.aggregator.get_date_range(),
         )
+
+        # 更新缓存
+        self._update_cache(cache_key, results)
+
+        return results
+
+    def _make_cache_key(
+        self,
+        query: str,
+        search_mode: str,
+        limit: int,
+        platform_filter: Optional[List[str]],
+        date_filter: Optional[Tuple[str, str]],
+    ) -> str:
+        """生成缓存键"""
+        key_parts = [
+            query,
+            search_mode,
+            str(limit),
+            ",".join(sorted(platform_filter)) if platform_filter else "",
+            f"{date_filter[0]}:{date_filter[1]}" if date_filter else "",
+        ]
+        key_string = "|".join(key_parts)
+        return hashlib.md5(key_string.encode()).hexdigest()
+
+    def _update_cache(self, cache_key: str, results: List[HybridSearchResult]) -> None:
+        """更新缓存，必要时淘汰旧条目"""
+        now = time.time()
+
+        # 如果缓存已满，淘汰最旧的条目
+        if len(self._search_cache) >= self._cache_max_size:
+            # 找到最旧的条目
+            oldest_key = min(self._search_cache, key=lambda k: self._search_cache[k][0])
+            del self._search_cache[oldest_key]
+
+        self._search_cache[cache_key] = (now, results)
 
     def keyword_search(
         self,
