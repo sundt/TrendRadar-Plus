@@ -97,6 +97,89 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
         """
     )
 
+    # User sessions for authenticated users
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            device_info TEXT DEFAULT '',
+            ip_address TEXT DEFAULT '',
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL,
+            last_active_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)")
+
+    # OAuth and multi-auth methods
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_auth_methods (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            auth_type TEXT NOT NULL,
+            auth_id TEXT NOT NULL,
+            auth_data TEXT DEFAULT '{}',
+            created_at INTEGER NOT NULL,
+            last_used_at INTEGER NOT NULL,
+            UNIQUE(auth_type, auth_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_auth_methods_user ON user_auth_methods(user_id)")
+
+    # User tag preferences for personalization
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_tag_preferences (
+            user_id INTEGER NOT NULL,
+            tag_id TEXT NOT NULL,
+            click_count INTEGER DEFAULT 0,
+            view_time_seconds INTEGER DEFAULT 0,
+            last_interaction_at INTEGER,
+            preference_score REAL DEFAULT 0.0,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, tag_id)
+        )
+        """
+    )
+
+    # User explicit tag settings (follow/mute)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_tag_settings (
+            user_id INTEGER NOT NULL,
+            tag_id TEXT NOT NULL,
+            preference TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (user_id, tag_id)
+        )
+        """
+    )
+
+    # Extend users table with auth columns
+    def _ensure_column(table: str, column: str, col_def: str) -> None:
+        try:
+            cur = conn.execute(f"PRAGMA table_info({table})")
+            cols = {str(r[1]) for r in (cur.fetchall() or [])}
+            if column not in cols:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+        except Exception:
+            pass
+
+    _ensure_column("users", "email", "TEXT DEFAULT ''")
+    _ensure_column("users", "email_verified", "INTEGER DEFAULT 0")
+    _ensure_column("users", "password_hash", "TEXT DEFAULT ''")
+    _ensure_column("users", "nickname", "TEXT DEFAULT ''")
+    _ensure_column("users", "avatar_url", "TEXT DEFAULT ''")
+    _ensure_column("users", "status", "TEXT DEFAULT 'active'")
+
+    # Extend news_clicks for preference tracking
+    _ensure_column("news_clicks", "tags_json", "TEXT DEFAULT '[]'") if False else None  # news_clicks is in online.db
+    
     conn.commit()
     _user_db_conn = conn
     return conn

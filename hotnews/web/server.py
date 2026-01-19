@@ -56,6 +56,9 @@ _newsnow_router = None
 _platform_admin_router = None
 _settings_admin_router = None
 _category_rules_router = None
+_tag_admin_router = None
+_auth_router = None
+_preferences_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
 
@@ -78,6 +81,15 @@ try:
     
     from hotnews.kernel.admin import category_rules_admin
     _category_rules_router = category_rules_admin.router
+    
+    from hotnews.kernel.admin import tag_admin
+    _tag_admin_router = tag_admin.router
+    
+    from hotnews.kernel.auth import auth_api
+    _auth_router = auth_api.router
+    
+    from hotnews.kernel.user import preferences_api
+    _preferences_router = preferences_api.router
     
     from hotnews.kernel.scheduler import rss_scheduler
     from hotnews.kernel.scheduler import auto_fetch_scheduler
@@ -404,6 +416,9 @@ if _newsnow_router: app.include_router(_newsnow_router)
 if _platform_admin_router: app.include_router(_platform_admin_router)
 if _settings_admin_router: app.include_router(_settings_admin_router)
 if _category_rules_router: app.include_router(_category_rules_router)
+if _tag_admin_router: app.include_router(_tag_admin_router)
+if _auth_router: app.include_router(_auth_router)
+if _preferences_router: app.include_router(_preferences_router)
 
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
@@ -2229,9 +2244,10 @@ async def api_news_check_updates():
 @app.post("/api/news/click")
 async def api_news_click(request: Request):
     """
-    API: Record a news item click for analytics.
+    API: Record a news item click for analytics and preference tracking.
     """
     import time
+    import json as _json
     try:
         data = await request.json()
         news_id = str(data.get("news_id") or "").strip()
@@ -2239,20 +2255,73 @@ async def api_news_click(request: Request):
         title = str(data.get("title") or "").strip()[:200]
         source_name = str(data.get("source_name") or "").strip()[:100]
         category = str(data.get("category") or "").strip()[:50]
+        source_id = str(data.get("source_id") or "").strip()[:100]
+        dedup_key = str(data.get("dedup_key") or "").strip()[:500]
         user_agent = request.headers.get("user-agent", "")[:500]
         
         if not news_id:
             return UnicodeJSONResponse(content={"success": False, "error": "missing news_id"}, status_code=400)
         
         conn = _get_online_db_conn()
+        
+        # Get user_id from session (if authenticated)
+        user_id = 0
+        try:
+            from hotnews.kernel.auth.auth_api import _get_session_token
+            from hotnews.kernel.auth.auth_service import validate_session
+            from hotnews.web.user_db import get_user_db_conn
+            session_token = _get_session_token(request)
+            if session_token:
+                user_conn = get_user_db_conn(request.app.state.project_root)
+                is_valid, user_info = validate_session(user_conn, session_token)
+                if is_valid and user_info:
+                    user_id = int(user_info.get("id") or 0)
+        except Exception:
+            pass
+        
+        # Get tags for this entry if source_id and dedup_key are provided
+        tags_json = "[]"
+        if source_id and dedup_key:
+            try:
+                cur = conn.execute(
+                    "SELECT tag_id FROM rss_entry_tags WHERE source_id = ? AND dedup_key = ?",
+                    (source_id, dedup_key)
+                )
+                tags = [r[0] for r in cur.fetchall() or []]
+                tags_json = _json.dumps(tags)
+            except Exception:
+                pass
+        
         conn.execute(
             """
-            INSERT INTO news_clicks (news_id, url, title, source_name, category, clicked_at, user_agent)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO news_clicks (news_id, url, title, source_name, category, clicked_at, user_agent, user_id, tags_json, source_id, dedup_key)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (news_id, url, title, source_name, category, int(time.time()), user_agent)
+            (news_id, url, title, source_name, category, int(time.time()), user_agent, user_id, tags_json, source_id, dedup_key)
         )
         conn.commit()
+        
+        # Update user tag preferences (async-friendly, quick update)
+        if user_id > 0 and tags_json != "[]":
+            try:
+                tags = _json.loads(tags_json)
+                now = int(time.time())
+                user_conn = get_user_db_conn(request.app.state.project_root)
+                for tag_id in tags:
+                    user_conn.execute(
+                        """
+                        INSERT INTO user_tag_preferences (user_id, tag_id, click_count, last_interaction_at, updated_at)
+                        VALUES (?, ?, 1, ?, ?)
+                        ON CONFLICT(user_id, tag_id) DO UPDATE SET
+                            click_count = click_count + 1,
+                            last_interaction_at = ?,
+                            updated_at = ?
+                        """,
+                        (user_id, tag_id, now, now, now, now)
+                    )
+                user_conn.commit()
+            except Exception:
+                pass
         
         return UnicodeJSONResponse(content={"success": True})
     except Exception as e:

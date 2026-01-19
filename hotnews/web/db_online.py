@@ -232,6 +232,47 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_news_clicks_news_id ON news_clicks(news_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_news_clicks_clicked_at ON news_clicks(clicked_at)")
 
+    # Tags definition table (multi-label classification)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tags (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            name_en TEXT DEFAULT '',
+            type TEXT NOT NULL,
+            parent_id TEXT DEFAULT '',
+            icon TEXT DEFAULT '',
+            color TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            sort_order INTEGER DEFAULT 0,
+            enabled INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tags_type ON tags(type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tags_enabled ON tags(enabled, sort_order)")
+
+    # News entry tags association table (many-to-many)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rss_entry_tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id TEXT NOT NULL,
+            dedup_key TEXT NOT NULL,
+            tag_id TEXT NOT NULL,
+            confidence REAL DEFAULT 1.0,
+            source TEXT DEFAULT 'ai',
+            created_at INTEGER NOT NULL,
+            UNIQUE(source_id, dedup_key, tag_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_tag ON rss_entry_tags(tag_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON rss_entry_tags(source_id, dedup_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_created ON rss_entry_tags(created_at DESC)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
@@ -279,6 +320,12 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
 
     # NewsNow platform category override for manual assignment
     _ensure_column("newsnow_platforms", "category_override", "TEXT DEFAULT ''")
+
+    # Preference tracking columns for news_clicks
+    _ensure_column("news_clicks", "user_id", "INTEGER DEFAULT 0")
+    _ensure_column("news_clicks", "tags_json", "TEXT DEFAULT '[]'")
+    _ensure_column("news_clicks", "source_id", "TEXT DEFAULT ''")
+    _ensure_column("news_clicks", "dedup_key", "TEXT DEFAULT ''")
 
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
