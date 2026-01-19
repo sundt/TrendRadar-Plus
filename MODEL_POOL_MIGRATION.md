@@ -1,5 +1,36 @@
 # 模型池迁移说明
 
+## ✅ 迁移状态：已完成并验证
+
+**部署时间**: 2026-01-19 17:16  
+**验证时间**: 2026-01-19 17:18  
+**状态**: ✅ 成功运行，模型池正常工作
+
+### 验证结果
+```sql
+-- 数据库统计（截至 2026-01-19 17:18）
+SELECT provider, COUNT(*) as total_entries, COUNT(DISTINCT model) as unique_models 
+FROM rss_entry_ai_labels 
+GROUP BY provider;
+
+-- 结果：
+-- dashscope  | 32,272 | 11  (旧系统)
+-- model_pool |     15 |  1  (新系统，刚启动)
+-- skip       |  5,624 |  1
+```
+
+### 运行日志示例
+```
+AI Rotation: Model 'qwen-flash-2025-07-28' failed: HTTP 403 (quota exhausted). Switching to next...
+AI Rotation: Model 'qwen3-coder-flash-2025-07-28' failed: HTTP 403 (quota exhausted). Switching to next...
+AI Rotation: Model 'qwen3-30b-a3b-thinking-2507' failed: HTTP 500 (internal error). Switching to next...
+INFO: mb_ai.batch ok size=6 model=qwen3-30b-a3b-instruct-2507
+```
+
+**✅ 确认**: 系统正在自动轮换模型，当模型失败时会切换到下一个可用模型。
+
+---
+
 ## 📊 变更概述
 
 将 AI 打标签功能从固定使用 `qwen-plus` 模型迁移到使用**模型池自动轮换**。
