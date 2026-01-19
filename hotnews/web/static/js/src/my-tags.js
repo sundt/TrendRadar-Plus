@@ -376,9 +376,12 @@ function handleTabSwitch(categoryId) {
  * Initialize the module
  */
 function init() {
+    console.log('[MyTags] Initializing module...');
+    
     // Listen for tab switch events
     window.addEventListener('tr_tab_switched', (event) => {
         const categoryId = event?.detail?.categoryId;
+        console.log('[MyTags] tr_tab_switched event received, categoryId:', categoryId);
         if (categoryId) {
             handleTabSwitch(categoryId);
         }
@@ -387,8 +390,36 @@ function init() {
     // Also check if my-tags is already the active tab (on page load)
     const activePane = document.querySelector('#tab-my-tags.active');
     if (activePane) {
+        console.log('[MyTags] Tab is already active on page load');
         loadMyTags();
     }
+    
+    // Add click listener to the my-tags tab button as a fallback
+    // This ensures loading even if tr_tab_switched event doesn't fire
+    const tryAttachClickListener = () => {
+        const tabButton = document.querySelector('.category-tab[data-category="my-tags"]');
+        if (tabButton) {
+            console.log('[MyTags] Attaching click listener to tab button');
+            tabButton.addEventListener('click', () => {
+                console.log('[MyTags] Tab button clicked');
+                // Use setTimeout to ensure the tab pane is active
+                setTimeout(() => {
+                    const pane = document.querySelector('#tab-my-tags.active');
+                    if (pane) {
+                        console.log('[MyTags] Tab pane is now active, loading...');
+                        loadMyTags();
+                    }
+                }, 100);
+            });
+        } else {
+            console.warn('[MyTags] Tab button not found, will retry...');
+            // Retry after a short delay if button not found yet
+            setTimeout(tryAttachClickListener, 500);
+        }
+    };
+    
+    // Try to attach click listener
+    tryAttachClickListener();
 
     console.log('[MyTags] Module initialized');
 }
