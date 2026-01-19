@@ -411,6 +411,18 @@ function init() {
                     }
                 }, 100);
             });
+            
+            // Also add touchstart for better mobile/WeChat support
+            tabButton.addEventListener('touchstart', () => {
+                console.log('[MyTags] Tab button touched (touchstart)');
+                setTimeout(() => {
+                    const pane = document.querySelector('#tab-my-tags.active');
+                    if (pane) {
+                        console.log('[MyTags] Tab pane is now active after touch, loading...');
+                        loadMyTags();
+                    }
+                }, 100);
+            }, { passive: true });
         } else {
             console.warn('[MyTags] Tab button not found, will retry...');
             // Retry after a short delay if button not found yet
@@ -420,6 +432,41 @@ function init() {
     
     // Try to attach click listener
     tryAttachClickListener();
+    
+    // Add MutationObserver to watch for tab pane becoming active
+    // This is a fallback for WeChat browser and other environments where events may not fire
+    const observeTabActivation = () => {
+        const tabPane = document.getElementById('tab-my-tags');
+        if (!tabPane) {
+            console.warn('[MyTags] Tab pane not found for MutationObserver');
+            return;
+        }
+        
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    const target = mutation.target;
+                    if (target.classList.contains('active')) {
+                        console.log('[MyTags] Tab pane became active (MutationObserver)');
+                        // Only load if not already loaded or loading
+                        if (!myTagsLoaded && !myTagsLoading) {
+                            loadMyTags();
+                        }
+                    }
+                }
+            }
+        });
+        
+        observer.observe(tabPane, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+        
+        console.log('[MyTags] MutationObserver attached to tab pane');
+    };
+    
+    // Attach observer after a short delay to ensure DOM is ready
+    setTimeout(observeTabActivation, 100);
 
     console.log('[MyTags] Module initialized');
 }
