@@ -4,6 +4,8 @@
  * Implements both frontend (localStorage) and backend caching for fast loading.
  */
 
+import { formatNewsDate } from './core.js';
+
 const MY_TAGS_CATEGORY_ID = 'my-tags';
 const MY_TAGS_CACHE_KEY = 'hotnews_my_tags_cache';
 const MY_TAGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -173,8 +175,8 @@ function createTagCard(tagData) {
 
     const newsListHtml = news.length > 0
         ? news.map((item, idx) => {
-            // Format date using the same function as other news
-            const dateStr = TR.formatNewsDate ? TR.formatNewsDate(item.published_at) : '';
+            // Format date using the imported function
+            const dateStr = formatNewsDate(item.published_at);
             return `
             <li class="news-item" data-news-id="${item.id}">
                 <div class="news-item-content">
