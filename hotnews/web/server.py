@@ -60,6 +60,7 @@ _tag_admin_router = None
 _auth_router = None
 _preferences_router = None
 _source_subscription_router = None
+_keyword_router = None
 _tag_candidate_admin_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
@@ -95,6 +96,9 @@ try:
     
     from hotnews.kernel.user import source_subscription_api
     _source_subscription_router = source_subscription_api.router
+    
+    from hotnews.kernel.user import keyword_api
+    _keyword_router = keyword_api.router
     
     from hotnews.kernel.admin import tag_candidate_admin
     _tag_candidate_admin_router = tag_candidate_admin.router
@@ -428,6 +432,7 @@ if _tag_admin_router: app.include_router(_tag_admin_router)
 if _auth_router: app.include_router(_auth_router)
 if _preferences_router: app.include_router(_preferences_router)
 if _source_subscription_router: app.include_router(_source_subscription_router)
+if _keyword_router: app.include_router(_keyword_router)
 if _tag_candidate_admin_router: 
     app.include_router(_tag_candidate_admin_router)
     from hotnews.kernel.admin.tag_candidate_admin import evolution_router

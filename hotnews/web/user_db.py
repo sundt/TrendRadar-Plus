@@ -180,6 +180,32 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     # Extend news_clicks for preference tracking
     _ensure_column("news_clicks", "tags_json", "TEXT DEFAULT '[]'") if False else None  # news_clicks is in online.db
     
+    # User custom keywords for personalized content matching
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_keywords (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            keyword TEXT NOT NULL,
+            keyword_type TEXT DEFAULT 'exact',
+            case_sensitive INTEGER DEFAULT 0,
+            match_whole_word INTEGER DEFAULT 0,
+            priority INTEGER DEFAULT 0,
+            is_exclude INTEGER DEFAULT 0,
+            auto_expand INTEGER DEFAULT 1,
+            match_count INTEGER DEFAULT 0,
+            last_matched_at INTEGER,
+            related_tags TEXT DEFAULT '[]',
+            enabled INTEGER DEFAULT 1,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(user_id, keyword)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_keywords_user ON user_keywords(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_keywords_enabled ON user_keywords(user_id, enabled)")
+    
     conn.commit()
     _user_db_conn = conn
     return conn
