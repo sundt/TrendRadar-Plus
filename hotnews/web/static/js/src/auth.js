@@ -141,11 +141,79 @@ export function toggleUserDropdown() {
 }
 
 export async function logoutUser() {
+    console.log('[Auth] Logging out...');
+    
+    // Close dropdown
+    const dropdown = document.getElementById('userDropdown');
+    if (dropdown) dropdown.classList.remove('show');
+    
+    // Show loading indicator
+    const avatar = document.querySelector('.user-avatar');
+    if (avatar) {
+        avatar.style.opacity = '0.5';
+        avatar.style.cursor = 'wait';
+        avatar.textContent = '...';
+    }
+    
     try {
-        await fetch('/api/auth/logout', { method: 'POST' });
-        window.location.reload();
+        // Call logout API
+        console.log('[Auth] Calling /api/auth/logout...');
+        const response = await fetch('/api/auth/logout', { 
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Logout failed: ${response.status}`);
+        }
+        
+        console.log('[Auth] Logout successful, clearing caches...');
+        
+        // Clear all relevant caches
+        try {
+            // Clear my-tags cache
+            localStorage.removeItem('hotnews_my_tags_cache');
+            localStorage.removeItem('hotnews_my_tags_cache_timestamp');
+            
+            // Clear any other user-specific data
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('user') || key.includes('auth') || key.includes('session'))) {
+                    keysToRemove.push(key);
+                }
+            }
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            
+            console.log('[Auth] Caches cleared');
+        } catch (e) {
+            console.warn('[Auth] Failed to clear some caches:', e);
+        }
+        
+        // Reload page to show logged-out state
+        console.log('[Auth] Reloading page...');
+        window.location.href = window.location.pathname; // Force reload without hash
+        
     } catch (e) {
-        alert('退出失败');
+        console.error('[Auth] Logout failed:', e);
+        alert('退出失败，请重试');
+        
+        // Restore avatar
+        if (avatar) {
+            avatar.style.opacity = '1';
+            avatar.style.cursor = 'pointer';
+            // Try to restore original initial
+            try {
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+                if (data.ok && data.user) {
+                    const name = data.user.nickname || data.user.email || 'Me';
+                    avatar.textContent = name[0].toUpperCase();
+                }
+            } catch (e2) {
+                avatar.textContent = '?';
+            }
+        }
     }
 }
 
