@@ -2491,6 +2491,13 @@ async def api_news(
     except Exception:
         pass
 
+    # Inject my-tags category (must be done before RSS injection)
+    try:
+        from .page_rendering import _inject_my_tags_category
+        data = _inject_my_tags_category(data)
+    except Exception:
+        pass
+
     try:
         data = _inject_rss_subscription_news_into_data(request=request, data=data)
     except Exception:
