@@ -107,3 +107,4 @@ node_modules/
 # GitHub Actions / Templates
 .github/
 we-mp-rss/
+wechat-article-exporter/
