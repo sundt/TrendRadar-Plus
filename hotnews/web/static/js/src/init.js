@@ -119,34 +119,18 @@ ready(function () {
 
     _setupMobileTopToggle();
 
-    // Initialize Auth State Manager
-    (async () => {
-        try {
-            // Check for OAuth login callback
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('login')) {
-                console.log('[Init] OAuth login callback detected');
-                await authState.onLogin();
-                // Clean up URL
-                urlParams.delete('login');
-                const newUrl = urlParams.toString()
-                    ? `${window.location.pathname}?${urlParams}`
-                    : window.location.pathname;
-                window.history.replaceState({}, '', newUrl);
-            } else {
-                // Normal init
-                await authState.init();
-            }
-
-            // Initialize AuthButton component if container exists
-            const authContainer = document.getElementById('authButtonContainer');
-            if (authContainer) {
-                new AuthButton(authContainer);
-            }
-        } catch (e) {
-            console.error('[Init] Auth initialization failed:', e);
+    // Initialize AuthButton component if container exists
+    // Note: authState auto-initializes on module load, so user data should be available
+    const initAuthButton = () => {
+        const authContainer = document.getElementById('authButtonContainer');
+        if (authContainer) {
+            new AuthButton(authContainer);
+            console.log('[Init] AuthButton initialized');
         }
-    })();
+    };
+
+    // Wait a short time for authState to complete initialization
+    setTimeout(initAuthButton, 100);
 
     // 检查栏目设置 NEW 标记是否应该隐藏
     if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {

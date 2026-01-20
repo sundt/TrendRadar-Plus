@@ -226,5 +226,41 @@ class AuthStateManager {
 // Singleton instance
 export const authState = new AuthStateManager();
 
+// Auto-initialize on module load
+(async () => {
+    try {
+        // Check for OAuth login callback
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('login')) {
+            console.log('[AuthState] OAuth login callback detected, refreshing user...');
+            await authState.onLogin();
+            // Clean up URL
+            urlParams.delete('login');
+            const newUrl = urlParams.toString()
+                ? `${window.location.pathname}?${urlParams}`
+                : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        } else if (urlParams.has('logout')) {
+            console.log('[AuthState] Logout callback detected, clearing state...');
+            authState.currentUser = null;
+            authState.initialized = true;
+            authState._notifyListeners();
+            // Clean up URL
+            urlParams.delete('logout');
+            const newUrl = urlParams.toString()
+                ? `${window.location.pathname}?${urlParams}`
+                : window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        } else {
+            // Normal init
+            await authState.init();
+        }
+        console.log('[AuthState] Auto-initialization complete, user:', authState.currentUser ? 'logged in' : 'not logged in');
+    } catch (e) {
+        console.error('[AuthState] Auto-initialization failed:', e);
+        authState.initialized = true;
+    }
+})();
+
 // Expose to window for debugging
 window.authState = authState;
