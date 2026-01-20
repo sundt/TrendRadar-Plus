@@ -2,6 +2,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Use Aliyun mirror for faster apt package downloads in China
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
+    sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+
 # Install build dependencies for bcrypt (required for compilation if wheel not available)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
