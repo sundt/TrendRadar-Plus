@@ -79,8 +79,9 @@ def _get_asset_rev(project_root) -> str:
     if forced:
         return forced
 
+    # Use the new esbuild output files
     css_path = project_root / "hotnews" / "web" / "static" / "css" / "viewer.css"
-    js_path = project_root / "hotnews" / "web" / "static" / "js" / "viewer.bundle.js"
+    js_path = project_root / "hotnews" / "web" / "static" / "js" / "index.js"
 
     h = hashlib.md5()
     found = False
