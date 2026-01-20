@@ -21,7 +21,7 @@ def _inject_my_tags_category(data: Dict[str, Any]) -> Dict[str, Any]:
 
         my_tags = {
             "id": "my-tags",
-            "name": "我的标签",
+            "name": "我的关注",
             "icon": "🏷️",
             "platforms": {},
             "news_count": 0,
