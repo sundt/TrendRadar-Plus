@@ -4,6 +4,15 @@
 
 This implementation integrates RSS/custom source subscription into the existing user settings page. The approach extends the current local state management pattern, adds tab-based UI switching, and implements source search with subscription management. All changes are made to `hotnews/kernel/templates/user_settings.html`.
 
+## Status
+
+✅ **COMPLETED** - Source search API fixed and deployed (2026-01-20)
+
+### Bug Fixes Applied:
+1. Fixed import: `_get_session_token` (was `_get_session_from_cookie`)
+2. Fixed import: `validate_session` (was `get_session_user`)
+3. Fixed SQL columns: `name`, `url`, `enabled` (was `feed_title`, `feed_url`, `status`)
+
 ## Tasks
 
 - [x] 1. Extend local state structure for unified following
