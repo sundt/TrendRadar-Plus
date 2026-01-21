@@ -3209,6 +3209,16 @@ async def on_startup():
     except Exception as e:
         print(f"⚠️ WeChat scheduler start failed: {e}")
 
+    # Initialize WeChat shared credentials service (load from SQLite)
+    try:
+        from hotnews.kernel.services.wechat_shared_credentials import init_shared_credentials
+        init_shared_credentials()
+        print("✅ WeChat shared credentials service initialized")
+    except ImportError:
+        pass  # Kernel module not available
+    except Exception as e:
+        print(f"⚠️ WeChat shared credentials init failed: {e}")
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
