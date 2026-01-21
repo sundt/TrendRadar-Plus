@@ -156,7 +156,7 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             display: none;
             /* 默认隐藏，由 JS 添加 .categories-ready 后显示 */
-            gap: 6px;
+            gap: 4px;
             overflow-x: hidden;
             flex-wrap: nowrap;
             justify-content: flex-start;
@@ -190,9 +190,10 @@
         }
 
         .category-tab {
-            flex: 0 0 calc((100% - 42px) / 8);
-            min-width: 80px;
-            padding: 6px 10px;
+            flex: 1 1 0;
+            min-width: 60px;
+            max-width: 120px;
+            padding: 6px 8px;
             background: #f3f4f6;
             border-radius: 8px;
             text-align: center;
@@ -200,6 +201,13 @@
             transition: all 0.2s ease;
             border: 1px solid transparent;
             position: relative;
+            overflow: hidden;
+        }
+        
+        .category-tab-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .category-drag-handle {
