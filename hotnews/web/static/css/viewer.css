@@ -191,8 +191,7 @@
 
         .category-tab {
             flex: 1 1 0;
-            min-width: 60px;
-            max-width: 120px;
+            min-width: 0;
             padding: 6px 8px;
             background: #f3f4f6;
             border-radius: 8px;
