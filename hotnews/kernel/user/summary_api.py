@@ -446,6 +446,24 @@ async def delete_summary(request: Request, news_id: str):
     return {"ok": True, "news_id": news_id}
 
 
+@router.get("/list")
+async def list_summarized(request: Request):
+    """Get list of news_ids that have been summarized by current user."""
+    user = _get_current_user(request)
+    conn = _get_user_db_conn(request)
+    
+    _ensure_favorites_table(conn)
+    
+    cur = conn.execute(
+        "SELECT news_id FROM user_favorites WHERE user_id = ? AND summary IS NOT NULL AND summary != ''",
+        (user["id"],)
+    )
+    rows = cur.fetchall() or []
+    news_ids = [row[0] for row in rows]
+    
+    return {"ok": True, "news_ids": news_ids}
+
+
 # Create a separate router for user token API
 user_router = APIRouter(prefix="/api/user", tags=["user"])
 
