@@ -35,8 +35,9 @@ fi
 
 # Step 2: Git Push
 echo ">>> Step 2: Git Push..."
-git push origin main
-echo "✅ Pushed to origin/main"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push origin "$CURRENT_BRANCH"
+echo "✅ Pushed to origin/$CURRENT_BRANCH"
 
 # Step 3: Remote Rebuild
 echo ">>> Step 3: Remote Rebuild on ${SERVER_HOST}..."
@@ -47,13 +48,20 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     echo "   [Remote] cd ${SERVER_PROJECT_ROOT}..."
     cd ${SERVER_PROJECT_ROOT}
     
-    # Force sync with remote to ensure all files (including binaries) are present
-    echo "   [Remote] Force syncing..."
-    git fetch origin
-    git reset --hard origin/main
+    # Get current branch from local
+    BRANCH="$CURRENT_BRANCH"
     
-    echo "   [Remote] Updating submodules..."
-    git submodule update --init --recursive
+    # Clean up old kernel submodule files if they exist
+    if [ -d "hotnews/kernel" ] && [ ! -f "hotnews/kernel/__init__.py" ]; then
+        echo "   [Remote] Cleaning old kernel submodule..."
+        rm -rf hotnews/kernel
+    fi
+    
+    # Force sync with remote
+    echo "   [Remote] Force syncing branch \$BRANCH..."
+    git fetch origin
+    git checkout \$BRANCH 2>/dev/null || git checkout -b \$BRANCH origin/\$BRANCH
+    git reset --hard origin/\$BRANCH
     
     echo "   [Remote] Building services ($SERVICES)..."
     cd docker
@@ -61,12 +69,6 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     
     echo "   [Remote] Creating containers..."
     docker compose -f ${DC_FILE} up -d --force-recreate $SERVICES
-    
-    echo "   [Remote] Running Database Migration..."
-    # Wait for container to be ready
-    sleep 5
-    docker cp ../scripts/migrate_add_use_scraperapi.py hotnews-viewer:/tmp/migrate_db.py
-    docker exec hotnews-viewer python /tmp/migrate_db.py /app/output/online.db
     
     echo "   ✅ Remote steps completed."
 EOF
