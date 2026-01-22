@@ -28,8 +28,9 @@ else
     echo "✅ Committed: $MSG"
 fi
 
-git push origin main
-echo "✅ Pushed to origin/main"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push origin "$CURRENT_BRANCH"
+echo "✅ Pushed to origin/$CURRENT_BRANCH"
 
 # Step 2: Remote Sync & Restart
 echo ">>> Step 2: Remote Sync & Restart..."
@@ -38,12 +39,12 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     echo "   [Remote] cd ${SERVER_PROJECT_ROOT}..."
     cd ${SERVER_PROJECT_ROOT}
     
-    echo "   [Remote] Syncing code..."
-    git fetch origin
-    git reset --hard origin/main
+    BRANCH="$CURRENT_BRANCH"
     
-    echo "   [Remote] Updating submodules..."
-    git submodule update --init --recursive
+    echo "   [Remote] Syncing code (branch: \$BRANCH)..."
+    git fetch origin
+    git checkout \$BRANCH 2>/dev/null || git checkout -b \$BRANCH origin/\$BRANCH
+    git reset --hard origin/\$BRANCH
     
     echo "   [Remote] Restarting containers (no rebuild)..."
     cd docker
