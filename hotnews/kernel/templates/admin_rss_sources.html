@@ -1,0 +1,2043 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="admin-token" content="{{ token }}" />
+  <title>RSS Source Admin</title>
+  <link rel="stylesheet" href="/static_kernel/css/admin_rss_sources.css" />
+</head>
+
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container">
+  </div>
+
+  <!-- AI Batch Import Modal -->
+  <div id="ai-batch-import-modal" class="modal-overlay"
+    style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:9999;">
+    <div class="modal-content" style="width:600px; max-width:90%;">
+      <div class="modal-header">
+        <h3>📥 批量导入模型 (Batch Import)</h3>
+        <button class="btn-close"
+          onclick="document.getElementById('ai-batch-import-modal').style.display='none'">×</button>
+      </div>
+      <div class="modal-body" style="padding:20px;">
+        <p style="font-size:12px; color:#666; margin-bottom:10px;">
+          格式: <code>ProviderID | ModelName | Priority | Expires(Optional)</code><br>
+          例如: <code>dashscope | qwen-plus | 10 | 2026-02-28</code>
+        </p>
+        <textarea id="ai-batch-import-text" class="form-control"
+          style="width:100%; height:150px; font-family:monospace; font-size:12px;"
+          placeholder="Paste your list here..."></textarea>
+
+        <div style="margin-top:10px;">
+          <label><input type="radio" name="import-mode" value="append" checked> Append (保留现有)</label> &nbsp;
+          <label><input type="radio" name="import-mode" value="replace"> Replace All (覆盖所有)</label>
+        </div>
+
+        <div id="ai-batch-preview"
+          style="display:none; margin-top:15px; max-height:150px; overflow-y:auto; border:1px solid #eee;">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="previewBatchImport()">👁 Preview</button>
+        <button class="btn btn-primary" id="btn-confirm-import" onclick="submitBatchImport()" disabled>🚀 Confirm
+          Import</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="admin-header">
+      <h1>RSS Source Admin</h1>
+      <button class="btn-logout" onclick="handleLogout()" title="退出登录">
+        🚪 退出
+      </button>
+    </div>
+
+    <!-- AI Batch Import Modal -->
+    <div id="ai-batch-import-modal" class="modal-overlay"
+      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; z-index:9999;">
+      <div class="modal-content" style="width:600px; max-width:90%;">
+        <div class="modal-header">
+          <h3>📥 批量导入模型 (Batch Import)</h3>
+          <button class="btn-close"
+            onclick="document.getElementById('ai-batch-import-modal').style.display='none'">×</button>
+        </div>
+        <div class="modal-body" style="padding:20px;">
+          <p style="font-size:12px; color:#666; margin-bottom:10px;">
+            格式: <code>ProviderID | ModelName | Priority | Expires(Optional)</code><br>
+            例如: <code>dashscope | qwen-plus | 10 | 2026-02-28</code>
+          </p>
+          <textarea id="ai-batch-import-text" class="form-control"
+            style="width:100%; height:150px; font-family:monospace; font-size:12px;"
+            placeholder="Paste your list here..."></textarea>
+
+          <div style="margin-top:10px;">
+            <label><input type="radio" name="import-mode" value="append" checked> Append (保留现有)</label> &nbsp;
+            <label><input type="radio" name="import-mode" value="replace"> Replace All (覆盖所有)</label>
+          </div>
+
+          <div id="ai-batch-preview"
+            style="display:none; margin-top:15px; max-height:150px; overflow-y:auto; border:1px solid #eee;">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="previewBatchImport()">👁 Preview</button>
+          <button class="btn btn-primary" id="btn-confirm-import" onclick="submitBatchImport()" disabled>🚀 Confirm
+            Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tabs" style="margin-top: 20px;">
+      <button data-tab="unified">📱 全部平台</button>
+      <button data-tab="catalog" class="active">📋 RSS 源列表</button>
+      <button data-tab="custom">🛠️ 自定义源</button>
+      <button data-tab="newsnow">📊 热榜源</button>
+      <button data-tab="import">📥 导入管理</button>
+      <button data-tab="requests">📨 请求审核</button>
+      <button data-tab="rules">⚙️ 规则配置</button>
+      <button data-tab="settings">🛠️ 系统配置</button>
+      <button data-tab="usage">📊 使用统计</button>
+      <button data-tab="user-stats">👥 用户统计</button>
+      <button data-tab="tag-candidates">🏷️ 标签发现</button>
+    </div>
+
+
+    <!-- Tab Panel: Unified Platform Management -->
+    <div class="tab-panel" data-panel="unified">
+      <h2>统一平台管理 (Unified Platform)</h2>
+
+      <!-- Category Management Section -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h3>默认栏目管理</h3>
+          <button class="btn btn-sm" onclick="openCategoryModal()">➕ 新建栏目</button>
+        </div>
+        <div id="category-pills" style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <!-- Loaded via JS -->
+          <div class="muted">Loading categories...</div>
+        </div>
+      </div>
+
+      <!-- Platform List Section -->
+      <div class="card">
+        <div class="row" style="margin-bottom:10px; gap: 10px; flex-wrap: wrap; align-items: center;">
+          <input type="text" id="unified-search" placeholder="搜索平台名称..." style="flex: 1; min-width: 200px;"
+            oninput="filterUnifiedPlatforms()" />
+
+          <select id="unified-filter-category" onchange="filterUnifiedPlatforms()"
+            style="border:1px solid #d1d5db; border-radius:6px; padding:6px;">
+            <option value="">所有栏目</option>
+            <!-- Loaded via JS -->
+          </select>
+
+          <select id="unified-filter-type" onchange="filterUnifiedPlatforms()"
+            style="border:1px solid #d1d5db; border-radius:6px; padding:6px;">
+            <option value="">所有类型</option>
+            <option value="newsnow">热榜源 (NewsNow)</option>
+            <option value="rss">RSS源</option>
+            <option value="api">API源</option>
+            <option value="html">HTML源</option>
+          </select>
+
+          <div style="flex-grow: 1;">
+          </div>
+
+          <div class="row-actions">
+            <button class="btn btn-sm" onclick="openBatchCategoryModal()">📂 设置栏目</button>
+            <button class="btn btn-sm" onclick="batchToggleUnified(true)">✅ 批量启用</button>
+            <button class="btn btn-danger btn-sm" onclick="batchToggleUnified(false)">🚫 批量禁用</button>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table id="unified-table">
+            <thead>
+              <tr>
+                <th style="width:30px;">
+                  <input type="checkbox" id="unified-select-all" onclick="toggleSelectAllUnified()">
+                </th>
+                <th style="width:40px;"></th>
+                <th style="width:80px;">类型</th>
+                <th style="width:200px;">名称</th>
+                <th style="width:120px;">当前栏目</th>
+                <th style="width:60px;">状态</th>
+                <th style="width:140px;">最后更新</th>
+                <th style="width:100px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="unified-tbody">
+              <!-- Loaded via JS -->
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #6b7280;">
+          显示 <span id="unified-count">0</span> 个平台
+        </div>
+      </div>
+    </div>
+
+    <!-- Category Modal -->
+    <div id="category-modal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeCategoryModal()">&times;</span>
+        <h2 id="category-modal-title">编辑栏目</h2>
+        <div class="form-group">
+          <label>ID</label>
+          <input type="text" id="cat-id" placeholder="id (e.g. 'tech')" />
+          <small class="muted">创建后ID不可修改</small>
+        </div>
+        <div class="form-group">
+          <label>名称 (Display Name)</label>
+          <input type="text" id="cat-name" placeholder="显示名称 (e.g. '科技')" />
+        </div>
+        <div class="form-group">
+          <label>图标 (Emoji)</label>
+          <input type="text" id="cat-icon" placeholder="例如: 📰" style="width: 80px;" />
+        </div>
+        <div class="form-group">
+          <label>排序权重 (0-100, 小靠前)</label>
+          <input type="number" id="cat-order" placeholder="0" />
+        </div>
+        <button class="btn btn-primary" onclick="saveCategory()">保存</button>
+      </div>
+    </div>
+
+    <!-- Batch Category Modal -->
+    <div id="batch-cat-modal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeBatchCategoryModal()">&times;</span>
+        <h2>批量设置栏目</h2>
+        <div class="form-group">
+          <label>选择栏目</label>
+          <select id="batch-cat-select" style="width:100%; border:1px solid #ddd; padding:8px; border-radius:4px;">
+            <!-- Populated by JS -->
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="executeBatchCategory()">确定应用</button>
+      </div>
+    </div>
+
+    <!-- Tab Panel: Rules Configuration -->
+    <div class="tab-panel" data-panel="rules">
+      <h2>Morning Brief Rules</h2>
+      <div class="card">
+        <div class="muted" style="margin-bottom:8px;">
+          Edit <code>morning_brief_rules_v1</code> (JSON). Changes take effect immediately.
+        </div>
+        <textarea id="mb-rules-text"
+          style="width:100%;min-height:160px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;"
+          placeholder='{"enabled":true,"drop_published_at_zero":true,"topic_keywords":["ai"],"depth_keywords":[],"negative_hard":[],"negative_soft":[],"source_scores":{},"source_decay":{"second":0.6,"third_plus":0.3},"overrides":{"force_top":[],"force_blacklist":[]}}'>
+</textarea>
+        <div style="height:10px;">
+        </div>
+        <div class="row" style="align-items:center;">
+          <button class="btn btn-primary" onclick="loadMorningBriefRules()">Load</button>
+          <button class="btn btn-primary" onclick="validateMorningBriefRules()">Validate</button>
+          <button class="btn btn-primary" onclick="saveMorningBriefRules()">Save</button>
+          <span class="muted" id="mb-rules-status">
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Panel: Import Management -->
+    <div class="tab-panel" data-panel="import">
+      <h2>CSV Paste Import</h2>
+      <div class="card">
+        <div class="muted" style="margin-bottom:8px;">
+          Paste CSV rows and import into <code>rss_sources</code>.
+        </div>
+        <div class="muted" style="margin-bottom:8px;">
+          Supported formats:
+          <div style="margin-top:4px;">
+            <div>
+              <b>URL-only</b>: one RSS URL per line (Preview will autofill fields)
+            </div>
+            <div>
+              <b>Headerless fixed-order (8/9 columns)</b>:
+              name,url,seed_last_updated,category,feed_type,country,language,source[,added_at]
+            </div>
+            <div>
+              <b>Chinese headers</b>: 标题,订阅地址,最后更新,分类,类型,国家,语言,来源,添加时间
+            </div>
+          </div>
+        </div>
+        <textarea id="csv-import-text"
+          style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;"
+          placeholder="Example (URL-only):\nhttps://blog.samaltman.com/posts.atom\nhttps://blog.google/technology/ai/rss/\n\nExample (CSV):\nGoogle Blog AI,https://blog.google/technology/ai/rss/,,人工智能,分类订阅,美国,英文,手动添加,2026-01-09 10:00">
+</textarea>
+        <div style="height:10px;">
+        </div>
+        <div class="row" style="align-items:center;">
+          <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
+          <button class="btn btn-primary" onclick="commitCsvImport()">Commit</button>
+          <button class="btn btn-danger" onclick="bulkDisableByUrls()">Bulk Disable (From URLs)</button>
+          <button class="btn btn-primary" onclick="bulkEnableCatalogAll()">Bulk Enable Catalog (All)</button>
+          <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">Bulk Disable Catalog (All)</button>
+          <button class="btn btn-primary" onclick="exportCatalogAll()">Export Catalog (All)</button>
+          <span class="muted" id="csv-import-status">
+          </span>
+        </div>
+        <div style="height:10px;">
+        </div>
+        <div id="csv-import-result">
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Panel: Request Review -->
+    <div class="tab-panel" data-panel="requests">
+      <h2>Pending Requests</h2>
+      <div class="card">
+        {% if pending and pending|length > 0 %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>URL</th>
+                <th>Note</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in pending %}
+              <tr>
+                <td>{{ r.id }}</td>
+                <td style="max-width:240px; word-break:break-word;">
+                  <b>{{ r.title }}</b>
+                </td>
+                <td style="max-width:520px; word-break:break-all;">
+                  <div>
+                    <b>{{ r.host }}</b>
+                  </div>
+                  <div class="muted">{{ r.url }}</div>
+                </td>
+                <td style="max-width:280px; word-break:break-word;">{{ r.note }}</td>
+                <td>
+                  <div class="row">
+                    <input type="text" id="name-{{ r.id }}" placeholder="Source name (optional)" />
+                    <button class="btn btn-primary" data-id="{{ r.id }}"
+                      onclick="approveReq(this.dataset.id)">Approve</button>
+                    <input type="text" id="reason-{{ r.id }}" placeholder="Reject reason" />
+                    <button class="btn btn-danger" data-id="{{ r.id }}"
+                      onclick="rejectReq(this.dataset.id)">Reject</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="muted">No pending requests.</div>
+        {% endif %}
+      </div>
+
+      <h2>Rejected Requests</h2>
+      <div class="card">
+        {% if rejected and rejected|length > 0 %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>URL</th>
+                <th>Reason</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rejected %}
+              <tr>
+                <td>{{ r.id }}</td>
+                <td style="max-width:240px; word-break:break-word;">
+                  <b>{{ r.title }}</b>
+                </td>
+                <td style="max-width:520px; word-break:break-all;">
+                  <div>
+                    <b>{{ r.host }}</b>
+                  </div>
+                  <div class="muted">{{ r.url }}</div>
+                </td>
+                <td style="max-width:280px; word-break:break-word;">{{ r.reason }}</td>
+                <td>
+                  <div class="row">
+                    <button class="btn" data-id="{{ r.id }}" onclick="reopenReq(this.dataset.id)">Reopen</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="muted">No rejected requests.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Tab Panel: Custom Sources (Unified API + HTML) -->
+    <div class="tab-panel" data-panel="custom">
+      <h2>自定义源列表 (API + HTML + Script)</h2>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px; gap:10px; flex-wrap:wrap; align-items:center;">
+          <input type="text" id="custom-search" placeholder="搜索名称或 ID"
+            style="flex: 1; min-width: 200px; max-width: 300px;" oninput="filterCustomSources('all')" />
+
+          <!-- Category Filter -->
+          <select id="custom-filter-category" onchange="filterCustomSources('all')"
+            style="border:1px solid #d1d5db; border-radius:6px; padding:6px;">
+            <option value="">所有栏目</option>
+            <option value="explore">深入探索</option>
+            <option value="知识">每日AI早报</option>
+            <option value="ainews">AI资讯</option>
+            <option value="finance">财经投资</option>
+            <option value="tech_news">科技资讯</option>
+            <option value="developer">开发者</option>
+            <option value="social">社交娱乐</option>
+            <option value="general">综合新闻</option>
+            <option value="sports">体育</option>
+          </select>
+
+          <!-- Status Filter -->
+          <select id="custom-filter-status" onchange="filterCustomSources('all')"
+            style="border:1px solid #d1d5db; border-radius:6px; padding:6px;">
+            <option value="">所有状态</option>
+            <option value="enabled">已启用</option>
+            <option value="disabled">已禁用</option>
+            <option value="error">有错误</option>
+            <option value="backoff">退避中</option>
+          </select>
+
+          <div style="flex-grow:1;"></div>
+
+          <!-- Batch Actions -->
+          <div class="dropdown" style="display:inline-block;">
+            <button class="btn btn-sm dropdown-toggle" onclick="toggleDropdown('custom-bulk-dropdown')">批量操作</button>
+            <div class="dropdown-menu" id="custom-bulk-dropdown">
+              <button class="dropdown-item" onclick="bulkEnableCustom('all'); closeDropdown('custom-bulk-dropdown')">✅
+                批量启用</button>
+              <button class="dropdown-item" onclick="bulkDisableCustom('all'); closeDropdown('custom-bulk-dropdown')">⛔
+                批量禁用</button>
+              <div style="border-top:1px solid #e5e7eb; margin:4px 0;"></div>
+              <button class="dropdown-item"
+                onclick="bulkSetScraperAPICustom(true); closeDropdown('custom-bulk-dropdown')">🔒 批量启用
+                ScraperAPI</button>
+              <button class="dropdown-item"
+                onclick="bulkSetScraperAPICustom(false); closeDropdown('custom-bulk-dropdown')">🔓 批量禁用
+                ScraperAPI</button>
+              <div style="border-top:1px solid #e5e7eb; margin:4px 0;"></div>
+              <button class="dropdown-item"
+                onclick="openBatchCategoryModalCustom(); closeDropdown('custom-bulk-dropdown')">📂
+                设置栏目</button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openEditCustomSourceModal('all')">➕ 添加自定义源</button>
+        </div>
+
+        <div class="table-scroll">
+          <table id="custom-table">
+            <thead>
+              <tr>
+                <th style="width:30px;">
+                  <input type="checkbox" id="custom-select-all" onclick="toggleSelectAllCustom('all')">
+                </th>
+                <th style="width:40px;">
+                </th>
+                <th style="width:60px;">状态</th>
+                <th style="width:70px;">类型</th>
+                <th style="width:260px;">名称 / URL</th>
+                <th style="width:100px;">当前栏目</th>
+                <th style="width:140px;">时间</th>
+                <th style="width:120px;">统计</th>
+                <th style="width:100px;">最新</th>
+                <th style="width:140px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="custom-tbody">
+              <!-- Loaded via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Panel: NewsNow Platforms -->
+    <div class="tab-panel" data-panel="newsnow">
+      <h2>热榜源管理 (NewsNow API)</h2>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px; gap:10px;">
+          <input type="text" id="newsnow-search" placeholder="搜索平台..." style="flex: 1; max-width: 300px;"
+            oninput="filterNewsNow()" />
+          <button class="btn" onclick="migrateNewsNowFromConfig()">📥 从配置文件导入</button>
+          <button class="btn btn-primary" onclick="showReloadInstructions()">🔄 重新加载配置</button>
+          <button class="btn btn-primary" onclick="openNewsNowModal()">➕ 添加平台</button>
+        </div>
+
+        <div class="table-scroll">
+          <table id="newsnow-table">
+            <thead>
+              <tr>
+                <th style="width:120px;">ID</th>
+                <th style="width:160px;">名称</th>
+                <th style="width:100px;">分类</th>
+                <th style="width:80px;">状态</th>
+                <th style="width:140px;">最后获取</th>
+                <th style="width:180px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="newsnow-tbody">
+              <!-- Loaded via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit NewsNow Platform Modal -->
+    <div id="newsnow-modal"
+      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+      <div class="card"
+        style="width:400px; max-width:90%; padding:20px; display:flex; flex-direction:column; gap:12px;">
+        <h3>编辑热榜平台</h3>
+        <input type="hidden" id="newsnow-edit-original-id" />
+
+        <div class="row">
+          <label style="width:80px;">ID:</label>
+          <input type="text" id="newsnow-edit-id" placeholder="weibo" style="flex:1;" />
+        </div>
+        <div class="row">
+          <label style="width:80px;">名称:</label>
+          <input type="text" id="newsnow-edit-name" placeholder="微博" style="flex:1;" />
+        </div>
+        <div class="row">
+          <label style="width:80px;">分类:</label>
+          <select id="newsnow-edit-category" style="flex:1;">
+            <option value="">未分类</option>
+            <option value="general">📰 综合新闻</option>
+            <option value="finance">💰 财经投资</option>
+            <option value="social">🔥 社交娱乐</option>
+            <option value="tech_news">📱 科技资讯</option>
+            <option value="sports">🏀 体育</option>
+          </select>
+        </div>
+        <div class="row">
+          <label style="width:80px;">排序:</label>
+          <input type="number" id="newsnow-edit-order" value="0" style="width:80px;" />
+        </div>
+        <div class="row">
+          <label style="width:80px;">启用:</label>
+          <input type="checkbox" id="newsnow-edit-enabled" checked />
+        </div>
+
+        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:10px;">
+          <button class="btn" onclick="closeNewsNowModal()">取消</button>
+          <button class="btn btn-primary" onclick="saveNewsNowPlatform()">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fully cleaned up duplicate modal -->
+
+    <!-- Tab Panel: RSS Source Catalog (Active by default) -->
+    <div class="tab-panel active" data-panel="catalog">
+      <!-- Quick Add RSS -->
+      <div class="quick-add">
+        <input type="text" id="quick-add-url" placeholder="输入 RSS URL 快速添加 (一键 Preview → Commit → Warmup)" />
+        <button class="btn btn-primary" onclick="quickAddRss()">➕ 快速添加</button>
+      </div>
+
+      <h2>Catalog (All)</h2>
+      <div class="card" id="rss-catalog-all">
+        <div class="row" style="align-items:center; margin-bottom:10px;">
+          <input type="text" id="catalog-search" placeholder="Search" style="flex: 1; max-width: 300px;" />
+
+          <!-- Quick Filter Buttons -->
+          <button class="btn" data-filter="ALL" onclick="setCatalogFilter('ALL')" title="显示全部">
+            全部 ({{ sources|length }})
+          </button>
+          <button class="btn btn-primary" data-filter="ABNORMAL" onclick="setCatalogFilter('ABNORMAL')" title="异常状态">
+            🔴 异常 ({{ health_abnormal_count or 0 }})
+          </button>
+
+          <!-- Category Filter HTML -->
+          <select id="catalog-category-filter" onchange="setCatalogFilter()"
+            style="border:1px solid #d1d5db; border-radius:6px; padding:6px; margin-left:8px;">
+            <option value="">所有栏目</option>
+            <option value="explore">深入探索</option>
+            <option value="知识">每日AI早报</option>
+            <option value="ainews">AI资讯</option>
+            <option value="finance">财经投资</option>
+            <option value="tech_news">科技资讯</option>
+            <option value="developer">开发者</option>
+            <option value="social">社交娱乐</option>
+            <option value="general">综合新闻</option>
+            <option value="sports">体育</option>
+          </select>
+
+          <!-- Filter Dropdown -->
+          <div class="dropdown">
+            <button class="btn dropdown-toggle" onclick="toggleDropdown('filter-dropdown')">更多筛选</button>
+            <div class="dropdown-menu" id="filter-dropdown">
+              <button class="dropdown-item" onclick="setCatalogFilter('OK'); closeDropdown('filter-dropdown')">
+                ✅ 正常 (OK) <span class="muted" style="float:right;">{{ (health_kpi or {}).get('OK', 0) }}</span>
+              </button>
+              <button class="dropdown-item" onclick="setCatalogFilter('FAIL'); closeDropdown('filter-dropdown')">
+                ❌ 失败 (FAIL) <span class="muted" style="float:right;">{{ (health_kpi or {}).get('FAIL', 0) }}</span>
+              </button>
+              <button class="dropdown-item" onclick="setCatalogFilter('BACKOFF'); closeDropdown('filter-dropdown')">
+                ⏸️ 退避 (BACKOFF) <span class="muted" style="float:right;">{{ (health_kpi or {}).get('BACKOFF', 0)
+                  }}</span>
+              </button>
+              <button class="dropdown-item" onclick="setCatalogFilter('NEVER_TRIED'); closeDropdown('filter-dropdown')">
+                🆕 未尝试 <span class="muted" style="float:right;">{{ (health_kpi or {}).get('NEVER_TRIED', 0) }}</span>
+              </button>
+              <button class="dropdown-item" onclick="setCatalogFilter('OK_EMPTY'); closeDropdown('filter-dropdown')">
+                📭 空 (OK_EMPTY) <span class="muted" style="float:right;">{{ (health_kpi or {}).get('OK_EMPTY', 0)
+                  }}</span>
+              </button>
+              <button class="dropdown-item" onclick="setCatalogFilter('STALE'); closeDropdown('filter-dropdown')">
+                🕒 长期不更新 <span class="muted" style="float:right;">{{ (health_kpi or {}).get('STALE', 0) }}</span>
+              </button>
+              <button class="dropdown-item" onclick="setCatalogFilter('DISABLED'); closeDropdown('filter-dropdown')">
+                ⛔ 已禁用 <span class="muted" style="float:right;">{{ (health_kpi or {}).get('DISABLED', 0) }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="flex:1">
+          </div>
+
+          <!-- Bulk Actions Dropdown -->
+          <div class="row" style="align-items:center;" id="bulk-actions-toolbar">
+            <span class="muted" id="bulk-selection-info" style="margin-right:8px;">Selected: 0</span>
+            <div class="dropdown">
+              <button class="btn dropdown-toggle" onclick="toggleDropdown('bulk-dropdown')">批量操作</button>
+              <div class="dropdown-menu" id="bulk-dropdown">
+                <button class="dropdown-item" onclick="bulkWarmupSelected(); closeDropdown('bulk-dropdown')">⚡️ 批量抓取
+                  (Warmup)</button>
+                <button class="dropdown-item" onclick="bulkSetCategorySelected(); closeDropdown('bulk-dropdown')">📂
+                  批量设置栏目</button>
+                <button class="dropdown-item" onclick="bulkClearBackoffAndRetry(); closeDropdown('bulk-dropdown')">🔄
+                  清除退避并重试</button>
+                <button class="dropdown-item" onclick="bulkSetEnabledSelected(1); closeDropdown('bulk-dropdown')">✅
+                  批量启用</button>
+                <button class="dropdown-item" onclick="bulkSetEnabledSelected(0); closeDropdown('bulk-dropdown')">⛔
+                  批量禁用</button>
+                <div style="border-top:1px solid #e5e7eb; margin:4px 0;">
+                </div>
+                <button class="dropdown-item"
+                  onclick="bulkSetScraperAPISelected(true); closeDropdown('bulk-dropdown')">🔒 批量启用 ScraperAPI</button>
+                <button class="dropdown-item"
+                  onclick="bulkSetScraperAPISelected(false); closeDropdown('bulk-dropdown')">🔓 批量禁用 ScraperAPI</button>
+                <button class="dropdown-item"
+                  onclick="bulkSetSocksProxySelected(true); closeDropdown('bulk-dropdown')">🌐 批量启用 Socks5</button>
+                <button class="dropdown-item"
+                  onclick="bulkSetSocksProxySelected(false); closeDropdown('bulk-dropdown')">🌐 批量禁用 Socks5</button>
+                <div style="border-top:1px solid #e5e7eb; margin:4px 0;">
+                </div>
+                <button class="dropdown-item danger" onclick="bulkDeleteSelected(); closeDropdown('bulk-dropdown')">🗑️
+                  批量删除</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reload Cache Button -->
+          <button class="btn btn-secondary" onclick="reloadPlatformCache()" title="刷新平台和分类缓存，使禁用/启用的源立即生效"
+            style="margin-left: 8px;">
+            🔄 刷新缓存
+          </button>
+        </div>
+
+
+
+        {% if sources and sources|length > 0 %}
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px;">
+                  <input type="checkbox" id="select-all-visible" onclick="toggleSelectAllVisible(this)" />
+                </th>
+                <th style="width:40px;">
+                </th>
+                <!-- Expand button column -->
+                <th style="width:90px;">状态</th>
+                <th style="width:240px;">名称 / URL</th>
+                <th style="width:110px;">当前栏目</th>
+                <th style="width:110px;">时间</th>
+                <!-- Added / Updated -->
+                <th style="width:90px;">统计</th>
+                <!-- Entries / Fail -->
+                <th style="width:100px;">最新</th>
+                <th style="width:140px;">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in sources %}
+              <!-- Main Row -->
+              <tr data-health="{{ s.health_state or '' }}" data-abnormal="{{ 1 if s.is_abnormal else 0 }}"
+                data-category="{{ (s.category or '')|lower }}"
+                data-search="{{ (s.name ~ ' ' ~ s.url ~ ' ' ~ s.host ~ ' ' ~ (s.category or '') ~ ' ' ~ (s.source or '') )|lower }}">
+                <td>
+                  <input type="checkbox" class="rss-src-select" data-id="{{ s.id }}" onclick="handleRowSelect(this)" />
+                </td>
+                <td>
+                  <button class="expand-btn" onclick="toggleDetail(this)" data-id="{{ s.id }}">▶</button>
+                </td>
+                <td>
+                  <!-- Compact Status -->
+                  {% set hs = s.health_state or '' %}
+                  {% if hs == 'OK' %}
+                  <span class="badge badge-ok">OK</span>
+                  {% elif hs in ['FAIL'] %}
+                  <span class="badge badge-bad">FAIL</span>
+                  {% elif hs in ['BACKOFF','NEVER_TRIED','OK_EMPTY','STALE'] %}
+                  <span class="badge badge-warn">{{ hs }}</span>
+                  {% elif hs == 'DISABLED' %}
+                  <span class="badge badge-off">DISABLED</span>
+                  {% else %}
+                  <span class="badge badge-off">{{ hs }}</span>
+                  {% endif %}
+                </td>
+                <td style="max-width:240px;" class="col-title">
+                  <div style="font-weight:600; color:#111827; font-size:13px;">
+                    {{ s.name or s.host }}
+                    {% if s.use_scraperapi %}
+                    <span class="badge"
+                      style="background:#f59e0b; color:#fff; font-size:10px; padding:2px 6px; margin-left:4px;"
+                      title="使用 ScraperAPI">🔒 API</span>
+                    {% endif %}
+                    {% if s.use_socks_proxy %}
+                    <span class="badge"
+                      style="background:#8b5cf6; color:#fff; font-size:10px; padding:2px 6px; margin-left:4px;"
+                      title="使用 Socks5 代理">🌐 Proxy</span>
+                    {% endif %}
+                  </div>
+                  <div class="muted"
+                    style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:12px;"
+                    title="{{ s.url }}">
+                    <a href="{{ s.url }}" target="_blank" rel="noopener noreferrer"
+                      style="text-decoration:none; color:inherit;">{{ s.url }}</a>
+                  </div>
+                  <div
+                    style="margin-top:2px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#4b5563;">
+                    <span
+                      style="font-weight:500; font-family:monospace; background:#f3f4f6; padding:1px 3px; border-radius:3px;">{{
+                      s.feed_type }}</span>
+                    <span style="margin:0 2px;">·</span> {{ s.country }} / {{ s.language }}
+                  </div>
+                  <div
+                    style="margin-top:1px; font-size:10px; color:#9ca3af; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                    title="ID: {{ s.id }} | Source: {{ s.source }}">
+                    #{{ s.id }} <span style="margin:0 2px;">·</span> {{ s.source }}
+                  </div>
+                </td>
+                <td>{{ s.category }}</td>
+                <td>
+                  <div class="muted" style="font-size:11px;" title="Added: {{ s.added_time }}">Add: {{
+                    s.added_time|truncate(10, True, '') }}</div>
+                  <div class="muted" style="font-size:11px;" title="Last Updated: {{ s.last_updated_time }}">Upd: {{
+                    s.last_updated_time|truncate(10, True, '') }}</div>
+                </td>
+                <td>
+                  <div style="font-size:12px;">Entries: {{ s.entries_count }}</div>
+                  {% if s.fail_count and s.fail_count > 0 %}
+                  <div style="font-size:12px; color:#dc2626;">Fail: {{ s.fail_count }}</div>
+                  {% else %}
+                  <div style="font-size:12px;" class="muted">Fail: 0</div>
+                  {% endif %}
+
+                  {% if s.backoff_until_time %}
+                  <div style="font-size:11px; color:#d97706; margin-top:2px; white-space:normal; word-break:break-all;"
+                    title="Backoff Until: {{ s.backoff_until_time }}">
+                    Wait: {{ s.backoff_until_time }}
+                  </div>
+                  {% endif %}
+
+                  {% if s.last_error_reason %}
+                  <div style="font-size:11px; color:#dc2626; margin-top:2px; white-space:normal; word-break:break-all;"
+                    title="{{ s.last_error_reason }}">
+                    Err: {{ s.last_error_reason }}
+                  </div>
+                  {% endif %}
+                </td>
+                <td>
+                  <div title="{{ s.latest_entry }}">
+                    {{ s.latest_entry_time|truncate(10, True, '') if s.latest_entry_time else '-' }}
+                  </div>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button class="btn btn-icon" title="Edit" onclick="openEditModal(this)" data-id="{{ s.id }}"
+                      data-name="{{ s.name }}" data-url="{{ s.url }}" data-category="{{ s.category }}"
+                      data-feed-type="{{ s.feed_type }}" data-country="{{ s.country }}" data-language="{{ s.language }}"
+                      data-source="{{ s.source }}" data-scrape-rules="{{ s.scrape_rules }}"
+                      data-enabled="{{ 1 if s.enabled else 0 }}"
+                      data-use-scraperapi="{{ 1 if s.use_scraperapi else 0 }}"
+                      data-use-socks-proxy="{{ 1 if s.use_socks_proxy else 0 }}">✏️</button>
+                    <button class="btn btn-icon" title="Run (Warmup)" onclick="warmupSource(this)" data-id="{{ s.id }}"
+                      style="color:#2563eb;">▶️</button>
+                    <button class="btn btn-icon" title="{{ 'Disable' if s.enabled else 'Enable' }}"
+                      onclick="toggleSourceEnabled(this)" data-id="{{ s.id }}"
+                      data-enabled="{{ 1 if s.enabled else 0 }}">
+                      {{ '✅' if s.enabled else '⛔' }}
+                    </button>
+                    <button class="btn btn-icon" title="Delete" onclick="deleteSource(this)" data-id="{{ s.id }}"
+                      data-name="{{ s.name }}" style="color:#dc2626;">🗑️</button>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Detail Row -->
+              <tr class="detail-row" style="display:none;">
+                <td colspan="9" style="padding:0;">
+                  <div class="detail-content"
+                    style="padding:10px 14px; background:#f9fafb; border-bottom:1px solid #e5e7eb;">
+                    <div id="detail-entries-{{ s.id }}" class="detail-entries-container">
+                      <div class="muted">Loading entries...</div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="muted">Catalog is empty.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Panel: System Settings -->
+    <div class="tab-panel" data-panel="settings">
+      <div class="settings-header">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <h2 style="margin:0; font-size: 20px; color:#111827;">🛠️ 系统配置 (System Settings)</h2>
+          <div id="settings-source-info" class="muted" style="font-size: 13px;">Loading info...</div>
+        </div>
+        <button id="btn-save-settings" class="btn btn-primary" onclick="saveSettings()"
+          style="padding: 8px 16px; font-weight: 500; display:flex; align-items:center; gap:6px;">💾 保存变更 </button>
+      </div>
+      <div class="sub-tabs">
+        <button class="sub-tab-btn active" onclick="switchSettingsTab('scheduler')">🕒 定时任务 (Timers)</button>
+        <button class="sub-tab-btn" onclick="switchSettingsTab('ai')">🧠 AI 配置</button>
+        <button class="sub-tab-btn" onclick="switchSettingsTab('scraperapi')">🔒 ScraperAPI</button>
+        <button class="sub-tab-btn" onclick="switchSettingsTab('display')">🖥️ 显示设置</button>
+        <button class="sub-tab-btn" onclick="switchSettingsTab('search')">🔍 搜索配置</button>
+        <button class="sub-tab-btn" onclick="switchSettingsTab('retention')">💾 数据与保留</button>
+      </div>
+
+      <div class="settings-content-area">
+        <!-- Scheduler Tab -->
+        <div id="settings-tab-scheduler" class="settings-tab-content active">
+
+          <!-- 1. Auto Fetch (Application Level) -->
+          <h3>1. 自动获取 (Auto Fetch)</h3>
+          <div class="settings-card no-border" style="margin-bottom: 20px;">
+            <div class="settings-card-body">
+              <label class="setting-toggle">
+                <span class="setting-toggle-label">启用自动获取 (Enable Auto Fetch)</span>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="setting-auto-fetch">
+                  <span class="toggle-slider"></span>
+                </div>
+              </label>
+              <label class="setting-toggle">
+                <span class="setting-toggle-label">启动时立即获取 (Fetch on Startup)</span>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="setting-fetch-startup">
+                  <span class="toggle-slider"></span>
+                </div>
+              </label>
+              <div class="setting-item">
+                <label>获取间隔 (Fetch Interval)</label>
+                <div class="setting-input-wrapper">
+                  <input type="number" id="setting-fetch-interval" class="setting-input" min="5" max="1440">
+                  <span class="setting-unit">分钟</span>
+                </div>
+                <div class="setting-hint">控制 <code>auto_fetch_scheduler</code> 的频率</div>
+              </div>
+              <div class="setting-item">
+                <label>请求间隔 (Request Interval)</label>
+                <div class="setting-input-wrapper">
+                  <input type="number" id="setting-request-interval" class="setting-input" min="100" max="10000">
+                  <span class="setting-unit">ms</span>
+                </div>
+                <div class="setting-hint">两次 RSS 请求之间的最小间隔 (Crawler Safety)</div>
+              </div>
+              <div class="setting-item">
+                <label>Status</label>
+                <div id="scheduler-status-autofetch" class="muted" style="font-family: monospace;">Loading...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. System Cron (Docker Level) -->
+          <h3>2. 容器 Cron (System Cron)</h3>
+          <div class="settings-card no-border" style="margin-bottom: 20px;">
+            <div class="settings-card-body">
+              <div class="setting-item">
+                <label>Current Schedule (Env: CRON_SCHEDULE)</label>
+                <div id="scheduler-status-cron-env" style="font-family: monospace; font-weight: bold;">-</div>
+              </div>
+              <div class="setting-item">
+                <label>Active Crontab (/tmp/crontab)</label>
+                <div class="code-block" id="scheduler-status-crontab"
+                  style="background:#f3f4f6; padding:8px; border-radius:4px; font-family:monospace; font-size:12px; white-space:pre-wrap;">
+                  -</div>
+              </div>
+              <div class="setting-hint">
+                由 <code>supercronic</code> 管理。修改 <code>CRON_SCHEDULE</code> 环境变量需重启容器。
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Internal Tasks (Asyncio Level) -->
+          <h3>3. 内部异步任务 (Asyncio Background Tasks)</h3>
+          <div class="settings-card no-border">
+            <div class="table-scroll">
+              <table style="width:100%; font-size:13px;">
+                <thead style="background:#f9fafb;">
+                  <tr>
+                    <th style="padding:8px; text-align:left;">任务名称</th>
+                    <th style="padding:8px; text-align:left;">状态</th>
+                    <th style="padding:8px; text-align:left;">详情</th>
+                    <th style="padding:8px; text-align:right;">配置</th>
+                  </tr>
+                </thead>
+                <tbody id="scheduler-internal-tasks-tbody">
+                  <tr>
+                    <td colspan="4" class="muted" style="padding:10px;">Loading internal tasks...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- AI Tab -->
+        <div id="settings-tab-ai" class="settings-tab-content">
+
+          <!-- NEW: AI Provider & Model Management Section -->
+          <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+
+            <!-- Left: Providers -->
+            <div style="flex:1; min-width:280px;">
+              <div class="settings-card no-border" style="height:100%;">
+                <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+                  <h3 style="margin:0;">🏢 供应商 (Providers)</h3>
+                </div>
+                <div id="ai-providers-list" style="font-size:13px;">
+                  <div class="muted">Loading...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Models -->
+            <div style="flex:2; min-width:380px;">
+              <div class="settings-card no-border" style="height:100%;">
+                <div class="row" style="justify-content:space-between; margin-bottom:10px;">
+                  <h3 style="margin:0;">🤖 模型池 (Model Pool)</h3>
+                  <div>
+                    <button class="btn btn-sm" onclick="testAIRotation()">🔄 Test</button>
+                    <button class="btn btn-sm btn-secondary"
+                      onclick="document.getElementById('ai-batch-import-modal').style.display='flex'">📥 Import</button>
+                  </div>
+                </div>
+                <div id="ai-test-result" style="margin-bottom:8px;"></div>
+                <div class="table-scroll" style="max-height:300px; overflow-y:auto;">
+                  <table style="font-size:12px;">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Provider</th>
+                        <th>Priority</th>
+                        <th>Expires</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ai-models-tbody">
+                      <tr>
+                        <td colspan="5" class="muted">Loading...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <!-- END: AI Provider & Model Management Section -->
+
+          <div class="settings-card no-border">
+            <div class="settings-card-body">
+              <div class="muted" style="margin-bottom:16px;">
+                此处配置将覆盖环境变量设置。需要 <code>DASHSCOPE_API_KEY</code> 有效。
+              </div>
+
+              <div class="setting-item">
+                <label style="font-size:15px; font-weight:600; margin-bottom:4px;">1. AI 早报标注 (Morning Brief AI)</label>
+                <div class="muted" style="font-size:12px; margin-bottom:8px;">实时扫描新文章，打标签/提取摘要。用于生成每日早报。</div>
+                <label class="setting-toggle">
+                  <span class="setting-toggle-label">启用 (Enable)</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="setting-ai-mb-enabled">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Category Whitelist for Morning Brief -->
+              <div class="setting-item"
+                style="margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
+                <label style="font-size:14px; font-weight:600; margin-bottom:4px; display:block;">📂 早报栏目过滤 (Category
+                  Filter)</label>
+                <div class="muted" style="font-size:12px; margin-bottom:12px;">只允许选定栏目的RSS源内容进入每日AI早报，过滤无关内容。</div>
+                <label class="setting-toggle">
+                  <span class="setting-toggle-label">启用栏目过滤 (Enable Filter)</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="setting-mb-category-filter-enabled">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+                <div id="mb-category-whitelist-container" style="margin-top:12px;">
+                  <label style="font-size:13px; font-weight:500; margin-bottom:8px; display:block;">选择允许的栏目：</label>
+                  <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:8px;">
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="explore"> 🔎 深入探索
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="tech_news"> 📱 科技资讯
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="ainews"> 🤖 AI资讯
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="developer"> 💻 开发者
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="finance"> 💰 财经投资
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="social"> 🔥 社交娱乐
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="general"> 📰 综合新闻
+                    </label>
+                    <label
+                      style="display:flex; align-items:center; gap:6px; padding:6px 10px; background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;">
+                      <input type="checkbox" class="mb-category-checkbox" value="sports"> 🏀 体育
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+
+              <div class="setting-item">
+                <label style="font-size:15px; font-weight:600; margin-bottom:4px;">2. RSS 源自动分类 (Source
+                  Auto-Classify)</label>
+                <div class="muted" style="font-size:12px; margin-bottom:8px;">每日凌晨分析未分类的 RSS 源，自动补充
+                  Category/Country/Language。</div>
+                <label class="setting-toggle">
+                  <span class="setting-toggle-label">启用 (Enable)</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="setting-ai-source-enabled">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+
+              <div class="setting-item">
+                <label style="font-size:15px; font-weight:600; margin-bottom:4px;">3. 自定义源 AI 辅助 (Custom Source
+                  AI)</label>
+                <div class="muted" style="font-size:12px; margin-bottom:8px;">允许自定义采集脚本(Script/Html)使用 AI 能力进行内容解析或生成。
+                </div>
+                <label class="setting-toggle">
+                  <span class="setting-toggle-label">启用 (Enable)</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="setting-ai-custom-enabled">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ScraperAPI Tab -->
+        <div id="settings-tab-scraperapi" class="settings-tab-content">
+          <div class="settings-card no-border">
+            <div class="settings-card-body">
+              <div class="muted" style="margin-bottom:16px;">
+                ScraperAPI 用于绕过 IP 封禁和访问限制。需要配置 <code>SCRAPERAPI_KEY</code> 环境变量。
+              </div>
+
+              <div class="setting-item">
+                <label style="font-size:15px; font-weight:600; margin-bottom:4px;">🔒 全局开关</label>
+                <div class="muted" style="font-size:12px; margin-bottom:8px;">关闭后所有 ScraperAPI 源将暂停使用 API，改为直连（可能失败）。
+                </div>
+                <label class="setting-toggle">
+                  <span class="setting-toggle-label">启用 ScraperAPI (Enable)</span>
+                  <div class="toggle-switch">
+                    <input type="checkbox" id="setting-scraperapi-enabled">
+                    <span class="toggle-slider"></span>
+                  </div>
+                </label>
+              </div>
+
+              <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+
+              <div class="setting-item">
+                <label style="font-size:15px; font-weight:600; margin-bottom:4px;">📊 配额限制</label>
+                <div class="muted" style="font-size:12px; margin-bottom:12px;">设置为 0 表示无限制。超限后将返回错误而不是调用 API。</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <div>
+                    <label>每小时最大调用次数</label>
+                    <div class="setting-input-wrapper">
+                      <input type="number" id="setting-scraperapi-max-per-hour" class="setting-input" min="0"
+                        max="10000">
+                      <span class="setting-unit">次/小时</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label>每日最大调用次数</label>
+                    <div class="setting-input-wrapper">
+                      <input type="number" id="setting-scraperapi-max-per-day" class="setting-input" min="0"
+                        max="100000">
+                      <span class="setting-unit">次/天</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+
+              <div class="setting-item">
+                <label style="font-size:15px; font-weight:600; margin-bottom:4px;">⏰ 默认调度</label>
+                <div class="muted" style="font-size:12px; margin-bottom:8px;">新建 ScraperAPI 源时使用的默认 Cron 表达式。</div>
+                <div class="setting-input-wrapper">
+                  <input type="text" id="setting-scraperapi-default-cron" class="setting-input"
+                    placeholder="0 */6 * * *">
+                </div>
+                <div class="setting-hint">常用: <code>0 */6 * * *</code> (每6小时) | <code>0 8 * * *</code> (每天8点)</div>
+              </div>
+
+              <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+
+              <div class="setting-item">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <label style="font-size:15px; font-weight:600;">📈 今日使用统计</label>
+                  <div>
+                    <span class="muted">今日总调用: </span>
+                    <span id="scraperapi-today-total" style="font-weight:700; font-size:18px; color:#3b82f6;">-</span>
+                    <button class="btn" style="margin-left:10px; padding:4px 10px; font-size:12px;"
+                      onclick="loadScraperAPIUsage()">🔄 刷新</button>
+                  </div>
+                </div>
+                <div id="scraperapi-usage-table" style="min-height:60px;">
+                  <div class="muted">点击刷新加载数据</div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Display Tab -->
+        <div id="settings-tab-display" class="settings-tab-content">
+          <div class="settings-card no-border">
+            <div class="settings-card-body">
+              <div class="setting-item">
+                <label>每页卡片显示数量</label>
+                <div class="setting-input-wrapper">
+                  <input type="number" id="setting-items-per-card" class="setting-input" min="1" max="100">
+                  <span class="setting-unit">条/页</span>
+                </div>
+                <div class="setting-hint">建议值: 10-50</div>
+              </div>
+              <div class="setting-item">
+                <label>每日早报显示数量 (Morning Brief)</label>
+                <div class="setting-input-wrapper">
+                  <input type="number" id="setting-morning-brief-items" class="setting-input" min="5" max="200">
+                  <span class="setting-unit">条</span>
+                </div>
+                <div class="setting-hint">建议值: 30-100</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search Tab -->
+        <div id="settings-tab-search" class="settings-tab-content">
+          <div class="settings-card no-border">
+            <div class="settings-card-body">
+              <label class="setting-toggle">
+                <span class="setting-toggle-label">启用向量搜索 (Enable Vector Search)</span>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="setting-vector-enabled">
+                  <span class="toggle-slider"></span>
+                </div>
+              </label>
+              <div class="setting-item">
+                <label>搜索回溯天数 (Search Days)</label>
+                <div class="setting-input-wrapper">
+                  <input type="number" id="setting-search-days" class="setting-input" min="1" max="365">
+                  <span class="setting-unit">天</span>
+                </div>
+              </div>
+              <div class="setting-item">
+                <label>Embedding 模型 (HuggingFace ID)</label>
+                <input type="text" id="setting-embedding-model" class="setting-input"
+                  placeholder="shibing624/text2vec-base-chinese">
+              </div>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="setting-item">
+                  <label>Top K</label>
+                  <input type="number" id="setting-vector-top-k" class="setting-input" min="1" max="500">
+                </div>
+                <div class="setting-item">
+                  <label>Min Score</label>
+                  <input type="number" id="setting-keyword-min-score" class="setting-input" step="0.1" min="0" max="1">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Retention Tab -->
+        <div id="settings-tab-retention" class="settings-tab-content">
+          <div class="settings-card no-border">
+            <div class="settings-card-body">
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="setting-item">
+                  <label>本地保留</label>
+                  <div class="setting-input-wrapper">
+                    <input type="number" id="setting-local-retention-days" class="setting-input" min="0">
+                    <span class="setting-unit">天</span>
+                  </div>
+                </div>
+                <div class="setting-item">
+                  <label>远程保留 (S3)</label>
+                  <div class="setting-input-wrapper">
+                    <input type="number" id="setting-remote-retention-days" class="setting-input" min="0">
+                    <span class="setting-unit">天</span>
+                  </div>
+                </div>
+              </div>
+              <div class="setting-hint" style="margin-bottom: 12px;">0 表示永久保留 (0 means keep forever)</div>
+
+              <div style="border-top: 1px solid #e5e7eb; margin: 16px 0; padding-top: 16px;">
+                <div class="setting-item">
+                  <label style="font-weight: 600;">📰 RSS 条目保留 (Entries Retention)</label>
+                  <div class="setting-input-wrapper">
+                    <input type="number" id="setting-rss-entries-retention-days" class="setting-input" min="0">
+                    <span class="setting-unit">天</span>
+                  </div>
+                  <div class="setting-hint" style="margin-top: 4px;">
+                    ⚠️ 根据<strong>入库时间</strong>清理 RSS 条目（非发布时间）。<br>
+                    条目入库超过此天数后将被自动删除。0 = 永久保留。
+                  </div>
+                </div>
+              </div>
+
+              <label class="setting-toggle">
+                <span class="setting-toggle-label">启用推送窗口 (Push Window)</span>
+                <div class="toggle-switch">
+                  <input type="checkbox" id="setting-push-window-enabled">
+                  <span class="toggle-slider"></span>
+                </div>
+              </label>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="setting-item">
+                  <label>开始时间</label>
+                  <input type="time" id="setting-push-start" class="setting-input">
+                </div>
+                <div class="setting-item">
+                  <label>结束时间</label>
+                  <input type="time" id="setting-push-end" class="setting-input">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Tab Panel: Usage Statistics -->
+    <div class="tab-panel" data-panel="usage">
+      <h2>RSS Usage</h2>
+      <div class="card">
+        <div class="row" style="align-items:center;">
+          <input type="text" id="usage-days" value="7" />
+          <button class="btn btn-primary" onclick="loadUsage()">Load</button>
+          <span class="muted" id="usage-status">
+          </span>
+        </div>
+        <div style="height:10px;">
+        </div>
+        <div class="kpi" id="usage-kpi" style="display:none;">
+        </div>
+        <div style="height:10px;">
+        </div>
+        <div id="usage-table">
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Panel: User Statistics -->
+    <div class="tab-panel" data-panel="user-stats">
+      <h2>用户统计 (User Statistics)</h2>
+      
+      <!-- Overview Cards -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="row" style="gap: 20px; flex-wrap: wrap;">
+          <div class="stat-card" style="flex: 1; min-width: 150px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px;">
+            <div style="font-size: 12px; opacity: 0.8;">总用户数</div>
+            <div id="stat-total-users" style="font-size: 32px; font-weight: bold;">-</div>
+          </div>
+          <div class="stat-card" style="flex: 1; min-width: 150px; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 20px; border-radius: 12px;">
+            <div style="font-size: 12px; opacity: 0.8;">OAuth 用户</div>
+            <div id="stat-oauth-users" style="font-size: 32px; font-weight: bold;">-</div>
+          </div>
+          <div class="stat-card" style="flex: 1; min-width: 150px; background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%); color: white; padding: 20px; border-radius: 12px;">
+            <div style="font-size: 12px; opacity: 0.8;">今日新增</div>
+            <div id="stat-today-new" style="font-size: 32px; font-weight: bold;">-</div>
+          </div>
+          <div class="stat-card" style="flex: 1; min-width: 150px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 12px;">
+            <div style="font-size: 12px; opacity: 0.8;">活跃会话</div>
+            <div id="stat-active-sessions" style="font-size: 32px; font-weight: bold;">-</div>
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <button class="btn btn-primary" onclick="loadUserStats()">🔄 刷新统计</button>
+        </div>
+      </div>
+
+      <!-- Auth Type Distribution -->
+      <div class="row" style="gap: 20px; margin-bottom: 20px;">
+        <div class="card" style="flex: 1;">
+          <h3>登录方式分布</h3>
+          <div id="auth-type-chart" style="min-height: 200px;">
+            <table style="width: 100%;">
+              <thead>
+                <tr>
+                  <th>登录方式</th>
+                  <th>用户数</th>
+                  <th>占比</th>
+                </tr>
+              </thead>
+              <tbody id="auth-type-tbody">
+                <tr><td colspan="3" class="muted">点击 "刷新统计" 加载数据...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="flex: 1;">
+          <h3>时间统计</h3>
+          <div id="time-stats">
+            <table style="width: 100%;">
+              <tbody>
+                <tr>
+                  <td>本周新增</td>
+                  <td id="stat-week-new" style="font-weight: bold; text-align: right;">-</td>
+                </tr>
+                <tr>
+                  <td>本月新增</td>
+                  <td id="stat-month-new" style="font-weight: bold; text-align: right;">-</td>
+                </tr>
+                <tr>
+                  <td>今日登录</td>
+                  <td id="stat-today-logins" style="font-weight: bold; text-align: right;">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Users -->
+      <div class="card">
+        <h3>最近注册用户</h3>
+        <div class="table-scroll">
+          <table id="recent-users-table">
+            <thead>
+              <tr>
+                <th style="width: 60px;">ID</th>
+                <th style="width: 50px;">头像</th>
+                <th style="width: 150px;">昵称</th>
+                <th style="width: 200px;">邮箱</th>
+                <th style="width: 100px;">登录方式</th>
+                <th style="width: 150px;">注册时间</th>
+              </tr>
+            </thead>
+            <tbody id="recent-users-tbody">
+              <tr><td colspan="6" class="muted">点击 "刷新统计" 加载数据...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab Panel: Tag Candidates -->
+    <div class="tab-panel" data-panel="tag-candidates">
+      <h2>动态标签发现 (AI Tag Discovery)</h2>
+      <div class="card">
+        <div class="row" style="margin-bottom:10px; gap:10px; align-items:center;">
+          <select id="tag-cand-status" style="border:1px solid #d1d5db; border-radius:6px; padding:6px;">
+            <option value="pending">待审核 (Pending)</option>
+            <option value="approved">已通过 (Approved)</option>
+            <option value="rejected">已拒绝 (Rejected)</option>
+            <option value="all">全部 (All)</option>
+          </select>
+          <button class="btn btn-primary" onclick="loadTagCandidates()">🔄 刷新</button>
+          <div style="flex:1"></div>
+          <span class="muted" id="tag-cand-stats">Pending: 0 | Approved: 0 | Rejected: 0</span>
+        </div>
+
+        <div class="table-scroll">
+          <table id="tag-cand-table">
+            <thead>
+              <tr>
+                <th style="width:100px;">标签 ID</th>
+                <th style="width:100px;">名称</th>
+                <th style="width:60px;">类型</th>
+                <th style="width:60px;">出现次数</th>
+                <th style="width:60px;">置信度</th>
+                <th style="width:100px;">首次发现</th>
+                <th style="width:200px;">示例标题</th>
+                <th style="width:100px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tag-cand-tbody">
+              <tr>
+                <td colspan="8" class="muted">点击 "刷新" 加载数据...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <h3 style="margin-top:20px;">标签演化日志 (Evolution Log)</h3>
+      <div class="card">
+        <button class="btn" onclick="loadTagEvolutionLogs()">📜 加载日志</button>
+        <div class="table-scroll" style="margin-top:10px;">
+          <table id="tag-evo-table">
+            <thead>
+              <tr>
+                <th style="width:100px;">时间</th>
+                <th style="width:100px;">标签 ID</th>
+                <th style="width:80px;">操作</th>
+                <th style="width:300px;">详情</th>
+              </tr>
+            </thead>
+            <tbody id="tag-evo-tbody">
+              <tr>
+                <td colspan="4" class="muted">点击 "加载日志" 查看...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RSS Source Edit Modal -->
+    <div id="rss-edit-modal" class="modal-overlay"
+      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+      <div class="modal-content"
+        style="background:white; padding:20px; border-radius:8px; width:600px; max-width:90%; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+        <h3 style="margin-top:0; margin-bottom:16px; font-size:18px; font-weight:600;">Edit RSS Source</h3>
+        <input type="hidden" id="edit-source-id">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Name</label>
+            <input type="text" id="edit-name" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Category</label>
+            <input type="text" id="edit-category" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">URL</label>
+            <input type="text" id="edit-url" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Feed Type</label>
+            <input type="text" id="edit-feed-type" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Source</label>
+            <input type="text" id="edit-source" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Country</label>
+            <input type="text" id="edit-country" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Language</label>
+            <input type="text" id="edit-language" class="form-control"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Scrape Rules
+              (JSON)</label>
+            <textarea id="edit-scrape-rules" class="form-control" rows="3"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px; font-family:monospace; font-size:12px;">
+</textarea>
+          </div>
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;">
+              <input type="checkbox" id="edit-enabled"> Enabled </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;">
+              <input type="checkbox" id="edit-use-scraperapi">
+              <span title="使用 ScraperAPI 绕过 IP 封禁（需配置 SCRAPERAPI_KEY）">🔒 ScraperAPI</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;">
+              <input type="checkbox" id="edit-use-socks-proxy">
+              <span title="使用本地 Socks5 代理拓取（用于被墙网站）">🌐 Socks5 代理</span>
+            </label>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+          <button class="btn btn-primary" onclick="saveEditSource()">Save</button>
+          <button class="btn" onclick="closeEditModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <!-- Edit Source Modal -->
+    <div id="edit-source-modal" class="modal-overlay"
+      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; overflow:auto; padding:20px;">
+      <div class="modal-content"
+        style="background:white; padding:24px; border-radius:12px; width:95vw; max-width:1400px; max-height:95vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+        <h3 style="margin-top:0; margin-bottom:16px; font-size:18px; font-weight:600;">Edit RSS Source</h3>
+        <input type="hidden" id="edit-source-id">
+        <input type="hidden" id="edit-custom-id-original">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <!-- URL Input with AI Button -->
+          <div class="form-group" style="grid-column: span 2;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">URL</label>
+            <div style="display:flex; gap:10px;">
+              <input type="text" id="edit-custom-magic-url" class="form-control" placeholder="https://example.com/news"
+                style="flex:1; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+              <button type="button" class="btn btn-primary" onclick="detectCustomSourceAI()"
+                style="white-space:nowrap;">
+                AI 🪄 Analyze </button>
+              <button type="button" class="btn btn-danger" onclick="clearCustomSourceMemory()"
+                title="清除 AI 对此链接的记忆 (Reset Memory)" style="padding:6px 10px;"> 🗑️ </button>
+            </div>
+            <div class="muted" style="margin-top:4px;">Enter URL and click AI Analyze to auto-detect configuration.
+            </div>
+          </div>
+          <!-- Analysis Objective Input -->
+          <div class="form-group" style="grid-column: span 2;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Analysis Objective
+              (Optional)</label>
+            <input type="text" id="edit-custom-objective" class="form-control"
+              placeholder="Optional: Tell AI what to look for (e.g. 'scrape links in the sidebar', 'focus on article dates')"
+              style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+          </div>
+          <!-- Manual Fields (Unhidden for transparency/editing) -->
+          <!-- Manual Fields (Hidden for simplicity) -->
+          <div style="grid-column: span 2; display:grid; grid-template-columns: 1fr; gap:10px;">
+            <div>
+              <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Provider Type</label>
+              <select id="edit-custom-provider" class="form-control" style="width:100%;" onchange="onProviderChange()">
+              </select>
+            </div>
+            <!-- Previously hidden manual fields -->
+            <div style="grid-column: span 2; display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:10px;">
+              <div class="form-group">
+                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">ID
+                  (Auto/ReadOnly)</label>
+                <input type="text" id="edit-custom-id" class="form-control"
+                  style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px; background:#f3f4f6;">
+              </div>
+              <div class="form-group">
+                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Name</label>
+                <input type="text" id="edit-custom-source-name" class="form-control"
+                  style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+              </div>
+              <div class="form-group">
+                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Category</label>
+                <select id="edit-custom-category" class="form-control"
+                  style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+                  {% for cat in platform_categories %}
+                  <option value="{{ cat.id }}" {% if cat.id=='explore' %}selected{% endif %}>{{ cat.icon }} {{ cat.name
+                    }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Cron Schedule</label>
+                <input type="text" id="edit-custom-cron" class="form-control" value="*/30 * * * *"
+                  style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+              </div>
+              <div class="form-group">
+                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Country</label>
+                <input type="text" id="edit-custom-country" class="form-control"
+                  style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+              </div>
+              <div class="form-group">
+                <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Language</label>
+                <input type="text" id="edit-custom-language" class="form-control"
+                  style="width:100%; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+              </div>
+              <div class="form-group" style="grid-column: span 2;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;">
+                  <input type="checkbox" id="edit-custom-enabled" checked> Enabled (Active) </label>
+              </div>
+              <div class="form-group" style="grid-column: span 2;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;">
+                  <input type="checkbox" id="edit-custom-use-scraperapi">
+                  <span title="使用 ScraperAPI 绕过 IP 封禁（需配置 SCRAPERAPI_KEY）">🔒 ScraperAPI (绕过封禁)</span>
+                </label>
+              </div>
+              <div class="form-group" style="grid-column: span 2;">
+                <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:500;">
+                  <input type="checkbox" id="edit-custom-use-socks-proxy">
+                  <span title="使用 Socks5 代理访问（需配置 HOTNEWS_SOCKS_PROXY）">🌐 Socks5 代理</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <!-- Detected Metadata Summary -->
+          <div id="ai-detected-summary"
+            style="grid-column: span 2; display:none; background:#f0f9ff; padding:10px; border-radius:6px; border:1px solid #bae6fd; margin-bottom:10px;">
+            <div style="font-weight:600; font-size:13px; margin-bottom:4px;">🤖 AI Detected Configuration:</div>
+            <div id="ai-summary-content" style="font-size:12px; color:#0369a1;">
+            </div>
+          </div>
+          <!-- Config JSON Editor -->
+          <div id="editor-config-json" class="form-group" style="grid-column: span 2;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Config JSON</label>
+            <textarea id="edit-custom-config" class="form-control"
+              style="width:100%; min-height:200px; font-family:monospace; padding:6px; border:1px solid #d1d5db; border-radius:4px; font-size:12px;">
+</textarea>
+          </div>
+          <!-- Script Editor (Hidden by default) -->
+          <div id="editor-script-py" class="form-group" style="grid-column: span 2; display:none;">
+            <label style="display:block; font-size:12px; font-weight:500; margin-bottom:4px;">Python Script (def
+              fetch(config, ctx): ...)</label>
+            <textarea id="edit-custom-script-content" class="form-control"
+              placeholder="def fetch(config, ctx):&#10;    return [{'title': 'Hello', 'url': 'http://...'}]"
+              style="width:100%; min-height:300px; font-family:monospace; padding:6px; border:1px solid #d1d5db; border-radius:4px; font-size:12px; background:#1e1e1e; color:#d4d4d4;">
+</textarea>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">🤖 AI 调试过程</label>
+            <div id="custom-test-result"
+              style="display:block; margin-top:10px; padding:15px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; font-size:12px; white-space:pre-wrap; min-height:200px; max-height:500px; overflow-y:auto;">
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+          <button class="btn" onclick="testCustomSource()">Test Run</button>
+          <button class="btn btn-primary" onclick="saveCustomSource()">Save</button>
+          <button class="btn"
+            onclick="document.getElementById('edit-source-modal').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <!-- Loading Overlay -->
+    <div id="ai-loading-overlay"
+      style="display:none; position:fixed; top:20px; right:20px; background:linear-gradient(135deg, #3b82f6, #8b5cf6); color:white; padding:12px 20px; border-radius:12px; z-index:100000; box-shadow:0 4px 20px rgba(59,130,246,0.4); min-width:200px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="font-size:20px; animation: spin 1s linear infinite;">🪄</div>
+        <div style="flex:1;">
+          <div style="font-weight:600; font-size:13px;">AI 分析中...</div>
+          <div id="ai-loading-status" style="font-size:11px; opacity:0.9;">正在识别页面结构</div>
+        </div>
+        <button onclick="cancelAIDetection()"
+          style="padding:6px 12px; background:rgba(255,255,255,0.2); color:white; border:1px solid rgba(255,255,255,0.3); border-radius:6px; cursor:pointer; font-size:11px; white-space:nowrap;"
+          onmouseover="this.style.background='rgba(255,255,255,0.3)'"
+          onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+          ⏹ 取消
+        </button>
+      </div>
+    </div>
+    <div id="visual-selector-modal" class="modal-overlay"
+      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; padding:20px; z-index:99999;">
+      <div class="modal-content"
+        style="width:95%; height:95%; max-width:1400px; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+        <!-- Header -->
+        <div
+          style="padding:10px 15px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; background:#f9fafb;">
+          <div style="display:flex; gap:10px; align-items:center;">
+            <h3 style="margin:0; font-size:16px;">Visual Scrape Selector</h3>
+            <span id="vs-url"
+              style="font-size:12px; color:#6b7280; max-width:400px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+            </span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button onclick="closeVisualSelector()"
+              style="padding:6px 12px; border:1px solid #d1d5db; background:white; border-radius:4px; cursor:pointer;">Cancel</button>
+            <button onclick="applyVisualRules()" class="btn-primary"
+              style="padding:6px 12px; border:none; border-radius:4px; cursor:pointer;">Apply Rules</button>
+          </div>
+        </div>
+        <!-- Toolbar & Frame -->
+        <div style="flex:1; display:flex; overflow:hidden; position:relative;">
+          <!-- Sidebar / Floating Toolbar -->
+          <div
+            style="width:280px; background:white; border-right:1px solid #e5e7eb; padding:15px; display:flex; flex-direction:column; gap:15px; overflow-y:auto;">
+            <div class="vs-step" data-step="item">
+              <label style="font-size:12px; font-weight:700; display:block; margin-bottom:4px;">1. Select Container
+                (Item)</label>
+              <div style="font-size:11px; color:#6b7280; margin-bottom:6px;">Result count: <span
+                  id="vs-item-count">-</span>
+              </div>
+              <div style="display:flex; gap:4px;">
+                <input type="text" id="vs-item-sel" placeholder="e.g. .post"
+                  style="flex:1; padding:4px; border:1px solid #d1d5db; font-size:11px; font-family:monospace;">
+                <button onclick="setVsMode('item')" id="btn-vs-item" class="btn-vs-mode">Target</button>
+              </div>
+            </div>
+            <div class="vs-step" data-step="title">
+              <label style="font-size:12px; font-weight:700; display:block; margin-bottom:4px;">2. Select Title</label>
+              <div style="font-size:11px; color:#6b7280; margin-bottom:6px;">Must be inside Item</div>
+              <div style="display:flex; gap:4px;">
+                <input type="text" id="vs-title-sel" placeholder="e.g. h2 > a"
+                  style="flex:1; padding:4px; border:1px solid #d1d5db; font-size:11px; font-family:monospace;">
+                <button onclick="setVsMode('title')" id="btn-vs-title" class="btn-vs-mode">Target</button>
+              </div>
+            </div>
+            <div class="vs-step" data-step="link">
+              <label style="font-size:12px; font-weight:700; display:block; margin-bottom:4px;">3. Select Link</label>
+              <div style="font-size:11px; color:#6b7280; margin-bottom:6px;">Usually same as Title</div>
+              <div style="display:flex; gap:4px;">
+                <input type="text" id="vs-link-sel" placeholder="e.g. h2 > a"
+                  style="flex:1; padding:4px; border:1px solid #d1d5db; font-size:11px; font-family:monospace;">
+                <button onclick="setVsMode('link')" id="btn-vs-link" class="btn-vs-mode">Target</button>
+              </div>
+            </div>
+            <div class="vs-step" data-step="date">
+              <label style="font-size:12px; font-weight:700; display:block; margin-bottom:4px;">4. Select Date
+                (Optional)</label>
+              <div style="display:flex; gap:4px;">
+                <input type="text" id="vs-date-sel" placeholder="e.g. .time"
+                  style="flex:1; padding:4px; border:1px solid #d1d5db; font-size:11px; font-family:monospace;">
+                <button onclick="setVsMode('date')" id="btn-vs-date" class="btn-vs-mode">Target</button>
+              </div>
+            </div>
+            <div style="margin-top:auto; padding-top:10px; border-top:1px solid #e5e7eb;">
+              <button onclick="resetVs()"
+                style="width:100%; padding:6px; border:1px solid #d1d5db; background:#f3f4f6; cursor:pointer; font-size:12px;">Reset
+                All</button>
+            </div>
+            <div id="vs-status" style="font-size:11px; color:#ef4444; min-height:16px;">
+            </div>
+          </div>
+          <!-- Iframe Container -->
+          <div style="flex:1; position:relative; background:#e5e7eb;">
+            <iframe id="vs-iframe" style="width:100%; height:100%; border:none; background:white;">
+            </iframe>
+            <div id="vs-loading"
+              style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.8); display:flex; align-items:center; justify-content:center; color:#6b7280;">
+              Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="/static_kernel/js/admin_rss_core.js?v=20260115223000">
+    </script>
+    <script src="/static_kernel/js/admin_rss_settings.js?v=20260113071200">
+    </script>
+    <script src="/static_kernel/js/admin_rss_unified.js?v=20260118b">
+    </script>
+    <script src="/static_kernel/js/admin_rss_visual.js">
+    </script>
+    <script src="/static_kernel/js/admin_ai_settings.js?v=5">
+    </script>
+    <script src="/static_kernel/js/admin_rss_newsnow.js?v=4">
+    </script>
+    <script>
+      // Initialize tabs
+      if (typeof initTabs === 'function') initTabs();
+    </script>
+    <script src="/static_kernel/js/admin_rss_usage.js">
+    </script>
+    <script src="/static_kernel/js/admin_rss_custom.js">
+    </script>
+    <script src="/static_kernel/js/admin_rss_requests.js">
+    </script>
+    <script src="/static_kernel/js/admin_rss_import.js">
+    </script>
+    <script src="/static_kernel/js/admin_rss_rules.js">
+    </script>
+    <script src="/static_kernel/js/admin_rss_sources.js?v=20260118">
+    </script>
+    <script>
+      // Logout handler
+      async function handleLogout() {
+        if (!confirm('确定要退出登录吗？')) return;
+        try {
+          const resp = await fetch('/admin/logout', { method: 'POST' });
+          const data = await resp.json();
+          if (data.success) {
+            window.location.href = data.redirect || '/admin/login';
+          } else {
+            alert('退出失败');
+          }
+        } catch (e) {
+          console.error('Logout error:', e);
+          window.location.href = '/admin/login';
+        }
+      }
+
+      // ========== User Statistics ==========
+      async function loadUserStats() {
+        try {
+          const resp = await fetch('/admin/stats/users');
+          const data = await resp.json();
+          
+          if (!data.ok) {
+            console.error('Failed to load user stats:', data.error);
+            return;
+          }
+          
+          const stats = data.stats;
+          
+          // Update overview cards
+          document.getElementById('stat-total-users').textContent = stats.overview.total_users?.toLocaleString() || '0';
+          document.getElementById('stat-oauth-users').textContent = stats.overview.oauth_users?.toLocaleString() || '0';
+          document.getElementById('stat-today-new').textContent = stats.overview.today_new?.toLocaleString() || '0';
+          document.getElementById('stat-active-sessions').textContent = stats.sessions.active?.toLocaleString() || '0';
+          
+          // Update time stats
+          document.getElementById('stat-week-new').textContent = stats.overview.week_new?.toLocaleString() || '0';
+          document.getElementById('stat-month-new').textContent = stats.overview.month_new?.toLocaleString() || '0';
+          document.getElementById('stat-today-logins').textContent = stats.sessions.today_logins?.toLocaleString() || '0';
+          
+          // Update auth type distribution
+          const authTbody = document.getElementById('auth-type-tbody');
+          const totalUsers = stats.overview.total_users || 1;
+          let authHtml = '';
+          
+          const authTypeNames = {
+            'github': '🐙 GitHub',
+            'google': '🔵 Google',
+            'wechat': '💚 微信',
+            'wechat_mp': '📱 公众号',
+            'anonymous': '👤 匿名用户'
+          };
+          
+          for (const [type, count] of Object.entries(stats.by_auth_type || {})) {
+            const percent = ((count / totalUsers) * 100).toFixed(1);
+            const displayName = authTypeNames[type] || type;
+            authHtml += `
+              <tr>
+                <td>${displayName}</td>
+                <td>${count.toLocaleString()}</td>
+                <td>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="flex: 1; background: #e5e7eb; border-radius: 4px; height: 8px;">
+                      <div style="width: ${percent}%; background: #3b82f6; border-radius: 4px; height: 100%;"></div>
+                    </div>
+                    <span style="min-width: 50px; text-align: right;">${percent}%</span>
+                  </div>
+                </td>
+              </tr>
+            `;
+          }
+          authTbody.innerHTML = authHtml || '<tr><td colspan="3" class="muted">无数据</td></tr>';
+          
+          // Update recent users
+          const usersTbody = document.getElementById('recent-users-tbody');
+          let usersHtml = '';
+          
+          for (const user of stats.recent_users || []) {
+            const createdAt = user.created_at ? new Date(user.created_at * 1000).toLocaleString('zh-CN') : '-';
+            const authTypes = (user.auth_types || []).map(t => authTypeNames[t] || t).join(', ') || '匿名';
+            const avatar = user.avatar_url 
+              ? `<img src="${user.avatar_url}" style="width: 32px; height: 32px; border-radius: 50%;" onerror="this.src='/static/default-avatar.png'">`
+              : '<div style="width: 32px; height: 32px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center;">👤</div>';
+            
+            usersHtml += `
+              <tr>
+                <td>#${user.id}</td>
+                <td>${avatar}</td>
+                <td>${user.nickname || '-'}</td>
+                <td style="font-size: 12px; color: #6b7280;">${user.email || '-'}</td>
+                <td>${authTypes}</td>
+                <td style="font-size: 12px;">${createdAt}</td>
+              </tr>
+            `;
+          }
+          usersTbody.innerHTML = usersHtml || '<tr><td colspan="6" class="muted">无数据</td></tr>';
+          
+        } catch (e) {
+          console.error('Error loading user stats:', e);
+        }
+      }
+
+      // Tag Candidates Management
+      async function loadTagCandidates() {
+        const status = document.getElementById('tag-cand-status').value;
+        const tbody = document.getElementById('tag-cand-tbody');
+        tbody.innerHTML = '<tr><td colspan="8">Loading...</td></tr>';
+
+        try {
+          const resp = await fetch(`/admin/tag-candidates?status=${status}&limit=100`);
+          const data = await resp.json();
+
+          if (!data.ok) {
+            tbody.innerHTML = '<tr><td colspan="8" class="muted">Error loading data</td></tr>';
+            return;
+          }
+
+          // Update stats
+          const statsEl = document.getElementById('tag-cand-stats');
+          if (statsEl && data.stats) {
+            statsEl.textContent = `Pending: ${data.stats.pending || 0} | Approved: ${data.stats.approved || 0} | Rejected: ${data.stats.rejected || 0}`;
+          }
+
+          if (!data.candidates || data.candidates.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="muted">暂无候选标签</td></tr>';
+            return;
+          }
+
+          let html = '';
+          for (const c of data.candidates) {
+            const firstSeen = c.first_seen_at ? new Date(c.first_seen_at * 1000).toLocaleDateString() : '-';
+            const samples = (c.sample_titles || []).slice(0, 2).join(' | ') || '-';
+            const avgConf = (c.avg_confidence || 0).toFixed(2);
+
+            let actions = '';
+            if (c.status === 'pending') {
+              actions = `
+                <button class="btn btn-sm btn-primary" onclick="approveCandidate('${c.tag_id}')">✅ 通过</button>
+                <button class="btn btn-sm btn-danger" onclick="rejectCandidate('${c.tag_id}')">❌ 拒绝</button>
+              `;
+            } else if (c.status === 'approved') {
+              actions = '<span class="badge badge-ok">已通过</span>';
+            } else if (c.status === 'rejected') {
+              actions = '<span class="badge badge-bad">已拒绝</span>';
+            }
+
+            html += `
+              <tr>
+                <td><code>${c.tag_id}</code></td>
+                <td>${c.name || c.tag_id}</td>
+                <td>${c.type || 'topic'}</td>
+                <td>${c.occurrence_count || 0}</td>
+                <td>${avgConf}</td>
+                <td>${firstSeen}</td>
+                <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis;" title="${samples}">${samples}</td>
+                <td>${actions}</td>
+              </tr>
+            `;
+          }
+          tbody.innerHTML = html;
+        } catch (e) {
+          console.error('loadTagCandidates error:', e);
+          tbody.innerHTML = '<tr><td colspan="8" class="muted">请求失败</td></tr>';
+        }
+      }
+
+      async function approveCandidate(tagId) {
+        if (!confirm(`确定要将 "${tagId}" 晋升为正式标签吗？`)) return;
+        try {
+          const resp = await fetch(`/admin/tag-candidates/${tagId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ icon: '🏷️' })
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            showToast('✅ 标签已晋升');
+            loadTagCandidates();
+          } else {
+            showToast('❌ 晋升失败: ' + (data.detail || '未知错误'));
+          }
+        } catch (e) {
+          showToast('❌ 请求失败');
+        }
+      }
+
+      async function rejectCandidate(tagId) {
+        const reason = prompt('拒绝原因 (可选):') || '';
+        try {
+          const resp = await fetch(`/admin/tag-candidates/${tagId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason })
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            showToast('❌ 标签已拒绝');
+            loadTagCandidates();
+          } else {
+            showToast('❌ 拒绝失败');
+          }
+        } catch (e) {
+          showToast('❌ 请求失败');
+        }
+      }
+
+      async function loadTagEvolutionLogs() {
+        const tbody = document.getElementById('tag-evo-tbody');
+        tbody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
+
+        try {
+          const resp = await fetch('/admin/tag-evolution/logs?limit=50');
+          const data = await resp.json();
+
+          if (!data.ok || !data.logs || data.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="muted">暂无日志</td></tr>';
+            return;
+          }
+
+          let html = '';
+          for (const log of data.logs) {
+            const time = log.created_at ? new Date(log.created_at * 1000).toLocaleString() : '-';
+            const details = JSON.stringify(log.new_value || log.old_value || {}).substring(0, 100);
+            html += `
+              <tr>
+                <td>${time}</td>
+                <td><code>${log.tag_id}</code></td>
+                <td>${log.action}</td>
+                <td style="max-width:300px; overflow:hidden; text-overflow:ellipsis;" title="${details}">${details}</td>
+              </tr>
+            `;
+          }
+          tbody.innerHTML = html;
+        } catch (e) {
+          console.error('loadTagEvolutionLogs error:', e);
+          tbody.innerHTML = '<tr><td colspan="4" class="muted">请求失败</td></tr>';
+        }
+      }
+    </script>
+</body>
+
+</html>

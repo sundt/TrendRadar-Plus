@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的设置 - HotNews</title>
+    <link rel="stylesheet" href="/static_kernel/css/user_settings.css?v=20260122">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <a href="/" class="back-link">← 返回首页</a>
+                <h1>我的设置</h1>
+            </div>
+            <div style="display:flex; align-items:center; gap:16px;">
+                <!-- 栏目设置按钮 -->
+                <button onclick="openCategorySettingsModal()" class="btn btn-outline" style="padding:8px 16px; font-size:13px;">
+                    ⚙️ 栏目设置
+                </button>
+                <!-- 用户头像（仅显示） -->
+                <div class="user-avatar" id="user-avatar"></div>
+            </div>
+        </header>
+
+        <div id="loading" class="loading">加载中...</div>
+
+        <div id="content" style="display:none;">
+            <!-- Stats -->
+            <div class="section">
+                <h2>📊 我的偏好统计</h2>
+                <div class="preference-stats" id="stats"></div>
+            </div>
+
+            <!-- Unified Following List -->
+            <div class="section">
+                <h2>💚 已关注 <span style="font-size:12px;color:var(--text-muted);font-weight:normal;">（拖动调整顺序，点击取消关注）</span></h2>
+                <div class="tags-grid sortable-tags" id="following-list"></div>
+            </div>
+
+            <!-- Main Tabs: Recommendations, Tags, Sources, Keywords -->
+            <div class="section">
+                <div class="selector-tabs" id="main-tabs">
+                    <button class="tab-btn active" data-tab="recommendations" onclick="switchMainTab('recommendations')">✨ 为你推荐</button>
+                    <button class="tab-btn" data-tab="tags" onclick="switchMainTab('tags')">🏷️ 标签</button>
+                    <button class="tab-btn" data-tab="sources" onclick="switchMainTab('sources')">📡 订阅源</button>
+                    <button class="tab-btn" data-tab="keywords" onclick="switchMainTab('keywords')">🔑 关键词</button>
+                    <button class="tab-btn" data-tab="wechat" onclick="switchMainTab('wechat')">💬 公众号<span class="wechat-warning-dot" id="wechatTabWarningDot" style="display:none;"></span></button>
+                </div>
+                <div class="tab-content" id="main-tab-content">
+                    <!-- Recommendations Tab -->
+                    <div id="recommendations-tab-content">
+                        <div id="recommendations-content">
+                            <div class="source-empty-state">
+                                <div class="empty-icon">⏳</div>
+                                <div class="empty-title">加载推荐中...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Tag Selector Tab (hidden by default) -->
+                    <div id="tag-selector-content" style="display:none;">
+                        <div style="margin-bottom: 16px;">
+                            <input type="text" id="tag-search" placeholder="🔍 搜索标签..." style="width:100%; padding:10px 16px; border-radius:8px; border:1px solid var(--border); background:rgba(255,255,255,0.05); color:var(--text); font-size:14px;">
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+                            <button class="filter-btn active" data-filter="all" onclick="filterTags('all')">全部</button>
+                            <button class="filter-btn" data-filter="hot" onclick="filterTags('hot')">🔥 热门</button>
+                            <button class="filter-btn" data-filter="new" onclick="filterTags('new')">⭐ 新发现</button>
+                            <button class="filter-btn" data-filter="category" onclick="filterTags('category')">大类</button>
+                            <button class="filter-btn" data-filter="topic" onclick="filterTags('topic')">主题</button>
+                            <button class="filter-btn" data-filter="attribute" onclick="filterTags('attribute')">属性</button>
+                        </div>
+                        <div id="all-tags"></div>
+                    </div>
+                    <!-- Source Selector Tab (hidden by default) -->
+                    <div id="source-selector-content" style="display:none;">
+                        <div class="source-selector">
+                            <input type="text" id="source-search" class="source-search-input" placeholder="🔍 搜索订阅源...">
+                            <div class="source-results" id="source-results">
+                                <div class="source-empty-state">
+                                    <div class="empty-icon">🔍</div>
+                                    <div class="empty-title">输入关键词搜索</div>
+                                    <div class="empty-desc">搜索 RSS 源名称或网址</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Keywords Tab (hidden by default) -->
+                    <div id="keywords-tab-content" style="display:none;">
+                        <div class="keyword-manager">
+                            <div class="keyword-input-section">
+                                <div style="display:flex; gap:8px; margin-bottom:16px;">
+                                    <input type="text" id="keyword-input" class="source-search-input" 
+                                           placeholder="输入关键词，如：DeepSeek、量子计算、马斯克..."
+                                           style="flex:1;"
+                                           onkeypress="if(event.key==='Enter')addKeyword()">
+                                    <button class="btn" onclick="addKeyword()">+ 添加</button>
+                                </div>
+                                <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
+                                    💡 添加关键词后，系统会自动匹配包含这些词的新闻推送给你
+                                </p>
+                            </div>
+                            <div id="keywords-list">
+                                <div class="source-empty-state">
+                                    <div class="empty-icon">🔑</div>
+                                    <div class="empty-title">还没有添加关键词</div>
+                                    <div class="empty-desc">添加你感兴趣的关键词，获取个性化内容推荐</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- WeChat MP Tab (hidden by default) -->
+                    <div id="wechat-tab-content" style="display:none;">
+                        <div class="wechat-manager">
+                            <!-- Loading/QR Section (shown when checking auth or need scan) -->
+                            <div id="wechat-auth-section" class="wechat-auth-section">
+                                <div id="wechat-auth-status">
+                                    <div class="source-empty-state">
+                                        <div class="empty-icon">⏳</div>
+                                        <div class="empty-title">检查中...</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Main Content Section (shown when authenticated) -->
+                            <div id="wechat-search-section" style="display:none;">
+                                <div style="display:flex; gap:8px; margin-bottom:16px;">
+                                    <input type="text" id="wechat-search" class="source-search-input" 
+                                           placeholder="🔍 搜索公众号名称..."
+                                           style="flex:1;"
+                                           onkeypress="if(event.key==='Enter')searchWechatMP()">
+                                    <button class="btn" onclick="searchWechatMP()">搜索</button>
+                                </div>
+                                <div id="wechat-search-results">
+                                    <div class="source-empty-state">
+                                        <div class="empty-icon">🔍</div>
+                                        <div class="empty-title">输入公众号名称搜索</div>
+                                        <div class="empty-desc">搜索并订阅你喜欢的微信公众号</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Subscriptions List -->
+                            <div id="wechat-subscriptions-section" style="margin-top:24px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                                    <h3 style="font-size:14px; color:var(--text-muted); margin:0;">已订阅的公众号</h3>
+                                    <button class="btn btn-outline" style="padding:6px 12px; font-size:12px;" onclick="refreshWechatArticles()" id="wechat-refresh-btn">
+                                        🔄 刷新文章
+                                    </button>
+                                </div>
+                                <div id="wechat-subscriptions-list">
+                                    <div class="source-empty-state">
+                                        <div class="empty-icon">💬</div>
+                                        <div class="empty-title">还没有订阅公众号</div>
+                                        <div class="empty-desc">搜索并订阅你喜欢的公众号</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Settings Modal -->
+    <div class="settings-modal-overlay" id="categorySettingsModal" onclick="closeCategorySettingsOnOverlay(event)">
+        <div class="settings-modal" onclick="event.stopPropagation()">
+            <div class="settings-modal-header">
+                <span class="settings-modal-title">⚙️ 栏目设置</span>
+                <button class="settings-modal-close" onclick="closeCategorySettings()">&times;</button>
+            </div>
+            <div class="settings-modal-body">
+                <div class="category-edit-panel" id="categoryEditPanel">
+                    <div class="edit-field">
+                        <label>栏目名称</label>
+                        <input type="text" id="editCategoryName" placeholder="输入栏目名称">
+                    </div>
+                    <div class="edit-field" id="platformSelectField">
+                        <label>选择平台 <span style="font-weight:normal;color:var(--text-muted);">(拖拽排序)</span></label>
+                        <div class="platform-select-toolbar">
+                            <input class="platform-select-search" type="text" id="platformSearchInput" placeholder="搜索平台..."
+                                oninput="setPlatformSearchQuery(this.value)">
+                            <div class="platform-select-actions">
+                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('all')">全选</button>
+                                <button class="platform-select-action-btn" type="button" onclick="bulkSelectPlatforms('none')">全不选</button>
+                            </div>
+                        </div>
+                        <div class="platform-select-list" id="platformSelectList"></div>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:16px;">
+                        <button class="btn" onclick="saveCategory()">保存</button>
+                        <button class="btn btn-outline" onclick="cancelEditCategory()">取消</button>
+                    </div>
+                </div>
+
+                <div class="category-list-controls">
+                    <div class="settings-section-title" style="margin:0; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <button class="platform-select-action-btn" id="categoryListToggleBtn" type="button" onclick="toggleCategoryListCollapseInSettings()">展开栏目列表</button>
+                            <span style="font-weight:normal;color:var(--text-muted);font-size:0.75rem;">(拖拽排序)</span>
+                        </div>
+                        <button class="platform-select-action-btn" type="button" onclick="resetDefaultCategoryConfig()">初始化</button>
+                    </div>
+                </div>
+                <div class="category-list-wrapper collapsed" id="categoryListWrapper">
+                    <div class="category-list" id="categoryList"></div>
+                </div>
+            </div>
+            <div class="settings-modal-footer">
+                <button class="settings-btn-secondary" onclick="cancelCategorySettings()">取消</button>
+                <button class="settings-btn-primary" onclick="saveCategorySettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static_kernel/js/user_settings.js?v=20260122"></script>
+</body>
+
+</html>

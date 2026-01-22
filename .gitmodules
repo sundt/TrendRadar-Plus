@@ -1,3 +1,0 @@
-[submodule "hotnews/kernel"]
-	path = hotnews/kernel
-	url = https://github.com/sundt/hotnews-kernel.git

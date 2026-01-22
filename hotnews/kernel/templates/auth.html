@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - HotNews</title>
+    <style>
+        :root {
+            --primary: #3B82F6;
+            --primary-dark: #2563EB;
+            --bg: #0F172A;
+            --card-bg: #1E293B;
+            --text: #F1F5F9;
+            --text-muted: #94A3B8;
+            --border: #334155;
+            --error: #EF4444;
+            --success: #22C55E;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .auth-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .code-input-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .code-input-group input {
+            flex: 1;
+            text-align: center;
+            font-size: 20px;
+            letter-spacing: 4px;
+            font-weight: 600;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .submit-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .send-code-btn {
+            padding: 14px 20px;
+            background: var(--bg);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .send-code-btn:hover:not(:disabled) {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .send-code-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            border-color: var(--border);
+            color: var(--text-muted);
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        .divider span {
+            padding: 0 16px;
+        }
+
+        .oauth-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .oauth-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .oauth-btn:hover {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .oauth-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.error {
+            display: block;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .message.success {
+            display: block;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+        }
+
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border);
+            transition: background 0.2s;
+        }
+
+        .step-dot.active {
+            background: var(--primary);
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .back-btn:hover {
+            color: var(--text);
+        }
+
+        .hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="logo">
+                <h1>🔥 HotNews</h1>
+                <p>输入邮箱，获取验证码登录</p>
+            </div>
+
+            <div class="step-indicator">
+                <div class="step-dot active" id="dot-1"></div>
+                <div class="step-dot" id="dot-2"></div>
+            </div>
+
+            <div id="message" class="message"></div>
+
+            <!-- Step 1: Enter Email -->
+            <div id="step-1" class="step active">
+                <form onsubmit="sendCode(event)">
+                    <div class="form-group">
+                        <label>邮箱地址</label>
+                        <input type="email" id="email" placeholder="your@email.com" required autofocus>
+                    </div>
+                    <button type="submit" class="submit-btn" id="send-btn">获取验证码</button>
+                    <p class="hint">新用户将自动注册</p>
+                </form>
+            </div>
+
+            <!-- Step 2: Enter Code -->
+            <div id="step-2" class="step">
+                <button class="back-btn" onclick="goBack()">← 返回</button>
+                <p style="margin-bottom: 16px; color: var(--text-muted);">
+                    验证码已发送至 <strong id="display-email" style="color: var(--text);"></strong>
+                </p>
+                <form onsubmit="verifyCode(event)">
+                    <div class="form-group">
+                        <label>验证码</label>
+                        <div class="code-input-group">
+                            <input type="text" id="code" placeholder="000000" maxlength="6" required 
+                                   pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
+                        </div>
+                    </div>
+                    <button type="submit" class="submit-btn" id="verify-btn">登录</button>
+                    <p class="hint">
+                        没收到？<button type="button" class="send-code-btn" id="resend-btn" 
+                                       onclick="resendCode()" disabled style="padding: 4px 8px; font-size: 12px;">
+                            <span id="resend-text">60秒后重发</span>
+                        </button>
+                    </p>
+                </form>
+            </div>
+
+            <div class="divider"><span>或使用第三方登录</span></div>
+
+            <div class="oauth-buttons">
+                <a href="/api/auth/oauth/github" class="oauth-btn">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                    </svg>
+                    GitHub
+                </a>
+                <a href="/api/auth/oauth/google" class="oauth-btn">
+                    <svg viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                    Google
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentEmail = '';
+        let resendCountdown = 0;
+        let countdownTimer = null;
+
+        function showMessage(text, type) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+        }
+
+        function hideMessage() {
+            document.getElementById('message').className = 'message';
+        }
+
+        function goToStep(step) {
+            document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+            document.getElementById('step-' + step).classList.add('active');
+            
+            document.querySelectorAll('.step-dot').forEach((d, i) => {
+                d.classList.toggle('active', i < step);
+            });
+            
+            hideMessage();
+        }
+
+        function goBack() {
+            goToStep(1);
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+        }
+
+        function startResendCountdown() {
+            resendCountdown = 60;
+            const btn = document.getElementById('resend-btn');
+            const text = document.getElementById('resend-text');
+            btn.disabled = true;
+            
+            countdownTimer = setInterval(() => {
+                resendCountdown--;
+                if (resendCountdown <= 0) {
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                    btn.disabled = false;
+                    text.textContent = '重新发送';
+                } else {
+                    text.textContent = resendCountdown + '秒后重发';
+                }
+            }, 1000);
+        }
+
+        async function sendCode(e) {
+            e.preventDefault();
+            const btn = document.getElementById('send-btn');
+            const email = document.getElementById('email').value.trim();
+            
+            if (!email) {
+                showMessage('请输入邮箱', 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '发送中...';
+
+            try {
+                const resp = await fetch('/api/auth/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    currentEmail = email;
+                    document.getElementById('display-email').textContent = email;
+                    goToStep(2);
+                    document.getElementById('code').focus();
+                    startResendCountdown();
+                } else {
+                    const errMsg = typeof data.detail === 'string' ? data.detail : 
+                                   (data.detail?.[0]?.msg || data.message || '发送失败');
+                    showMessage(errMsg, 'error');
+                }
+            } catch (err) {
+                showMessage('网络错误，请重试', 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '获取验证码';
+        }
+
+        async function resendCode() {
+            const btn = document.getElementById('resend-btn');
+            btn.disabled = true;
+
+            try {
+                const resp = await fetch('/api/auth/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail })
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    showMessage('验证码已重新发送', 'success');
+                    startResendCountdown();
+                } else {
+                    const errMsg = typeof data.detail === 'string' ? data.detail : 
+                                   (data.detail?.[0]?.msg || data.message || '发送失败');
+                    showMessage(errMsg, 'error');
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                showMessage('网络错误，请重试', 'error');
+                btn.disabled = false;
+            }
+        }
+
+        async function verifyCode(e) {
+            e.preventDefault();
+            const btn = document.getElementById('verify-btn');
+            const code = document.getElementById('code').value.trim();
+            
+            if (!code || code.length !== 6) {
+                showMessage('请输入6位验证码', 'error');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '登录中...';
+
+            try {
+                const resp = await fetch('/api/auth/verify-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: currentEmail,
+                        code: code 
+                    })
+                });
+
+                const data = await resp.json();
+
+                if (resp.ok) {
+                    showMessage('登录成功，正在跳转...', 'success');
+                    setTimeout(() => window.location.href = '/', 1000);
+                } else {
+                    const errMsg = typeof data.detail === 'string' ? data.detail : 
+                                   (data.detail?.[0]?.msg || data.message || '验证失败');
+                    showMessage(errMsg, 'error');
+                }
+            } catch (err) {
+                showMessage('网络错误，请重试', 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = '登录';
+        }
+
+        // Auto-format code input
+        document.getElementById('code').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
+        });
+    </script>
+</body>
+
+</html>

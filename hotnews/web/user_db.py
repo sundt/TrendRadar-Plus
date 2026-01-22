@@ -176,6 +176,10 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("users", "nickname", "TEXT DEFAULT ''")
     _ensure_column("users", "avatar_url", "TEXT DEFAULT ''")
     _ensure_column("users", "status", "TEXT DEFAULT 'active'")
+    
+    # Token quota fields for AI summary feature
+    _ensure_column("users", "token_balance", "INTEGER DEFAULT 100000")
+    _ensure_column("users", "tokens_used", "INTEGER DEFAULT 0")
 
     # Extend news_clicks for preference tracking
     _ensure_column("news_clicks", "tags_json", "TEXT DEFAULT '[]'") if False else None  # news_clicks is in online.db

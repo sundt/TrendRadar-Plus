@@ -499,6 +499,34 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     except Exception:
         pass
 
+    # ========== Global Article Summaries Cache ==========
+    # 全局文章摘要缓存（多用户共享，节省 AI Token）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS article_summaries (
+            url_hash TEXT PRIMARY KEY,
+            url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            article_type TEXT DEFAULT 'other',
+            model TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            created_by INTEGER NOT NULL,
+            hit_count INTEGER DEFAULT 0,
+            updated_at INTEGER NOT NULL,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            total_tokens INTEGER DEFAULT 0,
+            fetch_method TEXT DEFAULT ''
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_article_summaries_created ON article_summaries(created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_article_summaries_type ON article_summaries(article_type)")
+    
+    # Migration: add fetch_method column if not exists
+    _ensure_column("article_summaries", "fetch_method", "TEXT DEFAULT ''")
+
     conn.commit()
 
     _online_db_conn = conn

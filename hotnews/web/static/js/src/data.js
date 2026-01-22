@@ -58,6 +58,7 @@ function _createNewsLi(n, idx, platformId, platformName) {
     const newsId = String(n?.stable_id || '');
     li.dataset.newsId = newsId;
     li.dataset.newsTitle = String(n?.display_title || n?.title || '');
+    li.dataset.newsUrl = String(n?.url || '');
 
     const content = document.createElement('div');
     content.className = 'news-item-content';
@@ -100,31 +101,51 @@ function _createNewsLi(n, idx, platformId, platformName) {
     content.appendChild(indexSpan);
     content.appendChild(a);
 
-    // Add date display if timestamp is available
+    // AI indicator dot (breathing purple)
+    const aiDot = document.createElement('span');
+    aiDot.className = 'news-ai-indicator';
+    aiDot.dataset.newsId = newsId;
+    aiDot.title = 'AI 智能总结';
+    aiDot.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.handleSummaryClick === 'function') {
+            window.handleSummaryClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName);
+        }
+    };
+    content.appendChild(aiDot);
+
+    // Actions container (date + summary button)
+    const actions = document.createElement('div');
+    actions.className = 'news-actions';
+
     const dateStr = formatNewsDate(n?.timestamp);
     if (dateStr) {
         const dateSpan = document.createElement('span');
         dateSpan.className = 'tr-news-date';
-        dateSpan.style.marginLeft = '8px';
-        dateSpan.style.color = '#9ca3af';
-        dateSpan.style.fontSize = '12px';
-        dateSpan.style.whiteSpace = 'nowrap';
         dateSpan.textContent = dateStr;
-        content.appendChild(dateSpan);
+        actions.appendChild(dateSpan);
     }
 
-    // Add favorite button
-    const favBtn = document.createElement('button');
-    favBtn.className = 'news-favorite-btn';
-    favBtn.dataset.newsId = newsId;
-    favBtn.title = '收藏';
-    favBtn.textContent = '☆';
-    favBtn.onclick = (e) => {
-        if (typeof window.handleFavoriteClick === 'function') {
-            window.handleFavoriteClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName);
+    // Summary button
+    const summaryBtn = document.createElement('button');
+    summaryBtn.className = 'news-summary-btn';
+    summaryBtn.dataset.newsId = newsId;
+    summaryBtn.dataset.title = String(n?.display_title || n?.title || '');
+    summaryBtn.dataset.url = String(n?.url || '');
+    summaryBtn.dataset.sourceId = platformId;
+    summaryBtn.dataset.sourceName = platformName || '';
+    summaryBtn.title = 'AI 智能总结';
+    summaryBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.handleSummaryClick === 'function') {
+            window.handleSummaryClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName);
         }
     };
-    content.appendChild(favBtn);
+    actions.appendChild(summaryBtn);
+
+    content.appendChild(actions);
 
     li.appendChild(content);
 
@@ -375,10 +396,17 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
         const safeHref = url || '#';
         const dateStr = formatNewsDate(n?.timestamp);
-        const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
-        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 总结">📝</button>`;
+        
+        // AI indicator dot (breathing purple)
+        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
+        
+        // Actions container (date + summary button)
+        const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 智能总结"></button>`;
+        const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+        
         return `
-            <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
+            <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
                 <div class="news-item-content">
                     ${checkboxHtml}
                     ${indexHtml}
@@ -386,8 +414,8 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
                         ${title}
                         ${crossBadge}
                     </a>
-                    ${dateHtml}
-                    ${summaryBtnHtml}
+                    ${aiDotHtml}
+                    ${actionsHtml}
                 </div>
                 ${metaHtml}
             </li>`;
@@ -711,6 +739,19 @@ export const data = {
                 </div>`;
             }
 
+            // Special handling for my-tags (dynamically loaded)
+            if (String(catId) === 'my-tags') {
+                return `
+                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
+                    <div class="platform-grid" id="myTagsGrid">
+                        <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                            <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
+                            <div style="font-size:16px;">加载中...</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             if (String(catId) === 'knowledge') {
                 const gridInner = _knowledgeGridHtml || `
                     <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">
@@ -795,10 +836,17 @@ export const data = {
                         const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
                         const safeHref = url || '#';
                         const dateStr = formatNewsDate(n?.timestamp);
-                        const dateHtml = dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${escapeHtml(dateStr)}</span>` : '';
-                        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 总结">📝</button>`;
+                        
+                        // AI indicator dot
+                        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
+                        
+                        // Actions container
+                        const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
+                        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 智能总结"></button>`;
+                        const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+                        
                         return `
-                        <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}">
+                        <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
                             <div class="news-item-content">
                                 ${checkboxHtml}
                                 ${indexHtml}
@@ -806,8 +854,8 @@ export const data = {
                                     ${title}
                                     ${crossBadge}
                                 </a>
-                                ${dateHtml}
-                                ${summaryBtnHtml}
+                                ${aiDotHtml}
+                                ${actionsHtml}
                             </div>
                             ${metaHtml}
                         </li>`;

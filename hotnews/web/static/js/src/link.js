@@ -45,19 +45,31 @@ export const link = {
             }
         }
 
+        // Desktop: allow default navigation
         if (this.isHoverDevice()) {
             return;
         }
 
-        const isSame = item.classList.contains('preview');
-        if (isSame) {
-            item.classList.remove('preview');
-            return;
+        // Mobile: first tap expands to show actions, second tap navigates
+        const isExpanded = item.classList.contains('expanded');
+        
+        if (isExpanded) {
+            // Second tap - allow navigation, collapse
+            item.classList.remove('expanded');
+            return; // Let the default link behavior happen
         }
 
+        // First tap - expand to show actions, prevent navigation
         evt.preventDefault();
-        this.closeAllPreviews(item);
-        item.classList.add('preview');
+        this.closeAllExpanded(item);
+        item.classList.add('expanded');
+    },
+
+    closeAllExpanded(exceptItem) {
+        document.querySelectorAll('.news-item.expanded').forEach((it) => {
+            if (exceptItem && it === exceptItem) return;
+            it.classList.remove('expanded');
+        });
     },
 
     handleTitleKeydownV2(el, evt) {
@@ -91,13 +103,18 @@ document.addEventListener('click', (e) => {
     
     if (e.target.closest('.news-item')) return;
     link.closeAllPreviews(null);
+    link.closeAllExpanded(null);
 });
 document.addEventListener('touchstart', (e) => {
     if (e.target.closest('.news-item')) return;
     link.closeAllPreviews(null);
+    link.closeAllExpanded(null);
 }, { passive: true });
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') link.closeAllPreviews(null);
+    if (e.key === 'Escape') {
+        link.closeAllPreviews(null);
+        link.closeAllExpanded(null);
+    }
 });
 
 TR.link = link;

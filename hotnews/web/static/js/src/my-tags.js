@@ -224,15 +224,24 @@ function createTagCard(tagData) {
             const escapedTitle = safeTitle.replace(/'/g, "\\'");
             const escapedUrl = (item.url || '').replace(/'/g, "\\'");
             const escapedTagName = (tagName || '').replace(/'/g, "\\'");
+            
+            // AI indicator dot
+            const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')"></span>`;
+            
+            // Actions container (date + summary button)
+            const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
+            const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" title="AI 智能总结"></button>`;
+            const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+            
             return `
-            <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}">
+            <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
                 <div class="news-item-content">
                     <span class="news-index">${idx + 1}</span>
-                    <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer">
+                    <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">
                         ${item.title}
                     </a>
-                    ${dateStr ? `<span class="tr-news-date" style="margin-left:8px;color:#9ca3af;font-size:12px;white-space:nowrap;">${dateStr}</span>` : ''}
-                    <button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" title="AI 总结">📝</button>
+                    ${aiDotHtml}
+                    ${actionsHtml}
                 </div>
             </li>
             `;

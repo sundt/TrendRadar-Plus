@@ -114,6 +114,7 @@ function createNewsLi(n, idx, platformId, categoryId, platformName) {
     const newsId = String(n?.stable_id || '');
     li.dataset.newsId = newsId;
     li.dataset.newsTitle = String(n?.display_title || n?.title || '');
+    li.dataset.newsUrl = String(n?.url || '');
 
     const content = document.createElement('div');
     content.className = 'news-item-content';
@@ -144,6 +145,7 @@ function createNewsLi(n, idx, platformId, categoryId, platformName) {
     a.href = String(n?.url || '#');
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
+    // Mobile: first tap expands, second tap navigates
     a.setAttribute('onclick', 'handleTitleClickV2(this, event)');
     a.setAttribute('onauxclick', 'handleTitleClickV2(this, event)');
     a.setAttribute('oncontextmenu', 'handleTitleClickV2(this, event)');
@@ -164,20 +166,34 @@ function createNewsLi(n, idx, platformId, categoryId, platformName) {
     content.appendChild(indexSpan);
     content.appendChild(a);
 
-    // Add date display if timestamp is available
+    // AI indicator dot (breathing purple dot)
+    const aiDot = document.createElement('span');
+    aiDot.className = 'news-ai-indicator';
+    aiDot.dataset.newsId = newsId;
+    aiDot.title = 'AI 智能总结';
+    aiDot.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.handleSummaryClick === 'function') {
+            window.handleSummaryClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName || '');
+        }
+    };
+    content.appendChild(aiDot);
+
+    // Actions container (hidden by default, shown on hover/expand)
+    const actions = document.createElement('div');
+    actions.className = 'news-actions';
+
+    // Date display
     const dateStr = formatNewsDate(n?.timestamp);
     if (dateStr) {
         const dateSpan = document.createElement('span');
         dateSpan.className = 'tr-news-date';
-        dateSpan.style.marginLeft = '8px';
-        dateSpan.style.color = '#9ca3af';
-        dateSpan.style.fontSize = '12px';
-        dateSpan.style.whiteSpace = 'nowrap';
         dateSpan.textContent = dateStr;
-        content.appendChild(dateSpan);
+        actions.appendChild(dateSpan);
     }
 
-    // Add summary button
+    // Summary button
     const summaryBtn = document.createElement('button');
     summaryBtn.className = 'news-summary-btn';
     summaryBtn.dataset.newsId = newsId;
@@ -185,14 +201,17 @@ function createNewsLi(n, idx, platformId, categoryId, platformName) {
     summaryBtn.dataset.url = String(n?.url || '');
     summaryBtn.dataset.sourceId = platformId;
     summaryBtn.dataset.sourceName = platformName || '';
-    summaryBtn.title = 'AI 总结';
-    summaryBtn.textContent = '📝';
+    summaryBtn.title = 'AI 智能总结';
     summaryBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         if (typeof window.handleSummaryClick === 'function') {
             window.handleSummaryClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName || '');
         }
     };
-    content.appendChild(summaryBtn);
+    actions.appendChild(summaryBtn);
+
+    content.appendChild(actions);
 
     li.appendChild(content);
 

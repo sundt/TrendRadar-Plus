@@ -78,18 +78,29 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const title = escapeHtml(n?.display_title || n?.title || '');
         const url = escapeHtml(n?.url || '#');
         const t = _fmtTime(n?.published_at || n?.created_at);
-        const timeHtml = t ? `<span class="tr-mb-time" style="margin-left:8px;color:#9ca3af;font-size:12px;">${escapeHtml(t)}</span>` : '';
+        const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
         const publishedAt = n?.published_at || n?.created_at || 0;
         const dotHtml = _isNewContent(publishedAt) ? '<span class="tr-new-dot"></span>' : '';
+        
+        // AI indicator dot
+        const escapedTitle = title.replace(/'/g, "\\'");
+        const escapedUrl = url.replace(/'/g, "\\'");
+        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', 'knowledge', '知识库')"></span>`;
+        
+        // Actions container
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="knowledge" data-source-name="知识库" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', 'knowledge', '知识库')" title="AI 智能总结"></button>`;
+        const actionsHtml = `<div class="news-actions">${timeHtml}${summaryBtnHtml}</div>`;
+        
         return `
-            <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
+            <li class="news-item" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
                 <div class="news-item-content">
                     ${dotHtml}
                     <span class="news-index">${String(idx + 1)}</span>
                     <a class="news-title" href="${url}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
                         ${title}
                     </a>
-                    ${timeHtml}
+                    ${aiDotHtml}
+                    ${actionsHtml}
                 </div>
             </li>`;
     }).join('');
