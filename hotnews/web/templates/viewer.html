@@ -130,8 +130,8 @@
                         🌙
                     </button>
 
-                    <!-- 设置按钮 - 跳转到设置页面 -->
-                    <button class="icon-btn category-settings-btn" onclick="window.location.href='/api/user/preferences/page'" title="我的设置">
+                    <!-- 设置按钮 - 需要登录才能进入设置页面 -->
+                    <button class="icon-btn category-settings-btn" onclick="goToSettings()" title="我的设置">
                         ⚙️ <span class="new-dot" id="categorySettingsNewBadge"></span>
                     </button>
 

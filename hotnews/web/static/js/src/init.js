@@ -10,6 +10,20 @@ import { AuthButton } from './auth-ui.js';
 const MOBILE_TOP_COLLAPSE_STORAGE_KEY = 'hotnews_mobile_top_collapsed_v1';
 const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
 
+/**
+ * 跳转到设置页面（需要登录）
+ */
+function goToSettings() {
+    if (authState.isLoggedIn()) {
+        window.location.href = '/api/user/preferences/page';
+    } else {
+        window.location.href = '/api/auth/page';
+    }
+}
+
+// 暴露到全局
+window.goToSettings = goToSettings;
+
 function _isMobileNarrowScreen() {
     try {
         return !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;

@@ -193,7 +193,6 @@ export class AuthButton {
                 <div class="auth-dropdown" id="authDropdown">
                     <div class="auth-dropdown-item auth-user-info">${name}</div>
                     <div class="auth-dropdown-divider"></div>
-                    <a href="/api/user/preferences/page" class="auth-dropdown-item">⚙️ 我的设置</a>
                     <div class="auth-dropdown-item auth-logout-btn">🚪 退出登录</div>
                 </div>
             </div>
