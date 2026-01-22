@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>标签选择 UI 原型 - HotNews</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0F172A;
+            color: #F1F5F9;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #94A3B8;
+            font-size: 14px;
+        }
+
+        /* 搜索栏 */
+        .search-section {
+            background: #1E293B;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 12px 16px;
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #F1F5F9;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3B82F6;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            padding: 6px 12px;
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-chip:hover {
+            border-color: #3B82F6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .filter-chip.active {
+            background: #3B82F6;
+            border-color: #3B82F6;
+            color: white;
+        }
+
+        /* 推荐区域 */
+        .section {
+            background: #1E293B;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-subtitle {
+            font-size: 12px;
+            color: #94A3B8;
+            font-weight: normal;
+        }
+
+        /* 推荐卡片 */
+        .recommendations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .recommendation-card {
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .recommendation-card:hover {
+            border-color: #3B82F6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .tag-icon-large {
+            font-size: 32px;
+        }
+
+        .badges {
+            display: flex;
+            gap: 4px;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge.hot {
+            background: rgba(239, 68, 68, 0.2);
+            color: #FCA5A5;
+        }
+
+        .badge.new {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86EFAC;
+        }
+
+        .badge.trending {
+            background: rgba(245, 158, 11, 0.2);
+            color: #FCD34D;
+        }
+
+        .card-body {
+            margin-bottom: 12px;
+        }
+
+        .tag-name {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .tag-description {
+            font-size: 13px;
+            color: #94A3B8;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .tag-reason {
+            font-size: 12px;
+            color: #64748B;
+            font-style: italic;
+            margin-bottom: 12px;
+        }
+
+        .card-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-value {
+            font-size: 16px;
+            font-weight: 600;
+            color: #3B82F6;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #64748B;
+        }
+
+        .card-footer {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-follow {
+            background: #3B82F6;
+            color: white;
+        }
+
+        .btn-follow:hover {
+            background: #2563EB;
+        }
+
+        .btn-preview {
+            background: transparent;
+            border: 1px solid #334155;
+            color: #94A3B8;
+        }
+
+        .btn-preview:hover {
+            border-color: #3B82F6;
+            color: #3B82F6;
+        }
+
+        /* 标签列表 */
+        .tag-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .tag-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: #0F172A;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .tag-item:hover {
+            border-color: #3B82F6;
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .tag-item-icon {
+            font-size: 24px;
+        }
+
+        .tag-item-content {
+            flex: 1;
+        }
+
+        .tag-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .tag-item-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #64748B;
+        }
+
+        .tag-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            background: transparent;
+            color: #94A3B8;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .btn-icon:hover {
+            border-color: #3B82F6;
+            color: #3B82F6;
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        /* 可折叠区域 */
+        .collapsible {
+            margin-bottom: 16px;
+        }
+
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0F172A;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .collapsible-header:hover {
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .collapsible-title {
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .collapsible-count {
+            font-size: 12px;
+            color: #64748B;
+            font-weight: normal;
+        }
+
+        .collapsible-toggle {
+            color: #64748B;
+            transition: transform 0.2s;
+        }
+
+        .collapsible.expanded .collapsible-toggle {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .collapsible.expanded .collapsible-content {
+            max-height: 2000px;
+            padding-top: 12px;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748B;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏷️ 标签选择</h1>
+            <p class="subtitle">发现和关注你感兴趣的话题</p>
+        </header>
+
+        <!-- 搜索和筛选 -->
+        <div class="search-section">
+            <div class="search-bar">
+                <input type="text" class="search-input" placeholder="搜索标签... (支持拼音)">
+            </div>
+            <div class="filter-bar">
+                <div class="filter-chip active">全部</div>
+                <div class="filter-chip">科技</div>
+                <div class="filter-chip">商业</div>
+                <div class="filter-chip">金融</div>
+                <div class="filter-chip">生活</div>
+                <div class="filter-chip">娱乐</div>
+                <div class="filter-chip">热门</div>
+                <div class="filter-chip">新兴</div>
+            </div>
+        </div>
+
+        <!-- 为你推荐 -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    ✨ 为你推荐
+                    <span class="section-subtitle">基于你的浏览历史</span>
+                </h2>
+            </div>
+            <div class="recommendations-grid">
+                <!-- 推荐卡片 1 -->
+                <div class="recommendation-card">
+                    <div class="card-header">
+                        <div class="tag-icon-large">🔥</div>
+                        <div class="badges">
+                            <span class="badge hot">热门</span>
+                            <span class="badge new">NEW</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="tag-name">DeepSeek</div>
+                        <div class="tag-description">
+                            DeepSeek AI 公司及其大模型产品
+                        </div>
+                        <div class="tag-reason">
+                            💡 因为你关注了 AI/机器学习
+                        </div>
+                        <div class="card-stats">
+                            <div class="stat">
+                                <div class="stat-value">156</div>
+                                <div class="stat-label">新闻</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">89</div>
+                                <div class="stat-label">关注</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">↗ 45%</div>
+                                <div class="stat-label">趋势</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-follow">+ 关注</button>
+                        <button class="btn btn-preview">预览</button>
+                    </div>
+                </div>
+
+                <!-- 推荐卡片 2 -->
+                <div class="recommendation-card">
+                    <div class="card-header">
+                        <div class="tag-icon-large">📱</div>
+                        <div class="badges">
+                            <span class="badge new">NEW</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="tag-name">量子计算</div>
+                        <div class="tag-description">
+                            量子计算技术和应用的最新进展
+                        </div>
+                        <div class="tag-reason">
+                            💡 新兴技术话题
+                        </div>
+                        <div class="card-stats">
+                            <div class="stat">
+                                <div class="stat-value">78</div>
+                                <div class="stat-label">新闻</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">45</div>
+                                <div class="stat-label">关注</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">↗ 32%</div>
+                                <div class="stat-label">趋势</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-follow">+ 关注</button>
+                        <button class="btn btn-preview">预览</button>
+                    </div>
+                </div>
+
+                <!-- 推荐卡片 3 -->
+                <div class="recommendation-card">
+                    <div class="card-header">
+                        <div class="tag-icon-large">🎯</div>
+                        <div class="badges">
+                            <span class="badge trending">趋势</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="tag-name">开源项目</div>
+                        <div class="tag-description">
+                            开源软件和项目的发布与更新
+                        </div>
+                        <div class="tag-reason">
+                            💡 相似用户也关注
+                        </div>
+                        <div class="card-stats">
+                            <div class="stat">
+                                <div class="stat-value">234</div>
+                                <div class="stat-label">新闻</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">156</div>
+                                <div class="stat-label">关注</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">↗ 18%</div>
+                                <div class="stat-label">趋势</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-follow">+ 关注</button>
+                        <button class="btn btn-preview">预览</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 热门标签 -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    🔥 热门标签
+                    <span class="section-subtitle">30天最活跃</span>
+                </h2>
+            </div>
+            <div class="tag-list">
+                <div class="tag-item">
+                    <div class="tag-item-icon">🤖</div>
+                    <div class="tag-item-content">
+                        <div class="tag-item-name">AI/机器学习</div>
+                        <div class="tag-item-meta">
+                            <span>1.2k 条新闻</span>
+                            <span>↗ +25%</span>
+                            <span>856 人关注</span>
+                        </div>
+                    </div>
+                    <div class="tag-item-actions">
+                        <button class="btn-icon" title="预览">👁️</button>
+                        <button class="btn-icon" title="关注">+</button>
+                    </div>
+                </div>
+
+                <div class="tag-item">
+                    <div class="tag-item-icon">🚀</div>
+                    <div class="tag-item-content">
+                        <div class="tag-item-name">创业</div>
+                        <div class="tag-item-meta">
+                            <span>856 条新闻</span>
+                            <span>↗ +18%</span>
+                            <span>623 人关注</span>
+                        </div>
+                    </div>
+                    <div class="tag-item-actions">
+                        <button class="btn-icon" title="预览">👁️</button>
+                        <button class="btn-icon" title="关注">+</button>
+                    </div>
+                </div>
+
+                <div class="tag-item">
+                    <div class="tag-item-icon">💰</div>
+                    <div class="tag-item-content">
+                        <div class="tag-item-name">投资理财</div>
+                        <div class="tag-item-meta">
+                            <span>723 条新闻</span>
+                            <span>↗ +12%</span>
+                            <span>534 人关注</span>
+                        </div>
+                    </div>
+                    <div class="tag-item-actions">
+                        <button class="btn-icon" title="预览">👁️</button>
+                        <button class="btn-icon" title="关注">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分类浏览 -->
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">📂 分类浏览</h2>
+            </div>
+
+            <!-- 科技类 -->
+            <div class="collapsible expanded">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <div class="collapsible-title">
+                        💻 科技类
+                        <span class="collapsible-count">(45个标签)</span>
+                    </div>
+                    <div class="collapsible-toggle">▼</div>
+                </div>
+                <div class="collapsible-content">
+                    <div class="tag-list">
+                        <div class="tag-item">
+                            <div class="tag-item-icon">🤖</div>
+                            <div class="tag-item-content">
+                                <div class="tag-item-name">AI/机器学习</div>
+                                <div class="tag-item-meta">
+                                    <span>1.2k 条</span>
+                                </div>
+                            </div>
+                            <div class="tag-item-actions">
+                                <button class="btn-icon">+</button>
+                            </div>
+                        </div>
+                        <div class="tag-item">
+                            <div class="tag-item-icon">💻</div>
+                            <div class="tag-item-content">
+                                <div class="tag-item-name">编程开发</div>
+                                <div class="tag-item-meta">
+                                    <span>856 条</span>
+                                </div>
+                            </div>
+                            <div class="tag-item-actions">
+                                <button class="btn-icon">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 商业类 -->
+            <div class="collapsible">
+                <div class="collapsible-header" onclick="toggleCollapsible(this)">
+                    <div class="collapsible-title">
+                        💼 商业类
+                        <span class="collapsible-count">(32个标签)</span>
+                    </div>
+                    <div class="collapsible-toggle">▼</div>
+                </div>
+                <div class="collapsible-content">
+                    <div class="tag-list">
+                        <!-- 标签列表 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleCollapsible(header) {
+            const collapsible = header.parentElement;
+            collapsible.classList.toggle('expanded');
+        }
+    </script>
+</body>
+</html>

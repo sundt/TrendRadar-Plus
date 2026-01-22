@@ -10,7 +10,6 @@ venv/
 *.egg-info/
 dist/
 build/
-pytest.ini
 
 # IDE
 .vscode/
@@ -19,92 +18,34 @@ pytest.ini
 *.swo
 .DS_Store
 
-# Project specific
+# Output data (too large, local only)
 output/
-*.db
 *.log
-
 logs/
-rss_feeds.csv
-rss_feeds_manual_additions.csv
-RSSrequirement.txt
-
-workspace/metagpt/
-!workspace/metagpt/.gitkeep
-
-.venv-metagpt/
-
-# Environment
-.env
-.env.local
-docker/.env
-
-# Amazon Q / Copilot
-.amazonq/
-.claude/
-
-# OpenSpec
-openspec/
-
-# Local validation markers
-.local_validation_ok
 
 # Temporary files
 *.tmp
 *.bak
 release.tar.gz
-index.html
 
-# Node.js / Playwright
+# Node.js
 node_modules/
-package-lock.json
 playwright-report/
 test-results/
 .playwright/
 
-# [KERNEL] Private Logic
-# Ignore all content in kernel except the init files (to preserve structure)
-hotnews/kernel/
-!hotnews/kernel/
-!hotnews/kernel/__init__.py
-!hotnews/kernel/admin/__init__.py
-!hotnews/kernel/scheduler/__init__.py
-!hotnews/kernel/static/
-!hotnews/kernel/templates/
+# Local workspace
+workspace/metagpt/
+!workspace/metagpt/.gitkeep
+.venv-metagpt/
 
-# Documentation
-docs/
+# Local validation markers
+.local_validation_ok
 
-# Scripts / Tools (Local Only)
-scripts/
+# Environment files with secrets (keep local)
+.env
+docker/.env
 
-# AI Rules (Local only)
-.agent/
-.cursorrules
-.windsurfrules
-CLAUDE.md
-
-# Temporary Scraper Scripts
-scrape_*.py
-debug_*.py
-
-# Local Data/Logs
-temp_logs.txt
-*.xml
-uv.lock
-
-# Deployment Scripts
-deploy-*.sh
-rebuild_only.sh
-
-# Node.js / Testing (Local Only)
-playwright.config.ts
-tests/
-package.json
-package-lock.json
-node_modules/
-
-# GitHub Actions / Templates
-.github/
+# Reference projects (external)
 we-mp-rss/
 wechat-article-exporter/
