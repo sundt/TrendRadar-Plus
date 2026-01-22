@@ -613,17 +613,19 @@ async def generate_smart_summary_stream(
                         data = json.loads(data_str)
                         
                         # Extract usage if present (usually in last chunk)
-                        if "usage" in data:
+                        if "usage" in data and data["usage"]:
                             usage = data["usage"]
                             token_usage["prompt_tokens"] = usage.get("prompt_tokens", 0)
                             token_usage["completion_tokens"] = usage.get("completion_tokens", 0)
                             token_usage["total_tokens"] = usage.get("total_tokens", 0)
                         
                         if "choices" in data and len(data["choices"]) > 0:
-                            delta = data["choices"][0].get("delta", {})
-                            chunk = delta.get("content", "")
-                            if chunk:
-                                yield chunk, False, article_type, None, None
+                            choice = data["choices"][0]
+                            delta = choice.get("delta") if choice else None
+                            if delta:
+                                chunk = delta.get("content", "")
+                                if chunk:
+                                    yield chunk, False, article_type, None, None
                     except json.JSONDecodeError:
                         continue
                 
