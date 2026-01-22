@@ -2492,3 +2492,220 @@
     margin: 0 auto 16px;
     animation: spin 1s linear infinite;
 }
+
+
+/* ========== Login Modal Styles ========== */
+.login-modal {
+    background: #1e293b;
+}
+
+.login-logo {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.login-logo h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.login-logo p {
+    color: #94a3b8;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.login-step-indicator {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 24px;
+}
+
+.login-step-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #334155;
+    transition: background 0.2s;
+}
+
+.login-step-dot.active {
+    background: #3b82f6;
+}
+
+.login-step {
+    display: none;
+}
+
+.login-step.active {
+    display: block;
+}
+
+.login-form-group {
+    margin-bottom: 20px;
+}
+
+.login-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.login-form-group input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 16px;
+    transition: border-color 0.2s;
+}
+
+.login-form-group input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.login-form-group input::placeholder {
+    color: #64748b;
+}
+
+.login-submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.login-submit-btn:hover {
+    background: #2563eb;
+}
+
+.login-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.login-hint {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 12px;
+    text-align: center;
+}
+
+.login-back-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 16px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.login-back-btn:hover {
+    color: #f1f5f9;
+}
+
+.login-resend-btn {
+    padding: 4px 8px;
+    background: transparent;
+    color: #3b82f6;
+    border: 1px solid #3b82f6;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 4px;
+}
+
+.login-resend-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    border-color: #334155;
+    color: #64748b;
+}
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    margin: 24px 0;
+    color: #64748b;
+    font-size: 14px;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #334155;
+}
+
+.login-divider span {
+    padding: 0 16px;
+}
+
+.login-oauth-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.login-oauth-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.login-oauth-btn:hover {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.login-message {
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    display: none;
+}
+
+.login-message.error {
+    display: block;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid #ef4444;
+    color: #ef4444;
+}
+
+.login-message.success {
+    display: block;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid #22c55e;
+    color: #22c55e;
+}

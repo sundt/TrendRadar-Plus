@@ -33,6 +33,7 @@ import './click-tracker.js';
 import './auth.js';
 import './my-tags.js';
 import './source-subscription.js';
+import './login-modal.js';
 
 // 异步加载非关键 heavy 模块 (Code Splitting)
 import('./platform-reorder.js');
