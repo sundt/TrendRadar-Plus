@@ -336,16 +336,12 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             articleTypeName = data.article_type_name;
                             tokenUsage = data.token_usage || null;
                             const cachedFeedback = data.feedback || null;
-                            // For cached responses, fetch balance from API
-                            let cachedBalanceInfo = null;
-                            try {
-                                const balanceRes = await fetch('/api/user/tokens');
-                                if (balanceRes.ok) {
-                                    cachedBalanceInfo = await balanceRes.json();
-                                }
-                            } catch (e) {
-                                console.warn('[Summary] Failed to fetch balance:', e);
-                            }
+                            // Balance info is now included in cached response
+                            const cachedBalanceInfo = (data.token_balance !== undefined) ? {
+                                token_balance: data.token_balance,
+                                tokens_used: data.tokens_used,
+                                default_tokens: 100000
+                            } : null;
                             body.innerHTML = `
                                 <div class="summary-content">
                                     ${renderMarkdown(fullContent)}

@@ -192,11 +192,12 @@ async def _fetch_with_jina(url: str) -> Tuple[Optional[str], Optional[str]]:
         return None, f"Jina 请求错误: {e}"
 
 
-async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optional[str], Optional[str]]:
+async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optional[str], Optional[str], str]:
     """
     Fetch and extract article content from URL.
     Uses multiple extraction strategies as fallback.
-    Returns (content, error_message)
+    Returns (content, error_message, fetch_method)
+    fetch_method: "http", "jina", "scraperapi", "fallback", "error"
     """
     import os
     
@@ -204,7 +205,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
         from bs4 import BeautifulSoup
     except ImportError as e:
         logger.error(f"Missing dependency: {e}")
-        return None, "服务依赖缺失，请联系管理员"
+        return None, "服务依赖缺失，请联系管理员", "error"
     
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -221,6 +222,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
     
     html = None
     fetch_error = None
+    fetch_method = "error"
     
     # Try direct fetch first
     try:
@@ -228,6 +230,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
             resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             html = resp.text
+            fetch_method = "http"
             logger.info(f"Direct fetch succeeded for {url}")
     except httpx.HTTPStatusError as e:
         fetch_error = f"网页请求失败: {e.response.status_code}"
@@ -248,7 +251,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
             # Truncate if too long
             if len(jina_content) > MAX_CONTENT_LENGTH:
                 jina_content = jina_content[:MAX_CONTENT_LENGTH] + "\n\n[内容已截断...]"
-            return jina_content, None
+            return jina_content, None, "jina"
         else:
             logger.info(f"Jina Reader failed: {jina_error}")
     
@@ -276,6 +279,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
                     resp = await client.get(proxy_url)
                     resp.raise_for_status()
                     html = resp.text
+                    fetch_method = "scraperapi"
                     logger.info(f"ScraperAPI fetch succeeded for {url}")
                     fetch_error = None
             except httpx.HTTPStatusError as e:
@@ -294,7 +298,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
                     fetch_error = "代理请求失败"
     
     if html is None:
-        return None, fetch_error or "网页无法访问"
+        return None, fetch_error or "网页无法访问", "error"
     
     # Log HTML length for debugging
     logger.info(f"Fetched {len(html)} bytes from {url}")
@@ -320,7 +324,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
     # Final check
     if not content or len(content) < 50:
         logger.warning(f"Content extraction failed for {url}, got {len(content) if content else 0} chars")
-        return None, "无法提取文章正文（内容可能需要登录或由 JavaScript 动态加载）"
+        return None, "无法提取文章正文（内容可能需要登录或由 JavaScript 动态加载）", "error"
     
     # Clean up content
     # Remove excessive newlines
@@ -336,7 +340,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
         content = f"# {title}\n\n{content}"
     
     logger.info(f"Extracted {len(content)} chars from {url}")
-    return content, None
+    return content, None, fetch_method
 
 
 # System prompt for summarization
@@ -547,12 +551,13 @@ async def generate_smart_summary_stream(
 ):
     """
     Generate summary with streaming output.
-    Yields (chunk, is_done, article_type, error)
+    Yields (chunk, is_done, article_type, error, token_usage)
+    token_usage is a dict with prompt_tokens, completion_tokens, total_tokens (only on done)
     """
     from hotnews.kernel.services.prompts import get_template
     
     if not api_key:
-        yield None, True, "other", "AI 服务未配置"
+        yield None, True, "other", "AI 服务未配置", None
         return
     
     # Step 1: Classify article if type not provided
@@ -560,7 +565,7 @@ async def generate_smart_summary_stream(
         article_type = await classify_article(content, api_key, model)
     
     # Yield article type first
-    yield None, False, article_type, None
+    yield None, False, article_type, None, None
     
     # Step 2: Get template for this type
     template = get_template(article_type)
@@ -583,8 +588,11 @@ async def generate_smart_summary_stream(
         ],
         "temperature": 0.7,
         "max_tokens": 2000,
-        "stream": True
+        "stream": True,
+        "stream_options": {"include_usage": True}  # Request usage in stream
     }
+    
+    token_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     
     try:
         async with httpx.AsyncClient(timeout=120) as client:
@@ -597,30 +605,38 @@ async def generate_smart_summary_stream(
                     
                     data_str = line[6:]  # Remove "data: " prefix
                     if data_str == "[DONE]":
-                        yield None, True, article_type, None
+                        yield None, True, article_type, None, token_usage
                         return
                     
                     try:
                         import json
                         data = json.loads(data_str)
+                        
+                        # Extract usage if present (usually in last chunk)
+                        if "usage" in data:
+                            usage = data["usage"]
+                            token_usage["prompt_tokens"] = usage.get("prompt_tokens", 0)
+                            token_usage["completion_tokens"] = usage.get("completion_tokens", 0)
+                            token_usage["total_tokens"] = usage.get("total_tokens", 0)
+                        
                         if "choices" in data and len(data["choices"]) > 0:
                             delta = data["choices"][0].get("delta", {})
                             chunk = delta.get("content", "")
                             if chunk:
-                                yield chunk, False, article_type, None
+                                yield chunk, False, article_type, None, None
                     except json.JSONDecodeError:
                         continue
                 
-                yield None, True, article_type, None
+                yield None, True, article_type, None, token_usage
                 
     except httpx.TimeoutException:
-        yield None, True, article_type, "AI 服务响应超时"
+        yield None, True, article_type, "AI 服务响应超时", None
     except httpx.HTTPStatusError as e:
         logger.error(f"DashScope API error: {e.response.status_code}")
-        yield None, True, article_type, f"AI 服务错误: {e.response.status_code}"
+        yield None, True, article_type, f"AI 服务错误: {e.response.status_code}", None
     except Exception as e:
         logger.error(f"Summary generation error: {e}")
-        yield None, True, article_type, "AI 总结生成失败"
+        yield None, True, article_type, "AI 总结生成失败", None
 
 
 async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -> Tuple[Optional[str], Optional[str]]:
@@ -629,7 +645,7 @@ async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -
     Returns (summary, error_message)
     """
     # Step 1: Fetch content
-    content, error = await fetch_article_content(url)
+    content, error, _fetch_method = await fetch_article_content(url)
     if error:
         return None, error
     

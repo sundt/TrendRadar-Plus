@@ -2551,7 +2551,7 @@
 }
 
 .news-summary-btn::before {
-    content: "AI";
+    content: "✨";
 }
 
 /* Desktop: hover to show AI button, hide date */

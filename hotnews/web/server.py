@@ -63,6 +63,7 @@ _source_subscription_router = None
 _keyword_router = None
 _favorites_router = None
 _summary_router = None
+_user_token_router = None
 _token_router = None
 _tag_candidate_admin_router = None
 _user_stats_admin_router = None
@@ -110,6 +111,7 @@ try:
     
     from hotnews.kernel.user import summary_api
     _summary_router = summary_api.router
+    _user_token_router = summary_api.user_router
     
     from hotnews.kernel.user import token_api
     _token_router = token_api.router
@@ -455,6 +457,7 @@ if _source_subscription_router: app.include_router(_source_subscription_router)
 if _keyword_router: app.include_router(_keyword_router)
 if _favorites_router: app.include_router(_favorites_router)
 if _summary_router: app.include_router(_summary_router)
+if _user_token_router: app.include_router(_user_token_router)
 if _token_router: app.include_router(_token_router)
 if _wechat_admin_router: app.include_router(_wechat_admin_router)
 if _tag_candidate_admin_router: 

@@ -50,7 +50,7 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const sourceName = escapeHtml(n?.source_name || '深入探索');
         const t = _fmtTime(n?.published_at || n?.created_at);
         const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
-        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${sourceId}', '${sourceName.replace(/'/g, "\\'")}')" title="AI 智能总结">✨</button>`;
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${sourceId}', '${sourceName.replace(/'/g, "\\'")}')" title="AI 智能总结"></button>`;
         const actionsHtml = `<div class="news-actions">${timeHtml}${summaryBtnHtml}</div>`;
         return `
             <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
