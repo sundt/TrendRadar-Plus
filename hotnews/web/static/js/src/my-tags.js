@@ -175,18 +175,20 @@ function renderEmptyState(container) {
  */
 function renderLoginRequired(container) {
     container.innerHTML = `
-        <div style="text-align:center;padding:60px 20px;width:100%;">
-            <div style="font-size:64px;margin-bottom:20px;">🔒</div>
-            <div style="font-size:18px;color:#f1f5f9;margin-bottom:12px;font-weight:600;">请先登录</div>
-            <div style="font-size:14px;color:#94a3b8;margin-bottom:24px;line-height:1.6;">
-                登录后即可查看您关注的标签新闻
+        <div style="background:white;border-radius:12px;margin:8px;min-height:calc(100vh - 200px);display:flex;align-items:center;justify-content:center;">
+            <div style="text-align:center;padding:60px 20px;">
+                <div style="font-size:64px;margin-bottom:20px;">🔒</div>
+                <div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">请先登录</div>
+                <div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">
+                    登录后即可查看您关注的标签新闻
+                </div>
+                <button onclick="openLoginModal()" 
+                   style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;transition:transform 0.2s;"
+                   onmouseover="this.style.transform='scale(1.05)'"
+                   onmouseout="this.style.transform='scale(1)'">
+                    立即登录
+                </button>
             </div>
-            <button onclick="openLoginModal()" 
-               style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;transition:transform 0.2s;"
-               onmouseover="this.style.transform='scale(1.05)'"
-               onmouseout="this.style.transform='scale(1)'">
-                立即登录
-            </button>
         </div>
     `;
 }

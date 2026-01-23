@@ -259,18 +259,20 @@ import{a as k}from"./chunk-R33N4FES.js";import{a as c,b as A,c as S,d as Nt,e as
             </a>
         </div>
     `}function Rr(e){e.innerHTML=`
-        <div style="text-align:center;padding:60px 20px;width:100%;">
-            <div style="font-size:64px;margin-bottom:20px;">\u{1F512}</div>
-            <div style="font-size:18px;color:#f1f5f9;margin-bottom:12px;font-weight:600;">\u8BF7\u5148\u767B\u5F55</div>
-            <div style="font-size:14px;color:#94a3b8;margin-bottom:24px;line-height:1.6;">
-                \u767B\u5F55\u540E\u5373\u53EF\u67E5\u770B\u60A8\u5173\u6CE8\u7684\u6807\u7B7E\u65B0\u95FB
+        <div style="background:white;border-radius:12px;margin:8px;min-height:calc(100vh - 200px);display:flex;align-items:center;justify-content:center;">
+            <div style="text-align:center;padding:60px 20px;">
+                <div style="font-size:64px;margin-bottom:20px;">\u{1F512}</div>
+                <div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">\u8BF7\u5148\u767B\u5F55</div>
+                <div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">
+                    \u767B\u5F55\u540E\u5373\u53EF\u67E5\u770B\u60A8\u5173\u6CE8\u7684\u6807\u7B7E\u65B0\u95FB
+                </div>
+                <button onclick="openLoginModal()" 
+                   style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;transition:transform 0.2s;"
+                   onmouseover="this.style.transform='scale(1.05)'"
+                   onmouseout="this.style.transform='scale(1)'">
+                    \u7ACB\u5373\u767B\u5F55
+                </button>
             </div>
-            <button onclick="openLoginModal()" 
-               style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;transition:transform 0.2s;"
-               onmouseover="this.style.transform='scale(1.05)'"
-               onmouseout="this.style.transform='scale(1)'">
-                \u7ACB\u5373\u767B\u5F55
-            </button>
         </div>
     `}function Xo(e,t){e.innerHTML=`
         <div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;">
