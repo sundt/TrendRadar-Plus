@@ -6,6 +6,7 @@
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
 import { renderMarkdown } from './summary-modal.js';
+import { preferences } from './preferences.js';
 
 const FAVORITES_STORAGE_KEY = 'hotnews_favorites_v1';
 const FAVORITES_WIDTH_KEY = 'hotnews_favorites_width';
@@ -467,11 +468,13 @@ function getSavedPanelWidth() {
 }
 
 /**
- * Save panel width to localStorage
+ * Save panel width to localStorage and server (if logged in)
  */
 function savePanelWidth(width) {
     try {
         localStorage.setItem(FAVORITES_WIDTH_KEY, String(width));
+        // Also save to server via preferences module
+        preferences.saveSidebarWidths({ favorites_width: width });
     } catch (e) {}
 }
 

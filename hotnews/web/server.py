@@ -59,6 +59,7 @@ _category_rules_router = None
 _tag_admin_router = None
 _auth_router = None
 _preferences_router = None
+_preferences_sync_router = None
 _source_subscription_router = None
 _keyword_router = None
 _favorites_router = None
@@ -100,6 +101,9 @@ try:
     
     from hotnews.kernel.user import preferences_api
     _preferences_router = preferences_api.router
+    
+    from hotnews.kernel.user import preferences_sync_api
+    _preferences_sync_router = preferences_sync_api.router
     
     from hotnews.kernel.user import source_subscription_api
     _source_subscription_router = source_subscription_api.router
@@ -186,17 +190,12 @@ def _parse_rfc822_dt(value: str) -> Optional[datetime]:
 
 
 def _maybe_mint_rss_uid_cookie(request: Request) -> Tuple[Optional[int], Optional[str]]:
+    """Get user ID from rss_uid cookie. No longer auto-creates users."""
     tok = (request.cookies.get("rss_uid") or "").strip()
     if tok:
         uid = _resolve_anon_user_id(request)
         return uid, None
-
-    try:
-        tok = secrets.token_urlsafe(32)
-        uid = create_user_with_cookie_identity(conn=_get_user_db_conn(), token=tok)
-        return uid, tok
-    except Exception:
-        return None, None
+    return None, None
 
 
 def _enrich_rss_subscriptions(subs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -470,6 +469,7 @@ if _category_rules_router: app.include_router(_category_rules_router)
 if _tag_admin_router: app.include_router(_tag_admin_router)
 if _auth_router: app.include_router(_auth_router)
 if _preferences_router: app.include_router(_preferences_router)
+if _preferences_sync_router: app.include_router(_preferences_sync_router)
 if _source_subscription_router: app.include_router(_source_subscription_router)
 if _keyword_router: app.include_router(_keyword_router)
 if _favorites_router: app.include_router(_favorites_router)
@@ -625,18 +625,13 @@ def _beta_can_mint_identity(request: Request) -> bool:
 
 
 def _resolve_anon_user_id(request: Request) -> Optional[int]:
+    """Resolve user ID from rss_uid cookie. No longer auto-creates users."""
     tok = (request.cookies.get("rss_uid") or "").strip()
     if not tok:
         return None
     try:
         user_id = resolve_user_id_by_cookie_token(conn=_get_user_db_conn(), token=tok)
-        if user_id:
-            return user_id
-
-        # Legacy compatibility: existing rss_uid cookie may have been minted
-        # client-side (or under old gating) and thus not present in user.db.
-        # For B1, we always allow creating a server identity.
-        return create_user_with_cookie_identity(conn=_get_user_db_conn(), token=tok)
+        return user_id
     except Exception:
         return None
 

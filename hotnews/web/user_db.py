@@ -275,6 +275,20 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_user_done ON user_todos(user_id, done)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_created ON user_todos(user_id, created_at DESC)")
     
+    # ========== User Preferences ==========
+    # 用户偏好设置（云同步）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id INTEGER PRIMARY KEY,
+            category_config TEXT DEFAULT '{}',
+            theme TEXT DEFAULT 'light',
+            sidebar_widths TEXT DEFAULT '{}',
+            updated_at INTEGER NOT NULL
+        )
+        """
+    )
+    
     conn.commit()
     _user_db_conn = conn
     return conn

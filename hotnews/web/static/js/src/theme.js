@@ -4,28 +4,25 @@
  */
 
 import { TR } from './core.js';
+import { preferences } from './preferences.js';
 
-const THEME_STORAGE_KEY = 'hotnews_theme_mode';
 const DARK_THEME_CLASS = 'eye-protection-mode';
 
 export const theme = {
     isDarkMode() {
-        try {
-            return localStorage.getItem(THEME_STORAGE_KEY) === 'dark';
-        } catch (e) {
-            return false;
-        }
+        // 使用 preferences 模块获取主题设置
+        // 主题值为 'light', 'dark', 或 'auto'
+        const themeValue = preferences.getTheme();
+        return themeValue === 'dark';
     },
 
     toggle() {
         const isDark = this.isDarkMode();
         const nextIsDark = !isDark;
         this.apply(nextIsDark);
-        try {
-            localStorage.setItem(THEME_STORAGE_KEY, nextIsDark ? 'dark' : 'light');
-        } catch (e) {
-            // ignore
-        }
+        // 使用 preferences 模块保存主题设置
+        const themeValue = nextIsDark ? 'dark' : 'light';
+        preferences.saveTheme(themeValue);
     },
 
     apply(isDark) {

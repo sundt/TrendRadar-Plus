@@ -2632,6 +2632,7 @@
     width: 90%;
     max-width: 680px;
     max-height: 85vh;
+    min-height: 400px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -2691,8 +2692,11 @@
 .summary-modal-body {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px 32px 32px;
-    min-height: 200px;
+    min-height: 300px;
+    /* Prevent layout shift from scrollbar */
+    scrollbar-gutter: stable;
 }
 
 .summary-modal-footer {
@@ -2987,6 +2991,7 @@
     justify-content: center;
     padding: 80px 24px;
     gap: 20px;
+    min-height: 280px;
 }
 
 .summary-loading-spinner {
@@ -3061,6 +3066,57 @@
     font-size: 15px;
     font-weight: 500;
     text-align: center;
+}
+
+/* Timeout state - loading too slow */
+.summary-timeout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    gap: 16px;
+    min-height: 280px;
+}
+
+.summary-timeout-icon {
+    font-size: 44px;
+}
+
+.summary-timeout-text {
+    color: #666;
+    font-size: 15px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.summary-timeout-subtext {
+    color: #999;
+    font-size: 13px;
+    text-align: center;
+    margin-top: -8px;
+}
+
+.summary-view-original-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 28px;
+    background: #007aff;
+    color: white;
+    border: none;
+    border-radius: 980px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.summary-view-original-btn:hover {
+    background: #0066d6;
+    color: white;
+    text-decoration: none;
 }
 
 .summary-retry-btn {

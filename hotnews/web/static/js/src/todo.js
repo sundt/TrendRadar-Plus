@@ -5,6 +5,7 @@
 
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
+import { preferences } from './preferences.js';
 
 // ============ 状态 ============
 let todos = [];
@@ -348,7 +349,9 @@ function setupTodoResize() {
         isResizing = false;
         sidebar.classList.remove('resizing');
         handle.classList.remove('active');
+        // Save to localStorage and server (if logged in)
         localStorage.setItem(TODO_SIDEBAR_WIDTH_KEY, sidebar.offsetWidth);
+        preferences.saveSidebarWidths({ todo_width: sidebar.offsetWidth });
     });
 }
 

@@ -5,6 +5,7 @@
 
 import { TR, ready, escapeHtml } from './core.js';
 import { storage } from './storage.js';
+import { preferences } from './preferences.js';
 
 const CATEGORY_CONFIG_KEY = 'hotnews_categories_config';
 const CATEGORY_CONFIG_VERSION = 1;
@@ -71,9 +72,8 @@ export const settings = {
 
     getCategoryConfig() {
         try {
-            const raw = storage.getRaw(CATEGORY_CONFIG_KEY);
-            if (!raw) return null;
-            const config = JSON.parse(raw);
+            const config = preferences.getCategoryConfig();
+            if (!config) return null;
             if (config.version !== CATEGORY_CONFIG_VERSION) {
                 return null;
             }
@@ -85,7 +85,8 @@ export const settings = {
 
     saveCategoryConfig(config) {
         config.version = CATEGORY_CONFIG_VERSION;
-        storage.setRaw(CATEGORY_CONFIG_KEY, JSON.stringify(config));
+        // 使用 preferences 模块保存，支持云同步
+        preferences.saveCategoryConfig(config);
         this.syncConfigToCookie(config);
     },
 

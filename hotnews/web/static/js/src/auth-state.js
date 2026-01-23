@@ -9,6 +9,8 @@
  * - Automatic cache clearing on logout
  */
 
+import { preferences } from './preferences.js';
+
 // Singleton state manager
 class AuthStateManager {
     constructor() {
@@ -138,6 +140,18 @@ class AuthStateManager {
     async onLogin() {
         console.log('[AuthState] Login detected, refreshing user...');
         await this.fetchUser();
+        
+        // Sync preferences after successful login
+        if (this.isLoggedIn()) {
+            try {
+                await preferences.syncOnLogin();
+                console.log('[AuthState] Preferences synced after login');
+            } catch (e) {
+                console.error('[AuthState] Failed to sync preferences:', e);
+                // Don't throw - preferences sync failure shouldn't block login
+            }
+        }
+        
         this._broadcast({ type: 'login' });
     }
 

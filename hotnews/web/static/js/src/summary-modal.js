@@ -14,7 +14,7 @@ let currentNewsUrl = null;
 let slowLoadingTimer = null;
 
 // Timeout before showing "view original" hint (in ms)
-const SLOW_LOADING_TIMEOUT = 15000;
+const SLOW_LOADING_TIMEOUT = 10000;
 
 /**
  * Clear slow loading timer
@@ -291,13 +291,20 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     `;
     footer.style.display = 'none';
     
-    // Start slow loading timer
+    // Start slow loading timer - after timeout, stop spinner and show direct link
     clearSlowLoadingTimer();
     slowLoadingTimer = setTimeout(() => {
-        const slowHint = document.getElementById('summarySlowHint');
-        if (slowHint) {
-            slowHint.style.display = 'block';
-        }
+        // Stop the loading spinner and show direct link to original article
+        body.innerHTML = `
+            <div class="summary-timeout">
+                <div class="summary-timeout-icon">🛡️</div>
+                <div class="summary-timeout-text">该网站防护较强，暂时无法获取内容</div>
+                <div class="summary-timeout-subtext">建议直接阅读原文，体验更佳</div>
+                <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                    📖 阅读原文
+                </a>
+            </div>
+        `;
     }, SLOW_LOADING_TIMEOUT);
     
     try {
