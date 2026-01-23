@@ -16,6 +16,10 @@ function isScrollableX(el) {
 
 function findPlatformGridFromTarget(t) {
     const el = normalizeTarget(t);
+    // First check if we're directly on the grid (e.g., in gaps between cards)
+    const directGrid = el?.closest?.('.platform-grid');
+    if (directGrid) return directGrid;
+    // Otherwise check via card
     const card = el?.closest?.('.platform-card');
     const grid = card?.closest?.('.platform-grid');
     return grid || null;
@@ -27,6 +31,13 @@ function isInTitleArea(t) {
     if (el.closest('.platform-drag-handle')) return false;
     // Allow shift+scroll anywhere in the platform card
     return !!el.closest('.platform-card');
+}
+
+// Check if target is in platform-grid area (including gaps between cards)
+function isInGridArea(t) {
+    const el = normalizeTarget(t);
+    if (!el?.closest) return false;
+    return !!el.closest('.platform-grid');
 }
 
 ready(() => {
@@ -396,7 +407,8 @@ ready(() => {
             : null;
         const target = normalizeTarget(pointEl || e.target);
         if (!e.shiftKey) return;
-        if (!isInTitleArea(target)) return;
+        // Allow shift+scroll anywhere in the grid area (including gaps between cards)
+        if (!isInGridArea(target)) return;
         if (document.querySelector('.platform-card.dragging')) return;
 
         const grid = findPlatformGridFromTarget(target);
