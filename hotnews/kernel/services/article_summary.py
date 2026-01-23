@@ -657,3 +657,89 @@ async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -
         return None, error
     
     return summary, None
+
+
+def extract_tags_from_summary(summary: str) -> list:
+    """
+    Extract tags from summary text.
+    Looks for the "**标签**: tag1, tag2, tag3" pattern at the end.
+    Returns list of valid tag IDs.
+    """
+    import re
+    from hotnews.kernel.services.prompts import PREDEFINED_TAGS
+    
+    if not summary:
+        return []
+    
+    # Try to find tags pattern: **标签**: tag1, tag2, tag3
+    patterns = [
+        r'\*\*标签\*\*[：:]\s*([a-z_,\s]+)',  # **标签**: tags
+        r'标签[：:]\s*([a-z_,\s]+)',           # 标签: tags
+        r'🏷️[^:：]*[：:]\s*([a-z_,\s]+)',     # 🏷️ 文章标签: tags
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, summary, re.IGNORECASE)
+        if match:
+            tags_str = match.group(1).strip()
+            # Split by comma and clean
+            raw_tags = [t.strip().lower() for t in tags_str.split(',')]
+            # Filter to valid predefined tags
+            valid_tags = [t for t in raw_tags if t in PREDEFINED_TAGS]
+            if valid_tags:
+                logger.info(f"Extracted tags from summary: {valid_tags}")
+                return valid_tags[:5]  # Max 5 tags
+    
+    return []
+
+
+def update_entry_tags_from_summary(online_conn, url: str, tags: list, confidence: float = 0.95):
+    """
+    Update rss_entry_tags with tags extracted from summary.
+    Uses upsert to update existing tags or insert new ones.
+    Silent failure - does not raise exceptions.
+    
+    Args:
+        online_conn: SQLite connection to online.db
+        url: Article URL
+        tags: List of tag IDs
+        confidence: Confidence score (default 0.95 for summary-based tags)
+    """
+    import time
+    
+    if not tags:
+        return
+    
+    try:
+        # Find source_id and dedup_key from URL
+        cur = online_conn.execute(
+            "SELECT source_id, dedup_key FROM rss_entries WHERE url = ? LIMIT 1",
+            (url,)
+        )
+        row = cur.fetchone()
+        if not row:
+            logger.debug(f"No entry found for URL: {url}")
+            return
+        
+        source_id, dedup_key = row
+        now = int(time.time())
+        
+        # Upsert tags
+        for tag_id in tags:
+            online_conn.execute(
+                """
+                INSERT INTO rss_entry_tags(source_id, dedup_key, tag_id, confidence, source, created_at)
+                VALUES (?, ?, ?, ?, 'summary', ?)
+                ON CONFLICT(source_id, dedup_key, tag_id) DO UPDATE SET
+                    confidence = MAX(excluded.confidence, confidence),
+                    source = 'summary',
+                    created_at = excluded.created_at
+                """,
+                (source_id, dedup_key, tag_id, confidence, now)
+            )
+        
+        online_conn.commit()
+        logger.info(f"Updated {len(tags)} tags for {url}: {tags}")
+        
+    except Exception as e:
+        logger.warning(f"Failed to update entry tags: {e}")

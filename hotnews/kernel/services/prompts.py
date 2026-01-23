@@ -6,6 +6,29 @@ Contains article classification and summary templates.
 Migrated from hotnews-summarizer plugin.
 """
 
+# 预定义标签列表（用于总结时生成标签）
+PREDEFINED_TAGS = [
+    "tech", "ai_ml", "free_deal", "finance", "llm", "tutorial", "business",
+    "dev_tools", "deep_dive", "politics", "programming", "breaking", "world",
+    "database", "official", "entertainment", "cloud", "opinion", "sports",
+    "cybersecurity", "interview", "health", "hardware", "tool_rec", "science",
+    "mobile", "career", "lifestyle", "web3", "event", "education", "gaming",
+    "robotics", "iot", "vr_ar", "opensource", "stock", "crypto", "macro",
+    "banking", "insurance", "real_estate", "personal_fin", "startup",
+    "ecommerce", "marketing", "hr", "management", "food", "travel", "books"
+]
+
+# 标签输出指令（附加到总结模板末尾）
+TAGS_OUTPUT_INSTRUCTION = """
+
+---
+
+## 🏷️ 文章标签
+请从以下预定义标签中选择 1-3 个最相关的标签（用英文逗号分隔）：
+tech, ai_ml, free_deal, finance, llm, tutorial, business, dev_tools, deep_dive, politics, programming, breaking, world, database, official, entertainment, cloud, opinion, sports, cybersecurity, interview, health, hardware, tool_rec, science, mobile, career, lifestyle, web3, event, education, gaming, robotics, iot, vr_ar, opensource, stock, crypto, macro, banking, insurance, real_estate, personal_fin, startup, ecommerce, marketing, hr, management, food, travel, books
+
+**标签**: """
+
 # 通用输出规范 - 拼接到所有模板末尾
 CORE_INSTRUCTIONS = """
 通用输出规范：
@@ -30,6 +53,9 @@ LEARNING_FOOTER = """
 - 可以立即尝试或应用的事项
 - 需要进一步了解或研究的内容
 - 值得收藏的资源或工具（附链接）"""
+
+# 统一尾部 - 带标签输出（用于总结时生成标签）
+LEARNING_FOOTER_WITH_TAGS = LEARNING_FOOTER + TAGS_OUTPUT_INSTRUCTION
 
 # 文章类型定义
 ARTICLE_TYPES = {
@@ -84,7 +110,7 @@ SUMMARY_TEMPLATES = {
 
 ## 💬 各方观点
 （如有引用的观点或评论）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -114,7 +140,7 @@ SUMMARY_TEMPLATES = {
 
 ## ⚠️ 避坑指南
 （潜在错误、性能瓶颈或安全风险）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -146,7 +172,7 @@ SUMMARY_TEMPLATES = {
 
 ## ⚠️ 局限性
 （文中提及的限制或不足）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -177,7 +203,7 @@ SUMMARY_TEMPLATES = {
 
 ## ⚠️ 值得商榷
 （可能存在的问题或不同看法）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -209,7 +235,7 @@ SUMMARY_TEMPLATES = {
 ## 💡 局限与展望
 - **局限性**：
 - **未来方向**：
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -237,7 +263,7 @@ SUMMARY_TEMPLATES = {
 
 ## 📖 术语解释
 （解释文中的商业术语或缩写）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -267,7 +293,7 @@ SUMMARY_TEMPLATES = {
 
 ## 🚀 机会与建议
 （文中提到的机会或应对建议）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -296,7 +322,7 @@ SUMMARY_TEMPLATES = {
 
 ## 💡 关键信息
 （价格、时间、地点等具体信息）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：
@@ -324,7 +350,7 @@ SUMMARY_TEMPLATES = {
 
 ## 🚀 行动建议
 （读者可立即尝试的具体操作）
-""" + LEARNING_FOOTER + """
+""" + LEARNING_FOOTER_WITH_TAGS + """
 
 ---
 【文章内容】：

@@ -447,6 +447,19 @@ async def generate_summary_stream(
                 # Save to global cache
                 _save_to_global_cache(request, url, title, full_summary, article_type, model, user["id"], token_usage, fetch_method)
                 
+                # Silently update entry tags from summary
+                try:
+                    from hotnews.kernel.services.article_summary import extract_tags_from_summary, update_entry_tags_from_summary
+                    from hotnews.web.db_online import get_online_db_conn
+                    
+                    tags = extract_tags_from_summary(full_summary)
+                    if tags:
+                        online_conn = get_online_db_conn(request.app.state.project_root)
+                        update_entry_tags_from_summary(online_conn, url, tags)
+                except Exception as e:
+                    import logging
+                    logging.debug(f"Tag update skipped: {e}")
+                
                 # Return done with token info
                 done_data = {
                     'type': 'done',
