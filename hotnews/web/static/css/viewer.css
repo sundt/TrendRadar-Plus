@@ -2510,7 +2510,7 @@
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
-    position: relative;
+    position: static; /* Let .news-summary-btn position relative to .news-item */
 }
 
 /* News item needs relative positioning */

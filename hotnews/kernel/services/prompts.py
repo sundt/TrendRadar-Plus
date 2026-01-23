@@ -54,8 +54,8 @@ LEARNING_FOOTER = """
 - 需要进一步了解或研究的内容
 - 值得收藏的资源或工具（附链接）"""
 
-# 统一尾部 - 带标签输出（用于总结时生成标签）
-LEARNING_FOOTER_WITH_TAGS = LEARNING_FOOTER + TAGS_OUTPUT_INSTRUCTION
+# 统一尾部 - 不再包含标签输出（标签由后端单独处理）
+LEARNING_FOOTER_WITH_TAGS = LEARNING_FOOTER
 
 # 文章类型定义
 ARTICLE_TYPES = {
