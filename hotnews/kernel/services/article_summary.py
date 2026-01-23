@@ -302,7 +302,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
                     fetch_error = "代理请求失败"
     
     if html is None:
-        return None, fetch_error or "网页无法访问", "error"
+        return None, fetch_error or "该网站暂时无法访问，请稍后再试或直接点击链接阅读 📖", "error"
     
     # Log HTML length for debugging
     logger.info(f"Fetched {len(html)} bytes from {url}")
@@ -328,7 +328,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
     # Final check
     if not content or len(content) < 50:
         logger.warning(f"Content extraction failed for {url}, got {len(content) if content else 0} chars")
-        return None, "无法提取文章正文（内容可能需要登录或由 JavaScript 动态加载）", "error"
+        return None, "该网站设置了访问限制，暂时无法获取文章内容。建议直接点击链接阅读原文 📖", "error"
     
     # Clean up content
     # Remove excessive newlines
