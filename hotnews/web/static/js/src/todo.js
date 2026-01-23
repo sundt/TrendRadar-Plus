@@ -260,34 +260,50 @@ function updateTodoBadge() {
 
 
 // ============ 首页侧边栏 ============
+const TODO_SIDEBAR_WIDTH_KEY = 'todo_sidebar_width';
+const TODO_SIDEBAR_MIN_WIDTH = 320;
+const TODO_SIDEBAR_MAX_WIDTH = 800;
+const TODO_SIDEBAR_DEFAULT_WIDTH = 420;
+
 function ensureTodoSidebarExists() {
     if (document.getElementById('todoSidebar')) return;
     
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.id = 'todoSidebarBackdrop';
+    backdrop.className = 'todo-sidebar-backdrop';
+    document.body.appendChild(backdrop);
+    
+    // Create sidebar
     const html = `
         <div id="todoSidebar" class="todo-sidebar">
-            <div class="todo-sidebar-backdrop"></div>
-            <div class="todo-sidebar-content">
-                <div class="todo-sidebar-header">
-                    <h3>📋 我的 Todo</h3>
-                    <div class="todo-sidebar-actions">
-                        <button class="todo-filter-btn" id="todoFilterBtn">只看未完成</button>
-                        <button class="todo-close-btn" title="关闭">✕</button>
-                    </div>
+            <div class="todo-resize-handle" id="todoResizeHandle"></div>
+            <div class="todo-sidebar-header">
+                <span class="todo-sidebar-title">📋 我的 Todo</span>
+                <div class="todo-sidebar-actions">
+                    <button class="todo-filter-btn" id="todoFilterBtn">只看未完成</button>
+                    <button class="todo-close-btn" title="关闭">✕</button>
                 </div>
-                <div class="todo-new-group">
-                    <button class="todo-new-group-btn" id="todoNewGroupBtn">+ 新建标题</button>
-                </div>
-                <div class="todo-sidebar-body" id="todoSidebarBody">
-                    <div class="todo-empty">暂无 Todo</div>
-                </div>
+            </div>
+            <div class="todo-new-group">
+                <button class="todo-new-group-btn" id="todoNewGroupBtn">+ 新建标题</button>
+            </div>
+            <div class="todo-sidebar-body" id="todoSidebarBody">
+                <div class="todo-empty">暂无 Todo</div>
             </div>
         </div>
     `;
     document.body.insertAdjacentHTML('beforeend', html);
     
+    // Restore saved width
+    const savedWidth = localStorage.getItem(TODO_SIDEBAR_WIDTH_KEY);
+    if (savedWidth) {
+        const sidebar = document.getElementById('todoSidebar');
+        sidebar.style.width = savedWidth + 'px';
+    }
+    
     // Bind events
     const sidebar = document.getElementById('todoSidebar');
-    const backdrop = sidebar.querySelector('.todo-sidebar-backdrop');
     const closeBtn = sidebar.querySelector('.todo-close-btn');
     const filterBtn = document.getElementById('todoFilterBtn');
     const newGroupBtn = document.getElementById('todoNewGroupBtn');
@@ -296,6 +312,44 @@ function ensureTodoSidebarExists() {
     closeBtn.addEventListener('click', closeTodoSidebar);
     filterBtn.addEventListener('click', toggleTodoFilter);
     newGroupBtn.addEventListener('click', showNewGroupInput);
+    
+    // Setup resize
+    setupTodoResize();
+}
+
+function setupTodoResize() {
+    const sidebar = document.getElementById('todoSidebar');
+    const handle = document.getElementById('todoResizeHandle');
+    if (!sidebar || !handle) return;
+    
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+    
+    handle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = sidebar.offsetWidth;
+        sidebar.classList.add('resizing');
+        handle.classList.add('active');
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const delta = startX - e.clientX;
+        let newWidth = startWidth + delta;
+        newWidth = Math.max(TODO_SIDEBAR_MIN_WIDTH, Math.min(TODO_SIDEBAR_MAX_WIDTH, newWidth));
+        sidebar.style.width = newWidth + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (!isResizing) return;
+        isResizing = false;
+        sidebar.classList.remove('resizing');
+        handle.classList.remove('active');
+        localStorage.setItem(TODO_SIDEBAR_WIDTH_KEY, sidebar.offsetWidth);
+    });
 }
 
 function openTodoSidebar() {
@@ -303,9 +357,11 @@ function openTodoSidebar() {
     
     ensureTodoSidebarExists();
     const sidebar = document.getElementById('todoSidebar');
+    const backdrop = document.getElementById('todoSidebarBackdrop');
+    
     sidebar.classList.add('open');
+    backdrop.classList.add('show');
     todoSidebarOpen = true;
-    document.body.style.overflow = 'hidden';
     
     // Load and render
     loadTodos().then(() => renderTodoSidebar());
@@ -313,11 +369,15 @@ function openTodoSidebar() {
 
 function closeTodoSidebar() {
     const sidebar = document.getElementById('todoSidebar');
+    const backdrop = document.getElementById('todoSidebarBackdrop');
+    
     if (sidebar) {
         sidebar.classList.remove('open');
     }
+    if (backdrop) {
+        backdrop.classList.remove('show');
+    }
     todoSidebarOpen = false;
-    document.body.style.overflow = '';
 }
 
 function toggleTodoFilter() {
@@ -380,26 +440,48 @@ function showAddTodoInput(groupId, groupTitle, groupUrl, isCustom) {
     // Find or create group section
     let groupEl = container.querySelector(`.todo-group[data-group-id="${groupId}"]`);
     if (!groupEl) {
-        // Create new group section
+        // Create new group section - 展开新创建的组
+        const collapsed = getCollapsedGroups();
+        collapsed[groupId] = false;
+        saveCollapsedGroups(collapsed);
+        
         const groupHtml = `
             <div class="todo-group" data-group-id="${escapeHtml(groupId)}">
                 <div class="todo-group-header">
-                    <span class="todo-group-icon">${isCustom ? '📝' : '📰'}</span>
+                    <span class="todo-group-toggle">▼</span>
                     <span class="todo-group-title" title="${escapeHtml(groupTitle)}">${escapeHtml(groupTitle)}</span>
+                    <span class="todo-group-count">0/0</span>
                     <button class="todo-group-add-btn" title="添加 Todo">+</button>
                 </div>
-                <div class="todo-group-items"></div>
+                <div class="todo-group-items">
+                    <div class="todo-group-items-inner"></div>
+                </div>
             </div>
         `;
         container.insertAdjacentHTML('afterbegin', groupHtml);
         groupEl = container.querySelector(`.todo-group[data-group-id="${groupId}"]`);
         
-        // Bind add button
+        // Bind events for new group
         const addBtn = groupEl.querySelector('.todo-group-add-btn');
-        addBtn.addEventListener('click', () => showAddTodoInput(groupId, groupTitle, groupUrl, isCustom));
+        addBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showAddTodoInput(groupId, groupTitle, groupUrl, isCustom);
+        });
+        
+        const header = groupEl.querySelector('.todo-group-header');
+        header?.addEventListener('click', (e) => {
+            if (e.target.closest('.todo-group-add-btn')) return;
+            toggleGroupCollapse(groupId);
+        });
+    } else {
+        // 展开已有的组
+        groupEl.classList.remove('collapsed');
+        const collapsed = getCollapsedGroups();
+        collapsed[groupId] = false;
+        saveCollapsedGroups(collapsed);
     }
     
-    const itemsEl = groupEl.querySelector('.todo-group-items');
+    const itemsEl = groupEl.querySelector('.todo-group-items-inner');
     if (!itemsEl) return;
     
     // Check if input already exists
@@ -461,15 +543,31 @@ function renderTodoSidebar() {
         const groupTodos = todoShowAll ? group.todos : group.todos.filter(t => !t.done);
         if (groupTodos.length === 0 && !todoShowAll) continue;
         
+        const unfinishedCount = group.todos.filter(t => !t.done).length;
+        const totalCount = group.todos.length;
+        const isCollapsed = isGroupCollapsed(group.groupId);
+        const isCustomGroup = group.isCustom;
+        
+        // 只有非自定义分组才显示查看总结按钮
+        const summaryBtn = !isCustomGroup ? `
+            <button class="todo-group-summary-btn" title="查看总结" data-group-id="${escapeHtml(group.groupId)}" data-group-title="${escapeHtml(group.groupTitle)}" data-group-url="${escapeHtml(group.groupUrl || '')}">✨</button>
+        ` : '';
+        
         html += `
-            <div class="todo-group" data-group-id="${escapeHtml(group.groupId)}">
+            <div class="todo-group ${isCollapsed ? 'collapsed' : ''}" data-group-id="${escapeHtml(group.groupId)}">
                 <div class="todo-group-header">
-                    <span class="todo-group-icon">${group.isCustom ? '📝' : '📰'}</span>
+                    <span class="todo-group-toggle">▼</span>
                     <span class="todo-group-title" title="${escapeHtml(group.groupTitle)}">${escapeHtml(group.groupTitle)}</span>
-                    <button class="todo-group-add-btn" title="添加 Todo">+</button>
+                    <span class="todo-group-count">${unfinishedCount}/${totalCount}</span>
+                    <div class="todo-group-actions">
+                        ${summaryBtn}
+                        <button class="todo-group-add-btn" title="添加 Todo">+</button>
+                    </div>
                 </div>
                 <div class="todo-group-items">
-                    ${groupTodos.map(todo => renderTodoItem(todo)).join('')}
+                    <div class="todo-group-items-inner">
+                        ${groupTodos.map(todo => renderTodoItem(todo)).join('')}
+                    </div>
                 </div>
             </div>
         `;
@@ -484,12 +582,78 @@ function renderTodoSidebar() {
         if (!group) return;
         
         const addBtn = groupEl.querySelector('.todo-group-add-btn');
-        addBtn?.addEventListener('click', () => {
+        addBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
             showAddTodoInput(groupId, group.groupTitle, group.groupUrl, group.isCustom);
         });
+        
+        // Summary button - open summary modal
+        const summaryBtn = groupEl.querySelector('.todo-group-summary-btn');
+        summaryBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openSummaryFromTodo(group.groupId, group.groupTitle, group.groupUrl);
+        });
+        
+        // Toggle collapse on header click
+        const header = groupEl.querySelector('.todo-group-header');
+        header?.addEventListener('click', (e) => {
+            if (e.target.closest('.todo-group-add-btn')) return;
+            if (e.target.closest('.todo-group-summary-btn')) return;
+            toggleGroupCollapse(groupId);
+        });
+        
+        // Restore collapsed state
+        if (isGroupCollapsed(groupId)) {
+            groupEl.classList.add('collapsed');
+        }
     });
     
     bindTodoItemEvents(container);
+}
+
+// ============ 从 Todo 打开总结 ============
+function openSummaryFromTodo(newsId, title, url) {
+    // 调用全局的 openSummaryModal 函数
+    if (window.openSummaryModal) {
+        window.openSummaryModal(newsId, title, url, '', '');
+    }
+}
+
+// ============ 折叠状态管理 ============
+const TODO_COLLAPSED_KEY = 'todo_collapsed_groups';
+
+function getCollapsedGroups() {
+    try {
+        const data = localStorage.getItem(TODO_COLLAPSED_KEY);
+        return data ? JSON.parse(data) : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveCollapsedGroups(collapsed) {
+    try {
+        localStorage.setItem(TODO_COLLAPSED_KEY, JSON.stringify(collapsed));
+    } catch { /* ignore */ }
+}
+
+function isGroupCollapsed(groupId) {
+    const collapsed = getCollapsedGroups();
+    // 默认折叠
+    return collapsed[groupId] !== false;
+}
+
+function toggleGroupCollapse(groupId) {
+    const collapsed = getCollapsedGroups();
+    const isCurrentlyCollapsed = collapsed[groupId] !== false;
+    collapsed[groupId] = !isCurrentlyCollapsed;
+    saveCollapsedGroups(collapsed);
+    
+    // Update UI
+    const groupEl = document.querySelector(`.todo-group[data-group-id="${groupId}"]`);
+    if (groupEl) {
+        groupEl.classList.toggle('collapsed', !isCurrentlyCollapsed);
+    }
 }
 
 function renderTodoItem(todo) {
@@ -497,7 +661,7 @@ function renderTodoItem(todo) {
         <div class="todo-item ${todo.done ? 'done' : ''}" data-id="${todo.id}">
             <input type="checkbox" class="todo-checkbox" ${todo.done ? 'checked' : ''}>
             <span class="todo-text">${escapeHtml(todo.text)}</span>
-            <button class="todo-delete-btn" title="删除">🗑️</button>
+            <button class="todo-delete-btn" title="删除">×</button>
         </div>
     `;
 }
@@ -738,9 +902,17 @@ function initSelectionTodo() {
         hide();
     });
     
-    // Event listeners
+    // Event listeners - 支持桌面和移动端
     document.addEventListener('mouseup', () => setTimeout(showForCurrentSelection, 0));
     document.addEventListener('keyup', () => setTimeout(showForCurrentSelection, 0));
+    
+    // 移动端触摸选择支持
+    document.addEventListener('touchend', () => setTimeout(showForCurrentSelection, 100));
+    document.addEventListener('selectionchange', () => {
+        // 延迟检查，等待选择完成
+        setTimeout(showForCurrentSelection, 50);
+    });
+    
     document.addEventListener('scroll', hide, true);
     window.addEventListener('resize', hide);
     document.addEventListener('mousedown', (e) => {
@@ -748,24 +920,27 @@ function initSelectionTodo() {
         if (e.target.closest && e.target.closest('.selection-todo-btn')) return;
         // Don't hide immediately on mousedown, let mouseup handle it
     });
+    document.addEventListener('touchstart', (e) => {
+        if (selectionTodoBtn.contains(e.target)) return;
+        if (e.target.closest && e.target.closest('.selection-todo-btn')) return;
+        // Don't hide immediately, let touchend handle it
+    });
 }
 
 // ============ 首页按钮初始化 ============
 function createTodoButton() {
     const btn = document.createElement('button');
-    btn.className = 'todo-toggle-btn';
-    btn.innerHTML = `
-        <span class="todo-icon">📋</span>
-        <span class="todo-badge" id="todoBadge"></span>
-    `;
+    btn.className = 'icon-btn todo-btn';
+    btn.id = 'todoBtn';
     btn.title = '我的 Todo';
+    btn.innerHTML = `📋<span class="todo-badge" id="todoBadge"></span>`;
     btn.addEventListener('click', openTodoSidebar);
     return btn;
 }
 
 function initTodoButton() {
     // Find favorites button and insert todo button before it
-    const favBtn = document.querySelector('.favorites-toggle-btn');
+    const favBtn = document.getElementById('favoritesBtn');
     if (favBtn && favBtn.parentNode) {
         const todoBtn = createTodoButton();
         favBtn.parentNode.insertBefore(todoBtn, favBtn);

@@ -77,12 +77,6 @@ function renderMarkdown(text) {
     html = html.replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>');
     
-    // Add "添加到 Todo" button after action list header
-    html = html.replace(
-        /(<h2>✅\s*行动清单<\/h2>)/gi,
-        '$1<button class="action-list-add-btn" onclick="addActionListToTodo()">+ 添加到 Todo</button>'
-    );
-    
     // Bold and italic (handle ** and * properly)
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
@@ -199,6 +193,13 @@ function renderMarkdown(text) {
     html = html.replace(/(<\/ul>)<\/p>/g, '$1');
     html = html.replace(/<p>(<blockquote>)/g, '$1');
     html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+    
+    // Add "添加到 Todo" button after action list header (multiple patterns)
+    // Match: ✅ 行动清单, ✅行动清单, 行动清单, 📋 行动清单 etc.
+    html = html.replace(
+        /(<h[1-3]>(?:✅\s*|📋\s*)?行动清单\s*<\/h[1-3]>)/gi,
+        '<div class="action-list-header">$1<button class="action-list-add-btn" onclick="addActionListToTodo()">+ Todo</button></div>'
+    );
     
     return html;
 }
@@ -463,7 +464,7 @@ function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, fee
             </div>
         </div>
         <div class="summary-footer-right">
-            <button class="summary-todo-btn" onclick="openCurrentTodoPanel()" title="查看 Todo">
+            <button class="summary-todo-btn" id="summaryTodoToggleBtn" onclick="toggleCurrentTodoPanel()" title="查看 Todo">
                 📋 Todo
             </button>
             <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-link-btn">
@@ -638,6 +639,35 @@ if (document.readyState === 'loading') {
 function openCurrentTodoPanel() {
     if (!currentNewsId || !currentNewsTitle) return;
     openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
+    updateTodoToggleButton(true);
+}
+
+/**
+ * Toggle Todo panel for current news (open/close)
+ */
+function toggleCurrentTodoPanel() {
+    if (!currentNewsId || !currentNewsTitle) return;
+    
+    const panel = document.getElementById('summaryTodoPanel');
+    const isOpen = panel && panel.classList.contains('open');
+    
+    if (isOpen) {
+        closeTodoPanel();
+        updateTodoToggleButton(false);
+    } else {
+        openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
+        updateTodoToggleButton(true);
+    }
+}
+
+/**
+ * Update Todo toggle button active state
+ */
+function updateTodoToggleButton(isActive) {
+    const btn = document.getElementById('summaryTodoToggleBtn');
+    if (btn) {
+        btn.classList.toggle('active', isActive);
+    }
 }
 
 /**
@@ -695,6 +725,7 @@ window.handleSummaryClick = handleSummaryClick;
 window.loadSummarizedList = loadSummarizedList;
 window.handleSummaryFeedback = handleSummaryFeedback;
 window.openCurrentTodoPanel = openCurrentTodoPanel;
+window.toggleCurrentTodoPanel = toggleCurrentTodoPanel;
 window.addActionListToTodo = addActionListToTodo;
 
 export {

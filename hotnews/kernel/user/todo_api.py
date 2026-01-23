@@ -15,17 +15,28 @@ def _now_ts() -> int:
     return int(time.time())
 
 
-def _get_current_user(request: Request) -> dict:
-    """Get current user from request state, raise 401 if not logged in."""
-    user = getattr(request.state, "user", None)
-    if not user:
-        raise HTTPException(status_code=401, detail="请先登录")
-    return user
-
-
 def _get_user_db_conn(request: Request):
-    """Get user database connection from request state."""
-    return getattr(request.state, "user_db_conn", None)
+    """Get user database connection from request app state."""
+    from hotnews.web.user_db import get_user_db_conn
+    return get_user_db_conn(request.app.state.project_root)
+
+
+def _get_current_user(request: Request) -> dict:
+    """Get current user from session token, raise 401 if not logged in."""
+    from hotnews.kernel.auth.auth_api import _get_session_token
+    from hotnews.kernel.auth.auth_service import validate_session
+    
+    session_token = _get_session_token(request)
+    if not session_token:
+        raise HTTPException(status_code=401, detail="请先登录")
+    
+    conn = _get_user_db_conn(request)
+    is_valid, user_info = validate_session(conn, session_token)
+    
+    if not is_valid or not user_info:
+        raise HTTPException(status_code=401, detail="登录已过期")
+    
+    return user_info
 
 
 def _ensure_todos_table(conn):
