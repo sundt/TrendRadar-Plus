@@ -125,103 +125,67 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
 
 
 def _get_user_token_info(request: Request, user_id: int) -> dict:
-    """Get user's token balance and usage info.
+    """Get user's token balance from unified token_recharge_logs table.
     
     Returns:
-        token_balance: Total available tokens (free + recharged)
-        tokens_used: Total tokens consumed (lifetime)
+        token_balance: Total available tokens
+        tokens_used: Not used anymore (kept for compatibility)
         default_tokens: Default free quota
     """
-    free_quota = 0
-    tokens_used = 0
-    recharged_total = 0
+    import logging
+    
+    total_balance = 0
     
     try:
-        # Get free quota and usage from users table
-        conn = _get_user_db_conn(request)
-        cur = conn.execute(
-            "SELECT token_balance, tokens_used FROM users WHERE id = ?",
-            (user_id,)
-        )
-        row = cur.fetchone()
-        if row:
-            free_quota = row[0] or 0
-            tokens_used = row[1] or 0
-    except Exception:
-        pass
-    
-    try:
-        # Get recharged tokens from payment system
         from hotnews.web.db_online import get_online_db_conn
-        from hotnews.kernel.user.payment_api import get_user_token_balance
+        from hotnews.kernel.user.payment_api import get_user_token_balance, ensure_user_free_quota
         
         online_conn = get_online_db_conn(request.app.state.project_root)
+        
+        # Ensure user has free quota (creates if not exists)
+        ensure_user_free_quota(online_conn, user_id)
+        
+        # Get total balance from token_recharge_logs
         recharge_balance = get_user_token_balance(online_conn, user_id)
-        recharged_total = recharge_balance.get("total", 0)
-    except Exception:
-        pass
+        total_balance = recharge_balance.get("total", 0)
+        
+        logging.debug(f"[TokenInfo] user_id={user_id}, total_balance={total_balance}")
+    except Exception as e:
+        logging.warning(f"[TokenInfo] Failed to get token balance: {e}")
+        total_balance = 100000  # Fallback to default
     
     return {
-        "token_balance": free_quota + recharged_total,
-        "tokens_used": tokens_used,
+        "token_balance": total_balance,
+        "tokens_used": 0,  # Deprecated, kept for compatibility
         "default_tokens": 100000
     }
 
 
 def _consume_user_tokens(request: Request, user_id: int, amount: int) -> dict:
     """
-    Consume tokens from user account.
-    First tries recharged tokens, then falls back to free quota.
+    Consume tokens from user account (unified token_recharge_logs table).
+    Consumes from earliest expiring balance first.
     
     Returns:
         token_balance: New total balance after consumption
-        tokens_used: New total tokens used (lifetime)
-        consumed: Amount actually consumed
+        tokens_used: Deprecated (always 0)
     """
     import logging
     
-    consumed = 0
-    remaining_to_consume = amount
-    
-    # Step 1: Try to consume from recharged tokens first
     try:
         from hotnews.web.db_online import get_online_db_conn
-        from hotnews.kernel.user.payment_api import consume_tokens
+        from hotnews.kernel.user.payment_api import consume_tokens, ensure_user_free_quota
         
         online_conn = get_online_db_conn(request.app.state.project_root)
-        if consume_tokens(online_conn, user_id, amount):
-            consumed = amount
-            remaining_to_consume = 0
+        
+        # Ensure user has free quota
+        ensure_user_free_quota(online_conn, user_id)
+        
+        # Consume from unified pool
+        if not consume_tokens(online_conn, user_id, amount):
+            logging.warning(f"[TokenConsume] Insufficient balance for user {user_id}, amount={amount}")
     except Exception as e:
-        logging.debug(f"Recharged token consumption skipped: {e}")
-    
-    # Step 2: If not enough recharged tokens, consume from free quota
-    if remaining_to_consume > 0:
-        try:
-            conn = _get_user_db_conn(request)
-            cur = conn.execute(
-                "SELECT token_balance, tokens_used FROM users WHERE id = ?",
-                (user_id,)
-            )
-            row = cur.fetchone()
-            if row:
-                current_balance = row[0] or 0
-                current_used = row[1] or 0
-                
-                # Consume what we can from free quota
-                consume_from_free = min(remaining_to_consume, current_balance)
-                new_balance = max(0, current_balance - consume_from_free)
-                new_used = current_used + consume_from_free
-                
-                conn.execute(
-                    "UPDATE users SET token_balance = ?, tokens_used = ? WHERE id = ?",
-                    (new_balance, new_used, user_id)
-                )
-                conn.commit()
-                
-                consumed += consume_from_free
-        except Exception as e:
-            logging.warning(f"Free quota consumption failed: {e}")
+        logging.warning(f"[TokenConsume] Failed to consume tokens: {e}")
     
     # Return updated token info
     return _get_user_token_info(request, user_id)
