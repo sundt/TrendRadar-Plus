@@ -11,6 +11,20 @@ let isModalOpen = false;
 let currentNewsId = null;
 let currentNewsTitle = null;
 let currentNewsUrl = null;
+let slowLoadingTimer = null;
+
+// Timeout before showing "view original" hint (in ms)
+const SLOW_LOADING_TIMEOUT = 15000;
+
+/**
+ * Clear slow loading timer
+ */
+function clearSlowLoadingTimer() {
+    if (slowLoadingTimer) {
+        clearTimeout(slowLoadingTimer);
+        slowLoadingTimer = null;
+    }
+}
 
 /**
  * Article type icons
@@ -278,10 +292,23 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
             <div class="summary-loading-text">
                 <div id="summaryStatusText">正在获取文章内容...</div>
                 <div class="summary-loading-hint">首次总结需要 10-30 秒</div>
+                <div id="summarySlowHint" class="summary-slow-hint" style="display:none;">
+                    <span>加载较慢？</span>
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-slow-link">先看原文 →</a>
+                </div>
             </div>
         </div>
     `;
     footer.style.display = 'none';
+    
+    // Start slow loading timer
+    clearSlowLoadingTimer();
+    slowLoadingTimer = setTimeout(() => {
+        const slowHint = document.getElementById('summarySlowHint');
+        if (slowHint) {
+            slowHint.style.display = 'block';
+        }
+    }, SLOW_LOADING_TIMEOUT);
     
     try {
         // Use streaming endpoint
@@ -345,6 +372,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             if (!isStreaming) {
                                 // First chunk - switch to content view
                                 isStreaming = true;
+                                clearSlowLoadingTimer(); // Content arrived, no need for slow hint
                                 body.innerHTML = `
                                     <div class="summary-content summary-streaming" id="summaryStreamContent">
                                         <div class="summary-cursor"></div>
@@ -363,6 +391,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             
                         case 'cached':
                             // Cached summary - render immediately with token usage and feedback
+                            clearSlowLoadingTimer(); // Content arrived
                             fullContent = data.summary;
                             articleType = data.article_type;
                             articleTypeName = data.article_type_name;
@@ -415,6 +444,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
         
     } catch (e) {
         console.error('[Summary] Error:', e);
+        clearSlowLoadingTimer();
         body.innerHTML = `
             <div class="summary-error">
                 <div class="summary-error-icon">❌</div>
@@ -438,8 +468,9 @@ function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, fee
     if (balanceInfo && balanceInfo.tokens_used !== undefined) {
         const tokenText = formatTokenDisplay(currentTokens, balanceInfo.tokens_used, balanceInfo.token_balance);
         const lowBalanceClass = isLowBalance(balanceInfo.token_balance) ? 'low-balance' : '';
-        // 充值链接暂时隐藏，等待微信支付认证
-        const rechargeLink = '';
+        const rechargeLink = isLowBalance(balanceInfo.token_balance) 
+            ? ' <a href="#" class="token-recharge-link" onclick="event.preventDefault();window.openPaymentModal?.();">充值</a>' 
+            : '';
         tokenDisplay = `<span class="summary-token-tag ${lowBalanceClass}" title="本次/已用/剩余 (K tokens)">🪙 ${tokenText}${rechargeLink}</span>`;
     }
     
@@ -524,6 +555,7 @@ function closeSummaryModal() {
         modal.classList.remove('open');
         document.body.style.overflow = '';
     }
+    clearSlowLoadingTimer();
     isModalOpen = false;
     currentNewsId = null;
 }

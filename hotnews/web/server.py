@@ -353,7 +353,9 @@ def _build_rss_categories_from_subscriptions_db(
         except Exception:
             rows = []
 
-        for r in rows[: max(0, int(per_feed_limit))]:
+        # Deduplicate by title (keep first occurrence, which is the most recent)
+        seen_titles = set()
+        for r in rows[: max(0, int(per_feed_limit * 2))]:  # Fetch more to account for duplicates
             title = (r[0] or "").strip()
             link = (r[1] or "").strip()
             published_at = int(r[2] or 0)
@@ -363,6 +365,13 @@ def _build_rss_categories_from_subscriptions_db(
                 title = link
             if not link:
                 continue
+            
+            # Skip duplicate titles
+            title_key = title.lower()
+            if title_key in seen_titles:
+                continue
+            seen_titles.add(title_key)
+            
             stable_id = generate_news_id(platform_id, title)
             platform["news"].append(
                 {
@@ -374,6 +383,10 @@ def _build_rss_categories_from_subscriptions_db(
                     "timestamp": ts,
                 }
             )
+            
+            # Stop after reaching per_feed_limit unique items
+            if len(platform["news"]) >= per_feed_limit:
+                break
 
     return categories
 
