@@ -110,6 +110,7 @@ services:
       - ../config:/app/config:ro
       - ../output:/app/output
       - ../hotnews:/app/hotnews
+      - ../pub_key.pem:/app/pub_key.pem:ro
 
     environment:
       - TZ=Asia/Shanghai
@@ -155,6 +156,13 @@ services:
       - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
       - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER:-}
       - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT:-}
+      # 微信支付配置
+      - WECHAT_PAY_MCHID=${WECHAT_PAY_MCHID:-}
+      - WECHAT_PAY_APPID=${WECHAT_PAY_APPID:-}
+      - WECHAT_PAY_API_V3_KEY=${WECHAT_PAY_API_V3_KEY:-}
+      - WECHAT_PAY_PUB_KEY_ID=${WECHAT_PAY_PUB_KEY_ID:-}
+      - WECHAT_PAY_PRIVATE_KEY_PATH=${WECHAT_PAY_PRIVATE_KEY_PATH:-}
+      - WECHAT_PAY_NOTIFY_URL=${WECHAT_PAY_NOTIFY_URL:-}
 
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
