@@ -125,8 +125,19 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
 
 
 def _get_user_token_info(request: Request, user_id: int) -> dict:
-    """Get user's token balance and usage info."""
+    """Get user's token balance and usage info.
+    
+    Returns:
+        token_balance: Total available tokens (free + recharged)
+        tokens_used: Total tokens consumed (lifetime)
+        default_tokens: Default free quota
+    """
+    free_quota = 0
+    tokens_used = 0
+    recharged_total = 0
+    
     try:
+        # Get free quota and usage from users table
         conn = _get_user_db_conn(request)
         cur = conn.execute(
             "SELECT token_balance, tokens_used FROM users WHERE id = ?",
@@ -134,18 +145,86 @@ def _get_user_token_info(request: Request, user_id: int) -> dict:
         )
         row = cur.fetchone()
         if row:
-            return {
-                "token_balance": row[0] or 100000,
-                "tokens_used": row[1] or 0,
-                "default_tokens": 100000
-            }
+            free_quota = row[0] or 0
+            tokens_used = row[1] or 0
     except Exception:
         pass
+    
+    try:
+        # Get recharged tokens from payment system
+        from hotnews.web.db_online import get_online_db_conn
+        from hotnews.kernel.user.payment_api import get_user_token_balance
+        
+        online_conn = get_online_db_conn(request.app.state.project_root)
+        recharge_balance = get_user_token_balance(online_conn, user_id)
+        recharged_total = recharge_balance.get("total", 0)
+    except Exception:
+        pass
+    
     return {
-        "token_balance": 100000,
-        "tokens_used": 0,
+        "token_balance": free_quota + recharged_total,
+        "tokens_used": tokens_used,
         "default_tokens": 100000
     }
+
+
+def _consume_user_tokens(request: Request, user_id: int, amount: int) -> dict:
+    """
+    Consume tokens from user account.
+    First tries recharged tokens, then falls back to free quota.
+    
+    Returns:
+        token_balance: New total balance after consumption
+        tokens_used: New total tokens used (lifetime)
+        consumed: Amount actually consumed
+    """
+    import logging
+    
+    consumed = 0
+    remaining_to_consume = amount
+    
+    # Step 1: Try to consume from recharged tokens first
+    try:
+        from hotnews.web.db_online import get_online_db_conn
+        from hotnews.kernel.user.payment_api import consume_tokens
+        
+        online_conn = get_online_db_conn(request.app.state.project_root)
+        if consume_tokens(online_conn, user_id, amount):
+            consumed = amount
+            remaining_to_consume = 0
+    except Exception as e:
+        logging.debug(f"Recharged token consumption skipped: {e}")
+    
+    # Step 2: If not enough recharged tokens, consume from free quota
+    if remaining_to_consume > 0:
+        try:
+            conn = _get_user_db_conn(request)
+            cur = conn.execute(
+                "SELECT token_balance, tokens_used FROM users WHERE id = ?",
+                (user_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                current_balance = row[0] or 0
+                current_used = row[1] or 0
+                
+                # Consume what we can from free quota
+                consume_from_free = min(remaining_to_consume, current_balance)
+                new_balance = max(0, current_balance - consume_from_free)
+                new_used = current_used + consume_from_free
+                
+                conn.execute(
+                    "UPDATE users SET token_balance = ?, tokens_used = ? WHERE id = ?",
+                    (new_balance, new_used, user_id)
+                )
+                conn.commit()
+                
+                consumed += consume_from_free
+        except Exception as e:
+            logging.warning(f"Free quota consumption failed: {e}")
+    
+    # Return updated token info
+    return _get_user_token_info(request, user_id)
 
 
 @router.post("")
@@ -301,33 +380,8 @@ async def generate_summary_stream(
         # Deduct tokens based on original token usage (or default 500 if not recorded)
         cached_tokens = row[2] or 500  # Use stored tokens or default
         
-        try:
-            user_conn = _get_user_db_conn(request)
-            cur = user_conn.execute(
-                "SELECT token_balance, tokens_used FROM users WHERE id = ?",
-                (user["id"],)
-            )
-            balance_row = cur.fetchone()
-            if balance_row:
-                current_balance = balance_row[0] or 100000
-                current_used = balance_row[1] or 0
-                new_tokens_used = current_used + cached_tokens
-                new_token_balance = max(0, current_balance - cached_tokens)
-                
-                user_conn.execute(
-                    "UPDATE users SET token_balance = ?, tokens_used = ? WHERE id = ?",
-                    (new_token_balance, new_tokens_used, user["id"])
-                )
-                user_conn.commit()
-                
-                token_info = {
-                    "token_balance": new_token_balance,
-                    "tokens_used": new_tokens_used
-                }
-            else:
-                token_info = _get_user_token_info(request, user["id"])
-        except Exception:
-            token_info = _get_user_token_info(request, user["id"])
+        # Consume tokens using the unified helper
+        token_info = _consume_user_tokens(request, user["id"], cached_tokens)
         
         async def cached_stream():
             data = {
@@ -395,34 +449,9 @@ async def generate_summary_stream(
                 record_request(user["id"])
                 now = _now_ts()
                 
-                # Update user token balance
+                # Update user token balance using unified helper
                 total_tokens = token_usage.get("total_tokens", 0) if token_usage else 0
-                new_tokens_used = 0
-                new_token_balance = 0
-                
-                try:
-                    # Get current balance
-                    user_conn = _get_user_db_conn(request)
-                    cur = user_conn.execute(
-                        "SELECT token_balance, tokens_used FROM users WHERE id = ?",
-                        (user["id"],)
-                    )
-                    row = cur.fetchone()
-                    if row:
-                        current_balance = row[0] or 100000
-                        current_used = row[1] or 0
-                        new_tokens_used = current_used + total_tokens
-                        new_token_balance = max(0, current_balance - total_tokens)
-                        
-                        # Update user tokens
-                        user_conn.execute(
-                            "UPDATE users SET token_balance = ?, tokens_used = ? WHERE id = ?",
-                            (new_token_balance, new_tokens_used, user["id"])
-                        )
-                        user_conn.commit()
-                except Exception as e:
-                    import logging
-                    logging.warning(f"Failed to update token balance: {e}")
+                token_info = _consume_user_tokens(request, user["id"], total_tokens)
                 
                 try:
                     conn.execute(
@@ -466,8 +495,8 @@ async def generate_summary_stream(
                     'news_id': news_id,
                     'remaining': remaining - 1,
                     'token_usage': token_usage,
-                    'token_balance': new_token_balance,
-                    'tokens_used': new_tokens_used
+                    'token_balance': token_info["token_balance"],
+                    'tokens_used': token_info["tokens_used"]
                 }
                 yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
     

@@ -193,7 +193,10 @@ export class AuthButton {
                 <div class="auth-dropdown" id="authDropdown">
                     <div class="auth-dropdown-item auth-user-info">${name}</div>
                     <div class="auth-dropdown-divider"></div>
-                    <div class="auth-dropdown-item auth-recharge-btn">💰 充值</div>
+                    <div class="auth-dropdown-item auth-recharge-btn">
+                        💰 充值
+                        <span class="auth-balance-tag" id="authBalanceTag">--</span>
+                    </div>
                     <div class="auth-dropdown-item auth-logout-btn">🚪 退出登录</div>
                 </div>
             </div>
@@ -209,6 +212,8 @@ export class AuthButton {
             avatar.addEventListener('click', (e) => {
                 e.stopPropagation();
                 dropdown.classList.toggle('show');
+                // Load balance when dropdown opens
+                this._loadBalance();
             });
         }
 
@@ -278,6 +283,33 @@ export class AuthButton {
         }
     }
 
+    async _loadBalance() {
+        const tag = document.getElementById('authBalanceTag');
+        if (!tag) return;
+        
+        try {
+            const res = await fetch('/api/payment/balance');
+            if (!res.ok) return;
+            
+            const data = await res.json();
+            const total = data.total || 0;
+            
+            // Format: show in K or M
+            let display;
+            if (total >= 1000000) {
+                display = (total / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            } else if (total >= 1000) {
+                display = Math.round(total / 1000) + 'K';
+            } else {
+                display = total.toString();
+            }
+            
+            tag.textContent = display;
+        } catch (e) {
+            console.error('[AuthButton] Load balance error:', e);
+        }
+    }
+
     _ensureStyles() {
         if (document.getElementById('auth-button-styles')) return;
 
@@ -332,6 +364,19 @@ export class AuthButton {
             }
             .auth-dropdown-item:hover {
                 background: #334155;
+            }
+            .auth-recharge-btn {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .auth-balance-tag {
+                font-size: 11px;
+                color: #94a3b8;
+                background: #334155;
+                padding: 2px 6px;
+                border-radius: 4px;
+                margin-left: 8px;
             }
             .auth-user-info {
                 color: #94a3b8;
