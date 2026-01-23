@@ -375,6 +375,8 @@ import{a as A}from"./chunk-R33N4FES.js";import{a as l,b as k,c as b,d as Lt,e as
                 <div class="auth-dropdown" id="authDropdown">
                     <div class="auth-dropdown-item auth-user-info">${n}</div>
                     <div class="auth-dropdown-divider"></div>
+                    <!-- \u5145\u503C\u6309\u94AE (\u6682\u65F6\u9690\u85CF\uFF0C\u7B49\u5F85\u5FAE\u4FE1\u652F\u4ED8\u8BA4\u8BC1) -->
+                    <!-- <div class="auth-dropdown-item auth-recharge-btn">\u{1F4B0} \u5145\u503C</div> -->
                     <div class="auth-dropdown-item auth-logout-btn">\u{1F6AA} \u9000\u51FA\u767B\u5F55</div>
                 </div>
             </div>

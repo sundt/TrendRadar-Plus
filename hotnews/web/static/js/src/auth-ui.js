@@ -193,6 +193,8 @@ export class AuthButton {
                 <div class="auth-dropdown" id="authDropdown">
                     <div class="auth-dropdown-item auth-user-info">${name}</div>
                     <div class="auth-dropdown-divider"></div>
+                    <!-- 充值按钮 (暂时隐藏，等待微信支付认证) -->
+                    <!-- <div class="auth-dropdown-item auth-recharge-btn">💰 充值</div> -->
                     <div class="auth-dropdown-item auth-logout-btn">🚪 退出登录</div>
                 </div>
             </div>
@@ -202,6 +204,7 @@ export class AuthButton {
         const avatar = this.container.querySelector('.auth-avatar');
         const dropdown = this.container.querySelector('.auth-dropdown');
         const logoutBtn = this.container.querySelector('.auth-logout-btn');
+        // const rechargeBtn = this.container.querySelector('.auth-recharge-btn');
 
         if (avatar && dropdown) {
             avatar.addEventListener('click', (e) => {
@@ -213,6 +216,14 @@ export class AuthButton {
         if (logoutBtn) {
             logoutBtn.addEventListener('click', () => this._handleLogout());
         }
+
+        // 充值按钮事件 (暂时注释，等待微信支付认证)
+        // if (rechargeBtn) {
+        //     rechargeBtn.addEventListener('click', () => {
+        //         dropdown?.classList.remove('show');
+        //         window.openPaymentModal?.();
+        //     });
+        // }
 
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
