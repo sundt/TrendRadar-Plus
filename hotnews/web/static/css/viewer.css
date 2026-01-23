@@ -4968,12 +4968,14 @@
 
 .payment-plan-price {
     margin-bottom: 8px;
+    display: flex;
+    align-items: baseline;
 }
 
 .payment-plan-currency {
-    font-size: 14px;
+    font-size: 16px;
     color: #1d1d1f;
-    vertical-align: top;
+    font-weight: 500;
 }
 
 .payment-plan-amount {
@@ -5296,6 +5298,11 @@
     
     .payment-plan-price {
         margin-bottom: 0;
+        margin-right: 60px;
+    }
+    
+    .payment-plan-card.recommended .payment-plan-price {
+        margin-right: 70px;
     }
     
     .payment-plan-amount {
