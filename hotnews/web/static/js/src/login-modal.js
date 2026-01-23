@@ -206,24 +206,40 @@ function startWechatQRPolling() {
     if (!wechatQRSessionId) return;
     
     const poll = async () => {
+        // Save session_id before any async operations
+        const currentSessionId = wechatQRSessionId;
+        if (!currentSessionId) return;
+        
         try {
-            const resp = await fetch(`/api/auth/wechat-qr/status?session_id=${encodeURIComponent(wechatQRSessionId)}`);
+            const resp = await fetch(`/api/auth/wechat-qr/status?session_id=${encodeURIComponent(currentSessionId)}`);
             const data = await resp.json();
             
             if (data.status === 'confirmed' && data.session_token) {
                 // Login successful! Set cookie and reload
-                stopWechatQRPolling();
+                // Stop polling first but keep session_id for cookie call
+                if (wechatQRPollingTimer) {
+                    clearInterval(wechatQRPollingTimer);
+                    wechatQRPollingTimer = null;
+                }
+                if (wechatQRCountdownTimer) {
+                    clearInterval(wechatQRCountdownTimer);
+                    wechatQRCountdownTimer = null;
+                }
+                
                 loginShowMessage('登录成功', 'success');
                 
                 // Call confirm-cookie endpoint to set the session cookie
                 try {
-                    await fetch(`/api/auth/wechat-qr/confirm-cookie?session_id=${encodeURIComponent(wechatQRSessionId)}`, {
+                    await fetch(`/api/auth/wechat-qr/confirm-cookie?session_id=${encodeURIComponent(currentSessionId)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' }
                     });
                 } catch (e) {
                     console.error('Failed to set cookie:', e);
                 }
+                
+                // Now clear session_id
+                wechatQRSessionId = null;
                 
                 setTimeout(() => {
                     closeLoginModal();

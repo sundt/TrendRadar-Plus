@@ -807,15 +807,11 @@ async def change_password(
 
 @router.get("/page", include_in_schema=False)
 async def auth_page(request: Request):
-    """Serve the auth HTML page."""
-    from pathlib import Path
-    from fastapi.responses import HTMLResponse
+    """Redirect to home page with login modal trigger."""
+    from fastapi.responses import RedirectResponse
     
-    template_path = Path(__file__).parent.parent / "templates" / "auth.html"
-    if template_path.exists():
-        return HTMLResponse(content=template_path.read_text(encoding="utf-8"))
-    else:
-        return HTMLResponse(content="<h1>Auth page not found</h1>", status_code=404)
+    # Redirect to home page with ?login=1 to trigger login modal
+    return RedirectResponse(url="/?login=1", status_code=302)
 
 
 @router.get("/reset-password-page", include_in_schema=False)

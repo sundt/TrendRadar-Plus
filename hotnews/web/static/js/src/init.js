@@ -150,6 +150,23 @@ ready(function () {
     // Wait a short time for authState to complete initialization
     setTimeout(initAuthButton, 100);
     
+    // Check if we should auto-open login modal (from /api/auth/page redirect)
+    setTimeout(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('login') === '1') {
+                // Remove the login parameter from URL without reload
+                const url = new URL(window.location.href);
+                url.searchParams.delete('login');
+                window.history.replaceState({}, '', url.pathname + url.search);
+                // Open login modal
+                openLoginModal();
+            }
+        } catch (e) {
+            console.error('[Init] Error checking login param:', e);
+        }
+    }, 300);
+    
     // Initialize Todo button after auth is ready
     setTimeout(() => {
         initTodoButton();
