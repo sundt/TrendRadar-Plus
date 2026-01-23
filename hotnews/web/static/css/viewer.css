@@ -2747,6 +2747,22 @@
     background: rgba(217, 119, 6, 0.1);
 }
 
+.summary-recharge-link {
+    margin-left: 6px;
+    padding: 2px 8px;
+    background: rgba(217, 119, 6, 0.15);
+    border-radius: 10px;
+    font-size: 11px;
+    color: #d97706;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.summary-recharge-link:hover {
+    background: rgba(217, 119, 6, 0.25);
+    color: #b45309;
+}
+
 /* Summary Feedback Buttons (Thumbs up/down) */
 .summary-feedback {
     display: inline-flex;
@@ -4440,5 +4456,448 @@
     
     .summary-todo-panel {
         max-height: 50vh;
+    }
+}
+
+/* ========================================
+   Payment Modal - WeChat Pay Token Recharge
+   Modern, minimalist, human-centered design
+   ======================================== */
+
+.payment-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s;
+}
+
+.payment-modal.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.payment-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.payment-modal-content {
+    position: relative;
+    width: 90%;
+    max-width: 480px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.04), 
+                0 32px 80px -16px rgba(0, 0, 0, 0.25);
+    transform: scale(0.95) translateY(12px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+}
+
+.payment-modal.open .payment-modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.payment-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 1;
+}
+
+.payment-modal-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.7);
+}
+
+.payment-modal-header {
+    padding: 28px 28px 20px;
+    text-align: center;
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+.payment-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
+}
+
+.payment-balance-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #86868b;
+}
+
+.payment-balance-hint span {
+    color: #1d1d1f;
+    font-weight: 500;
+}
+
+.payment-modal-body {
+    padding: 24px;
+    min-height: 280px;
+}
+
+/* Plans Section */
+.payment-plans-section {
+    animation: fadeIn 0.3s ease;
+}
+
+.payment-plans-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.payment-plan-card {
+    position: relative;
+    padding: 20px 12px;
+    background: #f5f5f7;
+    border: 2px solid transparent;
+    border-radius: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.payment-plan-card:hover {
+    background: #ebebed;
+    transform: translateY(-2px);
+}
+
+.payment-plan-card.selected,
+.payment-plan-card.recommended {
+    border-color: #007aff;
+    background: rgba(0, 122, 255, 0.05);
+}
+
+.payment-plan-badge {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 10px;
+    background: linear-gradient(135deg, #007aff, #5856d6);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 10px;
+    letter-spacing: 0.02em;
+}
+
+.payment-plan-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 12px;
+}
+
+.payment-plan-price {
+    margin-bottom: 8px;
+}
+
+.payment-plan-currency {
+    font-size: 14px;
+    color: #1d1d1f;
+    vertical-align: top;
+}
+
+.payment-plan-amount {
+    font-size: 32px;
+    font-weight: 700;
+    color: #1d1d1f;
+    letter-spacing: -0.02em;
+}
+
+.payment-plan-tokens {
+    font-size: 13px;
+    font-weight: 500;
+    color: #007aff;
+    margin-bottom: 4px;
+}
+
+.payment-plan-desc {
+    font-size: 11px;
+    color: #86868b;
+}
+
+.payment-plans-note {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: rgba(0, 122, 255, 0.06);
+    border-radius: 12px;
+    font-size: 12px;
+    color: #1d1d1f;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* QR Code Section */
+.payment-qr-section {
+    text-align: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.payment-qr-back {
+    text-align: left;
+    margin-bottom: 16px;
+}
+
+.payment-qr-back span {
+    font-size: 13px;
+    color: #007aff;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.payment-qr-back span:hover {
+    opacity: 0.7;
+}
+
+.payment-qr-container {
+    display: inline-block;
+    padding: 20px;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.payment-qr-code {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.payment-qr-code canvas {
+    border-radius: 8px;
+}
+
+.payment-qr-hint {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #86868b;
+}
+
+.payment-qr-error {
+    color: #ff3b30;
+    font-size: 13px;
+}
+
+.payment-order-info {
+    margin-top: 20px;
+}
+
+.payment-order-amount {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1d1d1f;
+}
+
+.payment-order-tokens {
+    font-size: 14px;
+    color: #007aff;
+    font-weight: 500;
+}
+
+.payment-status {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: rgba(0, 122, 255, 0.08);
+    border-radius: 20px;
+    font-size: 13px;
+    color: #007aff;
+    display: inline-block;
+}
+
+.payment-status.error {
+    background: rgba(255, 59, 48, 0.08);
+    color: #ff3b30;
+}
+
+/* Success Section */
+.payment-success-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    animation: fadeIn 0.3s ease;
+}
+
+.payment-success-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: bounceIn 0.5s ease;
+}
+
+.payment-success-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #1d1d1f;
+    margin-bottom: 8px;
+}
+
+.payment-success-tokens {
+    font-size: 18px;
+    font-weight: 600;
+    color: #34c759;
+    margin-bottom: 24px;
+}
+
+.payment-success-btn {
+    padding: 12px 48px;
+    background: #007aff;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.payment-success-btn:hover {
+    background: #0066d6;
+    transform: scale(1.02);
+}
+
+/* Loading & Error States */
+.payment-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: #86868b;
+    font-size: 14px;
+}
+
+.payment-error {
+    text-align: center;
+    padding: 40px 20px;
+    color: #ff3b30;
+}
+
+.payment-error button {
+    margin-top: 12px;
+    padding: 8px 20px;
+    background: #f5f5f7;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.payment-not-configured {
+    text-align: center;
+    padding: 60px 20px;
+    color: #86868b;
+}
+
+.payment-not-configured-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounceIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    60% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+    .payment-modal-content {
+        width: calc(100% - 24px);
+        max-width: none;
+        margin: 12px;
+        border-radius: 20px;
+    }
+    
+    .payment-modal-header {
+        padding: 24px 20px 16px;
+    }
+    
+    .payment-modal-body {
+        padding: 20px 16px;
+    }
+    
+    .payment-plans-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .payment-plan-card {
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        text-align: left;
+        gap: 16px;
+    }
+    
+    .payment-plan-badge {
+        top: 50%;
+        left: auto;
+        right: 12px;
+        transform: translateY(-50%);
+    }
+    
+    .payment-plan-name {
+        margin-bottom: 0;
+        flex: 1;
+    }
+    
+    .payment-plan-price {
+        margin-bottom: 0;
+    }
+    
+    .payment-plan-amount {
+        font-size: 24px;
+    }
+    
+    .payment-plan-tokens,
+    .payment-plan-desc {
+        display: none;
+    }
+    
+    .payment-qr-code {
+        width: 180px;
+        height: 180px;
     }
 }

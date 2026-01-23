@@ -16,6 +16,12 @@
                 <h1>我的设置</h1>
             </div>
             <div style="display:flex; align-items:center; gap:16px;">
+                <!-- Token 余额与充值 -->
+                <div class="token-balance-section" id="tokenBalanceSection">
+                    <span class="token-balance-label">Token:</span>
+                    <span class="token-balance-value" id="tokenBalanceValue">--</span>
+                    <button class="btn btn-recharge" onclick="openRechargeModal()">充值</button>
+                </div>
                 <!-- 栏目设置按钮 -->
                 <button onclick="openCategorySettingsModal()" class="btn btn-outline" style="padding:8px 16px; font-size:13px;">
                     ⚙️ 栏目设置
@@ -216,6 +222,41 @@
         </div>
     </div>
 
+    <!-- Recharge Modal -->
+    <div class="settings-modal-overlay" id="rechargeModal" onclick="closeRechargeOnOverlay(event)">
+        <div class="recharge-modal" onclick="event.stopPropagation()">
+            <button class="recharge-modal-close" onclick="closeRechargeModal()">&times;</button>
+            <div class="recharge-modal-header">
+                <h2>✨ Token 充值</h2>
+                <p class="recharge-balance-hint">当前余额: <span id="rechargeCurrentBalance">--</span></p>
+            </div>
+            <div class="recharge-modal-body">
+                <div id="rechargePlansSection" class="recharge-plans-section">
+                    <div class="recharge-loading">加载中...</div>
+                </div>
+                <div id="rechargeQRSection" class="recharge-qr-section" style="display:none;">
+                    <div class="recharge-qr-back" onclick="showRechargePlans()">← 返回选择套餐</div>
+                    <div class="recharge-qr-container">
+                        <div id="rechargeQRCode" class="recharge-qr-code"></div>
+                        <div class="recharge-qr-hint">请使用微信扫码支付</div>
+                    </div>
+                    <div class="recharge-order-info">
+                        <div class="recharge-order-amount">¥<span id="rechargeOrderAmount">--</span></div>
+                        <div class="recharge-order-tokens"><span id="rechargeOrderTokens">--</span> Tokens</div>
+                    </div>
+                    <div id="rechargeStatus" class="recharge-status">等待支付...</div>
+                </div>
+                <div id="rechargeSuccessSection" class="recharge-success-section" style="display:none;">
+                    <div class="recharge-success-icon">🎉</div>
+                    <div class="recharge-success-title">充值成功</div>
+                    <div class="recharge-success-tokens">+<span id="rechargeSuccessTokens">--</span> Tokens</div>
+                    <button class="btn" onclick="closeRechargeModal()">完成</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script src="/static_kernel/js/user_settings.js?v=20260122"></script>
 </body>
 

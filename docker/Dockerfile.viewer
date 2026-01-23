@@ -18,6 +18,9 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --ret
 COPY hotnews/ ./hotnews/
 COPY mcp_server/ ./mcp_server/
 
+# Copy WeChat Pay private key if exists
+COPY pub_key.pem ./pub_key.pem
+
 RUN mkdir -p /app/config /app/output
 
 

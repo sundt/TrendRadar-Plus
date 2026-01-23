@@ -46,6 +46,11 @@ workspace/metagpt/
 .env
 docker/.env
 
+# WeChat Pay certificates (sensitive)
+*.pem
+pub_key.pem
+apiclient_*.pem
+
 # Reference projects (external)
 we-mp-rss/
 wechat-article-exporter/

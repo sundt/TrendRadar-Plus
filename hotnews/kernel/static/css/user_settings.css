@@ -1609,3 +1609,368 @@ header h1 {
     margin-left: 4px;
     vertical-align: middle;
 }
+
+/* ========================================
+   Token Balance & Recharge
+   ======================================== */
+
+.token-balance-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+}
+
+.token-balance-label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.token-balance-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #22c55e;
+}
+
+.btn-recharge {
+    padding: 4px 12px !important;
+    font-size: 12px !important;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border: none;
+    color: white;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-recharge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+/* Recharge Modal */
+.recharge-modal {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+    background: var(--card-bg);
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.recharge-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-muted);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 1;
+}
+
+.recharge-modal-close:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text);
+}
+
+.recharge-modal-header {
+    padding: 28px 28px 20px;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.recharge-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.recharge-balance-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.recharge-balance-hint span {
+    color: #22c55e;
+    font-weight: 500;
+}
+
+.recharge-modal-body {
+    padding: 24px;
+    min-height: 280px;
+}
+
+/* Plans Section */
+.recharge-plans-section {
+    animation: fadeIn 0.3s ease;
+}
+
+.recharge-plans-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.recharge-plan-card {
+    position: relative;
+    padding: 20px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.recharge-plan-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.recharge-plan-card.selected,
+.recharge-plan-card.recommended {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.recharge-plan-badge {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 3px 10px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.recharge-plan-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.recharge-plan-price {
+    margin-bottom: 8px;
+}
+
+.recharge-plan-currency {
+    font-size: 14px;
+    vertical-align: top;
+}
+
+.recharge-plan-amount {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.recharge-plan-tokens {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.recharge-plan-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.recharge-plans-note {
+    margin-top: 20px;
+    padding: 12px 16px;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* QR Code Section */
+.recharge-qr-section {
+    text-align: center;
+    animation: fadeIn 0.3s ease;
+}
+
+.recharge-qr-back {
+    text-align: left;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: var(--primary);
+    cursor: pointer;
+}
+
+.recharge-qr-back:hover {
+    opacity: 0.7;
+}
+
+.recharge-qr-container {
+    display: inline-block;
+    padding: 20px;
+    background: white;
+    border-radius: 16px;
+}
+
+.recharge-qr-code {
+    width: 200px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.recharge-qr-code canvas {
+    border-radius: 8px;
+}
+
+.recharge-qr-hint {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.recharge-order-info {
+    margin-top: 20px;
+}
+
+.recharge-order-amount {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.recharge-order-tokens {
+    font-size: 14px;
+    color: var(--primary);
+    font-weight: 500;
+}
+
+.recharge-status {
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: rgba(59, 130, 246, 0.15);
+    border-radius: 20px;
+    font-size: 13px;
+    color: var(--primary);
+    display: inline-block;
+}
+
+.recharge-status.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+}
+
+/* Success Section */
+.recharge-success-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    animation: fadeIn 0.3s ease;
+}
+
+.recharge-success-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: bounceIn 0.5s ease;
+}
+
+.recharge-success-title {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.recharge-success-tokens {
+    font-size: 18px;
+    font-weight: 600;
+    color: #22c55e;
+    margin-bottom: 24px;
+}
+
+/* Loading & Error */
+.recharge-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounceIn {
+    0% { transform: scale(0.5); opacity: 0; }
+    60% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+    .token-balance-section {
+        padding: 4px 10px;
+    }
+    
+    .recharge-modal {
+        max-width: calc(100% - 24px);
+        margin: 12px;
+    }
+    
+    .recharge-plans-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .recharge-plan-card {
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        text-align: left;
+        gap: 16px;
+    }
+    
+    .recharge-plan-badge {
+        top: 50%;
+        left: auto;
+        right: 12px;
+        transform: translateY(-50%);
+    }
+    
+    .recharge-plan-name {
+        margin-bottom: 0;
+        flex: 1;
+    }
+    
+    .recharge-plan-price {
+        margin-bottom: 0;
+    }
+    
+    .recharge-plan-amount {
+        font-size: 24px;
+    }
+    
+    .recharge-plan-tokens,
+    .recharge-plan-desc {
+        display: none;
+    }
+}

@@ -527,6 +527,11 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # Migration: add fetch_method column if not exists
     _ensure_column("article_summaries", "fetch_method", "TEXT DEFAULT ''")
 
+    # ========== Payment Tables ==========
+    # Initialize payment tables for WeChat Pay Token recharge
+    from hotnews.kernel.user.payment_api import init_payment_tables
+    init_payment_tables(conn)
+
     conn.commit()
 
     _online_db_conn = conn

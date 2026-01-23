@@ -2082,5 +2082,275 @@ function resetDefaultCategoryConfig() {
     renderCategoryList();
 }
 
+// ========================================
+// Token Recharge Functions
+// ========================================
+
+const rechargeState = {
+    currentOrderNo: null,
+    pollTimer: null,
+    selectedPlanId: null,
+};
+
+function formatTokens(tokens) {
+    if (tokens >= 1000000) {
+        return (tokens / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (tokens >= 1000) {
+        return (tokens / 1000).toFixed(0) + 'K';
+    }
+    return tokens.toString();
+}
+
+async function loadTokenBalance() {
+    try {
+        const res = await fetch('/api/payment/balance');
+        if (res.ok) {
+            const data = await res.json();
+            const el = document.getElementById('tokenBalanceValue');
+            if (el) el.textContent = formatTokens(data.total || 0);
+            return data.total || 0;
+        }
+    } catch (e) {
+        console.error('Load balance error:', e);
+    }
+    return 0;
+}
+
+async function openRechargeModal() {
+    rechargeState.currentOrderNo = null;
+    rechargeState.selectedPlanId = null;
+    stopRechargePolling();
+    
+    document.getElementById('rechargeModal').classList.add('show');
+    await loadRechargePlans();
+}
+
+function closeRechargeModal() {
+    document.getElementById('rechargeModal').classList.remove('show');
+    stopRechargePolling();
+    rechargeState.currentOrderNo = null;
+    rechargeState.selectedPlanId = null;
+    // Refresh balance
+    loadTokenBalance();
+}
+
+function closeRechargeOnOverlay(event) {
+    if (event.target === event.currentTarget) {
+        closeRechargeModal();
+    }
+}
+
+async function loadRechargePlans() {
+    const section = document.getElementById('rechargePlansSection');
+    const balanceEl = document.getElementById('rechargeCurrentBalance');
+    
+    try {
+        const [plansRes, balanceRes] = await Promise.all([
+            fetch('/api/payment/plans'),
+            fetch('/api/payment/balance')
+        ]);
+        
+        const plansData = await plansRes.json();
+        const balanceData = await balanceRes.json();
+        
+        if (balanceEl) {
+            balanceEl.textContent = formatTokens(balanceData.total || 0);
+        }
+        
+        if (!plansData.configured) {
+            section.innerHTML = `
+                <div class="source-empty-state">
+                    <div class="empty-icon">🔧</div>
+                    <div class="empty-title">支付服务暂未开放</div>
+                </div>
+            `;
+            return;
+        }
+        
+        const plans = plansData.plans || [];
+        if (plans.length === 0) {
+            section.innerHTML = '<div class="recharge-loading">暂无可用套餐</div>';
+            return;
+        }
+        
+        section.innerHTML = `
+            <div class="recharge-plans-grid">
+                ${plans.map((plan, idx) => renderRechargePlanCard(plan, idx === 1)).join('')}
+            </div>
+            <div class="recharge-plans-note">
+                <span>💡</span> 充值后 1 年内有效，可用于 AI 智能总结
+            </div>
+        `;
+        
+    } catch (err) {
+        console.error('Load plans error:', err);
+        section.innerHTML = `
+            <div class="source-empty-state">
+                <div class="empty-icon">❌</div>
+                <div class="empty-title">加载失败</div>
+                <button class="btn" onclick="loadRechargePlans()">重试</button>
+            </div>
+        `;
+    }
+}
+
+function renderRechargePlanCard(plan, isRecommended = false) {
+    const summaryCount = Math.floor(plan.tokens / 5000);
+    
+    return `
+        <div class="recharge-plan-card ${isRecommended ? 'recommended' : ''}" 
+             data-plan-id="${plan.id}"
+             onclick="selectRechargePlan(${plan.id})">
+            ${isRecommended ? '<div class="recharge-plan-badge">推荐</div>' : ''}
+            <div class="recharge-plan-name">${plan.name}</div>
+            <div class="recharge-plan-price">
+                <span class="recharge-plan-currency">¥</span>
+                <span class="recharge-plan-amount">${plan.price}</span>
+            </div>
+            <div class="recharge-plan-tokens">${formatTokens(plan.tokens)} Tokens</div>
+            <div class="recharge-plan-desc">约 ${summaryCount} 次总结</div>
+        </div>
+    `;
+}
+
+async function selectRechargePlan(planId) {
+    rechargeState.selectedPlanId = planId;
+    
+    document.querySelectorAll('.recharge-plan-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.planId == planId);
+    });
+    
+    const plansSection = document.getElementById('rechargePlansSection');
+    const qrSection = document.getElementById('rechargeQRSection');
+    const statusEl = document.getElementById('rechargeStatus');
+    
+    plansSection.style.display = 'none';
+    qrSection.style.display = 'block';
+    statusEl.textContent = '正在创建订单...';
+    statusEl.className = 'recharge-status';
+    
+    try {
+        const res = await fetch('/api/payment/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan_id: planId })
+        });
+        
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || '创建订单失败');
+        }
+        
+        const order = await res.json();
+        rechargeState.currentOrderNo = order.order_no;
+        
+        document.getElementById('rechargeOrderAmount').textContent = order.amount;
+        document.getElementById('rechargeOrderTokens').textContent = formatTokens(order.tokens);
+        
+        await generateRechargeQRCode(order.code_url);
+        
+        statusEl.textContent = '等待支付...';
+        startRechargePolling();
+        
+    } catch (err) {
+        console.error('Create order error:', err);
+        statusEl.textContent = err.message || '创建订单失败';
+        statusEl.className = 'recharge-status error';
+    }
+}
+
+async function generateRechargeQRCode(codeUrl) {
+    const container = document.getElementById('rechargeQRCode');
+    container.innerHTML = '';
+    
+    try {
+        if (!window.QRCode) {
+            throw new Error('QRCode library not loaded');
+        }
+        
+        const canvas = document.createElement('canvas');
+        await QRCode.toCanvas(canvas, codeUrl, {
+            width: 200,
+            margin: 2,
+            color: {
+                dark: '#1d1d1f',
+                light: '#ffffff'
+            }
+        });
+        
+        container.appendChild(canvas);
+    } catch (err) {
+        console.error('QR code error:', err);
+        container.innerHTML = '<div style="color:#ef4444;font-size:13px;">二维码生成失败</div>';
+    }
+}
+
+function showRechargePlans() {
+    stopRechargePolling();
+    rechargeState.currentOrderNo = null;
+    
+    document.getElementById('rechargePlansSection').style.display = 'block';
+    document.getElementById('rechargeQRSection').style.display = 'none';
+    document.getElementById('rechargeSuccessSection').style.display = 'none';
+}
+
+function startRechargePolling() {
+    stopRechargePolling();
+    
+    let attempts = 0;
+    const maxAttempts = 180;
+    
+    rechargeState.pollTimer = setInterval(async () => {
+        if (!rechargeState.currentOrderNo) {
+            stopRechargePolling();
+            return;
+        }
+        
+        attempts++;
+        if (attempts > maxAttempts) {
+            stopRechargePolling();
+            const statusEl = document.getElementById('rechargeStatus');
+            statusEl.textContent = '订单已超时，请重新下单';
+            statusEl.className = 'recharge-status error';
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/payment/status?order_no=${rechargeState.currentOrderNo}`);
+            const data = await res.json();
+            
+            if (data.status === 'paid') {
+                stopRechargePolling();
+                showRechargeSuccess(data.tokens_added || data.tokens);
+            } else if (data.status === 'expired') {
+                stopRechargePolling();
+                const statusEl = document.getElementById('rechargeStatus');
+                statusEl.textContent = '订单已过期，请重新下单';
+                statusEl.className = 'recharge-status error';
+            }
+        } catch (err) {
+            console.error('Poll status error:', err);
+        }
+    }, 10000);
+}
+
+function stopRechargePolling() {
+    if (rechargeState.pollTimer) {
+        clearInterval(rechargeState.pollTimer);
+        rechargeState.pollTimer = null;
+    }
+}
+
+function showRechargeSuccess(tokens) {
+    document.getElementById('rechargePlansSection').style.display = 'none';
+    document.getElementById('rechargeQRSection').style.display = 'none';
+    document.getElementById('rechargeSuccessSection').style.display = 'flex';
+    document.getElementById('rechargeSuccessTokens').textContent = formatTokens(tokens);
+}
+
 // Initialize on page load
 init();
+
+// Load token balance on page load
+setTimeout(loadTokenBalance, 500);
