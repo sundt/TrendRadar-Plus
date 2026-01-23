@@ -438,9 +438,8 @@ function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, fee
     if (balanceInfo && balanceInfo.tokens_used !== undefined) {
         const tokenText = formatTokenDisplay(currentTokens, balanceInfo.tokens_used, balanceInfo.token_balance);
         const lowBalanceClass = isLowBalance(balanceInfo.token_balance) ? 'low-balance' : '';
-        const rechargeLink = isLowBalance(balanceInfo.token_balance) 
-            ? `<a href="javascript:void(0)" onclick="openPaymentModal()" class="summary-recharge-link">充值</a>` 
-            : '';
+        // 充值链接暂时隐藏，等待微信支付认证
+        const rechargeLink = '';
         tokenDisplay = `<span class="summary-token-tag ${lowBalanceClass}" title="本次/已用/剩余 (K tokens)">🪙 ${tokenText}${rechargeLink}</span>`;
     }
     
