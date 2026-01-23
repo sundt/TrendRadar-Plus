@@ -340,12 +340,12 @@ async def generate_summary_stream(
     row = cur.fetchone()
     
     if row and row[0]:
-        # Return cached summary as single SSE event with token info
-        # Deduct tokens based on original token usage (or default 500 if not recorded)
-        cached_tokens = row[2] or 500  # Use stored tokens or default
+        # Return cached summary - user viewing their own cached summary, NO charge
+        # (Different users using global cache would be charged, but that's handled separately)
         
-        # Consume tokens using the unified helper
-        token_info = _consume_user_tokens(request, user["id"], cached_tokens)
+        # Just get current balance, don't consume
+        token_info = _get_user_token_info(request, user["id"])
+        cached_tokens = row[2] or 0  # For display only
         
         async def cached_stream():
             data = {
@@ -354,7 +354,7 @@ async def generate_summary_stream(
                 "article_type": row[1] or "other",
                 "article_type_name": get_type_name(row[1] or "other"),
                 "news_id": news_id,
-                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": cached_tokens},
+                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},  # No charge for own cache
                 "token_balance": token_info["token_balance"],
                 "tokens_used": token_info["tokens_used"]
             }
