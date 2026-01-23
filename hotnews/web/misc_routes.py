@@ -5,7 +5,7 @@ from datetime import date
 
 import requests
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, PlainTextResponse
 
 
 router = APIRouter()
@@ -22,6 +22,12 @@ class UnicodeJSONResponse(Response):
             indent=None,
             separators=(",", ":"),
         ).encode("utf-8")
+
+
+@router.get("/MP_verify_{token}.txt")
+async def wechat_mp_verify(token: str):
+    """微信公众号域名验证文件"""
+    return PlainTextResponse(content=token)
 
 
 @router.get("/api/nba-today")
