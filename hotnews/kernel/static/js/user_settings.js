@@ -1903,6 +1903,8 @@ function setupPlatformDragAndDrop() {
 
         item.addEventListener('dragend', () => {
             item.classList.remove('dragging');
+            // Auto-save after drag ends
+            autoSavePlatformOrder();
         });
 
         item.addEventListener('dragover', (e) => {
@@ -1919,6 +1921,48 @@ function setupPlatformDragAndDrop() {
             }
         });
     });
+}
+
+// Auto-save platform order after drag
+function autoSavePlatformOrder() {
+    if (!categorySettingsState.editingCategoryId) return;
+    
+    const catId = categorySettingsState.editingCategoryId;
+    const orderedPlatforms = getOrderedPlatforms();
+    const platforms = getSelectedPlatforms();
+    
+    const config = getCategoryConfig() || getDefaultCategoryConfig();
+    const customIdx = config.customCategories.findIndex(c => c.id === catId);
+    
+    if (customIdx >= 0) {
+        // Custom category: update platforms array
+        config.customCategories[customIdx] = {
+            ...config.customCategories[customIdx],
+            platforms: platforms.filter(pid => orderedPlatforms.includes(pid))
+        };
+        // Reorder to match drag order
+        const orderedSelected = orderedPlatforms.filter(pid => platforms.includes(pid));
+        config.customCategories[customIdx].platforms = orderedSelected;
+    } else {
+        // Default category: update platformOrder
+        config.platformOrder[catId] = orderedPlatforms;
+        
+        // Update hidden platforms
+        if (!Array.isArray(config.hiddenPlatforms)) config.hiddenPlatforms = [];
+        const hiddenSet = new Set((config.hiddenPlatforms || []).map(x => String(x || '').trim()).filter(Boolean));
+        orderedPlatforms.forEach(pid => {
+            if (!pid) return;
+            if (platforms.includes(pid)) {
+                hiddenSet.delete(pid);
+            } else {
+                hiddenSet.add(pid);
+            }
+        });
+        config.hiddenPlatforms = Array.from(hiddenSet);
+    }
+    
+    saveCategoryConfig(config);
+    categorySettingsState.configChanged = true;
 }
 
 function togglePlatformSelect(platformId) {

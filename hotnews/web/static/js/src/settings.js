@@ -696,6 +696,8 @@ export const settings = {
             item.addEventListener('dragend', () => {
                 item.classList.remove('dragging');
                 stopAutoScroll();
+                // Auto-save after drag ends
+                this._autoSavePlatformOrder();
             });
 
             item.addEventListener('dragover', (e) => {
@@ -751,6 +753,49 @@ export const settings = {
             if (pid) ordered.push(pid);
         });
         return ordered;
+    },
+
+    // Auto-save platform order after drag
+    _autoSavePlatformOrder() {
+        if (!_editingCategoryId) return;
+        
+        const catId = _editingCategoryId;
+        const orderedPlatforms = this.getOrderedPlatforms();
+        const platforms = this.getSelectedPlatforms();
+        
+        const config = this.getCategoryConfig() || this.getDefaultCategoryConfig();
+        const customIdx = (config.customCategories || []).findIndex(c => c.id === catId);
+        
+        if (customIdx >= 0) {
+            // Custom category: update platforms array with drag order
+            const orderedSelected = orderedPlatforms.filter(pid => platforms.includes(pid));
+            config.customCategories[customIdx] = {
+                ...config.customCategories[customIdx],
+                platforms: orderedSelected
+            };
+        } else {
+            // Default category: update platformOrder
+            if (!config.platformOrder || typeof config.platformOrder !== 'object') {
+                config.platformOrder = {};
+            }
+            config.platformOrder[catId] = orderedPlatforms;
+            
+            // Update hidden platforms
+            if (!Array.isArray(config.hiddenPlatforms)) config.hiddenPlatforms = [];
+            const hiddenSet = new Set((config.hiddenPlatforms || []).map(x => String(x || '').trim()).filter(Boolean));
+            orderedPlatforms.forEach(pid => {
+                if (!pid) return;
+                if (platforms.includes(pid)) {
+                    hiddenSet.delete(pid);
+                } else {
+                    hiddenSet.add(pid);
+                }
+            });
+            config.hiddenPlatforms = Array.from(hiddenSet);
+        }
+        
+        this.saveCategoryConfig(config);
+        _categoryConfigChanged = true;
     },
 
     saveCategory() {
