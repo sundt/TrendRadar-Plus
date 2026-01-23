@@ -5277,32 +5277,32 @@
     }
     
     .payment-plan-card {
-        padding: 16px;
+        padding: 16px 20px;
         display: flex;
         align-items: center;
         text-align: left;
-        gap: 16px;
+        gap: 12px;
     }
     
     .payment-plan-badge {
-        top: 50%;
-        left: auto;
-        right: 12px;
-        transform: translateY(-50%);
+        position: static;
+        transform: none;
+        order: 2;
+        flex-shrink: 0;
     }
     
     .payment-plan-name {
         margin-bottom: 0;
         flex: 1;
+        order: 1;
     }
     
     .payment-plan-price {
         margin-bottom: 0;
-        margin-right: 60px;
-    }
-    
-    .payment-plan-card.recommended .payment-plan-price {
-        margin-right: 70px;
+        order: 3;
+        flex-shrink: 0;
+        min-width: 50px;
+        text-align: right;
     }
     
     .payment-plan-amount {
