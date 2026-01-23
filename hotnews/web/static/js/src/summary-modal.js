@@ -42,34 +42,16 @@ const TYPE_ICONS = {
 };
 
 /**
- * Format token display as "本次/剩余" (e.g., "2.3/2100")
+ * Format token display - only show current consumption (e.g., "2.3K")
  * @param {number} currentTokens - tokens used for this summary
- * @param {number} tokenBalance - remaining token balance
- * @returns {string} formatted string like "2.3K/2.1M"
+ * @returns {string} formatted string like "2.3K"
  */
-function formatTokenDisplay(currentTokens, tokenBalance) {
-    // Format current tokens (always in K)
-    const current = ((currentTokens || 0) / 1000).toFixed(1);
-    
-    // Format remaining tokens (K or M depending on size)
-    const remaining = tokenBalance || 0;
-    let remainingStr;
-    if (remaining >= 1000000) {
-        remainingStr = (remaining / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    } else {
-        remainingStr = (remaining / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+function formatTokenDisplay(currentTokens) {
+    const tokens = currentTokens || 0;
+    if (tokens >= 1000) {
+        return (tokens / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
     }
-    
-    return `${current}K/${remainingStr}`;
-}
-
-/**
- * Check if token balance is low (remaining < 10K)
- * @param {number} tokenBalance - current balance
- * @returns {boolean}
- */
-function isLowBalance(tokenBalance) {
-    return (tokenBalance || 0) < 10000;
+    return tokens.toString();
 }
 
 /**
@@ -470,16 +452,12 @@ function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, fee
     const footer = document.getElementById('summaryModalFooter');
     const typeIcon = TYPE_ICONS[articleType] || '📝';
     
-    // Format token display: "本次/剩余" (e.g., "2.3K/2.1M")
+    // Format token display: only show current consumption (e.g., "2.3K")
     let tokenDisplay = '';
     const currentTokens = tokenUsage?.total_tokens || 0;
-    if (balanceInfo && balanceInfo.token_balance !== undefined) {
-        const tokenText = formatTokenDisplay(currentTokens, balanceInfo.token_balance);
-        const lowBalanceClass = isLowBalance(balanceInfo.token_balance) ? 'low-balance' : '';
-        const rechargeLink = isLowBalance(balanceInfo.token_balance) 
-            ? ' <a href="#" class="token-recharge-link" onclick="event.preventDefault();window.openPaymentModal?.();">充值</a>' 
-            : '';
-        tokenDisplay = `<span class="summary-token-tag ${lowBalanceClass}" title="本次消耗/剩余额度">🪙 ${tokenText}${rechargeLink}</span>`;
+    if (currentTokens > 0) {
+        const tokenText = formatTokenDisplay(currentTokens);
+        tokenDisplay = `<span class="summary-token-tag" title="本次消耗">🪙 ${tokenText}</span>`;
     }
     
     // Feedback button active states

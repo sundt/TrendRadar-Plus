@@ -161,7 +161,7 @@ def _get_user_token_info(request: Request, user_id: int) -> dict:
     }
 
 
-def _consume_user_tokens(request: Request, user_id: int, amount: int) -> dict:
+def _consume_user_tokens(request: Request, user_id: int, amount: int, news_id: str = None, title: str = None) -> dict:
     """
     Consume tokens from user account (unified token_recharge_logs table).
     Consumes from earliest expiring balance first.
@@ -181,8 +181,8 @@ def _consume_user_tokens(request: Request, user_id: int, amount: int) -> dict:
         # Ensure user has free quota
         ensure_user_free_quota(online_conn, user_id)
         
-        # Consume from unified pool
-        if not consume_tokens(online_conn, user_id, amount):
+        # Consume from unified pool (with logging)
+        if not consume_tokens(online_conn, user_id, amount, news_id, title):
             logging.warning(f"[TokenConsume] Insufficient balance for user {user_id}, amount={amount}")
     except Exception as e:
         logging.warning(f"[TokenConsume] Failed to consume tokens: {e}")
@@ -345,7 +345,7 @@ async def generate_summary_stream(
         
         # Just get current balance, don't consume
         token_info = _get_user_token_info(request, user["id"])
-        cached_tokens = row[2] or 0  # For display only
+        cached_tokens = row[2] or 0  # Original tokens used when generated
         
         async def cached_stream():
             data = {
@@ -354,7 +354,7 @@ async def generate_summary_stream(
                 "article_type": row[1] or "other",
                 "article_type_name": get_type_name(row[1] or "other"),
                 "news_id": news_id,
-                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},  # No charge for own cache
+                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": cached_tokens},  # Show original consumption
                 "token_balance": token_info["token_balance"],
                 "tokens_used": token_info["tokens_used"]
             }
@@ -413,9 +413,9 @@ async def generate_summary_stream(
                 record_request(user["id"])
                 now = _now_ts()
                 
-                # Update user token balance using unified helper
+                # Update user token balance using unified helper (with logging)
                 total_tokens = token_usage.get("total_tokens", 0) if token_usage else 0
-                token_info = _consume_user_tokens(request, user["id"], total_tokens)
+                token_info = _consume_user_tokens(request, user["id"], total_tokens, news_id, title)
                 
                 try:
                     conn.execute(
