@@ -47,6 +47,7 @@ workspace/metagpt/
 docker/.env
 
 # WeChat Pay certificates (sensitive)
+key/
 *.pem
 pub_key.pem
 apiclient_*.pem
