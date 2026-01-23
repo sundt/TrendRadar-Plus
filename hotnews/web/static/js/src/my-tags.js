@@ -175,7 +175,7 @@ function renderEmptyState(container) {
  */
 function renderLoginRequired(container) {
     container.innerHTML = `
-        <div style="background:white;border-radius:12px;margin:8px;min-height:calc(100vh - 200px);display:flex;align-items:center;justify-content:center;">
+        <div class="platform-card" style="min-height:calc(100vh - 200px);display:flex;align-items:center;justify-content:center;">
             <div style="text-align:center;padding:60px 20px;">
                 <div style="font-size:64px;margin-bottom:20px;">🔒</div>
                 <div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">请先登录</div>
