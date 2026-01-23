@@ -188,6 +188,21 @@
             text-decoration: underline;
             outline: none;
         }
+        
+        /* Desktop-only tip - hide on mobile */
+        .tr-footer-tip-desktop {
+            cursor: default;
+        }
+        
+        .tr-footer-tip-desktop:hover {
+            text-decoration: none;
+        }
+        
+        @media (max-width: 640px) {
+            .tr-footer-tip-desktop {
+                display: none;
+            }
+        }
 
         .category-tab {
             flex: 1 1 0;
@@ -443,28 +458,39 @@
         }
 
         .platform-grid {
-            scrollbar-width: none;
+            scrollbar-width: thin;
             /* Firefox */
-            -ms-overflow-style: none;
-            /* IE/Edge Legacy */
+            scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
         }
 
 
         .platform-grid::-webkit-scrollbar {
-            height: 0;
-            width: 0;
+            height: 8px;
         }
 
         .platform-grid::-webkit-scrollbar-track {
-            background: transparent;
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: 4px;
         }
 
         .platform-grid::-webkit-scrollbar-thumb {
-            background: transparent;
+            background: rgba(156, 163, 175, 0.4);
+            border-radius: 4px;
         }
 
         .platform-grid::-webkit-scrollbar-thumb:hover {
-            background: transparent;
+            background: rgba(156, 163, 175, 0.6);
+        }
+        
+        /* Mobile: hide scrollbar but keep scrolling functional */
+        @media (max-width: 640px) {
+            .platform-grid {
+                scrollbar-width: none;
+            }
+            
+            .platform-grid::-webkit-scrollbar {
+                height: 0;
+            }
         }
 
         .platform-card {
@@ -581,6 +607,20 @@
         body.tr-platform-title-dragging,
         body.tr-platform-title-dragging * {
             user-select: none;
+        }
+
+        /* Shift+scroll mode: disable vertical scrolling on page and cards */
+        body.tr-shift-scroll-mode {
+            overflow: hidden;
+        }
+        
+        body.tr-shift-scroll-mode .news-list {
+            overflow: hidden;
+        }
+        
+        body.tr-shift-scroll-mode .platform-grid {
+            scroll-snap-type: none;
+            scroll-behavior: auto;
         }
 
 

@@ -25,7 +25,8 @@ function isInTitleArea(t) {
     const el = normalizeTarget(t);
     if (!el?.closest) return false;
     if (el.closest('.platform-drag-handle')) return false;
-    return !!el.closest('.platform-header') || !!el.closest('.platform-name');
+    // Allow shift+scroll anywhere in the platform card
+    return !!el.closest('.platform-card');
 }
 
 ready(() => {
@@ -38,6 +39,33 @@ ready(() => {
     let startScrollLeft = 0;
     let didDrag = false;
     let suppressClickUntil = 0;
+    
+    // ======================================
+    // Shift Key State - Block vertical scroll when shift is held
+    // ======================================
+    let isShiftHeld = false;
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Shift' && !isShiftHeld) {
+            isShiftHeld = true;
+            document.body.classList.add('tr-shift-scroll-mode');
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        if (e.key === 'Shift') {
+            isShiftHeld = false;
+            document.body.classList.remove('tr-shift-scroll-mode');
+        }
+    });
+    
+    // Also handle window blur (user switches away while holding shift)
+    window.addEventListener('blur', () => {
+        if (isShiftHeld) {
+            isShiftHeld = false;
+            document.body.classList.remove('tr-shift-scroll-mode');
+        }
+    });
 
     // ======================================
     // Momentum Scrolling Implementation
@@ -175,11 +203,11 @@ ready(() => {
         if (wheelStopTimer) {
             clearTimeout(wheelStopTimer);
         }
-        wheelStopTimer = setTimeout(() => {
-            wheelStopTimer = null;
-            // Snap to nearest card after wheel scrolling stops
-            snapToNearestCard(wheelTargetGrid);
-        }, 150); // Wait 150ms after last wheel event
+        // Disable auto-snap for shift+wheel scroll - let user control position
+        // wheelStopTimer = setTimeout(() => {
+        //     wheelStopTimer = null;
+        //     snapToNearestCard(wheelTargetGrid);
+        // }, 150);
     }
 
     // ======================================
@@ -360,6 +388,8 @@ ready(() => {
     // ======================================
     // Optimized Wheel Event Handler
     // ======================================
+    let shiftScrollSnapTimer = null;
+    
     document.addEventListener('wheel', (e) => {
         const pointEl = (typeof document.elementFromPoint === 'function')
             ? document.elementFromPoint(e.clientX, e.clientY)
@@ -374,6 +404,20 @@ ready(() => {
 
         // Stop any ongoing momentum
         stopMomentum();
+        
+        // Temporarily disable scroll-snap for smooth shift+scroll
+        grid.style.scrollSnapType = 'none';
+        grid.style.scrollBehavior = 'auto';
+        
+        // Clear previous timer and set new one to re-enable snap
+        if (shiftScrollSnapTimer) {
+            clearTimeout(shiftScrollSnapTimer);
+        }
+        shiftScrollSnapTimer = setTimeout(() => {
+            shiftScrollSnapTimer = null;
+            grid.style.scrollSnapType = '';
+            grid.style.scrollBehavior = '';
+        }, 500);
 
         // Normalize delta based on deltaMode
         let delta = (typeof e.deltaX === 'number' && e.deltaX !== 0) ? e.deltaX : e.deltaY;
