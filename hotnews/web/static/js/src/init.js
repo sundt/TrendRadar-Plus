@@ -7,6 +7,7 @@ import { TR, ready } from './core.js';
 import { authState } from './auth-state.js';
 import { AuthButton } from './auth-ui.js';
 import { openLoginModal } from './login-modal.js';
+import { initTodoButton, loadTodos } from './todo.js';
 
 const MOBILE_TOP_COLLAPSE_STORAGE_KEY = 'hotnews_mobile_top_collapsed_v1';
 const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
@@ -146,6 +147,17 @@ ready(function () {
 
     // Wait a short time for authState to complete initialization
     setTimeout(initAuthButton, 100);
+    
+    // Initialize Todo button after auth is ready
+    setTimeout(() => {
+        initTodoButton();
+        // Reload todos when user logs in
+        authState.onAuthChange((user) => {
+            if (user) {
+                loadTodos();
+            }
+        });
+    }, 200);
 
     // 检查栏目设置 NEW 标记是否应该隐藏
     if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {

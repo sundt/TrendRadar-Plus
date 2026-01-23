@@ -135,7 +135,6 @@ function _createNewsLi(n, idx, platformId, platformName) {
     summaryBtn.dataset.url = String(n?.url || '');
     summaryBtn.dataset.sourceId = platformId;
     summaryBtn.dataset.sourceName = platformName || '';
-    summaryBtn.title = 'AI 智能总结';
     summaryBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -398,11 +397,11 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const dateStr = formatNewsDate(n?.timestamp);
         
         // AI indicator dot (breathing purple)
-        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
+        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
         
         // Actions container (date + summary button)
         const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
-        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 智能总结"></button>`;
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
         const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
         
         return `
@@ -838,11 +837,11 @@ export const data = {
                         const dateStr = formatNewsDate(n?.timestamp);
                         
                         // AI indicator dot
-                        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
+                        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
                         
                         // Actions container
                         const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
-                        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" title="AI 智能总结"></button>`;
+                        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
                         const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
                         
                         return `

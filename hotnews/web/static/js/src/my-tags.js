@@ -226,11 +226,11 @@ function createTagCard(tagData) {
             const escapedTagName = (tagName || '').replace(/'/g, "\\'");
             
             // AI indicator dot
-            const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')"></span>`;
+            const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')"></span>`;
             
             // Actions container (date + summary button)
             const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
-            const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" title="AI 智能总结"></button>`;
+            const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" ></button>`;
             const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
             
             return `

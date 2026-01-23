@@ -5,6 +5,7 @@
 
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
+import { renderMarkdown } from './summary-modal.js';
 
 const FAVORITES_STORAGE_KEY = 'hotnews_favorites_v1';
 const FAVORITES_WIDTH_KEY = 'hotnews_favorites_width';
@@ -226,7 +227,7 @@ function renderFavoritesList(favorites) {
                         </span>
                         <div class="favorite-item-actions">
                             <button class="favorite-summary-btn${f.summary ? ' has-summary' : ''}" 
-                                    onclick="handleSummaryClick('${f.news_id}')" 
+                                    onclick="handleFavoriteSummaryClick('${f.news_id}')" 
                                     title="${f.summary ? '查看总结' : 'AI 总结'}">
                                 ${f.summary ? '📄' : '📝'}
                             </button>
@@ -591,53 +592,9 @@ if (document.readyState === 'loading') {
 }
 
 /**
- * Simple markdown renderer for summaries
+ * Handle summary button click in favorites panel
  */
-function renderMarkdown(text) {
-    if (!text) return '';
-    
-    // Escape HTML first
-    let html = text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    
-    // Headers
-    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-    
-    // Bold
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-    
-    // Lists
-    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-    
-    // Wrap consecutive li in ul
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
-    
-    // Paragraphs (double newline)
-    html = html.replace(/\n\n/g, '</p><p>');
-    html = '<p>' + html + '</p>';
-    
-    // Clean up empty paragraphs
-    html = html.replace(/<p>\s*<\/p>/g, '');
-    html = html.replace(/<p>(<h[234]>)/g, '$1');
-    html = html.replace(/(<\/h[234]>)<\/p>/g, '$1');
-    html = html.replace(/<p>(<ul>)/g, '$1');
-    html = html.replace(/(<\/ul>)<\/p>/g, '$1');
-    
-    return html;
-}
-
-/**
- * Handle summary button click
- */
-async function handleSummaryClick(newsId) {
+async function handleFavoriteSummaryClick(newsId) {
     const summaryDiv = document.getElementById(`summary-${newsId}`);
     const btn = document.querySelector(`.favorite-item[data-news-id="${newsId}"] .favorite-summary-btn`);
     
@@ -706,7 +663,7 @@ async function handleSummaryClick(newsId) {
         summaryDiv.innerHTML = `
             <div class="summary-error">
                 <span>❌ ${e.message}</span>
-                <button onclick="handleSummaryClick('${newsId}')" style="margin-left:8px;">重试</button>
+                <button onclick="handleFavoriteSummaryClick('${newsId}')" style="margin-left:8px;">重试</button>
             </div>
         `;
         btn.textContent = '📝';
@@ -767,7 +724,7 @@ async function regenerateSummary(newsId) {
     }
     
     // Regenerate
-    await handleSummaryClick(newsId);
+    await handleFavoriteSummaryClick(newsId);
 }
 
 // Expose to window
@@ -776,7 +733,7 @@ window.closeFavoritesPanel = closeFavoritesPanel;
 window.removeFavoriteFromPanel = removeFavoriteFromPanel;
 window.handleFavoriteClick = handleFavoriteClick;
 window.isFavorited = isFavorited;
-window.handleSummaryClick = handleSummaryClick;
+window.handleFavoriteSummaryClick = handleFavoriteSummaryClick;
 window.toggleSummaryDisplay = toggleSummaryDisplay;
 window.regenerateSummary = regenerateSummary;
 

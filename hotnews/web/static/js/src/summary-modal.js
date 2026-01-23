@@ -5,9 +5,12 @@
 
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
+import { openTodoPanel, closeTodoPanel, batchAddTodos, addTodo, getCurrentTodoCount, loadTodos, initSelectionTodo } from './todo.js';
 
 let isModalOpen = false;
 let currentNewsId = null;
+let currentNewsTitle = null;
+let currentNewsUrl = null;
 
 /**
  * Article type icons
@@ -53,8 +56,13 @@ function isLowBalance(tokenBalance) {
 function renderMarkdown(text) {
     if (!text) return '';
     
-    // Escape HTML
+    // Pre-process: convert HTML br tags to newlines before escaping
     let html = text
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/br>/gi, '\n');
+    
+    // Escape HTML
+    html = html
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
@@ -68,6 +76,12 @@ function renderMarkdown(text) {
     html = html.replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>');
+    
+    // Add "添加到 Todo" button after action list header
+    html = html.replace(
+        /(<h2>✅\s*行动清单<\/h2>)/gi,
+        '$1<button class="action-list-add-btn" onclick="addActionListToTodo()">+ 添加到 Todo</button>'
+    );
     
     // Bold and italic (handle ** and * properly)
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -201,7 +215,7 @@ function ensureModalExists() {
             <div class="summary-modal-content">
                 <button class="summary-modal-close" onclick="closeSummaryModal()" title="关闭">✕</button>
                 <div class="summary-modal-header">
-                    <h2>📝 AI 智能总结</h2>
+                    <h2 id="summaryModalTitle">✨ AI 总结</h2>
                 </div>
                 <div class="summary-modal-body" id="summaryModalBody">
                     <!-- Content will be inserted here -->
@@ -230,11 +244,28 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     ensureModalExists();
     
     const modal = document.getElementById('summaryModal');
+    const modalTitle = document.getElementById('summaryModalTitle');
     const body = document.getElementById('summaryModalBody');
     const footer = document.getElementById('summaryModalFooter');
     
     currentNewsId = newsId;
+    currentNewsTitle = title;
+    currentNewsUrl = url;
     isModalOpen = true;
+    
+    // Expose to window for selection todo
+    window._currentSummaryNewsId = newsId;
+    window._currentSummaryNewsTitle = title;
+    window._currentSummaryNewsUrl = url;
+    
+    // Initialize selection todo (only once)
+    initSelectionTodo();
+    
+    // Set modal title to news title
+    if (modalTitle) {
+        const displayTitle = title && title.length > 50 ? title.substring(0, 50) + '...' : (title || 'AI 总结');
+        modalTitle.textContent = `✨ ${displayTitle}`;
+    }
     
     // Show modal with loading state
     modal.classList.add('open');
@@ -432,6 +463,9 @@ function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, fee
             </div>
         </div>
         <div class="summary-footer-right">
+            <button class="summary-todo-btn" onclick="openCurrentTodoPanel()" title="查看 Todo">
+                📋 Todo
+            </button>
             <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-link-btn">
                 🔗 查看原文
             </a>
@@ -598,6 +632,60 @@ if (document.readyState === 'loading') {
     setTimeout(loadSummarizedList, 500);
 }
 
+/**
+ * Open Todo panel for current news
+ */
+function openCurrentTodoPanel() {
+    if (!currentNewsId || !currentNewsTitle) return;
+    openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
+}
+
+/**
+ * Add action list items to Todo (行动清单一键添加)
+ */
+async function addActionListToTodo() {
+    if (!currentNewsId || !currentNewsTitle) return;
+    
+    // Find action list section in the summary content
+    const body = document.getElementById('summaryModalBody');
+    if (!body) return;
+    
+    // Look for "✅ 行动清单" section and extract list items
+    const content = body.innerHTML;
+    const actionListMatch = content.match(/✅\s*行动清单[\s\S]*?<ul>([\s\S]*?)<\/ul>/i);
+    
+    if (!actionListMatch) {
+        if (window.showToast) {
+            window.showToast('未找到行动清单');
+        }
+        return;
+    }
+    
+    // Extract list items
+    const listHtml = actionListMatch[1];
+    const itemMatches = listHtml.match(/<li>([\s\S]*?)<\/li>/gi) || [];
+    
+    const items = itemMatches.map(item => {
+        // Remove HTML tags and clean up
+        return item.replace(/<\/?li>/gi, '').replace(/<[^>]+>/g, '').trim();
+    }).filter(item => item.length > 0);
+    
+    if (items.length === 0) {
+        if (window.showToast) {
+            window.showToast('行动清单为空');
+        }
+        return;
+    }
+    
+    // Batch add to todo
+    await batchAddTodos(items, {
+        groupId: currentNewsId,
+        groupTitle: currentNewsTitle,
+        groupUrl: currentNewsUrl || '',
+        isCustom: false
+    });
+}
+
 // Expose to window
 window.openSummaryModal = openSummaryModal;
 window.closeSummaryModal = closeSummaryModal;
@@ -606,10 +694,13 @@ window.regenerateSummaryModal = regenerateSummaryModal;
 window.handleSummaryClick = handleSummaryClick;
 window.loadSummarizedList = loadSummarizedList;
 window.handleSummaryFeedback = handleSummaryFeedback;
+window.openCurrentTodoPanel = openCurrentTodoPanel;
+window.addActionListToTodo = addActionListToTodo;
 
 export {
     openSummaryModal,
     closeSummaryModal,
     handleSummaryClick,
-    loadSummarizedList
+    loadSummarizedList,
+    renderMarkdown
 };

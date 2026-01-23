@@ -40,6 +40,7 @@ async def get_user_stats(request: Request):
         "by_auth_type": {},
         "sessions": {},
         "recent_users": [],
+        "ai_summary": {},
     }
     
     try:
@@ -101,12 +102,42 @@ async def get_user_stats(request: Request):
         """, (today_start,))
         stats["sessions"]["today_logins"] = cur.fetchone()[0]
         
-        # Recent users (last 20)
+        # AI Summary statistics
+        try:
+            # Users who used AI summary (tokens_used > 0)
+            cur = conn.execute("SELECT COUNT(*) FROM users WHERE tokens_used > 0")
+            stats["ai_summary"]["users_count"] = cur.fetchone()[0]
+            
+            # Total tokens used
+            cur = conn.execute("SELECT SUM(tokens_used) FROM users WHERE tokens_used > 0")
+            stats["ai_summary"]["total_tokens_used"] = cur.fetchone()[0] or 0
+            
+            # Total summaries generated
+            cur = conn.execute("SELECT COUNT(*) FROM user_favorites WHERE summary IS NOT NULL AND summary != ''")
+            stats["ai_summary"]["total_summaries"] = cur.fetchone()[0]
+            
+            # Top AI summary users
+            cur = conn.execute("""
+                SELECT u.id, u.nickname, u.email, u.tokens_used, u.token_balance,
+                       COUNT(f.id) as summary_count
+                FROM users u
+                LEFT JOIN user_favorites f ON u.id = f.user_id AND f.summary IS NOT NULL AND f.summary != ''
+                WHERE u.tokens_used > 0
+                GROUP BY u.id
+                ORDER BY u.tokens_used DESC
+                LIMIT 10
+            """)
+            columns = [desc[0] for desc in cur.description]
+            stats["ai_summary"]["top_users"] = [dict(zip(columns, row)) for row in cur.fetchall()]
+        except Exception:
+            stats["ai_summary"] = {"users_count": 0, "total_tokens_used": 0, "total_summaries": 0, "top_users": []}
+        
+        # Recent registered users (only users with auth methods, last 20)
         cur = conn.execute("""
             SELECT u.id, u.nickname, u.email, u.avatar_url, u.created_at,
                    GROUP_CONCAT(a.auth_type) as auth_types
             FROM users u
-            LEFT JOIN user_auth_methods a ON u.id = a.user_id
+            INNER JOIN user_auth_methods a ON u.id = a.user_id
             GROUP BY u.id
             ORDER BY u.created_at DESC
             LIMIT 20

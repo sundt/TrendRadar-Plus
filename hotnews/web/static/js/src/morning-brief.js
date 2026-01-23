@@ -85,10 +85,10 @@ function _buildNewsItemsHtml(items, opts = {}) {
         // AI indicator dot
         const escapedTitle = title.replace(/'/g, "\\'");
         const escapedUrl = url.replace(/'/g, "\\'");
-        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" title="AI 智能总结" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', 'knowledge', '知识库')"></span>`;
+        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', 'knowledge', '知识库')"></span>`;
         
         // Actions container
-        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="knowledge" data-source-name="知识库" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', 'knowledge', '知识库')" title="AI 智能总结"></button>`;
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="knowledge" data-source-name="知识库" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', 'knowledge', '知识库')"></button>`;
         const actionsHtml = `<div class="news-actions">${timeHtml}${summaryBtnHtml}</div>`;
         
         return `

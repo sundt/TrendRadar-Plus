@@ -18,6 +18,19 @@ CORE_INSTRUCTIONS = """
 7. 表格规范：使用标准 Markdown 表格格式。
 """
 
+# 统一尾部 - 学习收获和行动清单
+LEARNING_FOOTER = """
+
+---
+
+## 💡 学习收获
+（读完这篇文章，读者能学到什么新知识、新视角或新技能？2-3 条）
+
+## ✅ 行动清单
+- 可以立即尝试或应用的事项
+- 需要进一步了解或研究的内容
+- 值得收藏的资源或工具（附链接）"""
+
 # 文章类型定义
 ARTICLE_TYPES = {
     'news': '新闻资讯',
@@ -71,6 +84,7 @@ SUMMARY_TEMPLATES = {
 
 ## 💬 各方观点
 （如有引用的观点或评论）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -100,6 +114,7 @@ SUMMARY_TEMPLATES = {
 
 ## ⚠️ 避坑指南
 （潜在错误、性能瓶颈或安全风险）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -131,6 +146,7 @@ SUMMARY_TEMPLATES = {
 
 ## ⚠️ 局限性
 （文中提及的限制或不足）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -161,6 +177,7 @@ SUMMARY_TEMPLATES = {
 
 ## ⚠️ 值得商榷
 （可能存在的问题或不同看法）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -192,6 +209,7 @@ SUMMARY_TEMPLATES = {
 ## 💡 局限与展望
 - **局限性**：
 - **未来方向**：
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -219,6 +237,7 @@ SUMMARY_TEMPLATES = {
 
 ## 📖 术语解释
 （解释文中的商业术语或缩写）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -248,6 +267,7 @@ SUMMARY_TEMPLATES = {
 
 ## 🚀 机会与建议
 （文中提到的机会或应对建议）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -276,6 +296,7 @@ SUMMARY_TEMPLATES = {
 
 ## 💡 关键信息
 （价格、时间、地点等具体信息）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：
@@ -303,6 +324,7 @@ SUMMARY_TEMPLATES = {
 
 ## 🚀 行动建议
 （读者可立即尝试的具体操作）
+""" + LEARNING_FOOTER + """
 
 ---
 【文章内容】：

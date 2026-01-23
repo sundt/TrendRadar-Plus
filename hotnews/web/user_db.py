@@ -251,6 +251,30 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_mp_subs_user ON wechat_mp_subscriptions(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_mp_subs_fakeid ON wechat_mp_subscriptions(fakeid)")
     
+    # ========== User Todos ==========
+    # 用户待办事项（从 AI 总结中收集）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_todos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            done INTEGER DEFAULT 0,
+            group_id TEXT NOT NULL,
+            group_title TEXT NOT NULL,
+            group_url TEXT DEFAULT '',
+            is_custom_group INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            UNIQUE(user_id, group_id, text)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_user ON user_todos(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_user_group ON user_todos(user_id, group_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_user_done ON user_todos(user_id, done)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_todos_created ON user_todos(user_id, created_at DESC)")
+    
     conn.commit()
     _user_db_conn = conn
     return conn

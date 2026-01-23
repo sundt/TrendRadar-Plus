@@ -201,7 +201,6 @@ function createNewsLi(n, idx, platformId, categoryId, platformName) {
     summaryBtn.dataset.url = String(n?.url || '');
     summaryBtn.dataset.sourceId = platformId;
     summaryBtn.dataset.sourceName = platformName || '';
-    summaryBtn.title = 'AI 智能总结';
     summaryBtn.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();

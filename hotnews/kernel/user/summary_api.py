@@ -66,6 +66,7 @@ def _ensure_favorites_table(conn):
             summary_at INTEGER,
             summary_model TEXT,
             article_type TEXT,
+            summary_tokens INTEGER DEFAULT 0,
             UNIQUE(user_id, news_id)
         )
     """)
@@ -78,6 +79,15 @@ def _ensure_favorites_table(conn):
     except Exception:
         try:
             conn.execute("ALTER TABLE user_favorites ADD COLUMN article_type TEXT")
+        except:
+            pass
+    
+    # Migration: add summary_tokens column
+    try:
+        conn.execute("SELECT summary_tokens FROM user_favorites LIMIT 1")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE user_favorites ADD COLUMN summary_tokens INTEGER DEFAULT 0")
         except:
             pass
     
@@ -281,14 +291,43 @@ async def generate_summary_stream(
     
     # Check if already summarized (return cached)
     cur = conn.execute(
-        "SELECT summary, article_type FROM user_favorites WHERE user_id = ? AND news_id = ?",
+        "SELECT summary, article_type, summary_tokens FROM user_favorites WHERE user_id = ? AND news_id = ?",
         (user["id"], news_id)
     )
     row = cur.fetchone()
     
     if row and row[0]:
         # Return cached summary as single SSE event with token info
-        token_info = _get_user_token_info(request, user["id"])
+        # Deduct tokens based on original token usage (or default 500 if not recorded)
+        cached_tokens = row[2] or 500  # Use stored tokens or default
+        
+        try:
+            user_conn = _get_user_db_conn(request)
+            cur = user_conn.execute(
+                "SELECT token_balance, tokens_used FROM users WHERE id = ?",
+                (user["id"],)
+            )
+            balance_row = cur.fetchone()
+            if balance_row:
+                current_balance = balance_row[0] or 100000
+                current_used = balance_row[1] or 0
+                new_tokens_used = current_used + cached_tokens
+                new_token_balance = max(0, current_balance - cached_tokens)
+                
+                user_conn.execute(
+                    "UPDATE users SET token_balance = ?, tokens_used = ? WHERE id = ?",
+                    (new_token_balance, new_tokens_used, user["id"])
+                )
+                user_conn.commit()
+                
+                token_info = {
+                    "token_balance": new_token_balance,
+                    "tokens_used": new_tokens_used
+                }
+            else:
+                token_info = _get_user_token_info(request, user["id"])
+        except Exception:
+            token_info = _get_user_token_info(request, user["id"])
         
         async def cached_stream():
             data = {
@@ -297,7 +336,7 @@ async def generate_summary_stream(
                 "article_type": row[1] or "other",
                 "article_type_name": get_type_name(row[1] or "other"),
                 "news_id": news_id,
-                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": cached_tokens},
                 "token_balance": token_info["token_balance"],
                 "tokens_used": token_info["tokens_used"]
             }
@@ -388,16 +427,17 @@ async def generate_summary_stream(
                 try:
                     conn.execute(
                         """
-                        INSERT INTO user_favorites (user_id, news_id, title, url, source_id, source_name, created_at, summary, summary_at, summary_model, article_type)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO user_favorites (user_id, news_id, title, url, source_id, source_name, created_at, summary, summary_at, summary_model, article_type, summary_tokens)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ON CONFLICT(user_id, news_id) DO UPDATE SET
                             title = excluded.title,
                             summary = excluded.summary,
                             summary_at = excluded.summary_at,
                             summary_model = excluded.summary_model,
-                            article_type = excluded.article_type
+                            article_type = excluded.article_type,
+                            summary_tokens = excluded.summary_tokens
                         """,
-                        (user["id"], news_id, title[:500], url[:2000], source_id, source_name, now, full_summary, now, model, article_type)
+                        (user["id"], news_id, title[:500], url[:2000], source_id, source_name, now, full_summary, now, model, article_type, total_tokens)
                     )
                     conn.commit()
                 except Exception as e:

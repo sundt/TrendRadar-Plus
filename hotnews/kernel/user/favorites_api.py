@@ -326,7 +326,7 @@ async def generate_favorite_summary(request: Request, news_id: str):
     """Generate AI summary for a favorited article."""
     import os
     from hotnews.kernel.services.article_summary import (
-        check_rate_limit, record_request, summarize_article
+        check_rate_limit, record_request, fetch_article_content, generate_smart_summary
     )
     
     user = _get_current_user(request)
@@ -370,8 +370,13 @@ async def generate_favorite_summary(request: Request, news_id: str):
     
     model = os.environ.get("DASHSCOPE_MODEL", "qwen-turbo")
     
-    # Generate summary
-    summary, error = await summarize_article(url, api_key, model)
+    # Fetch article content
+    content, error, _method = await fetch_article_content(url)
+    if error:
+        raise HTTPException(status_code=500, detail=error)
+    
+    # Generate smart summary (with classification)
+    summary, error, article_type = await generate_smart_summary(content, api_key, model)
     
     if error:
         raise HTTPException(status_code=500, detail=error)
@@ -393,6 +398,7 @@ async def generate_favorite_summary(request: Request, news_id: str):
         "cached": False,
         "summary_at": now,
         "model": model,
+        "article_type": article_type,
         "remaining": remaining - 1
     }
 
