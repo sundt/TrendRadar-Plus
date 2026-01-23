@@ -14,9 +14,23 @@ let wechatQRCountdownTimer = null;
 let wechatQRExpireSeconds = 300;
 
 /**
+ * Check if running in WeChat browser
+ */
+function isWeChatBrowser() {
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.indexOf('micromessenger') !== -1;
+}
+
+/**
  * Open the login modal
  */
 function openLoginModal() {
+    // If in WeChat browser, redirect to WeChat OAuth directly
+    if (isWeChatBrowser()) {
+        window.location.href = '/api/auth/oauth/wechat-mp';
+        return;
+    }
+    
     const modal = document.getElementById('loginModal');
     if (modal) {
         modal.style.display = 'flex';
