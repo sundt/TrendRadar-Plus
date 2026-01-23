@@ -224,23 +224,27 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
     fetch_error = None
     fetch_method = "error"
     
-    # Try direct fetch first
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
-            html = resp.text
-            fetch_method = "http"
-            logger.info(f"Direct fetch succeeded for {url}")
-    except httpx.HTTPStatusError as e:
-        fetch_error = f"网页请求失败: {e.response.status_code}"
-        logger.warning(f"Direct fetch failed ({e.response.status_code}): {url}")
-    except httpx.TimeoutException:
-        fetch_error = "网页请求超时"
-        logger.warning(f"Direct fetch timeout: {url}")
-    except Exception as e:
-        fetch_error = "网页无法访问"
-        logger.warning(f"Direct fetch error: {url} - {e}")
+    # WeChat articles need JS rendering, skip direct fetch
+    is_wechat = 'mp.weixin.qq.com' in url
+    
+    # Try direct fetch first (skip for WeChat)
+    if not is_wechat:
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers)
+                resp.raise_for_status()
+                html = resp.text
+                fetch_method = "http"
+                logger.info(f"Direct fetch succeeded for {url}")
+        except httpx.HTTPStatusError as e:
+            fetch_error = f"网页请求失败: {e.response.status_code}"
+            logger.warning(f"Direct fetch failed ({e.response.status_code}): {url}")
+        except httpx.TimeoutException:
+            fetch_error = "网页请求超时"
+            logger.warning(f"Direct fetch timeout: {url}")
+        except Exception as e:
+            fetch_error = "网页无法访问"
+            logger.warning(f"Direct fetch error: {url} - {e}")
     
     # If direct fetch failed, try Jina Reader first (free, good for Chinese sites)
     if html is None and use_proxy:
@@ -269,7 +273,7 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
                 # Check if site needs JS rendering
                 needs_render = any(domain in url for domain in [
                     'zhihu.com', 'weibo.com', 'douyin.com', 'xiaohongshu.com',
-                    'bilibili.com', 'toutiao.com'
+                    'bilibili.com', 'toutiao.com', 'mp.weixin.qq.com'
                 ])
                 render_param = 'true' if needs_render else 'false'
                 
