@@ -428,6 +428,10 @@ HOTNEWS_OAUTH_PROXY = os.environ.get("HOTNEWS_OAUTH_PROXY", "")
 WECHAT_APP_ID = os.environ.get("WECHAT_OAUTH_APP_ID", "")
 WECHAT_APP_SECRET = os.environ.get("WECHAT_OAUTH_APP_SECRET", "")
 
+# WeChat MP OAuth (微信服务号 - 网页授权)
+WECHAT_MP_APP_ID = os.environ.get("WECHAT_MP_APP_ID", "")
+WECHAT_MP_APP_SECRET = os.environ.get("WECHAT_MP_APP_SECRET", "")
+
 @router.get("/oauth/google")
 async def google_oauth_start(request: Request):
     """Start Google OAuth flow."""
@@ -612,6 +616,131 @@ async def wechat_oauth_callback(request: Request, code: str = "", state: str = "
         device_info=_get_device_info(request),
         ip_address=_get_client_ip(request),
     )
+    
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    
+    response = RedirectResponse(url=f"/?login={int(time.time())}")
+    _set_session_cookie(response, session_token, request)
+    return response
+
+
+# ==================== WeChat MP OAuth (服务号网页授权) ====================
+
+@router.get("/oauth/wechat-mp")
+async def wechat_mp_oauth_start(request: Request):
+    """
+    Start WeChat MP OAuth flow (微信服务号网页授权).
+    
+    适用于：
+    - 微信内打开网页时，用户点击授权按钮
+    - PC 端会显示二维码让用户扫码
+    
+    文档: https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/Wechat_webpage_authorization.html
+    """
+    from urllib.parse import quote
+    
+    if not WECHAT_MP_APP_ID:
+        raise HTTPException(status_code=501, detail="WeChat MP OAuth not configured")
+    
+    redirect_uri = _get_base_url(request) + "/api/auth/oauth/wechat-mp/callback"
+    encoded_redirect_uri = quote(redirect_uri, safe='')
+    
+    # 使用 snsapi_userinfo 获取用户信息（需要用户确认授权）
+    # snsapi_base 只能获取 openid，静默授权
+    oauth_url = (
+        f"https://open.weixin.qq.com/connect/oauth2/authorize"
+        f"?appid={WECHAT_MP_APP_ID}"
+        f"&redirect_uri={encoded_redirect_uri}"
+        f"&response_type=code"
+        f"&scope=snsapi_userinfo"
+        f"&state=STATE#wechat_redirect"
+    )
+    return RedirectResponse(url=oauth_url)
+
+
+@router.get("/oauth/wechat-mp/callback")
+async def wechat_mp_oauth_callback(request: Request, code: str = "", state: str = ""):
+    """Handle WeChat MP OAuth callback (服务号网页授权回调)."""
+    import httpx
+    from hotnews.kernel.auth.auth_service import oauth_login_or_register
+    
+    print(f"[AUTH] WeChat MP OAuth callback: code={code[:20] if code else 'NONE'}...")
+    
+    if not code or not WECHAT_MP_APP_ID or not WECHAT_MP_APP_SECRET:
+        print(f"[AUTH] WeChat MP OAuth validation failed: code={bool(code)}, app_id={bool(WECHAT_MP_APP_ID)}, secret={bool(WECHAT_MP_APP_SECRET)}")
+        raise HTTPException(status_code=400, detail="Invalid OAuth callback")
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # Step 1: Exchange code for access_token
+        # 文档: https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/Wechat_webpage_authorization.html#1
+        token_resp = await client.get(
+            "https://api.weixin.qq.com/sns/oauth2/access_token",
+            params={
+                "appid": WECHAT_MP_APP_ID,
+                "secret": WECHAT_MP_APP_SECRET,
+                "code": code,
+                "grant_type": "authorization_code",
+            },
+        )
+        token_data = token_resp.json()
+        
+        if "errcode" in token_data:
+            error_msg = token_data.get("errmsg", "Unknown error")
+            print(f"[AUTH] WeChat MP token error: {token_data}")
+            raise HTTPException(status_code=400, detail=f"WeChat MP auth failed: {error_msg}")
+        
+        access_token = token_data.get("access_token")
+        openid = token_data.get("openid")
+        unionid = token_data.get("unionid")  # 需要绑定开放平台才有
+        
+        print(f"[AUTH] WeChat MP token obtained: openid={openid}, unionid={unionid}")
+        
+        if not access_token or not openid:
+            raise HTTPException(status_code=400, detail="Failed to get WeChat MP access token")
+        
+        # Step 2: Get user info (snsapi_userinfo scope)
+        # 文档: https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/Wechat_webpage_authorization.html#3
+        user_resp = await client.get(
+            "https://api.weixin.qq.com/sns/userinfo",
+            params={
+                "access_token": access_token,
+                "openid": openid,
+                "lang": "zh_CN",
+            },
+        )
+        user_data = user_resp.json()
+        
+        if "errcode" in user_data:
+            error_msg = user_data.get("errmsg", "Unknown error")
+            print(f"[AUTH] WeChat MP userinfo error: {user_data}")
+            raise HTTPException(status_code=400, detail=f"Failed to get WeChat MP user info: {error_msg}")
+        
+        print(f"[AUTH] WeChat MP user info: nickname={user_data.get('nickname')}, headimgurl={user_data.get('headimgurl', '')[:50]}...")
+    
+    # 使用 unionid（如果有）或 openid 作为唯一标识
+    # 注意：服务号的 openid 和开放平台的 openid 不同，但 unionid 相同
+    auth_id = unionid if unionid else f"mp_{openid}"
+    
+    conn = _get_user_db_conn(request)
+    success, message, session_token, user_info = oauth_login_or_register(
+        conn,
+        auth_type="wechat_mp",  # 区分服务号和开放平台
+        auth_id=auth_id,
+        auth_data={
+            "access_token": access_token,
+            "openid": openid,
+            "unionid": unionid,
+            "source": "mp",  # 标记来源是服务号
+        },
+        email=None,  # 微信不提供邮箱
+        nickname=user_data.get("nickname"),
+        avatar_url=user_data.get("headimgurl"),
+        device_info=_get_device_info(request),
+        ip_address=_get_client_ip(request),
+    )
+    
+    print(f"[AUTH] WeChat MP oauth_login_or_register result: success={success}, message={message}")
     
     if not success:
         raise HTTPException(status_code=400, detail=message)

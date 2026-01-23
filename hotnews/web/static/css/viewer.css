@@ -3440,6 +3440,115 @@
     transform: translateY(-2px);
 }
 
+.login-oauth-btn.login-oauth-wechat {
+    background: #07c160;
+    border-color: #07c160;
+    color: white;
+}
+
+.login-oauth-btn.login-oauth-wechat:hover {
+    background: #06ae56;
+    border-color: #06ae56;
+}
+
+.login-oauth-btn.login-oauth-email {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: white;
+}
+
+.login-oauth-btn.login-oauth-email:hover {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+/* Apple-style login options grid */
+.login-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: 100%;
+}
+
+.login-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f5f5f7;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1d1d1f;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.login-option-btn:hover {
+    background: #e8e8ed;
+    transform: scale(1.02);
+}
+
+.login-option-btn:active {
+    transform: scale(0.98);
+}
+
+.login-option-btn svg {
+    flex-shrink: 0;
+}
+
+.login-option-btn span {
+    white-space: nowrap;
+}
+
+/* WeChat - subtle green */
+.login-option-wechat {
+    background: #f0fdf4;
+    color: #15803d;
+}
+
+.login-option-wechat:hover {
+    background: #dcfce7;
+}
+
+/* Email - subtle blue */
+.login-option-email {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.login-option-email:hover {
+    background: #dbeafe;
+}
+
+/* GitHub - subtle gray */
+.login-option-github {
+    background: #f5f5f7;
+    color: #1d1d1f;
+}
+
+.login-option-github:hover {
+    background: #e8e8ed;
+}
+
+/* Google - subtle gray */
+.login-option-google {
+    background: #f5f5f7;
+    color: #1d1d1f;
+}
+
+.login-option-google:hover {
+    background: #e8e8ed;
+}
+
+/* Email form container */
+.login-email-form {
+    width: 100%;
+}
+
 .login-message {
     padding: 12px 14px;
     border-radius: 10px;
@@ -3471,6 +3580,158 @@
     
     .login-modal-content {
         padding: 32px 24px 24px;
+    }
+}
+
+/* ========== WeChat QR Login Styles ========== */
+.login-qr-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.login-qr-container {
+    width: 180px;
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fafafa;
+    border-radius: 12px;
+    border: 1px solid #e5e5e5;
+    overflow: hidden;
+    position: relative;
+}
+
+.login-qr-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #86868b;
+    font-size: 13px;
+}
+
+.login-qr-spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid #e5e5e5;
+    border-top-color: #07c160;
+    border-radius: 50%;
+    animation: qrSpin 0.8s linear infinite;
+}
+
+@keyframes qrSpin {
+    to { transform: rotate(360deg); }
+}
+
+.login-qr-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 8px;
+}
+
+.login-qr-expired {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: #86868b;
+    font-size: 13px;
+    text-align: center;
+    padding: 16px;
+}
+
+.login-qr-expired svg {
+    color: #d1d1d6;
+}
+
+.login-qr-refresh-btn {
+    margin-top: 4px;
+    padding: 6px 14px;
+    background: #07c160;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.login-qr-refresh-btn:hover {
+    background: #06ae56;
+}
+
+.login-qr-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    color: #86868b;
+    font-size: 13px;
+}
+
+.login-qr-countdown {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #86868b;
+}
+
+.login-qr-countdown.warning {
+    color: #ff9500;
+}
+
+/* Other login options - horizontal row */
+.login-options-other {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.login-options-other .login-option-btn {
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    font-size: 13px;
+}
+
+/* Divider style */
+.login-divider {
+    display: flex;
+    align-items: center;
+    margin: 16px 0;
+    color: #86868b;
+    font-size: 12px;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: #e5e5e5;
+}
+
+.login-divider span {
+    padding: 0 12px;
+}
+
+/* Mobile responsive for QR login */
+@media (max-width: 480px) {
+    .login-qr-container {
+        width: 160px;
+        height: 160px;
+    }
+    
+    .login-options-other {
+        flex-wrap: wrap;
+    }
+    
+    .login-options-other .login-option-btn {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 0;
     }
 }
 

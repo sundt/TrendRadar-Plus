@@ -70,6 +70,8 @@ _tag_candidate_admin_router = None
 _user_stats_admin_router = None
 _wechat_admin_router = None
 _payment_router = None
+_wechat_mp_callback_router = None
+_wechat_qr_login_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
 
@@ -132,6 +134,12 @@ try:
     
     from hotnews.kernel.admin import user_stats_admin
     _user_stats_admin_router = user_stats_admin.router
+    
+    from hotnews.kernel.auth import wechat_mp_callback
+    _wechat_mp_callback_router = wechat_mp_callback.router
+    
+    from hotnews.kernel.auth import wechat_qr_login_api
+    _wechat_qr_login_router = wechat_qr_login_api.router
     
     from hotnews.kernel.scheduler import rss_scheduler
     from hotnews.kernel.scheduler import auto_fetch_scheduler
@@ -483,6 +491,8 @@ if _tag_candidate_admin_router:
     from hotnews.kernel.admin.tag_candidate_admin import evolution_router
     app.include_router(evolution_router)
 if _user_stats_admin_router: app.include_router(_user_stats_admin_router)
+if _wechat_mp_callback_router: app.include_router(_wechat_mp_callback_router)
+if _wechat_qr_login_router: app.include_router(_wechat_qr_login_router)
 
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"

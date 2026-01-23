@@ -1,11 +1,17 @@
 /**
  * Login Modal Module
- * Handles the login modal popup functionality
+ * Handles the login modal popup functionality with WeChat QR code login
  */
 
 let loginCurrentEmail = '';
 let loginResendCountdown = 0;
 let loginCountdownTimer = null;
+
+// WeChat QR Login state
+let wechatQRSessionId = null;
+let wechatQRPollingTimer = null;
+let wechatQRCountdownTimer = null;
+let wechatQRExpireSeconds = 300;
 
 /**
  * Open the login modal
@@ -14,13 +20,11 @@ function openLoginModal() {
     const modal = document.getElementById('loginModal');
     if (modal) {
         modal.style.display = 'flex';
-        // Reset to step 1
+        // Reset to main view
+        loginHideEmailForm();
         loginGoToStep(1);
-        // Focus email input
-        setTimeout(() => {
-            const emailInput = document.getElementById('login-email');
-            if (emailInput) emailInput.focus();
-        }, 100);
+        // Load WeChat QR code
+        loadWechatQR();
     }
 }
 
@@ -37,12 +41,245 @@ function closeLoginModal() {
         clearInterval(loginCountdownTimer);
         loginCountdownTimer = null;
     }
+    // Stop WeChat QR polling
+    stopWechatQRPolling();
     // Reset form
     loginHideMessage();
+    loginHideEmailForm();
     const emailInput = document.getElementById('login-email');
     const codeInput = document.getElementById('login-code');
     if (emailInput) emailInput.value = '';
     if (codeInput) codeInput.value = '';
+}
+
+/**
+ * Load WeChat QR code for login
+ */
+async function loadWechatQR() {
+    const loading = document.getElementById('login-qr-loading');
+    const image = document.getElementById('login-qr-image');
+    const expired = document.getElementById('login-qr-expired');
+    const countdown = document.getElementById('login-qr-countdown');
+    
+    // Show loading state
+    if (loading) loading.style.display = 'flex';
+    if (image) image.style.display = 'none';
+    if (expired) expired.style.display = 'none';
+    if (countdown) countdown.style.display = 'none';
+    
+    // Stop any existing polling
+    stopWechatQRPolling();
+    
+    try {
+        const resp = await fetch('/api/auth/wechat-qr/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await resp.json();
+        
+        if (data.ok && data.qr_url) {
+            wechatQRSessionId = data.session_id;
+            wechatQRExpireSeconds = data.expire_seconds || 300;
+            
+            // Show QR code
+            if (image) {
+                image.src = data.qr_url;
+                image.onload = () => {
+                    if (loading) loading.style.display = 'none';
+                    image.style.display = 'block';
+                };
+                image.onerror = () => {
+                    if (loading) loading.style.display = 'none';
+                    if (expired) {
+                        expired.style.display = 'flex';
+                        expired.querySelector('span').textContent = '加载失败';
+                    }
+                };
+            }
+            
+            // Start countdown
+            startWechatQRCountdown(wechatQRExpireSeconds);
+            
+            // Start polling for login status
+            startWechatQRPolling();
+        } else {
+            // Show error
+            if (loading) loading.style.display = 'none';
+            if (expired) {
+                expired.style.display = 'flex';
+                expired.querySelector('span').textContent = data.message || '加载失败';
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load WeChat QR:', err);
+        if (loading) loading.style.display = 'none';
+        if (expired) {
+            expired.style.display = 'flex';
+            expired.querySelector('span').textContent = '网络错误';
+        }
+    }
+}
+
+/**
+ * Refresh WeChat QR code
+ */
+function refreshWechatQR() {
+    loadWechatQR();
+}
+
+/**
+ * Start countdown for QR code expiration
+ */
+function startWechatQRCountdown(seconds) {
+    const countdown = document.getElementById('login-qr-countdown');
+    const countdownText = document.getElementById('login-qr-countdown-text');
+    
+    if (!countdown || !countdownText) return;
+    
+    let remaining = seconds;
+    countdown.style.display = 'block';
+    
+    const updateCountdown = () => {
+        const mins = Math.floor(remaining / 60);
+        const secs = remaining % 60;
+        countdownText.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        
+        // Warning color when < 60 seconds
+        if (remaining < 60) {
+            countdown.classList.add('warning');
+        } else {
+            countdown.classList.remove('warning');
+        }
+    };
+    
+    updateCountdown();
+    
+    wechatQRCountdownTimer = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+            clearInterval(wechatQRCountdownTimer);
+            wechatQRCountdownTimer = null;
+            showWechatQRExpired();
+        } else {
+            updateCountdown();
+        }
+    }, 1000);
+}
+
+/**
+ * Show QR code expired state
+ */
+function showWechatQRExpired() {
+    const image = document.getElementById('login-qr-image');
+    const expired = document.getElementById('login-qr-expired');
+    const countdown = document.getElementById('login-qr-countdown');
+    
+    if (image) image.style.display = 'none';
+    if (expired) {
+        expired.style.display = 'flex';
+        expired.querySelector('span').textContent = '二维码已过期';
+    }
+    if (countdown) countdown.style.display = 'none';
+    
+    stopWechatQRPolling();
+}
+
+/**
+ * Start polling for WeChat QR login status
+ */
+function startWechatQRPolling() {
+    if (!wechatQRSessionId) return;
+    
+    const poll = async () => {
+        try {
+            const resp = await fetch(`/api/auth/wechat-qr/status?session_id=${encodeURIComponent(wechatQRSessionId)}`);
+            const data = await resp.json();
+            
+            if (data.status === 'confirmed' && data.session_token) {
+                // Login successful! Set cookie and reload
+                stopWechatQRPolling();
+                loginShowMessage('登录成功', 'success');
+                
+                // Call confirm-cookie endpoint to set the session cookie
+                try {
+                    await fetch(`/api/auth/wechat-qr/confirm-cookie?session_id=${encodeURIComponent(wechatQRSessionId)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                } catch (e) {
+                    console.error('Failed to set cookie:', e);
+                }
+                
+                setTimeout(() => {
+                    closeLoginModal();
+                    window.location.reload();
+                }, 500);
+                return;
+            } else if (data.status === 'scanned') {
+                // User scanned, waiting for confirmation
+                loginShowMessage('已扫码，请在手机上确认', 'success');
+            } else if (data.status === 'expired') {
+                showWechatQRExpired();
+                return;
+            }
+            // Continue polling
+        } catch (err) {
+            console.error('Polling error:', err);
+        }
+    };
+    
+    // Poll every 2 seconds
+    wechatQRPollingTimer = setInterval(poll, 2000);
+    // Also poll immediately
+    poll();
+}
+
+/**
+ * Stop WeChat QR polling
+ */
+function stopWechatQRPolling() {
+    if (wechatQRPollingTimer) {
+        clearInterval(wechatQRPollingTimer);
+        wechatQRPollingTimer = null;
+    }
+    if (wechatQRCountdownTimer) {
+        clearInterval(wechatQRCountdownTimer);
+        wechatQRCountdownTimer = null;
+    }
+    wechatQRSessionId = null;
+}
+
+/**
+ * Show email login form
+ */
+function loginShowEmailForm() {
+    const mainView = document.getElementById('login-main');
+    const emailForm = document.getElementById('login-email-form');
+    if (mainView) mainView.style.display = 'none';
+    if (emailForm) emailForm.style.display = 'block';
+    // Stop QR polling when switching to email
+    stopWechatQRPolling();
+    // Focus email input
+    setTimeout(() => {
+        const emailInput = document.getElementById('login-email');
+        if (emailInput) emailInput.focus();
+    }, 100);
+}
+
+/**
+ * Hide email login form and show main view
+ */
+function loginHideEmailForm() {
+    const mainView = document.getElementById('login-main');
+    const emailForm = document.getElementById('login-email-form');
+    if (mainView) mainView.style.display = 'block';
+    if (emailForm) emailForm.style.display = 'none';
+    // Reset to step 1
+    loginGoToStep(1);
+    loginHideMessage();
+    // Reload QR code when going back
+    loadWechatQR();
 }
 
 /**
@@ -91,7 +328,7 @@ function loginGoToStep(step) {
 }
 
 /**
- * Go back to step 1
+ * Go back to step 1 (within email form)
  */
 function loginGoBack() {
     loginGoToStep(1);
@@ -285,6 +522,9 @@ window.loginResendCode = loginResendCode;
 window.loginGoBack = loginGoBack;
 window.loginGoToStep = loginGoToStep;
 window.loginShowMessage = loginShowMessage;
+window.loginShowEmailForm = loginShowEmailForm;
+window.loginHideEmailForm = loginHideEmailForm;
+window.refreshWechatQR = refreshWechatQR;
 
 export {
     openLoginModal,
@@ -295,5 +535,8 @@ export {
     loginResendCode,
     loginGoBack,
     loginGoToStep,
-    loginShowMessage
+    loginShowMessage,
+    loginShowEmailForm,
+    loginHideEmailForm,
+    refreshWechatQR
 };
