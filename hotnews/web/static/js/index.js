@@ -259,15 +259,15 @@ import{a as k}from"./chunk-R33N4FES.js";import{a as c,b as A,c as S,d as Nt,e as
             </a>
         </div>
     `}function Rr(e){e.innerHTML=`
-        <div class="platform-card" style="min-height:calc(100vh - 200px);display:flex;align-items:flex-start;justify-content:center;padding-top:15vh;">
-            <div style="text-align:center;padding:40px 20px;">
-                <div style="font-size:64px;margin-bottom:20px;">\u{1F512}</div>
-                <div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">\u8BF7\u5148\u767B\u5F55</div>
-                <div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">
+        <div class="platform-card" style="min-height:500px;">
+            <div style="text-align:center;padding:80px 20px 40px;">
+                <div style="font-size:56px;margin-bottom:16px;">\u{1F512}</div>
+                <div style="font-size:17px;color:#374151;margin-bottom:10px;font-weight:600;">\u8BF7\u5148\u767B\u5F55</div>
+                <div style="font-size:13px;color:#6b7280;margin-bottom:20px;line-height:1.5;">
                     \u767B\u5F55\u540E\u5373\u53EF\u67E5\u770B\u60A8\u5173\u6CE8\u7684\u6807\u7B7E\u65B0\u95FB
                 </div>
                 <button onclick="openLoginModal()" 
-                   style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;transition:transform 0.2s;"
+                   style="display:inline-block;padding:10px 22px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;font-size:14px;transition:transform 0.2s;"
                    onmouseover="this.style.transform='scale(1.05)'"
                    onmouseout="this.style.transform='scale(1)'">
                     \u7ACB\u5373\u767B\u5F55
