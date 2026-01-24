@@ -526,6 +526,10 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     
     # Migration: add fetch_method column if not exists
     _ensure_column("article_summaries", "fetch_method", "TEXT DEFAULT ''")
+    
+    # Migration: add tag columns for quality assessment and category tags
+    _ensure_column("article_summaries", "quality_tag", "TEXT DEFAULT ''")
+    _ensure_column("article_summaries", "category_tags", "TEXT DEFAULT '[]'")
 
     # ========== Payment Tables ==========
     # Initialize payment tables for WeChat Pay Token recharge

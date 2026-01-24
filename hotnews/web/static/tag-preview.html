@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文章标签样式预览 v2</title>
+    <style>
+        :root {
+            --primary-color: #4f46e5;
+            --secondary-color: #7c3aed;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        h1 { color: white; text-align: center; margin-bottom: 16px; font-size: 1.4rem; }
+        
+        .style-selector {
+            display: flex; gap: 8px; justify-content: center;
+            margin-bottom: 16px; flex-wrap: wrap;
+        }
+        
+        .style-btn {
+            padding: 8px 14px; border: none; border-radius: 20px;
+            background: white; cursor: pointer; font-size: 13px; transition: all 0.2s;
+        }
+        .style-btn.active { background: #4f46e5; color: white; }
+
+        .tab-content-area {
+            background: white; border-radius: 10px;
+            padding: 10px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .platform-grid {
+            display: flex; flex-wrap: nowrap; gap: 10px;
+            overflow-x: auto; padding-bottom: 8px;
+        }
+        
+        .platform-card {
+            background: #f9fafb; border-radius: 12px; padding: 10px;
+            flex: 0 0 calc((100% - 20px) / 3); width: calc((100% - 20px) / 3);
+            min-width: 280px; border: 1px solid #e5e7eb;
+            display: flex; flex-direction: column; max-height: 500px;
+        }
+        
+        .platform-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px;
+        }
+        .platform-name { font-size: 0.9rem; font-weight: 600; color: #374151; }
+        
+        .news-list { list-style: none; flex: 1; overflow-y: auto; }
+        
+        .news-item {
+            padding: 8px 0; border-bottom: 1px solid #f3f4f6;
+            font-size: 0.8rem; position: relative;
+        }
+        .news-item:last-child { border-bottom: none; }
+        .news-item-content { display: flex; align-items: flex-start; }
+        
+        .news-index {
+            width: 18px; flex-shrink: 0; text-align: right;
+            color: #9ca3af; font-size: 0.75rem; line-height: 1.4;
+            margin-top: 1px; margin-right: 6px;
+        }
+
+        .news-title {
+            font-size: 0.9rem; color: #1f2937; line-height: 1.45;
+            flex: 1; min-width: 0; text-decoration: none;
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .news-title:hover { color: var(--primary-color); }
+        
+        .tr-news-date {
+            flex-shrink: 0; color: #9ca3af; font-size: 12px;
+            white-space: nowrap; margin-left: 8px; transition: opacity 0.15s ease;
+        }
+        
+        .news-summary-btn {
+            position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 3px 10px; background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+            color: white; border: none; border-radius: 100px;
+            font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap;
+            opacity: 0; pointer-events: none; transition: opacity 0.15s ease;
+        }
+        .news-summary-btn.has-summary { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); }
+        
+        @media (hover: hover) {
+            .news-item:hover .tr-news-date { opacity: 0; }
+            .news-item:hover .news-summary-btn { opacity: 1; pointer-events: auto; }
+        }
+        .news-item.expanded .tr-news-date { opacity: 0; }
+        .news-item.expanded .news-summary-btn { opacity: 1; pointer-events: auto; }
+        .news-item.has-summary .news-index { color: #22c55e; font-weight: 600; }
+
+        /* 样式 C: 标题后缀标签（悬停显示）*/
+        .tag-suffix {
+            display: inline; margin-left: 4px; font-size: 10px; font-weight: 500;
+            padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+            opacity: 0; transition: opacity 0.15s ease;
+        }
+        @media (hover: hover) { .news-item:hover .tag-suffix { opacity: 1; } }
+        .news-item.expanded .tag-suffix { opacity: 1; }
+        
+        /* 质量评估标签颜色 - 负面 */
+        .tag-suffix.suffix-ad { background: #fef2f2; color: #dc2626; }
+        .tag-suffix.suffix-sponsored { background: #fef2f2; color: #dc2626; }
+        .tag-suffix.suffix-clickbait { background: #fff7ed; color: #ea580c; }
+        .tag-suffix.suffix-pr { background: #fff7ed; color: #ea580c; }
+        .tag-suffix.suffix-outdated { background: #f3f4f6; color: #6b7280; }
+        .tag-suffix.suffix-low_quality { background: #f3f4f6; color: #6b7280; }
+        /* 质量评估标签颜色 - 正面 */
+        .tag-suffix.suffix-gem { background: #f0fdf4; color: #16a34a; }
+        .tag-suffix.suffix-breaking { background: #eff6ff; color: #2563eb; }
+        .tag-suffix.suffix-exclusive { background: #faf5ff; color: #9333ea; }
+        .tag-suffix.suffix-practical { background: #ecfeff; color: #0891b2; }
+        /* 内容分类标签 - 淡灰色 */
+        .tag-suffix.tag-category { background: #f3f4f6; color: #6b7280; }
+
+        /* 图例 */
+        .legend {
+            background: white; border-radius: 12px; padding: 16px; margin-top: 16px;
+        }
+        .legend h3 { font-size: 14px; color: #374151; margin-bottom: 12px; }
+        .legend-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6b7280; }
+        .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+        
+        .note {
+            background: rgba(255,255,255,0.9); border-radius: 8px;
+            padding: 12px; margin-top: 12px; font-size: 13px; color: #374151;
+        }
+        
+        @media (max-width: 900px) { .platform-card { flex: 0 0 calc(50% - 5px); width: calc(50% - 5px); } }
+        @media (max-width: 640px) { .platform-card { flex: 0 0 100%; width: 100%; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📌 文章标签样式预览 v2</h1>
+        <div class="style-selector">
+            <button class="style-btn active" onclick="setStyle('c')">标题后缀（悬停显示）⭐</button>
+        </div>
+        <div class="tab-content-area">
+            <div class="platform-grid" id="previewGrid"></div>
+        </div>
+        
+        <div class="legend">
+            <h3>🔴 负面标签（警示类）</h3>
+            <div class="legend-grid">
+                <div class="legend-item"><span class="legend-dot" style="background:#ef4444"></span><span>广告</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#dc2626"></span><span>软文</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#f97316"></span><span>标题党</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#ea580c"></span><span>公关稿</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#9ca3af"></span><span>过时</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#6b7280"></span><span>水文</span></div>
+            </div>
+            <h3 style="margin-top: 12px;">🟢 正面标签（推荐类）</h3>
+            <div class="legend-grid">
+                <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span><span>精华</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span><span>突发</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#a855f7"></span><span>独家</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#06b6d4"></span><span>实用</span></div>
+            </div>
+            <h3 style="margin-top: 12px;">📂 内容分类标签（淡色）</h3>
+            <div class="legend-grid">
+                <div class="legend-item"><span class="legend-dot" style="background:#9ca3af"></span><span>AI / 科技 / 教程 / 工具 / 深度 / 商业 ...</span></div>
+            </div>
+        </div>
+        
+        <div class="note">
+            <strong>💡 交互说明：</strong> 鼠标悬停在新闻条目上查看标签效果，移动端点击标题展开
+        </div>
+    </div>
+
+    <script>
+        // 质量评估标签（10 个）
+        const qualityLabels = {
+            // 负面
+            ad: '广告', sponsored: '软文', clickbait: '标题党',
+            pr: '公关稿', outdated: '过时', low_quality: '水文',
+            // 正面
+            gem: '精华', breaking: '突发', exclusive: '独家', practical: '实用'
+        };
+        
+        // 内容分类标签
+        const categoryLabels = {
+            tech: '科技', ai_ml: 'AI', tutorial: '教程', tool_rec: '工具',
+            dev_tools: '开发', deep_dive: '深度', programming: '编程',
+            business: '商业', finance: '财经', hardware: '硬件',
+            mobile: '移动', lifestyle: '生活', career: '职场'
+        };
+
+        // 模拟新闻数据
+        const platforms = [
+            {
+                name: '36氪', icon: '📱',
+                news: [
+                    { title: 'OpenAI 正式发布 GPT-5：多模态能力大幅提升，推理速度提高 10 倍', date: '01-24', quality: 'breaking', category: ['ai_ml', 'tech'], hasSummary: true },
+                    { title: '手把手教你用 Claude 搭建企业级 AI 助手：从零开始的完整指南', date: '01-24', quality: 'practical', category: ['tutorial', 'ai_ml'], hasSummary: true },
+                    { title: '某品牌新款旗舰手机深度体验：这可能是今年最值得购买的安卓机', date: '01-24', quality: 'sponsored', category: ['mobile', 'hardware'], hasSummary: true },
+                    { title: '苹果 WWDC 2026 将于 6 月举办，iOS 20 有望带来重大更新', date: '01-23', quality: null, category: [], hasSummary: false },
+                    { title: '震惊！学会这个方法，普通人也能月入过万，99% 的人都不知道', date: '01-23', quality: 'clickbait', category: ['career'], hasSummary: true },
+                    { title: 'GitHub Copilot 免费版正式上线：个人开发者福音', date: '01-23', quality: 'gem', category: ['tool_rec', 'dev_tools'], hasSummary: true },
+                    { title: '特斯拉 Q4 财报超预期，股价大涨 8%', date: '01-22', quality: 'pr', category: ['business'], hasSummary: false },
+                    { title: '2026 年最值得学习的 10 个编程语言：Python 依然稳居榜首', date: '01-22', quality: 'outdated', category: ['programming'], hasSummary: true },
+                ]
+            },
+            {
+                name: '虎嗅', icon: '🐯',
+                news: [
+                    { title: '字节跳动内部信曝光：2026 年将全面押注 AI，短视频业务或迎来重大调整', date: '01-24', quality: 'exclusive', category: ['business', 'ai_ml'], hasSummary: true },
+                    { title: '为什么说这款智能音箱是年度最佳？我们深度体验了一个月后有了答案', date: '01-24', quality: 'ad', category: ['hardware'], hasSummary: true },
+                    { title: '深度解析：大模型的下一个突破点在哪里？业内专家给出了这些预测', date: '01-24', quality: 'gem', category: ['ai_ml', 'deep_dive'], hasSummary: true },
+                    { title: '阿里云宣布核心产品降价 50%，云计算价格战全面升级', date: '01-23', quality: null, category: [], hasSummary: false },
+                    { title: '不看后悔一辈子！这个效率技巧能让你的工作效率翻倍，亲测有效', date: '01-23', quality: 'clickbait', category: ['career'], hasSummary: true },
+                    { title: '腾讯发布新一代混元大模型，性能对标 GPT-4', date: '01-23', quality: 'pr', category: ['ai_ml'], hasSummary: false },
+                    { title: 'Notion AI 完全使用指南：从入门到精通', date: '01-22', quality: 'practical', category: ['tutorial', 'tool_rec'], hasSummary: true },
+                    { title: '这篇文章内容很水，基本是东拼西凑的', date: '01-22', quality: 'low_quality', category: [], hasSummary: true },
+                ]
+            },
+            {
+                name: '少数派', icon: '🎯',
+                news: [
+                    { title: 'Arc 浏览器深度评测：它真的能重新定义我们的浏览体验吗？', date: '01-24', quality: 'gem', category: ['tool_rec', 'deep_dive'], hasSummary: true },
+                    { title: '我的 2026 数字生活工具箱：这 20 个 App 让我的效率提升了 300%', date: '01-24', quality: null, category: ['tool_rec', 'lifestyle'], hasSummary: true },
+                    { title: 'Raycast 插件开发入门教程：零基础也能打造专属效率工具', date: '01-24', quality: 'practical', category: ['tutorial', 'dev_tools'], hasSummary: true },
+                    { title: 'macOS Sequoia 隐藏功能大揭秘：这些实用技巧你可能还不知道', date: '01-23', quality: null, category: [], hasSummary: false },
+                    { title: '这款 App 彻底改变了我的工作方式，强烈推荐给每一个知识工作者', date: '01-23', quality: 'sponsored', category: ['tool_rec'], hasSummary: true },
+                    { title: 'Obsidian 插件推荐：这 10 个插件让你的笔记效率提升 10 倍', date: '01-23', quality: null, category: ['tool_rec', 'tutorial'], hasSummary: true },
+                    { title: 'iPhone 摄影进阶技巧：如何用手机拍出电影感画面', date: '01-22', quality: 'practical', category: ['tutorial', 'mobile'], hasSummary: true },
+                    { title: '年度最佳中文播客推荐：这 15 档节目值得你订阅', date: '01-22', quality: null, category: [], hasSummary: false },
+                ]
+            }
+        ];
+        
+        function renderCards() {
+            const grid = document.getElementById('previewGrid');
+            grid.innerHTML = platforms.map(platform => `
+                <div class="platform-card">
+                    <div class="platform-header">
+                        <div class="platform-name">${platform.icon} ${platform.name}</div>
+                    </div>
+                    <ul class="news-list">
+                        ${platform.news.map((news, idx) => {
+                            let suffixHtml = '';
+                            if (news.quality) {
+                                suffixHtml += `<span class="tag-suffix suffix-${news.quality}">${qualityLabels[news.quality]}</span>`;
+                            }
+                            if (news.category && news.category.length > 0) {
+                                suffixHtml += news.category.slice(0, 2).map(t => 
+                                    `<span class="tag-suffix tag-category">${categoryLabels[t] || t}</span>`
+                                ).join('');
+                            }
+                            
+                            return `
+                            <li class="news-item ${news.hasSummary ? 'has-summary' : ''}" onclick="toggleExpand(this)">
+                                <div class="news-item-content">
+                                    <span class="news-index">${idx + 1}</span>
+                                    <a class="news-title" href="#">${news.title}${suffixHtml}</a>
+                                    <span class="tr-news-date">${news.date}</span>
+                                    <button class="news-summary-btn ${news.hasSummary ? 'has-summary' : ''}">${news.hasSummary ? 'AI ✓' : 'AI ✨'}</button>
+                                </div>
+                            </li>
+                        `}).join('')}
+                    </ul>
+                </div>
+            `).join('');
+        }
+        
+        function setStyle(style) {
+            document.querySelectorAll('.style-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+        
+        function toggleExpand(item) {
+            if (window.innerWidth <= 640) {
+                document.querySelectorAll('.news-item.expanded').forEach(el => {
+                    if (el !== item) el.classList.remove('expanded');
+                });
+                item.classList.toggle('expanded');
+            }
+        }
+        
+        renderCards();
+    </script>
+</body>
+</html>

@@ -94,10 +94,11 @@ def _ensure_favorites_table(conn):
     conn.commit()
 
 
-def _save_to_global_cache(request: Request, url: str, title: str, summary: str, article_type: str, model: str, user_id: int, token_usage: dict = None, fetch_method: str = ""):
+def _save_to_global_cache(request: Request, url: str, title: str, summary: str, article_type: str, model: str, user_id: int, token_usage: dict = None, fetch_method: str = "", quality_tag: str = "", category_tags: list = None):
     """Save summary to global cache for sharing across users."""
     try:
         from hotnews.web.db_online import get_online_db_conn
+        import json
         
         url_hash = hashlib.md5(url.encode()).hexdigest()
         now = _now_ts()
@@ -108,15 +109,20 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
         completion_tokens = token_usage.get("completion_tokens", 0) if token_usage else 0
         total_tokens = token_usage.get("total_tokens", 0) if token_usage else 0
         
+        # Serialize category_tags to JSON
+        category_tags_json = json.dumps(category_tags or [], ensure_ascii=False)
+        
         online_conn.execute(
             """
-            INSERT INTO article_summaries (url_hash, url, title, summary, article_type, model, created_at, created_by, hit_count, updated_at, prompt_tokens, completion_tokens, total_tokens, fetch_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+            INSERT INTO article_summaries (url_hash, url, title, summary, article_type, model, created_at, created_by, hit_count, updated_at, prompt_tokens, completion_tokens, total_tokens, fetch_method, quality_tag, category_tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url_hash) DO UPDATE SET
                 hit_count = hit_count + 1,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                quality_tag = excluded.quality_tag,
+                category_tags = excluded.category_tags
             """,
-            (url_hash, url[:2000], title[:500], summary, article_type, model, now, user_id, now, prompt_tokens, completion_tokens, total_tokens, fetch_method or "")
+            (url_hash, url[:2000], title[:500], summary, article_type, model, now, user_id, now, prompt_tokens, completion_tokens, total_tokens, fetch_method or "", quality_tag or "", category_tags_json)
         )
         online_conn.commit()
     except Exception as e:
@@ -440,18 +446,27 @@ async def generate_summary_stream(
                 # Save to global cache
                 _save_to_global_cache(request, url, title, full_summary, article_type, model, user["id"], token_usage, fetch_method)
                 
-                # Silently update entry tags from summary
+                # Extract and save tags from summary
+                quality_tag = ""
+                category_tags = []
                 try:
                     from hotnews.kernel.services.article_summary import extract_tags_from_summary, update_entry_tags_from_summary
                     from hotnews.web.db_online import get_online_db_conn
                     
                     tags = extract_tags_from_summary(full_summary)
-                    if tags:
+                    quality_tag = tags.get('quality') or ""
+                    category_tags = tags.get('category') or []
+                    
+                    # Update global cache with tags
+                    _save_to_global_cache(request, url, title, full_summary, article_type, model, user["id"], token_usage, fetch_method, quality_tag, category_tags)
+                    
+                    # Also update rss_entry_tags for "我的关注" feature (category tags only)
+                    if category_tags:
                         online_conn = get_online_db_conn(request.app.state.project_root)
-                        update_entry_tags_from_summary(online_conn, url, tags)
+                        update_entry_tags_from_summary(online_conn, url, {'category': category_tags})
                 except Exception as e:
                     import logging
-                    logging.debug(f"Tag update skipped: {e}")
+                    logging.debug(f"Tag extraction/update skipped: {e}")
                 
                 # Return done with token info
                 done_data = {
@@ -523,3 +538,141 @@ async def get_user_tokens(request: Request):
         "ok": True,
         **token_info
     }
+
+
+@router.get("/tags")
+async def get_article_tags(request: Request, urls: str = ""):
+    """
+    Get tags for articles by URLs (batch query).
+    
+    Query params:
+        urls: Comma-separated list of article URLs
+    
+    Returns:
+        {
+            "ok": true,
+            "tags": {
+                "url1": {"quality": "gem", "category": ["ai_ml", "tutorial"]},
+                "url2": {"quality": null, "category": ["finance"]},
+                ...
+            }
+        }
+    
+    Note: Only summarized articles have tags.
+    """
+    import json as json_module
+    
+    if not urls:
+        return {"ok": True, "tags": {}}
+    
+    url_list = [u.strip() for u in urls.split(",") if u.strip()]
+    if not url_list:
+        return {"ok": True, "tags": {}}
+    
+    # Limit to 50 URLs per request
+    url_list = url_list[:50]
+    
+    try:
+        from hotnews.web.db_online import get_online_db_conn
+        
+        online_conn = get_online_db_conn(request.app.state.project_root)
+        
+        # Build query with placeholders
+        placeholders = ",".join(["?"] * len(url_list))
+        cur = online_conn.execute(
+            f"""
+            SELECT url, quality_tag, category_tags
+            FROM article_summaries
+            WHERE url IN ({placeholders})
+            """,
+            tuple(url_list)
+        )
+        rows = cur.fetchall() or []
+        
+        result = {}
+        for row in rows:
+            url = row[0]
+            quality_tag = row[1] or None
+            category_tags_raw = row[2] or "[]"
+            
+            try:
+                category_tags = json_module.loads(category_tags_raw)
+            except:
+                category_tags = []
+            
+            result[url] = {
+                "quality": quality_tag if quality_tag else None,
+                "category": category_tags
+            }
+        
+        return {"ok": True, "tags": result}
+        
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to get article tags: {e}")
+        return {"ok": False, "error": str(e), "tags": {}}
+
+
+@router.get("/tags/by-hash")
+async def get_article_tags_by_hash(request: Request, hashes: str = ""):
+    """
+    Get tags for articles by URL hashes (batch query).
+    More efficient than URL-based query for frontend.
+    
+    Query params:
+        hashes: Comma-separated list of URL MD5 hashes
+    
+    Returns same format as /tags endpoint.
+    """
+    import json as json_module
+    
+    if not hashes:
+        return {"ok": True, "tags": {}}
+    
+    hash_list = [h.strip() for h in hashes.split(",") if h.strip()]
+    if not hash_list:
+        return {"ok": True, "tags": {}}
+    
+    # Limit to 100 hashes per request
+    hash_list = hash_list[:100]
+    
+    try:
+        from hotnews.web.db_online import get_online_db_conn
+        
+        online_conn = get_online_db_conn(request.app.state.project_root)
+        
+        placeholders = ",".join(["?"] * len(hash_list))
+        cur = online_conn.execute(
+            f"""
+            SELECT url_hash, url, quality_tag, category_tags
+            FROM article_summaries
+            WHERE url_hash IN ({placeholders})
+            """,
+            tuple(hash_list)
+        )
+        rows = cur.fetchall() or []
+        
+        result = {}
+        for row in rows:
+            url_hash = row[0]
+            url = row[1]
+            quality_tag = row[2] or None
+            category_tags_raw = row[3] or "[]"
+            
+            try:
+                category_tags = json_module.loads(category_tags_raw)
+            except:
+                category_tags = []
+            
+            result[url_hash] = {
+                "url": url,
+                "quality": quality_tag if quality_tag else None,
+                "category": category_tags
+            }
+        
+        return {"ok": True, "tags": result}
+        
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to get article tags by hash: {e}")
+        return {"ok": False, "error": str(e), "tags": {}}

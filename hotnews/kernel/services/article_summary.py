@@ -663,41 +663,94 @@ async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -
     return summary, None
 
 
-def extract_tags_from_summary(summary: str) -> list:
+def extract_tags_from_summary(summary: str) -> dict:
     """
     Extract tags from summary text.
-    Looks for the "**标签**: tag1, tag2, tag3" pattern at the end.
-    Returns list of valid tag IDs.
+    Looks for the two-category format:
+    **质量评估**: gem (or empty)
+    **内容分类**: ai_ml, tutorial
+    
+    Returns dict with 'quality' (str or None) and 'category' (list).
     """
     import re
-    from hotnews.kernel.services.prompts import PREDEFINED_TAGS
+    from hotnews.kernel.services.prompts import PREDEFINED_TAGS, QUALITY_TAGS
+    
+    result = {
+        'quality': None,    # 质量评估标签 (0-1个，字符串或 None)
+        'category': []      # 内容分类标签 (1-2个，列表)
+    }
     
     if not summary:
-        return []
+        return result
     
-    # Try to find tags pattern: **标签**: tag1, tag2, tag3
-    patterns = [
-        r'\*\*标签\*\*[：:]\s*([a-z_,\s]+)',  # **标签**: tags
-        r'标签[：:]\s*([a-z_,\s]+)',           # 标签: tags
-        r'🏷️[^:：]*[：:]\s*([a-z_,\s]+)',     # 🏷️ 文章标签: tags
+    # Extract quality tag: **质量评估**: gem
+    quality_patterns = [
+        r'\*\*质量评估\*\*[：:]\s*([a-z_]*)',
+        r'质量评估[：:]\s*([a-z_]*)',
     ]
     
-    for pattern in patterns:
+    for pattern in quality_patterns:
+        match = re.search(pattern, summary, re.IGNORECASE)
+        if match:
+            tag_str = match.group(1).strip().lower()
+            if tag_str and tag_str not in ['无', 'none', '空', ''] and tag_str in QUALITY_TAGS:
+                result['quality'] = tag_str
+                logger.info(f"Extracted quality tag: {result['quality']}")
+            break
+    
+    # Extract category tags: **内容分类**: ai_ml, tutorial
+    category_patterns = [
+        r'\*\*内容分类\*\*[：:]\s*([a-z_,\s]+)',
+        r'内容分类[：:]\s*([a-z_,\s]+)',
+    ]
+    
+    for pattern in category_patterns:
         match = re.search(pattern, summary, re.IGNORECASE)
         if match:
             tags_str = match.group(1).strip()
-            # Split by comma and clean
             raw_tags = [t.strip().lower() for t in tags_str.split(',')]
-            # Filter to valid predefined tags
             valid_tags = [t for t in raw_tags if t in PREDEFINED_TAGS]
             if valid_tags:
-                logger.info(f"Extracted tags from summary: {valid_tags}")
-                return valid_tags[:5]  # Max 5 tags
+                result['category'] = valid_tags[:2]  # Max 2 category tags
+                logger.info(f"Extracted category tags: {result['category']}")
+            break
     
-    return []
+    # Fallback: try old format for backward compatibility
+    if not result['category']:
+        old_patterns = [
+            r'\*\*标签\*\*[：:]\s*([a-z_,\s]+)',
+            r'标签[：:]\s*([a-z_,\s]+)',
+            r'🏷️[^:：]*[：:]\s*([a-z_,\s]+)',
+        ]
+        
+        for pattern in old_patterns:
+            match = re.search(pattern, summary, re.IGNORECASE)
+            if match:
+                tags_str = match.group(1).strip()
+                raw_tags = [t.strip().lower() for t in tags_str.split(',')]
+                valid_tags = [t for t in raw_tags if t in PREDEFINED_TAGS]
+                if valid_tags:
+                    result['category'] = valid_tags[:3]
+                    logger.info(f"Extracted tags (old format): {result['category']}")
+                break
+    
+    return result
 
 
-def update_entry_tags_from_summary(online_conn, url: str, tags: list, confidence: float = 0.95):
+def get_all_tags_from_summary(summary: str) -> list:
+    """
+    Get all tags as a flat list (for backward compatibility).
+    Quality tag first (if any), then category tags.
+    """
+    tags_dict = extract_tags_from_summary(summary)
+    result = []
+    if tags_dict.get('quality'):
+        result.append(tags_dict['quality'])
+    result.extend(tags_dict.get('category', []))
+    return result
+
+
+def update_entry_tags_from_summary(online_conn, url: str, tags: list | dict, confidence: float = 0.95):
     """
     Update rss_entry_tags with tags extracted from summary.
     Uses upsert to update existing tags or insert new ones.
@@ -706,12 +759,18 @@ def update_entry_tags_from_summary(online_conn, url: str, tags: list, confidence
     Args:
         online_conn: SQLite connection to online.db
         url: Article URL
-        tags: List of tag IDs
+        tags: List of tag IDs or dict with 'quality' and 'category' lists
         confidence: Confidence score (default 0.95 for summary-based tags)
     """
     import time
     
-    if not tags:
+    # Handle both old list format and new dict format
+    if isinstance(tags, dict):
+        all_tags = tags.get('quality', []) + tags.get('category', [])
+    else:
+        all_tags = tags if tags else []
+    
+    if not all_tags:
         return
     
     try:
@@ -729,7 +788,7 @@ def update_entry_tags_from_summary(online_conn, url: str, tags: list, confidence
         now = int(time.time())
         
         # Upsert tags
-        for tag_id in tags:
+        for tag_id in all_tags:
             online_conn.execute(
                 """
                 INSERT INTO rss_entry_tags(source_id, dedup_key, tag_id, confidence, source, created_at)
@@ -743,7 +802,7 @@ def update_entry_tags_from_summary(online_conn, url: str, tags: list, confidence
             )
         
         online_conn.commit()
-        logger.info(f"Updated {len(tags)} tags for {url}: {tags}")
+        logger.info(f"Updated {len(all_tags)} tags for {url}: {all_tags}")
         
     except Exception as e:
         logger.warning(f"Failed to update entry tags: {e}")

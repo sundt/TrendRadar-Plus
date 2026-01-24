@@ -7,6 +7,7 @@ Migrated from hotnews-summarizer plugin.
 """
 
 # 预定义标签列表（用于总结时生成标签）
+# 内容分类标签
 PREDEFINED_TAGS = [
     "tech", "ai_ml", "free_deal", "finance", "llm", "tutorial", "business",
     "dev_tools", "deep_dive", "politics", "programming", "breaking", "world",
@@ -18,16 +19,44 @@ PREDEFINED_TAGS = [
     "ecommerce", "marketing", "hr", "management", "food", "travel", "books"
 ]
 
+# 质量评估标签（10 个，互斥，每篇文章最多 1 个）
+QUALITY_TAGS = {
+    # 负面标签（警示类）
+    "ad": {"name": "广告", "color": "#ef4444", "desc": "纯广告、促销、购买链接、优惠码"},
+    "sponsored": {"name": "软文", "color": "#dc2626", "desc": "品牌植入、恰饭、利益相关但不明说"},
+    "clickbait": {"name": "标题党", "color": "#f97316", "desc": "标题夸张、内容空洞、货不对板"},
+    "pr": {"name": "公关稿", "color": "#ea580c", "desc": "企业通稿、官方口吻、无独立观点"},
+    "outdated": {"name": "过时", "color": "#9ca3af", "desc": "旧闻翻炒、信息过期、炒冷饭"},
+    "low_quality": {"name": "水文", "color": "#6b7280", "desc": "内容浅薄、拼凑搬运、AI 生成痕迹重"},
+    # 正面标签（推荐类）
+    "gem": {"name": "精华", "color": "#22c55e", "desc": "深度分析、原创见解、数据详实、值得收藏"},
+    "breaking": {"name": "突发", "color": "#3b82f6", "desc": "重大新闻、突发事件、第一手报道"},
+    "exclusive": {"name": "独家", "color": "#a855f7", "desc": "独家报道、内幕消息、稀缺信息源"},
+    "practical": {"name": "实用", "color": "#06b6d4", "desc": "可操作、有干货、教程类、工具推荐"},
+}
+
+# 质量标签分类
+QUALITY_TAGS_NEGATIVE = ["ad", "sponsored", "clickbait", "pr", "outdated", "low_quality"]
+QUALITY_TAGS_POSITIVE = ["gem", "breaking", "exclusive", "practical"]
+
 # 标签输出指令（附加到总结模板末尾）
 TAGS_OUTPUT_INSTRUCTION = """
 
 ---
 
 ## 🏷️ 文章标签
-请从以下预定义标签中选择 1-3 个最相关的标签（用英文逗号分隔）：
+
+请根据文章内容打标签：
+
+**质量评估**（从以下选择 0-1 个，大部分文章无需标记，只标记特征明显的）：
+- 负面警示：ad(广告), sponsored(软文), clickbait(标题党), pr(公关稿), outdated(过时), low_quality(水文)
+- 正面推荐：gem(精华), breaking(突发), exclusive(独家), practical(实用)
+
+**内容分类**（从以下选择 1-2 个最相关的）：
 tech, ai_ml, free_deal, finance, llm, tutorial, business, dev_tools, deep_dive, politics, programming, breaking, world, database, official, entertainment, cloud, opinion, sports, cybersecurity, interview, health, hardware, tool_rec, science, mobile, career, lifestyle, web3, event, education, gaming, robotics, iot, vr_ar, opensource, stock, crypto, macro, banking, insurance, real_estate, personal_fin, startup, ecommerce, marketing, hr, management, food, travel, books
 
-**标签**: """
+**质量评估**: 
+**内容分类**: """
 
 # 通用输出规范 - 拼接到所有模板末尾
 CORE_INSTRUCTIONS = """
@@ -55,7 +84,7 @@ LEARNING_FOOTER = """
 - 值得收藏的资源或工具（附链接）"""
 
 # 统一尾部 - 不再包含标签输出（标签由后端单独处理）
-LEARNING_FOOTER_WITH_TAGS = LEARNING_FOOTER
+LEARNING_FOOTER_WITH_TAGS = LEARNING_FOOTER + TAGS_OUTPUT_INSTRUCTION
 
 # 文章类型定义
 ARTICLE_TYPES = {

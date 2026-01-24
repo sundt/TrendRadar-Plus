@@ -259,7 +259,8 @@
                             {% if is_real_card %}
                             {% for news in platform.news[:items_per_card] %}
                             <li class="news-item" data-news-id="{{ news.stable_id }}"
-                                data-news-title="{{ news.display_title or news.title }}">
+                                data-news-title="{{ news.display_title or news.title }}"
+                                data-url="{{ news.url }}">
                                 <div class="news-item-content">
                                     <input type="checkbox" class="news-checkbox" title="标记已读"
                                         onchange="markAsRead(this)" />

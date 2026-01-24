@@ -5366,3 +5366,72 @@
         height: 180px;
     }
 }
+
+/* ========================================
+   Article Tags - Hover Display Style
+   ======================================== */
+
+/* Tag suffix - inline after title */
+.article-tag-suffix {
+    display: inline;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    vertical-align: middle;
+}
+
+/* Show tags on hover (desktop) */
+@media (hover: hover) {
+    .news-item:hover .article-tag-suffix {
+        opacity: 1;
+    }
+}
+
+/* Show tags on expand (mobile) */
+.news-item.expanded .article-tag-suffix {
+    opacity: 1;
+}
+
+/* Quality tags - Negative (warning) */
+.article-tag-suffix.tag-ad { background: #fef2f2; color: #dc2626; }
+.article-tag-suffix.tag-sponsored { background: #fef2f2; color: #dc2626; }
+.article-tag-suffix.tag-clickbait { background: #fff7ed; color: #ea580c; }
+.article-tag-suffix.tag-pr { background: #fff7ed; color: #ea580c; }
+.article-tag-suffix.tag-outdated { background: #f3f4f6; color: #6b7280; }
+.article-tag-suffix.tag-low_quality { background: #f3f4f6; color: #6b7280; }
+
+/* Quality tags - Positive (recommend) */
+.article-tag-suffix.tag-gem { background: #f0fdf4; color: #16a34a; }
+.article-tag-suffix.tag-breaking { background: #eff6ff; color: #2563eb; }
+.article-tag-suffix.tag-exclusive { background: #faf5ff; color: #9333ea; }
+.article-tag-suffix.tag-practical { background: #ecfeff; color: #0891b2; }
+
+/* Category tags - neutral gray */
+.article-tag-suffix.tag-category { background: #f3f4f6; color: #6b7280; }
+
+/* Eye protection mode */
+body.eye-protection-mode .article-tag-suffix {
+    opacity: 0;
+}
+
+body.eye-protection-mode .news-item:hover .article-tag-suffix,
+body.eye-protection-mode .news-item.expanded .article-tag-suffix {
+    opacity: 1;
+}
+
+body.eye-protection-mode .article-tag-suffix.tag-ad,
+body.eye-protection-mode .article-tag-suffix.tag-sponsored { background: #3d2020; color: #f87171; }
+body.eye-protection-mode .article-tag-suffix.tag-clickbait,
+body.eye-protection-mode .article-tag-suffix.tag-pr { background: #3d2d1a; color: #fb923c; }
+body.eye-protection-mode .article-tag-suffix.tag-outdated,
+body.eye-protection-mode .article-tag-suffix.tag-low_quality { background: #2d2d2d; color: #9ca3af; }
+body.eye-protection-mode .article-tag-suffix.tag-gem { background: #1a3d2a; color: #4ade80; }
+body.eye-protection-mode .article-tag-suffix.tag-breaking { background: #1a2d3d; color: #60a5fa; }
+body.eye-protection-mode .article-tag-suffix.tag-exclusive { background: #2d1a3d; color: #c084fc; }
+body.eye-protection-mode .article-tag-suffix.tag-practical { background: #1a3d3d; color: #22d3d3; }
+body.eye-protection-mode .article-tag-suffix.tag-category { background: #2d2d2d; color: #9ca3af; }
