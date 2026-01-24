@@ -705,6 +705,7 @@ async def generate_smart_summary_stream(
                     
                     data_str = line[6:]  # Remove "data: " prefix
                     if data_str == "[DONE]":
+                        logger.info(f"Received [DONE] marker, token_usage: {token_usage}")
                         yield None, True, article_type, None, token_usage, confidence
                         return
                     
@@ -718,6 +719,7 @@ async def generate_smart_summary_stream(
                             token_usage["prompt_tokens"] = usage.get("prompt_tokens", 0)
                             token_usage["completion_tokens"] = usage.get("completion_tokens", 0)
                             token_usage["total_tokens"] = usage.get("total_tokens", 0)
+                            logger.info(f"Got token usage from stream: {token_usage}")
                         
                         if "choices" in data and len(data["choices"]) > 0:
                             choice = data["choices"][0]
@@ -729,6 +731,8 @@ async def generate_smart_summary_stream(
                     except json.JSONDecodeError:
                         continue
                 
+                # Stream ended without [DONE] marker
+                logger.info(f"Stream ended without [DONE], token_usage: {token_usage}")
                 yield None, True, article_type, None, token_usage, confidence
                 
     except httpx.TimeoutException:
