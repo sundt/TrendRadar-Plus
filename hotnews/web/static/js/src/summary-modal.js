@@ -422,9 +422,11 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                                 tokens_used: data.tokens_used,
                                 default_tokens: 100000
                             } : null;
+                            // Strip tags block before rendering (same as done event)
+                            const cachedDisplayContent = stripTagsBlock(fullContent);
                             body.innerHTML = `
                                 <div class="summary-content">
-                                    ${renderMarkdown(fullContent)}
+                                    ${renderMarkdown(cachedDisplayContent)}
                                 </div>
                             `;
                             showFooter(url, articleType, articleTypeName, true, tokenUsage, cachedFeedback, cachedBalanceInfo);
@@ -930,6 +932,26 @@ if (document.readyState === 'loading') {
 } else {
     setTimeout(loadSummarizedList, 500);
 }
+
+// Reload summarized list when user returns to the page (cross-device sync)
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        // Debounce: only reload if page was hidden for more than 30 seconds
+        const lastLoad = window._lastSummarizedListLoad || 0;
+        const now = Date.now();
+        if (now - lastLoad > 30000) {
+            console.log('[Summary] Page visible, reloading summarized list');
+            loadSummarizedList();
+        }
+    }
+});
+
+// Track last load time
+const originalLoadSummarizedList = loadSummarizedList;
+loadSummarizedList = async function() {
+    window._lastSummarizedListLoad = Date.now();
+    return originalLoadSummarizedList();
+};
 
 /**
  * Open Todo panel for current news

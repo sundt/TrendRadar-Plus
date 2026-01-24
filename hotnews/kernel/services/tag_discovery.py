@@ -430,6 +430,11 @@ class TagDiscoveryService:
             })
             
             logger.info(f"Promoted candidate {tag_id} to official tag")
+            
+            # Auto-link entries for the new dynamic tag
+            linked_count = self.link_tag_to_entries(tag_id, days_back=30)
+            logger.info(f"Auto-linked {linked_count} entries for new tag {tag_id}")
+            
             return True
             
         except Exception as e:
@@ -594,3 +599,199 @@ class TagDiscoveryService:
             self.conn.commit()
         except Exception as e:
             logger.error(f"Failed to log evolution for {tag_id}: {e}")
+
+
+    def link_tag_to_entries(
+        self,
+        tag_id: str,
+        keywords: List[str] = None,
+        days_back: int = 30,
+        max_entries: int = 500,
+        confidence: float = 0.85
+    ) -> int:
+        """
+        Link a dynamic tag to matching RSS entries by keyword search.
+        
+        Args:
+            tag_id: Tag ID to link
+            keywords: List of keywords to search (defaults to tag name and name_en)
+            days_back: How many days back to search
+            max_entries: Maximum entries to link
+            confidence: Confidence score for the links
+            
+        Returns:
+            Number of entries linked
+        """
+        now = int(time.time())
+        min_timestamp = now - (days_back * 86400)
+        
+        # Get tag info if keywords not provided
+        if not keywords:
+            cur = self.conn.execute(
+                "SELECT name, name_en FROM tags WHERE id = ?",
+                (tag_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                logger.warning(f"Tag {tag_id} not found")
+                return 0
+            
+            keywords = []
+            if row[0]:  # name (Chinese)
+                keywords.append(row[0])
+            if row[1]:  # name_en (English)
+                keywords.append(row[1])
+            # Also add tag_id as keyword (e.g., "deepseek")
+            keywords.append(tag_id)
+        
+        if not keywords:
+            logger.warning(f"No keywords for tag {tag_id}")
+            return 0
+        
+        # Build LIKE conditions for all keywords
+        like_conditions = []
+        params = []
+        for kw in keywords:
+            if kw and len(kw) >= 2:
+                like_conditions.append("title LIKE ?")
+                params.append(f"%{kw}%")
+        
+        if not like_conditions:
+            return 0
+        
+        where_clause = " OR ".join(like_conditions)
+        params.extend([min_timestamp, max_entries])
+        
+        # Find matching entries
+        query = f"""
+            SELECT source_id, dedup_key, title
+            FROM rss_entries
+            WHERE ({where_clause})
+              AND published_at >= ?
+            ORDER BY published_at DESC
+            LIMIT ?
+        """
+        
+        cur = self.conn.execute(query, params)
+        entries = cur.fetchall() or []
+        
+        if not entries:
+            logger.info(f"No entries found for tag {tag_id} with keywords {keywords}")
+            return 0
+        
+        # Insert into rss_entry_tags (upsert)
+        linked_count = 0
+        for source_id, dedup_key, title in entries:
+            try:
+                self.conn.execute(
+                    """
+                    INSERT INTO rss_entry_tags (source_id, dedup_key, tag_id, confidence, source, created_at)
+                    VALUES (?, ?, ?, ?, 'keyword', ?)
+                    ON CONFLICT(source_id, dedup_key, tag_id) DO UPDATE SET
+                        confidence = MAX(excluded.confidence, confidence),
+                        source = CASE WHEN source = 'ai' THEN source ELSE 'keyword' END
+                    """,
+                    (source_id, dedup_key, tag_id, confidence, now)
+                )
+                linked_count += 1
+            except Exception as e:
+                logger.debug(f"Failed to link entry: {e}")
+        
+        self.conn.commit()
+        
+        # Update tag usage count
+        self.conn.execute(
+            "UPDATE tags SET usage_count = ?, last_used_at = ? WHERE id = ?",
+            (linked_count, now, tag_id)
+        )
+        self.conn.commit()
+        
+        logger.info(f"Linked {linked_count} entries to tag {tag_id}")
+        return linked_count
+    
+    def refresh_all_dynamic_tags(
+        self,
+        days_back: int = 7,
+        max_entries_per_tag: int = 200
+    ) -> Dict[str, int]:
+        """
+        Refresh entry links for all active dynamic tags.
+        Call this periodically (e.g., every hour) to keep links up-to-date.
+        
+        Args:
+            days_back: How many days back to search for new entries
+            max_entries_per_tag: Maximum entries to link per tag
+            
+        Returns:
+            Dict of tag_id -> linked_count
+        """
+        # Get all active dynamic tags
+        cur = self.conn.execute(
+            """
+            SELECT id, name, name_en
+            FROM tags
+            WHERE is_dynamic = 1 AND lifecycle = 'active' AND enabled = 1
+            """
+        )
+        tags = cur.fetchall() or []
+        
+        results = {}
+        for tag_id, name, name_en in tags:
+            keywords = [k for k in [name, name_en, tag_id] if k]
+            count = self.link_tag_to_entries(
+                tag_id=tag_id,
+                keywords=keywords,
+                days_back=days_back,
+                max_entries=max_entries_per_tag
+            )
+            results[tag_id] = count
+        
+        # Invalidate my_tags cache after bulk update
+        try:
+            from hotnews.web.timeline_cache import my_tags_cache
+            my_tags_cache.invalidate()
+            logger.info("Invalidated my_tags_cache after refreshing dynamic tags")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate cache: {e}")
+        
+        return results
+
+
+def link_dynamic_tag_entries(conn, tag_id: str, days_back: int = 30) -> int:
+    """
+    Convenience function to link a single dynamic tag to entries.
+    
+    Args:
+        conn: Database connection
+        tag_id: Tag ID to link
+        days_back: How many days back to search
+        
+    Returns:
+        Number of entries linked
+    """
+    service = TagDiscoveryService(conn)
+    count = service.link_tag_to_entries(tag_id, days_back=days_back)
+    
+    # Invalidate cache
+    try:
+        from hotnews.web.timeline_cache import my_tags_cache
+        my_tags_cache.invalidate()
+    except:
+        pass
+    
+    return count
+
+
+def refresh_dynamic_tag_entries(conn, days_back: int = 7) -> Dict[str, int]:
+    """
+    Convenience function to refresh all dynamic tag entries.
+    
+    Args:
+        conn: Database connection
+        days_back: How many days back to search
+        
+    Returns:
+        Dict of tag_id -> linked_count
+    """
+    service = TagDiscoveryService(conn)
+    return service.refresh_all_dynamic_tags(days_back=days_back)

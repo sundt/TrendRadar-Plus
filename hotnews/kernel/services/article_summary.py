@@ -846,11 +846,22 @@ def strip_tags_from_summary(summary: str) -> str:
     if not summary:
         return summary
     
-    # Remove [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] block (with optional --- separator)
-    result = re.sub(r'\n*-{0,3}\n*\[TAGS_?START\].*?\[TAGS_?END\]\s*', '', summary, flags=re.DOTALL | re.IGNORECASE)
+    # Remove [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] block
+    # Handle various formats: with/without underscore, with/without newlines, with/without --- separator
+    patterns = [
+        r'\n*-{0,3}\n*\[TAGS_?START\].*?\[TAGS_?END\]\s*',  # Standard format
+        r'\[TAGS_?START\].*?\[TAGS_?END\]',  # Compact format (no newlines)
+    ]
+    
+    result = summary
+    for pattern in patterns:
+        result = re.sub(pattern, '', result, flags=re.DOTALL | re.IGNORECASE)
     
     # Remove old format tags section (## 🏷️ 文章标签 ...)
     result = re.sub(r'\n*---\n*## 🏷️ 文章标签.*$', '', result, flags=re.DOTALL)
+    
+    # Clean up trailing whitespace and extra newlines
+    result = re.sub(r'\n{3,}', '\n\n', result)
     
     return result.strip()
 

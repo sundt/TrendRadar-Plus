@@ -226,3 +226,51 @@ async def get_evolution_stats(request: Request):
         "ok": True,
         "stats": stats,
     }
+
+
+@router.post("/refresh-dynamic-tags")
+async def refresh_dynamic_tag_entries(request: Request, days_back: int = 7):
+    """
+    Refresh entry links for all active dynamic tags.
+    This updates rss_entry_tags with keyword-matched entries.
+    
+    Args:
+        days_back: How many days back to search (default 7)
+    """
+    _require_admin(request)
+    
+    from hotnews.kernel.services.tag_discovery import refresh_dynamic_tag_entries
+    
+    conn = _get_online_db_conn(request)
+    results = refresh_dynamic_tag_entries(conn, days_back=days_back)
+    
+    total_linked = sum(results.values())
+    
+    return {
+        "ok": True,
+        "message": f"Refreshed {len(results)} dynamic tags, linked {total_linked} entries",
+        "results": results,
+    }
+
+
+@router.post("/link-tag/{tag_id}")
+async def link_single_tag(request: Request, tag_id: str, days_back: int = 30):
+    """
+    Link a single tag to matching entries.
+    
+    Args:
+        tag_id: Tag ID to link
+        days_back: How many days back to search (default 30)
+    """
+    _require_admin(request)
+    
+    from hotnews.kernel.services.tag_discovery import link_dynamic_tag_entries
+    
+    conn = _get_online_db_conn(request)
+    count = link_dynamic_tag_entries(conn, tag_id, days_back=days_back)
+    
+    return {
+        "ok": True,
+        "tag_id": tag_id,
+        "linked_count": count,
+    }
