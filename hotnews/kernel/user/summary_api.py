@@ -132,31 +132,47 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
 
 
 def _get_user_token_info(request: Request, user_id: int) -> dict:
-    """Get user's token balance from unified token_recharge_logs table.
+    """Get user's token balance and subscription status.
     
     Returns:
-        token_balance: Total available tokens
+        token_balance: Total available tokens (for free users)
         tokens_used: Not used anymore (kept for compatibility)
         default_tokens: Default free quota
+        is_vip: Whether user is VIP
+        usage_remaining: VIP usage remaining (if VIP)
+        permission_type: Current permission type
     """
-
     
     total_balance = 0
+    is_vip = False
+    usage_remaining = 0
+    permission_type = "token"
     
     try:
         from hotnews.web.db_online import get_online_db_conn
         from hotnews.kernel.user.payment_api import get_user_token_balance, ensure_user_free_quota
+        from hotnews.kernel.user.permission_checker import can_use_summary
+        from hotnews.kernel.user.subscription_service import ensure_user_subscription
         
         online_conn = get_online_db_conn(request.app.state.project_root)
         
-        # Ensure user has free quota (creates if not exists)
+        # Ensure user has free quota and subscription record
         ensure_user_free_quota(online_conn, user_id)
+        ensure_user_subscription(online_conn, user_id)
         
-        # Get total balance from token_recharge_logs
+        # Check permission
+        can_use, perm_type, extra_info = can_use_summary(online_conn, user_id)
+        permission_type = perm_type
+        
+        if perm_type == "vip":
+            is_vip = True
+            usage_remaining = extra_info.get("usage_remaining", 0)
+        
+        # Get total token balance (for display)
         recharge_balance = get_user_token_balance(online_conn, user_id)
         total_balance = recharge_balance.get("total", 0)
         
-        logging.debug(f"[TokenInfo] user_id={user_id}, total_balance={total_balance}")
+        logging.debug(f"[TokenInfo] user_id={user_id}, total_balance={total_balance}, is_vip={is_vip}, perm={permission_type}")
     except Exception as e:
         logging.warning(f"[TokenInfo] Failed to get token balance: {e}")
         total_balance = 100000  # Fallback to default
@@ -164,33 +180,47 @@ def _get_user_token_info(request: Request, user_id: int) -> dict:
     return {
         "token_balance": total_balance,
         "tokens_used": 0,  # Deprecated, kept for compatibility
-        "default_tokens": 100000
+        "default_tokens": 100000,
+        "is_vip": is_vip,
+        "usage_remaining": usage_remaining,
+        "permission_type": permission_type,
     }
 
 
 def _consume_user_tokens(request: Request, user_id: int, amount: int, news_id: str = None, title: str = None) -> dict:
     """
-    Consume tokens from user account (unified token_recharge_logs table).
-    Consumes from earliest expiring balance first.
+    Consume tokens/quota from user account based on permission type.
+    VIP users: consume usage quota, log tokens (no deduction)
+    Free users: consume tokens from balance
     
     Returns:
         token_balance: New total balance after consumption
         tokens_used: Deprecated (always 0)
+        is_vip: Whether user is VIP
+        usage_remaining: VIP usage remaining (if VIP)
     """
-
     
     try:
         from hotnews.web.db_online import get_online_db_conn
-        from hotnews.kernel.user.payment_api import consume_tokens, ensure_user_free_quota
+        from hotnews.kernel.user.permission_checker import can_use_summary, consume_quota
+        from hotnews.kernel.user.subscription_service import ensure_user_subscription
+        from hotnews.kernel.user.payment_api import ensure_user_free_quota
         
         online_conn = get_online_db_conn(request.app.state.project_root)
         
-        # Ensure user has free quota
+        # Ensure user has records
         ensure_user_free_quota(online_conn, user_id)
+        ensure_user_subscription(online_conn, user_id)
         
-        # Consume from unified pool (with logging)
-        if not consume_tokens(online_conn, user_id, amount, news_id, title):
-            logging.warning(f"[TokenConsume] Insufficient balance for user {user_id}, amount={amount}")
+        # Check permission type
+        can_use, perm_type, extra_info = can_use_summary(online_conn, user_id)
+        
+        if can_use:
+            # Consume based on permission type
+            consume_quota(online_conn, user_id, perm_type, amount, news_id, title)
+            logging.info(f"[TokenConsume] Consumed: user={user_id}, type={perm_type}, amount={amount}")
+        else:
+            logging.warning(f"[TokenConsume] No permission: user={user_id}, type={perm_type}")
     except Exception as e:
         logging.warning(f"[TokenConsume] Failed to consume tokens: {e}")
     
@@ -341,6 +371,27 @@ async def generate_summary_stream(
     is_allowed, remaining = check_rate_limit(user["id"])
     if not is_allowed:
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试（每小时限制20次）")
+    
+    # Check permission (VIP or token balance)
+    try:
+        from hotnews.web.db_online import get_online_db_conn
+        from hotnews.kernel.user.permission_checker import can_use_summary, get_permission_error_message
+        from hotnews.kernel.user.subscription_service import ensure_user_subscription
+        from hotnews.kernel.user.payment_api import ensure_user_free_quota
+        
+        online_conn = get_online_db_conn(request.app.state.project_root)
+        ensure_user_free_quota(online_conn, user["id"])
+        ensure_user_subscription(online_conn, user["id"])
+        
+        can_use, perm_type, extra_info = can_use_summary(online_conn, user["id"])
+        if not can_use:
+            error_msg = get_permission_error_message(perm_type, extra_info)
+            raise HTTPException(status_code=403, detail=error_msg)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.warning(f"Permission check failed: {e}")
+        # Continue anyway if permission check fails (fallback)
     
     # Generate news_id if not provided
     if not news_id:

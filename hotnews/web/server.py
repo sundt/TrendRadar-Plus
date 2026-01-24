@@ -70,6 +70,7 @@ _tag_candidate_admin_router = None
 _user_stats_admin_router = None
 _wechat_admin_router = None
 _payment_router = None
+_subscription_router = None
 _wechat_mp_callback_router = None
 _wechat_qr_login_router = None
 auto_fetch_scheduler = None
@@ -125,6 +126,9 @@ try:
     
     from hotnews.kernel.user import payment_routes
     _payment_router = payment_routes.router
+    
+    from hotnews.kernel.user import subscription_routes
+    _subscription_router = subscription_routes
     
     from hotnews.kernel.admin import wechat_admin
     _wechat_admin_router = wechat_admin.router
@@ -485,6 +489,7 @@ if _summary_router: app.include_router(_summary_router)
 if _user_token_router: app.include_router(_user_token_router)
 if _todo_router: app.include_router(_todo_router)
 if _payment_router: app.include_router(_payment_router)
+if _subscription_router: _subscription_router.setup_subscription_routes(app)
 if _wechat_admin_router: app.include_router(_wechat_admin_router)
 if _tag_candidate_admin_router: 
     app.include_router(_tag_candidate_admin_router)
