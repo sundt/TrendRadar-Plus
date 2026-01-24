@@ -3109,10 +3109,81 @@
 }
 
 .summary-error-text {
-    color: #ff3b30;
+    color: #6b7280;
     font-size: 15px;
     font-weight: 500;
     text-align: center;
+}
+
+.summary-error-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.summary-link-btn-secondary {
+    padding: 10px 20px;
+    border-radius: 20px;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.summary-link-btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+/* Access error state - friendly version */
+.summary-access-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    gap: 12px;
+    min-height: 280px;
+}
+
+.summary-access-error-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+}
+
+.summary-access-error-title {
+    color: #374151;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.summary-access-error-text {
+    color: #6b7280;
+    font-size: 14px;
+    text-align: center;
+}
+
+.summary-access-error-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.summary-retry-btn-secondary {
+    padding: 10px 20px;
+    border-radius: 20px;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.summary-retry-btn-secondary:hover {
+    background: #e5e7eb;
 }
 
 /* Timeout state - loading too slow */
@@ -3180,6 +3251,85 @@
 
 .summary-retry-btn:hover {
     background: #0066d6;
+}
+
+/* Short content state - content too short for summary */
+.summary-short-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    gap: 12px;
+}
+
+.short-content-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+}
+
+.short-content-message {
+    color: #333;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.short-content-length {
+    color: #999;
+    font-size: 13px;
+}
+
+.short-content-preview {
+    max-width: 400px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.6;
+    text-align: left;
+    margin: 8px 0;
+}
+
+.short-content-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.short-content-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 980px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.short-content-btn.primary {
+    background: #007aff;
+    color: white;
+}
+
+.short-content-btn.primary:hover {
+    background: #0066d6;
+    color: white;
+    text-decoration: none;
+}
+
+.short-content-btn.secondary {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+.short-content-btn.secondary:hover {
+    background: #e5e7eb;
 }
 
 /* Streaming cursor */

@@ -55,6 +55,20 @@ function formatTokenDisplay(currentTokens) {
 }
 
 /**
+ * Strip tags block from summary text for display
+ * Removes [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] blocks
+ */
+function stripTagsBlock(text) {
+    if (!text) return text;
+    // Match various formats: [TAGS_START], [TAGSSTART], with or without underscore, case insensitive
+    // Also handle mismatched tags like [TAGSSTART]...[TAGS_END]
+    let result = text.replace(/\[TAGS_?START\][\s\S]*?\[TAGS_?END\]/gi, '');
+    // Clean up any trailing dashes or whitespace
+    result = result.replace(/\n*-{3,}\s*$/g, '');
+    return result.trim();
+}
+
+/**
  * Render Markdown to HTML - improved version
  */
 function renderMarkdown(text) {
@@ -435,7 +449,9 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             const finalEl = document.getElementById('summaryStreamContent');
                             if (finalEl) {
                                 finalEl.classList.remove('summary-streaming');
-                                finalEl.innerHTML = renderMarkdown(fullContent);
+                                // Strip tags block before final render
+                                const displayContent = stripTagsBlock(fullContent);
+                                finalEl.innerHTML = renderMarkdown(displayContent);
                             }
                             showFooter(url, articleType, articleTypeName, false, tokenUsage, null, doneBalanceInfo);
                             updateNewsItemButton(newsId, true);
@@ -459,6 +475,28 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             }
                             break;
                             
+                        case 'short_content':
+                            // Content too short - show suggestion to read original
+                            clearSlowLoadingTimer();
+                            body.innerHTML = `
+                                <div class="summary-short-content">
+                                    <div class="short-content-icon">📄</div>
+                                    <div class="short-content-message">${data.message}</div>
+                                    <div class="short-content-length">文章长度：${data.content_length} 字</div>
+                                    ${data.preview ? `<div class="short-content-preview">${data.preview}</div>` : ''}
+                                    <div class="short-content-actions">
+                                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="short-content-btn primary">
+                                            📖 阅读原文
+                                        </a>
+                                        <button class="short-content-btn secondary" onclick="forceSummary('${newsId}', '${encodeURIComponent(title)}', '${encodeURIComponent(url)}', '${sourceId || ''}', '${encodeURIComponent(sourceName || '')}')">
+                                            ✨ 仍要总结
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                            footer.style.display = 'none';
+                            return;
+                            
                         case 'error':
                             throw new Error(data.message);
                     }
@@ -474,13 +512,41 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     } catch (e) {
         console.error('[Summary] Error:', e);
         clearSlowLoadingTimer();
-        body.innerHTML = `
-            <div class="summary-error">
-                <div class="summary-error-icon">❌</div>
-                <div class="summary-error-text">${e.message}</div>
-                <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
-            </div>
-        `;
+        
+        // Check if it's a content access error
+        const isAccessError = e.message && (
+            e.message.includes('访问限制') || 
+            e.message.includes('无法获取') ||
+            e.message.includes('无法访问') ||
+            e.message.includes('请求失败')
+        );
+        
+        if (isAccessError) {
+            body.innerHTML = `
+                <div class="summary-access-error">
+                    <div class="summary-access-error-icon">🔒</div>
+                    <div class="summary-access-error-title">暂时无法获取内容</div>
+                    <div class="summary-access-error-text">该网站设置了访问保护，建议直接阅读原文</div>
+                    <div class="summary-access-error-actions">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                            📖 阅读原文
+                        </a>
+                        <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            body.innerHTML = `
+                <div class="summary-error">
+                    <div class="summary-error-icon">😅</div>
+                    <div class="summary-error-text">${e.message}</div>
+                    <div class="summary-error-actions">
+                        <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-link-btn-secondary">查看原文</a>
+                    </div>
+                </div>
+            `;
+        }
     }
 }
 
@@ -617,6 +683,168 @@ async function regenerateSummaryModal() {
     
     // Retry
     retrySummaryModal();
+}
+
+/**
+ * Force summary generation even for short content
+ */
+async function forceSummary(newsId, encodedTitle, encodedUrl, sourceId, encodedSourceName) {
+    const title = decodeURIComponent(encodedTitle);
+    const url = decodeURIComponent(encodedUrl);
+    const sourceName = decodeURIComponent(encodedSourceName);
+    
+    // Call the force endpoint
+    openSummaryModalForce(newsId, title, url, sourceId, sourceName);
+}
+
+/**
+ * Open summary modal with force flag (skip short content check)
+ */
+async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
+    const user = authState.getUser();
+    
+    if (!user) {
+        openLoginModal();
+        return;
+    }
+    
+    ensureModalExists();
+    
+    const modal = document.getElementById('summaryModal');
+    const body = document.getElementById('summaryModalBody');
+    const footer = document.getElementById('summaryModalFooter');
+    
+    currentNewsId = newsId;
+    currentNewsTitle = title;
+    currentNewsUrl = url;
+    
+    // Show loading state
+    body.innerHTML = `
+        <div class="summary-loading">
+            <div class="summary-loading-spinner"></div>
+            <div class="summary-loading-text">
+                <div id="summaryStatusText">正在生成总结...</div>
+            </div>
+        </div>
+    `;
+    footer.style.display = 'none';
+    
+    try {
+        // Use force endpoint
+        const res = await fetch('/api/summary/stream?force=1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: url,
+                title: title,
+                news_id: newsId,
+                source_id: sourceId,
+                source_name: sourceName
+            })
+        });
+        
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || '生成失败');
+        }
+        
+        // Process SSE stream (same as normal flow)
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        
+        let fullContent = '';
+        let articleType = 'other';
+        let articleTypeName = '其他';
+        let isStreaming = false;
+        let tokenUsage = null;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const text = decoder.decode(value, { stream: true });
+            const lines = text.split('\n');
+            
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    
+                    switch (data.type) {
+                        case 'status':
+                            const statusEl = document.getElementById('summaryStatusText');
+                            if (statusEl) statusEl.textContent = data.message;
+                            break;
+                            
+                        case 'type':
+                            articleType = data.article_type;
+                            articleTypeName = data.article_type_name;
+                            break;
+                            
+                        case 'chunk':
+                            if (!isStreaming) {
+                                isStreaming = true;
+                                body.innerHTML = `
+                                    <div class="summary-content summary-streaming" id="summaryStreamContent">
+                                        <div class="summary-cursor"></div>
+                                    </div>
+                                `;
+                            }
+                            fullContent += data.content;
+                            const contentEl = document.getElementById('summaryStreamContent');
+                            if (contentEl) {
+                                contentEl.innerHTML = renderMarkdown(fullContent) + '<span class="summary-cursor">▌</span>';
+                                contentEl.scrollTop = contentEl.scrollHeight;
+                            }
+                            break;
+                            
+                        case 'done':
+                            tokenUsage = data.token_usage || null;
+                            const doneBalanceInfo = (data.token_balance !== undefined) ? {
+                                token_balance: data.token_balance,
+                                tokens_used: data.tokens_used,
+                                default_tokens: 100000
+                            } : null;
+                            const finalEl = document.getElementById('summaryStreamContent');
+                            if (finalEl) {
+                                finalEl.classList.remove('summary-streaming');
+                                finalEl.innerHTML = renderMarkdown(fullContent);
+                            }
+                            showFooter(url, articleType, articleTypeName, false, tokenUsage, null, doneBalanceInfo);
+                            updateNewsItemButton(newsId, true);
+                            
+                            if (data.tags && window.ArticleTags) {
+                                let newsItem = document.querySelector(`.news-item[data-news-id="${newsId}"]`);
+                                if (!newsItem) newsItem = document.querySelector(`.news-item[data-url="${url}"]`);
+                                if (newsItem) {
+                                    window.ArticleTags.applyTags(newsItem, data.tags);
+                                    newsItem.dataset.tagsLoaded = 'true';
+                                }
+                            }
+                            break;
+                            
+                        case 'error':
+                            throw new Error(data.message);
+                    }
+                } catch (parseErr) {
+                    if (parseErr.message && !parseErr.message.includes('JSON')) {
+                        throw parseErr;
+                    }
+                }
+            }
+        }
+        
+    } catch (e) {
+        console.error('[Summary] Force error:', e);
+        body.innerHTML = `
+            <div class="summary-error">
+                <div class="summary-error-icon">❌</div>
+                <div class="summary-error-text">${e.message}</div>
+                <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
+            </div>
+        `;
+    }
 }
 
 /**
@@ -786,6 +1014,7 @@ window.handleSummaryFeedback = handleSummaryFeedback;
 window.openCurrentTodoPanel = openCurrentTodoPanel;
 window.toggleCurrentTodoPanel = toggleCurrentTodoPanel;
 window.addActionListToTodo = addActionListToTodo;
+window.forceSummary = forceSummary;
 
 export {
     openSummaryModal,

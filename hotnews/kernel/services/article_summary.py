@@ -681,8 +681,9 @@ def extract_tags_from_summary(summary: str) -> dict:
     if not summary:
         return result
     
-    # Try to extract from [TAGS_START]...[TAGS_END] block first
-    tags_block_match = re.search(r'\[TAGS_START\](.*?)\[TAGS_END\]', summary, re.DOTALL | re.IGNORECASE)
+    # Try to extract from [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] block first
+    # Support both formats: with and without underscore
+    tags_block_match = re.search(r'\[TAGS_?START\](.*?)\[TAGS_?END\]', summary, re.DOTALL | re.IGNORECASE)
     search_text = tags_block_match.group(1) if tags_block_match else summary
     
     # Extract quality tag: **质量评估**: gem
@@ -742,15 +743,15 @@ def extract_tags_from_summary(summary: str) -> dict:
 def strip_tags_from_summary(summary: str) -> str:
     """
     Remove the tags block from summary text for display.
-    Removes [TAGS_START]...[TAGS_END] block and old format tags section.
+    Removes [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] block and old format tags section.
     """
     import re
     
     if not summary:
         return summary
     
-    # Remove [TAGS_START]...[TAGS_END] block
-    result = re.sub(r'\n*---\n*\[TAGS_START\].*?\[TAGS_END\]\s*', '', summary, flags=re.DOTALL | re.IGNORECASE)
+    # Remove [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] block (with optional --- separator)
+    result = re.sub(r'\n*-{0,3}\n*\[TAGS_?START\].*?\[TAGS_?END\]\s*', '', summary, flags=re.DOTALL | re.IGNORECASE)
     
     # Remove old format tags section (## 🏷️ 文章标签 ...)
     result = re.sub(r'\n*---\n*## 🏷️ 文章标签.*$', '', result, flags=re.DOTALL)

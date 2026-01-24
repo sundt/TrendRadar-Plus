@@ -312,12 +312,19 @@ async def generate_summary_stream(
     news_id: Optional[str] = Body(None),
     source_id: Optional[str] = Body(None),
     source_name: Optional[str] = Body(None),
+    force: Optional[int] = None,  # Query param: force=1 to skip short content check
 ):
     """
     Generate smart summary with streaming output (SSE).
     Returns Server-Sent Events for progressive rendering.
+    
+    Query params:
+        force: Set to 1 to skip short content check
     """
     import json
+    
+    # Check force param from query string
+    force_summary = request.query_params.get('force') == '1'
     from fastapi.responses import StreamingResponse
     from hotnews.kernel.services.article_summary import (
         check_rate_limit, record_request, fetch_article_content, generate_smart_summary_stream
@@ -406,6 +413,9 @@ async def generate_summary_stream(
     
     model = os.environ.get("DASHSCOPE_MODEL", "qwen-turbo")
     
+    # Minimum content length for AI summary (characters)
+    MIN_CONTENT_FOR_SUMMARY = 500
+    
     async def stream_generator():
         # Step 1: Fetch article content
         yield f"data: {json.dumps({'type': 'status', 'message': '正在获取文章内容...'}, ensure_ascii=False)}\n\n"
@@ -413,6 +423,25 @@ async def generate_summary_stream(
         content, error, fetch_method = await fetch_article_content(url)
         if error:
             yield f"data: {json.dumps({'type': 'error', 'message': error}, ensure_ascii=False)}\n\n"
+            return
+        
+        # Check if content is too short for summary (skip if force=1)
+        content_length = len(content) if content else 0
+        if not force_summary and content_length < MIN_CONTENT_FOR_SUMMARY:
+            # Content too short - suggest reading original
+            # Get a preview (first 300 chars, clean up)
+            preview = content[:300].strip() if content else ""
+            if len(content) > 300:
+                preview += "..."
+            
+            short_data = {
+                'type': 'short_content',
+                'message': '内容较短，建议直接阅读原文',
+                'content_length': content_length,
+                'preview': preview,
+                'news_id': news_id
+            }
+            yield f"data: {json.dumps(short_data, ensure_ascii=False)}\n\n"
             return
         
         yield f"data: {json.dumps({'type': 'status', 'message': '正在分析文章类型...'}, ensure_ascii=False)}\n\n"
