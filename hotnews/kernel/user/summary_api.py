@@ -450,17 +450,20 @@ async def generate_summary_stream(
         full_summary = ""
         article_type = "other"
         token_usage = None
+        confidence = 0.0
         
-        async for chunk, is_done, a_type, err, usage in generate_smart_summary_stream(content, api_key, model):
+        async for chunk, is_done, a_type, err, usage, conf in generate_smart_summary_stream(content, api_key, model, source_name=source_name):
             if err:
                 yield f"data: {json.dumps({'type': 'error', 'message': err}, ensure_ascii=False)}\n\n"
                 return
             
             article_type = a_type
+            if conf is not None:
+                confidence = conf
             
             if chunk is None and not is_done:
-                # Article type determined, send it
-                yield f"data: {json.dumps({'type': 'type', 'article_type': article_type, 'article_type_name': get_type_name(article_type)}, ensure_ascii=False)}\n\n"
+                # Article type determined, send it with confidence
+                yield f"data: {json.dumps({'type': 'type', 'article_type': article_type, 'article_type_name': get_type_name(article_type), 'confidence': confidence}, ensure_ascii=False)}\n\n"
                 yield f"data: {json.dumps({'type': 'status', 'message': '正在生成总结...'}, ensure_ascii=False)}\n\n"
             elif chunk:
                 full_summary += chunk
@@ -526,9 +529,11 @@ async def generate_summary_stream(
                         from hotnews.web.db_online import get_online_db_conn
                         online_conn = get_online_db_conn(request.app.state.project_root)
                         update_entry_tags_from_summary(online_conn, url, {'category': category_tags})
+                        logging.info(f"[MyTags] Updated entry tags for {url[:50]}: {category_tags}")
+                    else:
+                        logging.info(f"[MyTags] No category tags extracted for {url[:50]}")
                 except Exception as e:
-                    import logging
-                    logging.debug(f"Tag update skipped: {e}")
+                    logging.warning(f"[MyTags] Tag update failed: {e}")
                 
                 # Return done with token info and tags
                 done_data = {

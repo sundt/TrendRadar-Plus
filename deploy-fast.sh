@@ -55,13 +55,21 @@ EOF
 
 # Step 3: Health Check
 echo ">>> Step 3: Health Check..."
-sleep 3
-if ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "curl -fsS http://127.0.0.1:8090/health > /dev/null"; then
-    echo "   ✅ Health check passed."
-else
-    echo "   ❌ Health check FAILED!"
-    exit 1
-fi
+sleep 8
+for i in 1 2 3; do
+    if ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "curl -fsS http://127.0.0.1:8090/health > /dev/null 2>&1"; then
+        echo "   ✅ Health check passed."
+        break
+    else
+        if [ $i -lt 3 ]; then
+            echo "   ⏳ Waiting for service... (attempt $i/3)"
+            sleep 5
+        else
+            echo "   ❌ Health check FAILED!"
+            exit 1
+        fi
+    fi
+done
 
 echo "========================================"
 echo "✅ Fast Deploy Success!"

@@ -27,17 +27,23 @@ function clearSlowLoadingTimer() {
 }
 
 /**
- * Article type icons
+ * Article type icons - V4 (10 types + general)
  */
 const TYPE_ICONS = {
     'news': '📰',
-    'tech-tutorial': '👨‍💻',
-    'product': '🚀',
-    'opinion': '⚖️',
+    'policy': '⚠️',
+    'business': '📊',
+    'tutorial': '✅',
     'research': '📚',
-    'business': '💼',
-    'trend': '📈',
-    'lifestyle': '🌟',
+    'product': '🚀',
+    'opinion': '💭',
+    'interview': '💬',
+    'listicle': '📑',
+    'lifestyle': '✅',
+    'general': '📝',
+    // Legacy mappings for backward compatibility
+    'tech-tutorial': '✅',
+    'trend': '📊',
     'other': '📝'
 };
 
@@ -373,9 +379,11 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             break;
                             
                         case 'type':
-                            // Article type determined
+                            // Article type determined with confidence
                             articleType = data.article_type;
                             articleTypeName = data.article_type_name;
+                            // Store confidence for footer display
+                            window._currentTypeConfidence = data.confidence || 0;
                             break;
                             
                         case 'chunk':
@@ -453,7 +461,9 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                                 const displayContent = stripTagsBlock(fullContent);
                                 finalEl.innerHTML = renderMarkdown(displayContent);
                             }
-                            showFooter(url, articleType, articleTypeName, false, tokenUsage, null, doneBalanceInfo);
+                            // Pass confidence to footer
+                            const typeConfidence = window._currentTypeConfidence || 0;
+                            showFooter(url, articleType, articleTypeName, false, tokenUsage, null, doneBalanceInfo, typeConfidence);
                             updateNewsItemButton(newsId, true);
                             
                             // Apply tags immediately after summary completes
@@ -552,8 +562,9 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
 
 /**
  * Show footer with type tag, token usage and actions
+ * V4: Shows article type (read-only, no selector)
  */
-function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, feedback = null, balanceInfo = null) {
+function showFooter(url, articleType, articleTypeName, isCached, tokenUsage, feedback = null, balanceInfo = null, confidence = null) {
     const footer = document.getElementById('summaryModalFooter');
     const typeIcon = TYPE_ICONS[articleType] || '📝';
     

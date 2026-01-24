@@ -429,19 +429,37 @@ async def generate_summary(content: str, api_key: str, model: str = "qwen-turbo"
         return None, "AI 总结生成失败"
 
 
-async def classify_article(content: str, api_key: str, model: str = "qwen-turbo") -> str:
+async def classify_article(
+    content: str, 
+    api_key: str, 
+    model: str = "qwen-turbo",
+    source_name: str = None
+) -> dict:
     """
-    Classify article type using AI.
-    Returns article type code (e.g., 'news', 'tech-tutorial').
+    Classify article type using AI with confidence score.
+    
+    Args:
+        content: Article content
+        api_key: DashScope API key
+        model: Model name
+        source_name: Source name for hints (e.g., "36氪")
+    
+    Returns:
+        dict with 'type' and 'confidence', e.g., {"type": "news", "confidence": 0.85}
     """
-    from hotnews.kernel.services.prompts import CLASSIFY_SYSTEM_PROMPT, CLASSIFY_USER_TEMPLATE, ARTICLE_TYPES
+    from hotnews.kernel.services.prompts import (
+        get_classify_prompt, ARTICLE_TYPES, CONFIDENCE_THRESHOLD, TYPE_MAPPING
+    )
+    import json as json_module
+    
+    default_result = {"type": "general", "confidence": 0.5}
     
     if not api_key:
-        return "other"
+        return default_result
     
     # Use first 2000 chars for classification (save tokens)
     content_preview = content[:2000] if len(content) > 2000 else content
-    user_prompt = CLASSIFY_USER_TEMPLATE.format(content=content_preview)
+    system_prompt, user_prompt = get_classify_prompt(content_preview, source_name)
     
     url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     
@@ -453,11 +471,11 @@ async def classify_article(content: str, api_key: str, model: str = "qwen-turbo"
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.3,
-        "max_tokens": 50
+        "max_tokens": 100
     }
     
     try:
@@ -467,40 +485,99 @@ async def classify_article(content: str, api_key: str, model: str = "qwen-turbo"
             data = resp.json()
             
             if "choices" in data and len(data["choices"]) > 0:
-                result = data["choices"][0]["message"]["content"].strip().lower()
-                # Clean up result - extract type code
+                result_str = data["choices"][0]["message"]["content"].strip()
+                
+                # Try to parse JSON response
+                try:
+                    # Extract JSON from response (may have extra text)
+                    import re
+                    json_match = re.search(r'\{[^}]+\}', result_str)
+                    if json_match:
+                        result = json_module.loads(json_match.group())
+                        article_type = result.get("type", "general").lower()
+                        confidence = float(result.get("confidence", 0.5))
+                        
+                        # Handle old type codes
+                        if article_type in TYPE_MAPPING:
+                            article_type = TYPE_MAPPING[article_type]
+                        
+                        # Validate type
+                        if article_type not in ARTICLE_TYPES:
+                            article_type = "general"
+                            confidence = 0.5
+                        
+                        # Apply confidence threshold
+                        if confidence < CONFIDENCE_THRESHOLD:
+                            logger.info(f"Low confidence ({confidence:.2f}), using general template")
+                            article_type = "general"
+                        
+                        logger.info(f"Article classified as: {article_type} (confidence: {confidence:.2f})")
+                        return {"type": article_type, "confidence": confidence}
+                except (json_module.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Failed to parse classification JSON: {result_str}, error: {e}")
+                
+                # Fallback: try to extract type code from text
                 for type_code in ARTICLE_TYPES.keys():
-                    if type_code in result:
-                        logger.info(f"Article classified as: {type_code}")
-                        return type_code
-                logger.warning(f"Unknown classification result: {result}")
-                return "other"
+                    if type_code in result_str.lower():
+                        logger.info(f"Article classified as: {type_code} (fallback)")
+                        return {"type": type_code, "confidence": 0.7}
+                
+                logger.warning(f"Unknown classification result: {result_str}")
+                return default_result
             else:
-                return "other"
+                return default_result
                 
     except Exception as e:
-        logger.warning(f"Classification failed: {e}, defaulting to 'other'")
-        return "other"
+        logger.warning(f"Classification failed: {e}, defaulting to 'general'")
+        return default_result
+
+
+async def classify_article_simple(
+    content: str, 
+    api_key: str, 
+    model: str = "qwen-turbo",
+    source_name: str = None
+) -> str:
+    """
+    Simplified classify_article that returns just the type code.
+    For backward compatibility.
+    """
+    result = await classify_article(content, api_key, model, source_name)
+    return result["type"]
 
 
 async def generate_smart_summary(
     content: str, 
     api_key: str, 
     model: str = "qwen-turbo",
-    article_type: str = None
-) -> Tuple[Optional[str], Optional[str], str]:
+    article_type: str = None,
+    source_name: str = None
+) -> Tuple[Optional[str], Optional[str], str, float]:
     """
     Generate summary using smart template selection.
-    Returns (summary, error_message, article_type)
+    
+    Args:
+        content: Article content
+        api_key: DashScope API key
+        model: Model name
+        article_type: Override article type (skip classification)
+        source_name: Source name for classification hints
+    
+    Returns:
+        (summary, error_message, article_type, confidence)
     """
-    from hotnews.kernel.services.prompts import get_template, get_type_name
+    from hotnews.kernel.services.prompts import get_template
     
     if not api_key:
-        return None, "AI 服务未配置", "other"
+        return None, "AI 服务未配置", "general", 0.0
+    
+    confidence = 1.0  # Default confidence when type is provided
     
     # Step 1: Classify article if type not provided
     if not article_type:
-        article_type = await classify_article(content, api_key, model)
+        classify_result = await classify_article(content, api_key, model, source_name)
+        article_type = classify_result["type"]
+        confidence = classify_result["confidence"]
     
     # Step 2: Get template for this type
     template = get_template(article_type)
@@ -522,7 +599,7 @@ async def generate_smart_summary(
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 2000
+        "max_tokens": 2500  # V4: increased from 2000
     }
     
     try:
@@ -533,43 +610,62 @@ async def generate_smart_summary(
             
             if "choices" in data and len(data["choices"]) > 0:
                 summary = data["choices"][0]["message"]["content"]
-                return summary.strip(), None, article_type
+                return summary.strip(), None, article_type, confidence
             else:
-                return None, "AI 返回内容为空", article_type
+                return None, "AI 返回内容为空", article_type, confidence
                 
     except httpx.TimeoutException:
-        return None, "AI 服务响应超时", article_type
+        return None, "AI 服务响应超时", article_type, confidence
     except httpx.HTTPStatusError as e:
         logger.error(f"DashScope API error: {e.response.text}")
-        return None, f"AI 服务错误: {e.response.status_code}", article_type
+        return None, f"AI 服务错误: {e.response.status_code}", article_type, confidence
     except Exception as e:
         logger.error(f"Summary generation error: {e}")
-        return None, "AI 总结生成失败", article_type
+        return None, "AI 总结生成失败", article_type, confidence
 
 
 async def generate_smart_summary_stream(
     content: str, 
     api_key: str, 
     model: str = "qwen-turbo",
-    article_type: str = None
+    article_type: str = None,
+    source_name: str = None
 ):
     """
     Generate summary with streaming output.
-    Yields (chunk, is_done, article_type, error, token_usage)
-    token_usage is a dict with prompt_tokens, completion_tokens, total_tokens (only on done)
+    
+    Args:
+        content: Article content
+        api_key: DashScope API key
+        model: Model name
+        article_type: Override article type (skip classification)
+        source_name: Source name for classification hints
+    
+    Yields:
+        (chunk, is_done, article_type, error, token_usage, confidence)
+        - chunk: Text chunk or None
+        - is_done: Whether streaming is complete
+        - article_type: Detected article type
+        - error: Error message or None
+        - token_usage: dict with prompt_tokens, completion_tokens, total_tokens (only on done)
+        - confidence: Classification confidence (0.0-1.0)
     """
     from hotnews.kernel.services.prompts import get_template
     
     if not api_key:
-        yield None, True, "other", "AI 服务未配置", None
+        yield None, True, "general", "AI 服务未配置", None, 0.0
         return
+    
+    confidence = 1.0  # Default confidence when type is provided
     
     # Step 1: Classify article if type not provided
     if not article_type:
-        article_type = await classify_article(content, api_key, model)
+        classify_result = await classify_article(content, api_key, model, source_name)
+        article_type = classify_result["type"]
+        confidence = classify_result["confidence"]
     
-    # Yield article type first
-    yield None, False, article_type, None, None
+    # Yield article type and confidence first
+    yield None, False, article_type, None, None, confidence
     
     # Step 2: Get template for this type
     template = get_template(article_type)
@@ -591,7 +687,7 @@ async def generate_smart_summary_stream(
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 2000,
+        "max_tokens": 2500,  # V4: increased from 2000
         "stream": True,
         "stream_options": {"include_usage": True}  # Request usage in stream
     }
@@ -609,7 +705,7 @@ async def generate_smart_summary_stream(
                     
                     data_str = line[6:]  # Remove "data: " prefix
                     if data_str == "[DONE]":
-                        yield None, True, article_type, None, token_usage
+                        yield None, True, article_type, None, token_usage, confidence
                         return
                     
                     try:
@@ -629,20 +725,20 @@ async def generate_smart_summary_stream(
                             if delta:
                                 chunk = delta.get("content", "")
                                 if chunk:
-                                    yield chunk, False, article_type, None, None
+                                    yield chunk, False, article_type, None, None, confidence
                     except json.JSONDecodeError:
                         continue
                 
-                yield None, True, article_type, None, token_usage
+                yield None, True, article_type, None, token_usage, confidence
                 
     except httpx.TimeoutException:
-        yield None, True, article_type, "AI 服务响应超时", None
+        yield None, True, article_type, "AI 服务响应超时", None, confidence
     except httpx.HTTPStatusError as e:
         logger.error(f"DashScope API error: {e.response.status_code}")
-        yield None, True, article_type, f"AI 服务错误: {e.response.status_code}", None
+        yield None, True, article_type, f"AI 服务错误: {e.response.status_code}", None, confidence
     except Exception as e:
         logger.error(f"Summary generation error: {e}")
-        yield None, True, article_type, "AI 总结生成失败", None
+        yield None, True, article_type, "AI 总结生成失败", None, confidence
 
 
 async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -> Tuple[Optional[str], Optional[str]]:
@@ -781,18 +877,26 @@ def update_entry_tags_from_summary(online_conn, url: str, tags: list | dict, con
     Args:
         online_conn: SQLite connection to online.db
         url: Article URL
-        tags: List of tag IDs or dict with 'quality' and 'category' lists
+        tags: List of tag IDs or dict with 'quality' (str or None) and 'category' (list)
         confidence: Confidence score (default 0.95 for summary-based tags)
     """
     import time
     
     # Handle both old list format and new dict format
     if isinstance(tags, dict):
-        all_tags = tags.get('quality', []) + tags.get('category', [])
+        # quality is a string or None, category is a list
+        quality = tags.get('quality')
+        category = tags.get('category', [])
+        all_tags = []
+        if quality:
+            all_tags.append(quality)
+        if category:
+            all_tags.extend(category)
     else:
         all_tags = tags if tags else []
     
     if not all_tags:
+        logger.info(f"No tags to update for URL: {url}")
         return
     
     try:
@@ -803,7 +907,7 @@ def update_entry_tags_from_summary(online_conn, url: str, tags: list | dict, con
         )
         row = cur.fetchone()
         if not row:
-            logger.debug(f"No entry found for URL: {url}")
+            logger.info(f"No RSS entry found for URL (article may be from external source): {url[:100]}")
             return
         
         source_id, dedup_key = row
