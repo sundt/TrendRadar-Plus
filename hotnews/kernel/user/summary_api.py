@@ -8,6 +8,7 @@ Provides one-click article summarization with auto-classification and auto-favor
 import os
 import time
 import hashlib
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException, Body

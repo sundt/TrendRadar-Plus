@@ -399,10 +399,14 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                                 `;
                             }
                             fullContent += data.content;
-                            // Render incrementally
+                            // Render incrementally - strip tags during streaming too
                             const contentEl = document.getElementById('summaryStreamContent');
                             if (contentEl) {
-                                contentEl.innerHTML = renderMarkdown(fullContent) + '<span class="summary-cursor">▌</span>';
+                                // Strip incomplete tags block during streaming (hide [TAGSSTART] etc.)
+                                let displayContent = fullContent;
+                                // Remove any [TAGSSTART or [TAGS_START that might be incomplete
+                                displayContent = displayContent.replace(/\[TAGS_?START\][\s\S]*$/gi, '');
+                                contentEl.innerHTML = renderMarkdown(displayContent) + '<span class="summary-cursor">▌</span>';
                                 // Auto scroll to bottom
                                 contentEl.scrollTop = contentEl.scrollHeight;
                             }
@@ -519,6 +523,19 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                     }
                 }
             }
+        }
+        
+        // Fallback: if stream ended without 'done' event but we have content, show it
+        if (isStreaming && fullContent && !document.querySelector('.summary-modal-footer[style*="flex"]')) {
+            console.log('[Summary] Stream ended without done event, showing fallback footer');
+            const finalEl = document.getElementById('summaryStreamContent');
+            if (finalEl) {
+                finalEl.classList.remove('summary-streaming');
+                const displayContent = stripTagsBlock(fullContent);
+                finalEl.innerHTML = renderMarkdown(displayContent);
+            }
+            showFooter(url, articleType, articleTypeName, false, tokenUsage, null, null, 0);
+            updateNewsItemButton(newsId, true);
         }
         
     } catch (e) {
