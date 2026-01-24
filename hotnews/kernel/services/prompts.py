@@ -80,30 +80,30 @@ QUALITY_TAGS_POSITIVE = ["gem", "breaking", "exclusive", "practical"]
 TAGS_OUTPUT_INSTRUCTION = """
 
 ---
+**【重要】请在总结末尾输出标签：**
 [TAGS_START]
-**质量评估**: 
-**内容分类**: 
+**质量评估**: （从 gem/practical/breaking/exclusive/ad/sponsored/clickbait/pr/outdated/low_quality 中选 0-1 个，大部分文章无需标记）
+**内容分类**: （从 tech/finance/business/ai_ml/llm/stock/crypto/startup/tutorial/deep_dive 等选 1-2 个）
 [TAGS_END]"""
 
 TAGS_SYSTEM_INSTRUCTION = """
-在总结末尾，请在 [TAGS_START] 和 [TAGS_END] 之间输出标签：
 
-**质量评估**（从以下选择 0-1 个，大部分文章无需标记，只标记特征明显的）：
-- 负面：ad(广告), sponsored(软文), clickbait(标题党), pr(公关稿), outdated(过时), low_quality(水文)
+**【必须】在总结末尾输出标签**（格式必须严格遵循）：
+
+[TAGS_START]
+**质量评估**: （选 0-1 个，大部分文章留空）
+**内容分类**: （选 1-2 个，用英文逗号分隔）
+[TAGS_END]
+
+质量评估标签（只标记特征明显的文章）：
 - 正面：gem(精华), breaking(突发), exclusive(独家), practical(实用)
+- 负面：ad(广告), sponsored(软文), clickbait(标题党), pr(公关稿), outdated(过时), low_quality(水文)
 
-**内容分类**（选择 1-2 个最精准的标签）：
+内容分类标签（必选 1-2 个）：
+- 大类：tech, finance, business, politics, world, entertainment, sports, health, science, lifestyle, education, other
+- 细分：ai_ml, llm, dev_tools, programming, stock, crypto, startup, ecommerce, tutorial, deep_dive, opinion, interview
 
-大类（必选1个）：
-tech, finance, business, politics, world, entertainment, sports, health, science, lifestyle, education, other
-
-细分主题（选0-1个）：
-ai_ml, llm, dev_tools, programming, database, cloud, cybersecurity, hardware, mobile, web3, gaming, robotics, iot, vr_ar, opensource, stock, crypto, macro, banking, insurance, real_estate, personal_fin, earnings, ipo, fund, startup, ecommerce, marketing, hr, management, merger, layoff, food, travel, fashion, home, parenting, pets, automotive, movies, music, tv_shows, celebrity, anime, books
-
-属性标签（选0-1个）：
-free_deal, tutorial, deep_dive, breaking, official, opinion, interview, tool_rec, career, event
-
-格式示例：
+示例输出：
 [TAGS_START]
 **质量评估**: gem
 **内容分类**: finance, earnings

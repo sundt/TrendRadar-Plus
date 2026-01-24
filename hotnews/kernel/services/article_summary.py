@@ -779,43 +779,67 @@ def extract_tags_from_summary(summary: str) -> dict:
     }
     
     if not summary:
+        logger.debug("[TagExtract] Empty summary, returning empty tags")
         return result
+    
+    # Log summary tail for debugging (last 500 chars where tags should be)
+    summary_tail = summary[-500:] if len(summary) > 500 else summary
+    logger.debug(f"[TagExtract] Summary tail: {summary_tail}")
     
     # Try to extract from [TAGS_START]...[TAGS_END] or [TAGSSTART]...[TAGSEND] block first
     # Support both formats: with and without underscore
     tags_block_match = re.search(r'\[TAGS_?START\](.*?)\[TAGS_?END\]', summary, re.DOTALL | re.IGNORECASE)
-    search_text = tags_block_match.group(1) if tags_block_match else summary
+    if tags_block_match:
+        search_text = tags_block_match.group(1)
+        logger.debug(f"[TagExtract] Found tags block: {search_text}")
+    else:
+        search_text = summary
+        logger.debug("[TagExtract] No tags block found, searching full summary")
     
     # Extract quality tag: **质量评估**: gem
+    # Support various formats: with/without **, with/without space, Chinese/English colon
     quality_patterns = [
-        r'\*\*质量评估\*\*[：:]\s*([a-z_]*)',
-        r'质量评估[：:]\s*([a-z_]*)',
+        r'\*\*质量评估\*\*[：:]\s*([a-z_]+)',
+        r'质量评估[：:]\s*([a-z_]+)',
+        r'\*\*Quality\*\*[：:]\s*([a-z_]+)',
+        r'Quality[：:]\s*([a-z_]+)',
     ]
     
     for pattern in quality_patterns:
         match = re.search(pattern, search_text, re.IGNORECASE)
         if match:
             tag_str = match.group(1).strip().lower()
-            if tag_str and tag_str not in ['无', 'none', '空', ''] and tag_str in QUALITY_TAGS:
+            logger.debug(f"[TagExtract] Quality pattern matched: {tag_str}")
+            if tag_str and tag_str not in ['无', 'none', '空', '', 'null'] and tag_str in QUALITY_TAGS:
                 result['quality'] = tag_str
-                logger.info(f"Extracted quality tag: {result['quality']}")
+                logger.info(f"[TagExtract] Extracted quality tag: {result['quality']}")
             break
     
     # Extract category tags: **内容分类**: finance, earnings
+    # Support various formats
     category_patterns = [
         r'\*\*内容分类\*\*[：:]\s*([a-z_,\s]+)',
         r'内容分类[：:]\s*([a-z_,\s]+)',
+        r'\*\*Category\*\*[：:]\s*([a-z_,\s]+)',
+        r'Category[：:]\s*([a-z_,\s]+)',
+        r'\*\*分类\*\*[：:]\s*([a-z_,\s]+)',
+        r'分类[：:]\s*([a-z_,\s]+)',
     ]
     
     for pattern in category_patterns:
         match = re.search(pattern, search_text, re.IGNORECASE)
         if match:
             tags_str = match.group(1).strip()
-            raw_tags = [t.strip().lower() for t in tags_str.split(',')]
+            logger.debug(f"[TagExtract] Category pattern matched: {tags_str}")
+            # Split by comma, space, or Chinese comma
+            raw_tags = re.split(r'[,，\s]+', tags_str)
+            raw_tags = [t.strip().lower() for t in raw_tags if t.strip()]
             valid_tags = [t for t in raw_tags if t in PREDEFINED_TAGS]
             if valid_tags:
                 result['category'] = valid_tags[:2]  # Max 2 category tags
-                logger.info(f"Extracted category tags: {result['category']}")
+                logger.info(f"[TagExtract] Extracted category tags: {result['category']}")
+            else:
+                logger.debug(f"[TagExtract] No valid tags in: {raw_tags}")
             break
     
     # Fallback: try old format for backward compatibility
@@ -830,12 +854,17 @@ def extract_tags_from_summary(summary: str) -> dict:
             match = re.search(pattern, summary, re.IGNORECASE)
             if match:
                 tags_str = match.group(1).strip()
-                raw_tags = [t.strip().lower() for t in tags_str.split(',')]
+                raw_tags = re.split(r'[,，\s]+', tags_str)
+                raw_tags = [t.strip().lower() for t in raw_tags if t.strip()]
                 valid_tags = [t for t in raw_tags if t in PREDEFINED_TAGS]
                 if valid_tags:
                     result['category'] = valid_tags[:3]
-                    logger.info(f"Extracted tags (old format): {result['category']}")
+                    logger.info(f"[TagExtract] Extracted tags (old format): {result['category']}")
                 break
+    
+    # Log final result
+    if not result['quality'] and not result['category']:
+        logger.warning(f"[TagExtract] No tags extracted from summary")
     
     return result
 

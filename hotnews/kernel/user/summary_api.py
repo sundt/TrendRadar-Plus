@@ -486,12 +486,13 @@ async def generate_summary_stream(
                     from hotnews.kernel.services.article_summary import extract_tags_from_summary, strip_tags_from_summary, update_entry_tags_from_summary
                     from hotnews.web.db_online import get_online_db_conn
                     
+                    logging.info(f"[TagExtract] Extracting tags from summary (length={len(full_summary)})")
                     tags = extract_tags_from_summary(full_summary)
                     quality_tag = tags.get('quality') or ""
                     category_tags = tags.get('category') or []
+                    logging.info(f"[TagExtract] Result: quality={quality_tag}, category={category_tags}")
                 except Exception as e:
-
-                    logging.debug(f"Tag extraction skipped: {e}")
+                    logging.warning(f"[TagExtract] Tag extraction failed: {e}")
                 
                 # Strip tags block from summary for display/storage
                 try:
