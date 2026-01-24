@@ -298,6 +298,8 @@ ready(() => {
 
     document.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 && e.button !== 1) return;
+        // Skip touch events on mobile - let browser handle native scrolling
+        if (e.pointerType === 'touch') return;
         const target = normalizeTarget(e.target);
         const isMiddle = e.button === 1;
         if (!beginDrag(target, e.clientX, isMiddle)) return;
@@ -322,6 +324,8 @@ ready(() => {
     }, { passive: false });
 
     document.addEventListener('pointermove', (e) => {
+        // Skip touch events on mobile
+        if (e.pointerType === 'touch') return;
         if (activePointerId === null || e.pointerId !== activePointerId) return;
         if (!activeGrid) return;
         if (document.querySelector('.platform-card.dragging')) {

@@ -486,10 +486,17 @@
         @media (max-width: 640px) {
             .platform-grid {
                 scrollbar-width: none;
+                /* Disable smooth scroll on mobile for better touch performance */
+                scroll-behavior: auto;
             }
             
             .platform-grid::-webkit-scrollbar {
                 height: 0;
+            }
+            
+            /* Disable transition during scroll for better performance */
+            .platform-card {
+                transition: none;
             }
         }
 
