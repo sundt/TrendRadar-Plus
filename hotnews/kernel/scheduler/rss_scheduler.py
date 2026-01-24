@@ -2077,6 +2077,7 @@ async def _tag_promotion_loop() -> None:
     """
     Tag auto-promotion loop. Runs once per day (every 24 hours).
     Automatically promotes qualified tag candidates to official tags.
+    Also refreshes dynamic tag entries periodically.
     
     Promotion criteria (from TagDiscoveryService):
     - min_occurrence: 10+ times
@@ -2087,20 +2088,28 @@ async def _tag_promotion_loop() -> None:
     
     logger.info("tag_promotion.start")
     
-    # Check every 6 hours, but only run promotion once per day
-    check_interval_seconds = 6 * 3600  # 6 hours
+    # Check every 1 hour for dynamic tag refresh, promotion once per day
+    check_interval_seconds = 1 * 3600  # 1 hour
     
     while _tag_promotion_running:
         try:
             today = datetime.now().strftime("%Y-%m-%d")
             
-            # Only run once per day
+            conn = _get_online_db_conn()
+            service = TagDiscoveryService(conn)
+            
+            # Refresh dynamic tag entries every 6 hours
+            try:
+                results = service.refresh_all_dynamic_tags(days_back=7, max_entries_per_tag=200)
+                total_linked = sum(results.values())
+                logger.info(f"tag_promotion.refresh_dynamic_tags tags={len(results)} entries={total_linked}")
+            except Exception as e:
+                logger.warning(f"tag_promotion.refresh_dynamic_tags_error: {e}")
+            
+            # Only run promotion once per day
             if today == _tag_promotion_last_run_date:
                 await asyncio.sleep(check_interval_seconds)
                 continue
-            
-            conn = _get_online_db_conn()
-            service = TagDiscoveryService(conn)
             
             # Get qualified candidates
             qualified = service.get_qualified_candidates()

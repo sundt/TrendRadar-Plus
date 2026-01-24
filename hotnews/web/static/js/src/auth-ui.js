@@ -193,8 +193,7 @@ export class AuthButton {
                 <div class="auth-dropdown" id="authDropdown">
                     <div class="auth-dropdown-item auth-user-info">${name}</div>
                     <div class="auth-dropdown-divider"></div>
-                    <div class="auth-dropdown-item auth-recharge-btn">💰 充值</div>
-                    <div class="auth-dropdown-item auth-usage-btn">📊 消费明细</div>
+                    <div class="auth-dropdown-item auth-recharge-btn">💰 会员</div>
                     <div class="auth-dropdown-divider"></div>
                     <div class="auth-dropdown-item auth-logout-btn">🚪 退出登录</div>
                 </div>
@@ -206,7 +205,6 @@ export class AuthButton {
         const dropdown = this.container.querySelector('.auth-dropdown');
         const logoutBtn = this.container.querySelector('.auth-logout-btn');
         const rechargeBtn = this.container.querySelector('.auth-recharge-btn');
-        const usageBtn = this.container.querySelector('.auth-usage-btn');
 
         if (avatar && dropdown) {
             avatar.addEventListener('click', (e) => {
@@ -219,19 +217,11 @@ export class AuthButton {
             logoutBtn.addEventListener('click', () => this._handleLogout());
         }
 
-        // 充值按钮事件
+        // 会员按钮事件
         if (rechargeBtn) {
             rechargeBtn.addEventListener('click', () => {
                 dropdown?.classList.remove('show');
                 window.openPaymentModal?.();
-            });
-        }
-
-        // 消费明细按钮事件
-        if (usageBtn) {
-            usageBtn.addEventListener('click', () => {
-                dropdown?.classList.remove('show');
-                window.openUsageModal?.();
             });
         }
 

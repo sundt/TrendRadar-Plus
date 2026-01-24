@@ -87,7 +87,9 @@ function redirectToLogin() {
  */
 async function fetchFollowedNews() {
     try {
-        const res = await fetch('/api/user/preferences/followed-news?limit=50');
+        const res = await fetch('/api/user/preferences/followed-news?limit=50', {
+            credentials: 'include'
+        });
         if (!res.ok) {
             if (res.status === 401) {
                 return { needsAuth: true };
@@ -106,7 +108,9 @@ async function fetchFollowedNews() {
  */
 async function checkWechatAuthExpiration() {
     try {
-        const res = await fetch('/api/wechat/auth/expiration-warning');
+        const res = await fetch('/api/wechat/auth/expiration-warning', {
+            credentials: 'include'
+        });
         if (!res.ok) return null;
         
         const data = await res.json();
@@ -320,6 +324,12 @@ async function loadMyTags(force = false) {
     myTagsLoading = true;
 
     try {
+        // Wait for authState to initialize if not yet done
+        if (!authState.initialized) {
+            console.log('[MyTags] Waiting for authState to initialize...');
+            await authState.init();
+        }
+        
         // Check auth first (sync check from authState)
         console.log('[MyTags] Checking auth...');
         const user = checkAuth();
@@ -428,10 +438,30 @@ async function fetchAndUpdateCache() {
         if (result.ok && result.tags) {
             setCachedData(result.tags);
             console.log('[MyTags] Background cache update completed');
+            return result.tags;
         }
     } catch (e) {
         console.error('[MyTags] Background cache update error:', e);
     }
+    return null;
+}
+
+/**
+ * Preload data in background (called after login)
+ */
+async function preloadData() {
+    // Only preload if user is logged in and we don't have fresh cache
+    const user = checkAuth();
+    if (!user) return;
+    
+    const cached = getCachedData();
+    if (cached && cached.length > 0) {
+        console.log('[MyTags] Preload skipped - cache is fresh');
+        return;
+    }
+    
+    console.log('[MyTags] Preloading data in background...');
+    await fetchAndUpdateCache();
 }
 
 /**
@@ -463,6 +493,10 @@ function init() {
             // Clear cache on logout
             if (!isLoggedIn) {
                 clearCache();
+            } else {
+                // User just logged in - preload data in background
+                console.log('[MyTags] User logged in, preloading data...');
+                preloadData();
             }
             // Reload if my-tags tab is active
             const activePane = document.querySelector('#tab-my-tags.active');
@@ -563,6 +597,15 @@ function init() {
 
     // Attach observer after a short delay to ensure DOM is ready
     setTimeout(observeTabActivation, 100);
+
+    // Preload data if user is already logged in (page refresh scenario)
+    // Use a small delay to not block initial page render
+    setTimeout(async () => {
+        if (authState.initialized && authState.getUser()) {
+            console.log('[MyTags] User already logged in, preloading data...');
+            preloadData();
+        }
+    }, 500);
 
     console.log('[MyTags] Module initialized');
 }
