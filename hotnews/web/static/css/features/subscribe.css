@@ -1,0 +1,706 @@
+/**
+ * Subscribe Sidebar Feature Styles
+ * Extracted from viewer.css - Task 8.4
+ * 
+ * Contains:
+ * - .subscribe-sidebar panel
+ * - .subscribe-tabs navigation
+ * - .subscribe-item cards
+ * - Search and filter components
+ * - Keyword and WeChat subscription styles
+ * - Mobile responsive styles
+ */
+
+/* ==========================================================================
+   Subscribe Sidebar Panel
+   ========================================================================== */
+
+.subscribe-sidebar {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 420px;
+    max-width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    transform: translateX(calc(100% + 24px));
+}
+
+.subscribe-sidebar.open {
+    transform: translateX(0);
+}
+
+.subscribe-sidebar.resizing {
+    transition: none;
+    user-select: none;
+}
+
+/* ==========================================================================
+   Resize Handle
+   ========================================================================== */
+
+.subscribe-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 10;
+    transition: background 0.2s;
+}
+
+.subscribe-resize-handle:hover,
+.subscribe-resize-handle.active {
+    background: linear-gradient(to right, rgba(34, 197, 94, 0.3), transparent);
+}
+
+.subscribe-resize-handle::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 40px;
+    background: #cbd5e1;
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.subscribe-resize-handle:hover::before,
+.subscribe-resize-handle.active::before {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   Backdrop
+   ========================================================================== */
+
+.subscribe-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+}
+
+.subscribe-sidebar-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ==========================================================================
+   Header
+   ========================================================================== */
+
+.subscribe-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(to bottom, #f8fafc, #ffffff);
+}
+
+.subscribe-sidebar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subscribe-sidebar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subscribe-close-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.subscribe-close-btn:hover {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+/* ==========================================================================
+   Tabs
+   ========================================================================== */
+
+.subscribe-tabs {
+    display: flex;
+    justify-content: center;
+    padding: 8px 12px;
+    gap: 4px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fafbfc;
+    overflow-x: auto;
+}
+
+.subscribe-tab {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 8px 10px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.subscribe-tab:hover {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.subscribe-tab.active {
+    background: #22c55e;
+    color: white;
+}
+
+/* ==========================================================================
+   Body
+   ========================================================================== */
+
+.subscribe-sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.subscribe-loading,
+.subscribe-empty,
+.subscribe-error {
+    text-align: center;
+    padding: 40px 20px;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.subscribe-error {
+    color: #ef4444;
+}
+
+/* ==========================================================================
+   Search Box
+   ========================================================================== */
+
+.subscribe-search-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.subscribe-search-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.subscribe-search-input:focus {
+    border-color: #22c55e;
+}
+
+.subscribe-search-btn {
+    padding: 10px 16px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.subscribe-search-btn:hover {
+    background: #16a34a;
+}
+
+/* ==========================================================================
+   Filters
+   ========================================================================== */
+
+.subscribe-filters {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.subscribe-filter-btn {
+    padding: 6px 12px;
+    background: #f1f5f9;
+    border: none;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.subscribe-filter-btn:hover {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.subscribe-filter-btn.active {
+    background: #22c55e;
+    color: white;
+}
+
+/* ==========================================================================
+   Add Box
+   ========================================================================== */
+
+.subscribe-add-box {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.subscribe-add-input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.subscribe-add-input:focus {
+    border-color: #22c55e;
+}
+
+.subscribe-add-btn {
+    padding: 10px 16px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.subscribe-add-btn:hover {
+    background: #16a34a;
+}
+
+/* ==========================================================================
+   List
+   ========================================================================== */
+
+.subscribe-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subscribe-sources-list {
+    display: block;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+/* ==========================================================================
+   Item
+   ========================================================================== */
+
+.subscribe-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+
+.subscribe-item:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.subscribe-item-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.subscribe-item-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.subscribe-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.subscribe-item-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.subscribe-item-desc {
+    display: block;
+    font-size: 12px;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.subscribe-item-btn {
+    padding: 6px 14px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.subscribe-item-btn:hover {
+    background: #16a34a;
+}
+
+.subscribe-item-btn.followed {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.subscribe-item-btn.followed:hover {
+    background: #e2e8f0;
+    color: #ef4444;
+}
+
+.subscribe-item-btn.delete {
+    background: #fef2f2;
+    color: #ef4444;
+}
+
+.subscribe-item-btn.delete:hover {
+    background: #fee2e2;
+}
+
+/* ==========================================================================
+   Section Title
+   ========================================================================== */
+
+.subscribe-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    margin: 16px 0 8px;
+    padding-left: 4px;
+}
+
+/* ==========================================================================
+   Auth Prompt
+   ========================================================================== */
+
+.subscribe-auth-prompt {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.subscribe-auth-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.subscribe-auth-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 8px;
+}
+
+.subscribe-auth-desc {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 20px;
+}
+
+.subscribe-auth-btn {
+    display: inline-block;
+    padding: 10px 24px;
+    background: #22c55e;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.subscribe-auth-btn:hover {
+    background: #16a34a;
+}
+
+/* ==========================================================================
+   Empty State
+   ========================================================================== */
+
+.subscribe-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.subscribe-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.subscribe-empty-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #334155;
+    margin-bottom: 8px;
+}
+
+.subscribe-empty-desc {
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+/* ==========================================================================
+   Keyword Styles
+   ========================================================================== */
+
+.subscribe-keyword-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subscribe-keyword-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.subscribe-keyword-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.subscribe-keyword-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.subscribe-keyword-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+    margin-bottom: 4px;
+}
+
+.subscribe-keyword-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.subscribe-keyword-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #475569;
+}
+
+.subscribe-keyword-delete {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    color: #64748b;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.subscribe-keyword-delete:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+/* ==========================================================================
+   WeChat Styles
+   ========================================================================== */
+
+.subscribe-wechat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subscribe-wechat-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.subscribe-wechat-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.subscribe-wechat-avatar-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.subscribe-wechat-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.subscribe-wechat-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1e293b;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.subscribe-wechat-signature {
+    font-size: 12px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.subscribe-wechat-btn {
+    padding: 6px 12px;
+    background: #22c55e;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.subscribe-wechat-btn:hover {
+    background: #16a34a;
+}
+
+.subscribe-wechat-btn.subscribed {
+    background: #e2e8f0;
+    color: #64748b;
+}
+
+.subscribe-wechat-btn.subscribed:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* ==========================================================================
+   Responsive - Mobile (480px)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+    .subscribe-sidebar {
+        top: 0;
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        border-radius: 0;
+    }
+    
+    .subscribe-resize-handle {
+        display: none;
+    }
+    
+    .subscribe-tabs {
+        padding: 8px;
+    }
+    
+    .subscribe-tab {
+        font-size: 12px;
+        padding: 8px 2px;
+    }
+    
+    .subscribe-sidebar-body {
+        padding: 8px;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    }
+}

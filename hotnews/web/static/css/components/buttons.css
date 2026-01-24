@@ -1,0 +1,331 @@
+/**
+ * Button Component Styles
+ * Extracted from viewer.css - Task 6.3
+ * 
+ * Contains:
+ * - .icon-btn base styles (unified icon button)
+ * - .fetch-btn data fetch button
+ * - .auth-btn login/user button
+ * - .theme-toggle-btn eye protection toggle
+ * - .search-btn search button
+ * - .category-settings-btn settings button
+ * - .platform-refresh-btn refresh button
+ * - .nba-mode-btn NBA mode toggle
+ * - Button states (hover, active, disabled, loading)
+ * - Progress bar styles
+ * - New dot indicator
+ */
+
+/* ==========================================================================
+   Icon Button Base (Unified Style)
+   ========================================================================== */
+
+.icon-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    background: rgba(59, 130, 246, 0.14) !important;
+    color: rgba(37, 99, 235, 0.78);
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.icon-btn:hover {
+    background: rgba(59, 130, 246, 0.2) !important;
+    border-color: rgba(59, 130, 246, 0.3);
+    transform: translateY(-1px);
+}
+
+.icon-btn:active {
+    transform: translateY(0);
+}
+
+/* ==========================================================================
+   Search Button
+   ========================================================================== */
+
+.search-btn {
+    /* Inherits icon-btn styles */
+}
+
+/* ==========================================================================
+   Theme Toggle Button
+   ========================================================================== */
+
+.theme-toggle-btn {
+    /* Inherits icon-btn styles */
+}
+
+/* ==========================================================================
+   Category Settings Button
+   ========================================================================== */
+
+.category-settings-btn {
+    /* Inherits icon-btn styles */
+    gap: 0;
+}
+
+/* Unified sizing for icon buttons */
+.stat-card.theme-toggle-btn,
+.category-settings-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+/* ==========================================================================
+   Auth Button (Login/User)
+   ========================================================================== */
+
+.auth-btn {
+    /* Inherits icon-btn styles */
+}
+
+/* Logged in state */
+.auth-btn.logged-in {
+    background: rgba(34, 197, 94, 0.14) !important;
+    border-color: rgba(34, 197, 94, 0.18);
+    color: rgba(22, 163, 74, 0.78);
+}
+
+.auth-btn.logged-in:hover {
+    background: rgba(34, 197, 94, 0.2) !important;
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+/* ==========================================================================
+   Fetch Data Button
+   ========================================================================== */
+
+.fetch-btn {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.fetch-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+.fetch-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Fetch button spinner */
+.fetch-btn .spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.fetch-btn.loading .spinner {
+    display: inline-block;
+}
+
+.fetch-btn.loading .btn-text {
+    display: none;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   Platform Refresh Button
+   ========================================================================== */
+
+.platform-refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    padding: 6px 10px;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+
+.platform-refresh-btn:hover {
+    background: #e0e7ff;
+    border-color: #a5b4fc;
+}
+
+.platform-refresh-btn:active {
+    transform: translateY(1px);
+}
+
+/* ==========================================================================
+   NBA Mode Buttons
+   ========================================================================== */
+
+.nba-mode-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.nba-mode-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+}
+
+.nba-mode-btn.active {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    border-color: #4f46e5;
+}
+
+/* ==========================================================================
+   Progress Bar
+   ========================================================================== */
+
+.progress-container {
+    display: none;
+    margin-top: 10px;
+    background: #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    height: 6px;
+}
+
+.progress-container.show {
+    display: block;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #3b82f6);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 8px;
+}
+
+.progress-bar.indeterminate {
+    width: 30%;
+    animation: indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+    0% {
+        transform: translateX(-100%);
+    }
+
+    100% {
+        transform: translateX(400%);
+    }
+}
+
+/* ==========================================================================
+   Fetch Status
+   ========================================================================== */
+
+.fetch-status {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 5px;
+}
+
+.fetch-status.success {
+    color: #10b981;
+}
+
+.fetch-status.error {
+    color: #ef4444;
+}
+
+/* ==========================================================================
+   New Dot Indicator
+   ========================================================================== */
+
+.new-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 8px;
+    height: 8px;
+    background-color: #ef4444;
+    border-radius: 50%;
+    display: none;
+    border: 1px solid white;
+    z-index: 10;
+}
+
+/* ==========================================================================
+   Stats Row Button Alignment
+   ========================================================================== */
+
+.stats-row .stat-card,
+.stats-row .category-settings-btn {
+    position: relative;
+    margin-right: 4px;
+}
+
+
+/* ==========================================================================
+   Custom Tooltip
+   ========================================================================== */
+
+.has-tooltip {
+    position: relative;
+}
+
+.has-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    margin-bottom: 6px;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.has-tooltip:hover::after {
+    opacity: 1;
+    visibility: visible;
+}

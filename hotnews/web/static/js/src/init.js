@@ -9,6 +9,7 @@ import { AuthButton } from './auth-ui.js';
 import { openLoginModal } from './login-modal.js';
 import { initTodoButton, loadTodos } from './todo.js';
 import { openSubscriptionModal } from './subscription.js';
+import { openSubscribeSidebar } from './subscribe-sidebar.js';
 
 // 保留原 Token 充值功能（隐藏，仅内部使用）
 import { openPaymentModal as openTokenPaymentModal } from './payment.js';
@@ -18,10 +19,11 @@ const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
 
 /**
  * 跳转到设置页面（需要登录）
+ * 现在改为打开快速订阅侧边栏
  */
 function goToSettings() {
     if (authState.isLoggedIn()) {
-        window.location.href = '/api/user/preferences/page';
+        openSubscribeSidebar();
     } else {
         openLoginModal();
     }

@@ -1,0 +1,35 @@
+/* viewer-modular.css - Main Entry File for CSS Modules */
+/* This file imports all CSS modules in the correct cascade order */
+
+/* 1. Base - Must be first for variable availability */
+@import './base/variables.css';
+@import './base/reset.css';
+
+/* 2. Layout - Structural styles */
+@import './layout/header.css';
+@import './layout/tabs.css';
+@import './layout/grid.css';
+@import './layout/footer.css';
+
+/* 3. Components - Reusable UI elements */
+@import './components/platform-card.css';
+@import './components/news-item.css';
+@import './components/buttons.css';
+@import './components/skeleton.css';
+
+/* 4. Features - Feature-specific styles */
+@import './features/summary-modal.css';
+@import './features/payment-modal.css';
+@import './features/login-modal.css';
+@import './features/favorites.css';
+@import './features/todo.css';
+@import './features/subscribe.css';
+@import './features/settings-modal.css';
+@import './features/article-tags.css';
+@import './features/rss.css';
+
+/* 5. Themes - Override component colors */
+@import './themes/eye-protection.css';
+
+/* 6. Responsive - Must be last for media query overrides */
+@import './responsive/mobile.css';

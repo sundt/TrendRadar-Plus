@@ -1,0 +1,135 @@
+/* Layout Grid Styles */
+/* Platform grid, tab content area, responsive columns */
+
+.tab-content-area {
+    background: white;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    min-height: 520px;
+    --tr-platform-card-height: clamp(860px, calc(100vh - 280px), 1240px);
+    flex: 1;
+    display: none;
+    /* 默认隐藏，由 JS 添加 .categories-ready 后显示 */
+}
+
+body.tr-rss-reading .tab-content-area {
+    background: transparent;
+    box-shadow: none;
+}
+
+.platform-grid {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-anchor: auto;
+    padding-bottom: 8px;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    /* Performance optimizations for smoother scrolling */
+    will-change: scroll-position;
+    transform: translateZ(0);
+    /* GPU acceleration */
+    contain: layout style;
+    /* Reduce repaints */
+    -webkit-overflow-scrolling: touch;
+    /* iOS momentum scrolling */
+    perspective: 1400px;
+    scrollbar-width: thin;
+    /* Firefox */
+    scrollbar-color: rgba(156, 163, 175, 0.4) transparent;
+}
+
+/* Disable smooth scroll during drag for instant response */
+body.tr-platform-title-dragging .platform-grid {
+    scroll-behavior: auto;
+    scroll-snap-type: none;
+    /* Disable snap during drag */
+}
+
+/* Disable scroll-snap when page is hidden to prevent jump on return */
+body.tr-page-hidden .platform-grid,
+body.tr-snap-paused .platform-grid {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+}
+
+/* Shift+scroll mode: disable vertical scrolling on page and cards */
+body.tr-shift-scroll-mode {
+    overflow: hidden;
+}
+
+body.tr-shift-scroll-mode .news-list {
+    overflow: hidden;
+}
+
+body.tr-shift-scroll-mode .platform-grid {
+    scroll-snap-type: none;
+    scroll-behavior: auto;
+}
+
+.platform-grid::-webkit-scrollbar {
+    height: 8px;
+}
+
+.platform-grid::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 4px;
+}
+
+.platform-grid::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.4);
+    border-radius: 4px;
+}
+
+.platform-grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.6);
+}
+
+.tab-content-area .platform-grid>.platform-card {
+    flex: 0 0 calc((100% - 20px) / 3);
+    width: calc((100% - 20px) / 3);
+    height: var(--tr-platform-card-height);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.tab-content-area .platform-card .news-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge Legacy */
+}
+
+.tab-content-area .platform-card .news-list::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.tab-content-area .news-item {
+    padding: 8px 0;
+    font-size: 0.8rem;
+    min-height: calc(1.55em + 12px);
+}
+
+.tab-content-area .news-title {
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+@media (max-width: 1024px) {
+    .tab-content-area {
+        --tr-platform-card-height: clamp(820px, calc(100vh - 260px), 1160px);
+    }
+
+    .tab-content-area .platform-grid>.platform-card {
+        flex: 0 0 calc((100% - 10px) / 2);
+        width: calc((100% - 10px) / 2);
+    }
+}

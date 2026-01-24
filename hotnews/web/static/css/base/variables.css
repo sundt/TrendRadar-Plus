@@ -1,0 +1,8 @@
+/* Base CSS Variables */
+/* Global custom properties used across all modules */
+
+:root {
+    --primary-color: #4f46e5;
+    --secondary-color: #7c3aed;
+    --cross-platform-color: #f97316;
+}

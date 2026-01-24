@@ -1,0 +1,212 @@
+/**
+ * Mobile Responsive Styles
+ * Extracted from viewer.css - Task 12.1
+ * 
+ * Contains all @media (max-width: 640px) rules organized by component
+ */
+
+/* ==========================================================================
+   Footer Tips
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .tr-footer-tip-desktop {
+        display: none;
+    }
+}
+
+/* ==========================================================================
+   Main Container & Layout
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .main-container {
+        width: 100vw;
+        max-width: none;
+        padding: 0 4px;
+        gap: 8px;
+    }
+
+    .header-card {
+        padding: 10px;
+        margin-bottom: 0;
+        border-radius: 12px;
+    }
+
+    .category-tabs {
+        padding: 4px;
+        gap: 6px;
+        margin-bottom: 0;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        border-radius: 12px;
+    }
+
+    .category-tab {
+        flex: 0 0 auto;
+        min-width: 72px;
+        padding: 6px 8px;
+    }
+
+    .tab-content-area {
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+        min-height: 420px;
+    }
+
+    #tab-explore {
+        padding: 0 !important;
+    }
+
+    .platform-grid {
+        gap: 8px;
+        padding-bottom: 4px;
+    }
+
+    .platform-card {
+        padding: 8px;
+    }
+}
+
+/* ==========================================================================
+   Platform Grid Scrolling
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .platform-grid {
+        scrollbar-width: none;
+        /* Disable smooth scroll on mobile for better touch performance */
+        scroll-behavior: auto;
+    }
+    
+    .platform-grid::-webkit-scrollbar {
+        height: 0;
+    }
+    
+    /* Disable transition during scroll for better performance */
+    .platform-card {
+        transition: none;
+    }
+}
+
+/* ==========================================================================
+   Tab Content Area & Platform Cards
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .tab-content-area {
+        --tr-platform-card-height: clamp(780px, calc(100vh - 240px), 1020px);
+    }
+
+    .platform-card {
+        flex: 0 0 100%;
+        width: 100%;
+        scroll-snap-align: start;
+        scroll-margin-left: 0;
+    }
+
+    .tab-content-area .platform-grid {
+        padding-left: 0;
+        padding-right: 0;
+        gap: 0;
+    }
+
+    .tab-content-area .platform-grid>.platform-card {
+        flex: 0 0 100%;
+        width: 100%;
+        border-radius: 12px 12px 0 0;
+        border: none;
+        border-bottom: 1px solid #f3f4f6;
+
+        /* Reset 3D transforms for mobile to prevent flickering */
+        transform: none !important;
+        transform-style: flat !important;
+        backface-visibility: visible !important;
+        perspective: none !important;
+    }
+
+    .platform-grid {
+        perspective: none !important;
+    }
+}
+
+/* ==========================================================================
+   News Title
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .news-title {
+        font-size: 0.95rem;
+    }
+}
+
+/* ==========================================================================
+   RSS Carousel
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    #rssCategoryCarouselGrid .rss-carousel-nav-hints,
+    #rssCatalogPreviewGrid .rss-carousel-nav-hints {
+        display: none !important;
+    }
+
+    #rssCategoryCarouselGrid .rss-carousel-frame,
+    #rssCatalogPreviewGrid .rss-carousel-frame {
+        padding: 16px 14px !important;
+    }
+
+    #rssCategoryCarouselGrid .news-title,
+    #rssCatalogPreviewGrid .news-title {
+        white-space: normal !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box !important;
+        line-clamp: 2;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    #rssCategoryCarouselGrid .news-item,
+    #rssCatalogPreviewGrid .news-item {
+        padding: 4px 0;
+    }
+}
+
+/* ==========================================================================
+   Summary Modal
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .summary-modal-content {
+        width: calc(100% - 16px);
+        max-width: calc(100% - 16px);
+        height: calc(100vh - 16px);
+        max-height: calc(100vh - 16px);
+        border-radius: 16px;
+        margin: 8px;
+    }
+    
+    .summary-modal-header {
+        padding: 14px 20px 10px;
+    }
+    
+    .summary-modal-body {
+        padding: 24px 20px;
+        flex: 1;
+        overflow-y: auto;
+    }
+    
+    .summary-modal-footer {
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px 20px;
+    }
+    
+    .summary-footer-left,
+    .summary-footer-right {
+        width: 100%;
+        justify-content: center;
+    }
+}

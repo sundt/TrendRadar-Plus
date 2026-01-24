@@ -1,0 +1,501 @@
+/**
+ * Favorites Panel Feature Styles
+ * Extracted from viewer.css - Task 9.2
+ * 
+ * Contains:
+ * - .favorites-panel sidebar
+ * - .favorite-item cards
+ * - Favorite action buttons
+ * - Summary content in favorites
+ * - Mobile responsive styles
+ */
+
+/* ==========================================================================
+   Favorites Panel
+   ========================================================================== */
+
+.favorites-panel {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    width: 500px;
+    max-width: calc(100vw - 24px);
+    height: calc(100vh - 24px);
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    transform: translateX(calc(100% + 24px));
+}
+
+.favorites-panel.open {
+    transform: translateX(0);
+}
+
+.favorites-panel.resizing {
+    transition: none;
+    user-select: none;
+}
+
+/* ==========================================================================
+   Resize Handle
+   ========================================================================== */
+
+.favorites-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 10;
+    transition: background 0.2s;
+}
+
+.favorites-resize-handle:hover,
+.favorites-resize-handle.active {
+    background: linear-gradient(to right, rgba(59, 130, 246, 0.3), transparent);
+}
+
+.favorites-resize-handle::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 40px;
+    background: #cbd5e1;
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.favorites-resize-handle:hover::before,
+.favorites-resize-handle.active::before {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   Panel Header
+   ========================================================================== */
+
+.favorites-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(to bottom, #f8fafc, #ffffff);
+}
+
+.favorites-panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.favorites-panel-close {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    border: none;
+    border-radius: 8px;
+    color: #64748b;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.favorites-panel-close:hover {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+/* ==========================================================================
+   Panel Body
+   ========================================================================== */
+
+.favorites-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f8fafc;
+}
+
+/* ==========================================================================
+   Empty/Loading States
+   ========================================================================== */
+
+.favorites-loading,
+.favorites-empty,
+.favorites-login-required {
+    text-align: center;
+    padding: 60px 24px;
+    color: #64748b;
+}
+
+.favorites-empty-icon,
+.favorites-login-icon {
+    font-size: 56px;
+    margin-bottom: 20px;
+    opacity: 0.8;
+}
+
+.favorites-login-btn {
+    display: inline-block;
+    margin-top: 20px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, #3b82f6, #6366f1);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.favorites-login-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+/* ==========================================================================
+   Favorites List
+   ========================================================================== */
+
+.favorites-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ==========================================================================
+   Favorite Item
+   ========================================================================== */
+
+.favorite-item {
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.favorite-item:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+
+.favorite-item-title {
+    color: #1e293b;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+.favorite-item-title:hover {
+    color: #3b82f6;
+}
+
+.favorite-item-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.favorite-item-source {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.favorite-item-source span {
+    background: #f1f5f9;
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+/* ==========================================================================
+   Favorite Item Actions
+   ========================================================================== */
+
+.favorite-item-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.favorite-summary-btn {
+    background: #f0f9ff;
+    border: none;
+    color: #0284c7;
+    cursor: pointer;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.favorite-summary-btn:hover {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.favorite-summary-btn.has-summary {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.favorite-summary-btn.has-summary:hover {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.favorite-summary-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.favorite-remove-btn {
+    background: #fef2f2;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 4px 10px;
+    font-size: 12px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.favorite-remove-btn:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* ==========================================================================
+   Favorites Overlay
+   ========================================================================== */
+
+.favorites-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.favorites-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ==========================================================================
+   News Item Favorite Button
+   ========================================================================== */
+
+.news-favorite-btn {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.6;
+    transition: opacity 0.2s, color 0.2s, transform 0.2s;
+}
+
+.news-favorite-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.news-favorite-btn.favorited {
+    color: #fbbf24;
+    opacity: 1;
+}
+
+/* ==========================================================================
+   Summary Content in Favorites
+   ========================================================================== */
+
+.favorite-item-summary {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #334155;
+}
+
+.favorite-item-summary .summary-content {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.favorite-item-summary .summary-content h2,
+.favorite-item-summary .summary-content h3,
+.favorite-item-summary .summary-content h4 {
+    margin: 12px 0 8px 0;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.favorite-item-summary .summary-content h2 {
+    font-size: 15px;
+}
+
+.favorite-item-summary .summary-content h3 {
+    font-size: 14px;
+}
+
+.favorite-item-summary .summary-content h4 {
+    font-size: 13px;
+}
+
+.favorite-item-summary .summary-content h2:first-child,
+.favorite-item-summary .summary-content h3:first-child,
+.favorite-item-summary .summary-content h4:first-child {
+    margin-top: 0;
+}
+
+.favorite-item-summary .summary-content p {
+    margin: 8px 0;
+}
+
+.favorite-item-summary .summary-content ul {
+    margin: 8px 0;
+    padding-left: 20px;
+}
+
+.favorite-item-summary .summary-content li {
+    margin: 4px 0;
+}
+
+.favorite-item-summary .summary-content a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.favorite-item-summary .summary-content a:hover {
+    text-decoration: underline;
+}
+
+.favorite-item-summary .summary-content strong {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+/* ==========================================================================
+   Summary Actions
+   ========================================================================== */
+
+.summary-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.summary-toggle-btn {
+    background: #f1f5f9;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    padding: 5px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.summary-toggle-btn:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+/* ==========================================================================
+   Todo Button (Homepage)
+   ========================================================================== */
+
+.todo-btn {
+    position: relative;
+}
+
+.todo-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 16px;
+    height: 16px;
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    border-radius: 8px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.todo-badge.show {
+    display: flex;
+}
+
+/* ==========================================================================
+   Responsive - Mobile (480px)
+   ========================================================================== */
+
+@media (max-width: 480px) {
+    .favorites-panel {
+        top: 0;
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        transform: translateX(100%);
+    }
+    
+    .favorites-panel.open {
+        transform: translateX(0);
+    }
+    
+    .favorites-resize-handle {
+        display: none;
+    }
+}

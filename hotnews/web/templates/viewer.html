@@ -12,7 +12,7 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
     <!-- 关键 CSS 预加载 -->
-    <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
+    <link rel="preload" href="{{ static_prefix }}/css/viewer-modular.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" as="style">
     <!-- JS 模块预加载 -->
     <link rel="modulepreload" href="{{ static_prefix }}/js/index.js?v={{ asset_rev }}">
@@ -99,9 +99,9 @@
             }
         }
     </style>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/vendor/bootstrap.min.css" rel="stylesheet">
     <link href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" rel="stylesheet">
-    <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/viewer-modular.css?v={{ asset_rev }}" rel="stylesheet">
 </head>
 
 <body>
@@ -134,8 +134,8 @@
                     </button>
 
                     <!-- 设置按钮 - 需要登录才能进入设置页面 -->
-                    <button class="icon-btn category-settings-btn" onclick="goToSettings()" title="我的设置">
-                        ⚙️ <span class="new-dot" id="categorySettingsNewBadge"></span>
+                    <button class="icon-btn category-settings-btn has-tooltip" onclick="goToSettings()" data-tooltip="订阅更多内容">
+                        ➕ <span class="new-dot" id="categorySettingsNewBadge" style="display:block"></span>
                     </button>
 
                     <!-- 登录/用户按钮 - 由 AuthButton 组件动态渲染 -->
@@ -368,13 +368,19 @@
 
     {% include "_viewer_modals.html" %}
 
-    <div
-        style="margin-top:14px;padding:10px 6px 18px 6px;color:#6b7280;font-size:12px;line-height:1.5;text-align:center;">
+    <div class="tr-footer-info">
         本站内容由系统自动聚合自互联网公开RSS源，仅提供信息索引与导读，版权归属于原作者。本站不对其准确性、完整性负责。如涉及版权或内容违规，请联系我们及时删除。
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" class="tr-footer-top-toggle footer-icp">粤ICP备2022053144号-1</a>
         <a class="tr-footer-top-toggle" href="https://p2fjebt29i.feishu.cn/share/base/form/shrcnL6g8L6M6yFJU9gTnE4pBqe"
             target="_blank" rel="noopener noreferrer">💡 建议</a>
         <span class="tr-footer-top-toggle tr-footer-tip-desktop">⌨️ Shift+滚轮快速切换卡片</span>
         <span class="tr-footer-top-toggle tr-footer-tip-desktop">🖱️ 标题右键可快速排序</span>
+        <span class="tr-footer-top-toggle footer-qr-wrapper">
+            <a href="javascript:void(0)" class="footer-qr-trigger" onclick="toggleFooterQR()">加入用户群</a>
+            <span class="footer-qr-popup" id="footerQRPopup">
+                <img src="{{ static_prefix }}/images/qun.webp" alt="用户群二维码" loading="lazy">
+            </span>
+        </span>
     </div>
 
     <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
@@ -387,6 +393,20 @@
                 localStorage.setItem('hotnews_mobile_top_collapsed_v1', '0');
             } catch (e) { }
         })();
+    </script>
+
+    <script>
+        function toggleFooterQR() {
+            var popup = document.getElementById('footerQRPopup');
+            popup.classList.toggle('show');
+        }
+        document.addEventListener('click', function(e) {
+            var popup = document.getElementById('footerQRPopup');
+            var wrapper = document.querySelector('.footer-qr-wrapper');
+            if (popup && wrapper && !wrapper.contains(e.target)) {
+                popup.classList.remove('show');
+            }
+        });
     </script>
 </body>
 

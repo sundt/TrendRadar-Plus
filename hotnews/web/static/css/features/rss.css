@@ -1,0 +1,110 @@
+/**
+ * RSS Feature Styles
+ * Extracted from viewer.css - Task 9.5
+ * 
+ * Contains:
+ * - #tab-rsscol-rss tab styles
+ * - RSS reading mode styles
+ * - RSS carousel and preview styles
+ * - RSS empty state
+ */
+
+/* ==========================================================================
+   RSS Tab Container
+   ========================================================================== */
+
+#tab-rsscol-rss {
+    background:
+        linear-gradient(rgba(250, 248, 243, 0.92), rgba(250, 248, 243, 0.92)),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+    border-radius: 18px;
+    padding: 16px 14px 18px;
+    min-height: 100%;
+}
+
+#tab-rsscol-rss .platform-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+/* ==========================================================================
+   RSS Empty State
+   ========================================================================== */
+
+.tr-rss-src-empty {
+    padding: 18px 12px;
+    color: #6b7280;
+    font-size: 0.92rem;
+}
+
+/* ==========================================================================
+   RSS Catalog Preview Modal
+   ========================================================================== */
+
+#rssCatalogPreviewModal .settings-modal {
+    background:
+        linear-gradient(rgba(250, 248, 243, 0.94), rgba(250, 248, 243, 0.94)),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+    border: 1px solid rgba(255, 255, 255, 0.40);
+}
+
+#rssCatalogPreviewModal .settings-modal {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    max-height: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+#rssCatalogPreviewModal .settings-modal-header {
+    border-bottom: 1px solid rgba(200, 195, 185, 0.30);
+    background: transparent;
+    color: #2a2a2a;
+}
+
+#rssCatalogPreviewModal .settings-modal-close {
+    background: rgba(0, 0, 0, 0.06);
+    color: #111827;
+}
+
+#rssCatalogPreviewModal .settings-modal-close:hover {
+    background: rgba(0, 0, 0, 0.10);
+}
+
+#rssCatalogPreviewModal .settings-modal-body {
+    padding: 16px 16px 20px;
+}
+
+#rssCatalogPreviewModal .rss-preview-title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
+#rssCatalogPreviewModal .rss-preview-title-text {
+    flex: 1;
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    word-break: break-word;
+}
+
+#rssCatalogPreviewModal .rss-preview-title-date {
+    flex: 0 0 auto;
+    color: #6b7280;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+#rssCatalogPreviewModal #rssCatalogPreviewGrid {
+    align-items: start;
+}
+
+#rssCatalogPreviewModal #rssCatalogPreviewGrid .platform-card {
+    width: 100% !important;
+    flex: 0 0 auto !important;
+    box-sizing: border-box;
+}

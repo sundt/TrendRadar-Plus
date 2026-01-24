@@ -1,0 +1,105 @@
+/* Layout Header Styles */
+/* Header card, stats row, stat cards, search input */
+
+.header-card {
+    background: white;
+    border-radius: 12px;
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.header-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    color: #111827;
+    margin-bottom: 0;
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-subtitle {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    line-height: 1;
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+    align-items: center;
+}
+
+.stat-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.14) !important;
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    color: rgba(37, 99, 235, 0.78);
+    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.06);
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    opacity: 0.85;
+}
+
+.stat-value {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.15px;
+    opacity: 0.9;
+}
+
+#searchInput {
+    flex: 0 0 140px !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    transition: width 160ms ease, max-width 160ms ease, flex-basis 160ms ease;
+    border: none !important;
+    box-shadow: none !important;
+    background: rgba(0, 0, 0, 0.04) !important;
+}
+
+#searchInput:hover {
+    background: rgba(0, 0, 0, 0.06) !important;
+}
+
+#searchInput:focus {
+    flex-basis: 320px !important;
+    width: 320px !important;
+    max-width: 320px !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.22) !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+}
+
+.stats-row .stat-card,
+.stats-row .category-settings-btn {
+    position: relative;
+    margin-right: 4px;
+}
+
+body.tr-mobile-top-collapsed .header-card {
+    display: none !important;
+}

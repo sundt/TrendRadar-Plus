@@ -1,0 +1,74 @@
+/**
+ * Article Tags Feature Styles
+ * Extracted from viewer.css - Task 9.4
+ * 
+ * Contains:
+ * - .article-tag-suffix inline tags
+ * - Quality tags (negative/positive)
+ * - Category tags
+ * - Special business event tags
+ */
+
+/* ==========================================================================
+   Tag Suffix Base
+   ========================================================================== */
+
+.article-tag-suffix {
+    display: inline;
+    margin-left: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    vertical-align: middle;
+}
+
+/* Show tags on hover (desktop) */
+@media (hover: hover) {
+    .news-item:hover .article-tag-suffix {
+        opacity: 1;
+    }
+}
+
+/* Show tags on expand (mobile) */
+.news-item.expanded .article-tag-suffix {
+    opacity: 1;
+}
+
+/* ==========================================================================
+   Quality Tags - Negative (Warning)
+   ========================================================================== */
+
+.article-tag-suffix.tag-ad { background: #fef2f2; color: #dc2626; }
+.article-tag-suffix.tag-sponsored { background: #fef2f2; color: #dc2626; }
+.article-tag-suffix.tag-clickbait { background: #fff7ed; color: #ea580c; }
+.article-tag-suffix.tag-pr { background: #fff7ed; color: #ea580c; }
+.article-tag-suffix.tag-outdated { background: #f3f4f6; color: #6b7280; }
+.article-tag-suffix.tag-low_quality { background: #f3f4f6; color: #6b7280; }
+
+/* ==========================================================================
+   Quality Tags - Positive (Recommend)
+   ========================================================================== */
+
+.article-tag-suffix.tag-gem { background: #f0fdf4; color: #16a34a; }
+.article-tag-suffix.tag-breaking { background: #eff6ff; color: #2563eb; }
+.article-tag-suffix.tag-exclusive { background: #faf5ff; color: #9333ea; }
+.article-tag-suffix.tag-practical { background: #ecfeff; color: #0891b2; }
+
+/* ==========================================================================
+   Category Tags - Neutral
+   ========================================================================== */
+
+.article-tag-suffix.tag-category { background: #f3f4f6; color: #6b7280; }
+
+/* ==========================================================================
+   Special Category Tags - Business Events
+   ========================================================================== */
+
+.article-tag-suffix.tag-earnings { background: #fef3c7; color: #b45309; }
+.article-tag-suffix.tag-ipo { background: #dbeafe; color: #1d4ed8; }
+.article-tag-suffix.tag-merger { background: #e0e7ff; color: #4338ca; }
+.article-tag-suffix.tag-layoff { background: #fee2e2; color: #b91c1c; }

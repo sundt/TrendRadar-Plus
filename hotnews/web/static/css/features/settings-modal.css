@@ -1,0 +1,466 @@
+/**
+ * Settings Modal Feature Styles
+ * Extracted from viewer.css - Task 9.3
+ * 
+ * Contains:
+ * - .settings-modal-overlay and modal
+ * - .category-item cards
+ * - Category edit panel
+ * - Platform selection
+ * - Settings buttons
+ */
+
+/* ==========================================================================
+   Settings Modal Overlay
+   ========================================================================== */
+
+.settings-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+
+.settings-modal-overlay.show {
+    display: flex;
+}
+
+/* ==========================================================================
+   Settings Modal
+   ========================================================================== */
+
+.settings-modal {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+/* ==========================================================================
+   Modal Header
+   ========================================================================== */
+
+.settings-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.settings-modal-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.settings-modal-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 1.05rem;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.settings-modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ==========================================================================
+   Modal Body
+   ========================================================================== */
+
+.settings-modal-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 14px;
+}
+
+/* ==========================================================================
+   Modal Footer
+   ========================================================================== */
+
+.settings-modal-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-top: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+/* ==========================================================================
+   Settings Section
+   ========================================================================== */
+
+.settings-section {
+    margin-bottom: 20px;
+}
+
+.settings-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ==========================================================================
+   Category List
+   ========================================================================== */
+
+.category-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.category-list-wrapper.collapsed {
+    display: none;
+}
+
+.category-list-controls {
+    position: sticky;
+    bottom: 0;
+    background: #f9fafb;
+    padding: 10px 0;
+    border-top: 1px solid #e5e7eb;
+    z-index: 2;
+}
+
+.category-list.hide-default .category-item:not(.custom) {
+    display: none;
+}
+
+/* ==========================================================================
+   Category Item
+   ========================================================================== */
+
+.category-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: grab;
+    transition: all 0.2s;
+}
+
+.category-item:hover {
+    border-color: #7c3aed;
+    background: #faf5ff;
+}
+
+.category-item.dragging {
+    opacity: 0.5;
+    border-style: dashed;
+}
+
+.category-item.custom {
+    border-left: 3px solid #7c3aed;
+}
+
+.category-item-drag {
+    color: #9ca3af;
+    cursor: grab;
+}
+
+.category-item-icon {
+    font-size: 1.2rem;
+}
+
+.category-item-name {
+    flex: 1;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.category-item-platforms {
+    font-size: 0.7rem;
+    color: #6b7280;
+}
+
+/* ==========================================================================
+   Category Item Toggle
+   ========================================================================== */
+
+.category-item-toggle {
+    position: relative;
+    width: 40px;
+    height: 22px;
+}
+
+.category-item-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.category-item-toggle .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #d1d5db;
+    transition: 0.3s;
+    border-radius: 22px;
+}
+
+.category-item-toggle .slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.category-item-toggle input:checked+.slider {
+    background-color: #7c3aed;
+}
+
+.category-item-toggle input:checked+.slider:before {
+    transform: translateX(18px);
+}
+
+/* ==========================================================================
+   Category Item Actions
+   ========================================================================== */
+
+.category-item-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.category-item-btn {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+}
+
+.category-item-btn:hover {
+    background: #f3f4f6;
+}
+
+.category-item-btn.delete {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.category-item-btn.delete:hover {
+    background: #fee2e2;
+}
+
+/* ==========================================================================
+   Add Category Button
+   ========================================================================== */
+
+.add-category-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    background: #f3e8ff;
+    color: #7c3aed;
+    border: 2px dashed #c4b5fd;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.add-category-btn:hover {
+    background: #ede9fe;
+    border-color: #7c3aed;
+}
+
+/* ==========================================================================
+   Settings Buttons
+   ========================================================================== */
+
+.settings-btn-primary {
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.settings-btn-primary:hover {
+    opacity: 0.9;
+}
+
+.settings-btn-primary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.settings-btn-secondary {
+    padding: 8px 16px;
+    background: white;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.settings-btn-secondary:hover {
+    background: #f3f4f6;
+}
+
+.settings-btn-secondary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Category Edit Panel
+   ========================================================================== */
+
+.category-edit-panel {
+    display: none;
+    padding: 16px;
+    background: #faf5ff;
+    border: 1px solid #e9d5ff;
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.category-edit-panel.show {
+    display: block;
+}
+
+.edit-field {
+    margin-bottom: 12px;
+}
+
+.edit-field label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 4px;
+}
+
+.edit-field input[type="text"],
+.edit-field input[type="number"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   Platform Selection
+   ========================================================================== */
+
+.platform-select-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.platform-select-search {
+    flex: 1;
+    min-width: 180px;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: white;
+}
+
+.platform-select-actions {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.platform-select-action-btn {
+    padding: 6px 10px;
+    background: white;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+}
+
+.platform-select-action-btn.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+}
+
+.platform-select-action-btn:hover {
+    background: #f3f4f6;
+}
+
+.platform-select-action-btn.primary:hover {
+    opacity: 0.9;
+}
+
+.platform-select-action-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.platform-select-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 6px;
+    max-height: 45vh;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 8px;
+    background: white;
+}
+
+.platform-select-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    cursor: default;
+    font-size: 0.75rem;
+    user-select: none;
+}

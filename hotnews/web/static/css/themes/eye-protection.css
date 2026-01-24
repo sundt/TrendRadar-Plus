@@ -1,0 +1,249 @@
+/**
+ * Eye Protection Mode (Dark Theme) Styles
+ * Extracted from viewer.css - Task 11.1
+ * 
+ * Contains all body.eye-protection-mode overrides organized by component
+ */
+
+/* ==========================================================================
+   Base Body Styles
+   ========================================================================== */
+
+body.eye-protection-mode {
+    background: #1a1b1e;
+    color: #e5e7eb;
+}
+
+body.eye-protection-mode a {
+    color: #60a5fa;
+}
+
+/* ==========================================================================
+   Layout Components
+   ========================================================================== */
+
+body.eye-protection-mode .header-card,
+body.eye-protection-mode .category-tabs,
+body.eye-protection-mode .category-tab,
+body.eye-protection-mode .platform-card,
+body.eye-protection-mode .tab-content-area,
+body.eye-protection-mode .tr-confirm-modal {
+    background: #25262b;
+    color: #e5e7eb;
+    border-color: #373a40;
+}
+
+body.eye-protection-mode .header-title,
+body.eye-protection-mode .news-title {
+    color: #e5e7eb;
+}
+
+body.eye-protection-mode .header-subtitle,
+body.eye-protection-mode .news-subtitle,
+body.eye-protection-mode .news-placeholder,
+body.eye-protection-mode .category-empty-state,
+body.eye-protection-mode .tr-platform-card-close,
+body.eye-protection-mode .tr-platform-card-hide {
+    color: #9ca3af;
+    border-color: #373a40;
+    background: #2c2e33;
+}
+
+/* ==========================================================================
+   Tab Navigation
+   ========================================================================== */
+
+body.eye-protection-mode .category-tab.active {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+}
+
+body.eye-protection-mode .category-settings-btn {
+    box-shadow: none;
+}
+
+/* ==========================================================================
+   Platform Card
+   ========================================================================== */
+
+body.eye-protection-mode .platform-header {
+    border-bottom-color: #373a40;
+}
+
+body.eye-protection-mode .platform-card {
+    box-shadow: none;
+    border-color: #373a40;
+    border-radius: 12px;
+}
+
+body.eye-protection-mode .platform-card:hover {
+    border-color: #4f46e5;
+}
+
+/* Mobile: Ensure rounded corners on top in eye protection mode */
+@media (max-width: 640px) {
+    body.eye-protection-mode .tab-content-area .platform-grid>.platform-card {
+        border-radius: 12px 12px 0 0;
+        border: 1px solid #373a40;
+        border-bottom: 1px solid #373a40;
+    }
+}
+
+/* ==========================================================================
+   News Items
+   ========================================================================== */
+
+body.eye-protection-mode .news-item {
+    border-bottom-color: #373a40;
+}
+
+body.eye-protection-mode .news-item.read .news-title {
+    color: #6b7280;
+}
+
+/* ==========================================================================
+   Search Input
+   ========================================================================== */
+
+body.eye-protection-mode #searchInput {
+    background: #2c2e33 !important;
+    color: #e5e7eb;
+}
+
+body.eye-protection-mode #searchInput:focus {
+    background: #373a40 !important;
+    box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.4) !important;
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+body.eye-protection-mode .stat-card,
+body.eye-protection-mode .theme-toggle-btn {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
+body.eye-protection-mode .theme-toggle-btn:hover {
+    background: rgba(59, 130, 246, 0.15) !important;
+}
+
+body.eye-protection-mode .icon-btn {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
+body.eye-protection-mode .icon-btn:hover {
+    background: rgba(59, 130, 246, 0.15) !important;
+}
+
+body.eye-protection-mode .auth-btn.logged-in {
+    background: rgba(34, 197, 94, 0.1) !important;
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+body.eye-protection-mode .auth-btn.logged-in:hover {
+    background: rgba(34, 197, 94, 0.15) !important;
+}
+
+/* ==========================================================================
+   Skeleton Loaders
+   ========================================================================== */
+
+body.eye-protection-mode .tr-news-skeleton {
+    border-bottom-color: #373a40;
+}
+
+body.eye-protection-mode .tr-news-skeleton-line {
+    background: #373a40;
+}
+
+/* ==========================================================================
+   Article Tags
+   ========================================================================== */
+
+body.eye-protection-mode .article-tag-suffix {
+    opacity: 0;
+}
+
+body.eye-protection-mode .news-item:hover .article-tag-suffix,
+body.eye-protection-mode .news-item.expanded .article-tag-suffix {
+    opacity: 1;
+}
+
+/* Quality tags - Negative */
+body.eye-protection-mode .article-tag-suffix.tag-ad,
+body.eye-protection-mode .article-tag-suffix.tag-sponsored { background: #3d2020; color: #f87171; }
+body.eye-protection-mode .article-tag-suffix.tag-clickbait,
+body.eye-protection-mode .article-tag-suffix.tag-pr { background: #3d2d1a; color: #fb923c; }
+body.eye-protection-mode .article-tag-suffix.tag-outdated,
+body.eye-protection-mode .article-tag-suffix.tag-low_quality { background: #2d2d2d; color: #9ca3af; }
+
+/* Quality tags - Positive */
+body.eye-protection-mode .article-tag-suffix.tag-gem { background: #1a3d2a; color: #4ade80; }
+body.eye-protection-mode .article-tag-suffix.tag-breaking { background: #1a2d3d; color: #60a5fa; }
+body.eye-protection-mode .article-tag-suffix.tag-exclusive { background: #2d1a3d; color: #c084fc; }
+body.eye-protection-mode .article-tag-suffix.tag-practical { background: #1a3d3d; color: #22d3d3; }
+body.eye-protection-mode .article-tag-suffix.tag-category { background: #2d2d2d; color: #9ca3af; }
+
+/* Special category tags */
+body.eye-protection-mode .article-tag-suffix.tag-earnings { background: #3d3520; color: #fbbf24; }
+body.eye-protection-mode .article-tag-suffix.tag-ipo { background: #1a2d3d; color: #60a5fa; }
+body.eye-protection-mode .article-tag-suffix.tag-merger { background: #1a1a3d; color: #818cf8; }
+body.eye-protection-mode .article-tag-suffix.tag-layoff { background: #3d2020; color: #f87171; }
+
+/* ==========================================================================
+   Subscribe Sidebar
+   ========================================================================== */
+
+body.eye-protection-mode .subscribe-sidebar {
+    background: #1a1a1a;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+body.eye-protection-mode .subscribe-sidebar-header {
+    background: linear-gradient(to bottom, #252525, #1a1a1a);
+    border-color: #333;
+}
+
+body.eye-protection-mode .subscribe-sidebar-title {
+    color: #e5e5e5;
+}
+
+body.eye-protection-mode .subscribe-tabs {
+    background: #252525;
+    border-color: #333;
+}
+
+body.eye-protection-mode .subscribe-tab {
+    color: #9ca3af;
+}
+
+body.eye-protection-mode .subscribe-tab:hover {
+    background: #333;
+    color: #e5e5e5;
+}
+
+body.eye-protection-mode .subscribe-tab.active {
+    background: #22c55e;
+    color: white;
+}
+
+body.eye-protection-mode .subscribe-search-input,
+body.eye-protection-mode .subscribe-add-input {
+    background: #252525;
+    border-color: #333;
+    color: #e5e5e5;
+}
+
+body.eye-protection-mode .subscribe-filter-btn {
+    background: #252525;
+    color: #9ca3af;
+}
+
+body.eye-protection-mode .subscribe-filter-btn:hover {
+    background: #333;
+    color: #e5e5e5;
+}

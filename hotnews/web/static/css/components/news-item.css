@@ -1,0 +1,472 @@
+/**
+ * News Item Component Styles
+ * Extracted from viewer.css - Task 6.2
+ * 
+ * Contains:
+ * - .news-item base styles and states
+ * - .news-title styles and variations
+ * - .news-index numbering styles
+ * - .news-subtitle styles
+ * - .news-placeholder empty state
+ * - .news-list container
+ * - .news-item-content layout
+ * - .news-meta information
+ * - .news-actions and AI summary button
+ * - Cross-platform highlight styles
+ * - Read state styles
+ */
+
+/* ==========================================================================
+   News List Container
+   ========================================================================== */
+
+.news-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tab-content-area .platform-card .news-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.tab-content-area .platform-card .news-list::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+/* ==========================================================================
+   News Placeholder
+   ========================================================================== */
+
+.news-placeholder {
+    padding: 10px 8px;
+    color: #9ca3af;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.category-empty-state {
+    padding: 16px 12px;
+    color: #6b7280;
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+/* ==========================================================================
+   News Item Base
+   ========================================================================== */
+
+.news-item {
+    padding: 4px 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.8rem;
+    box-sizing: border-box;
+    min-height: calc(1.4em + 8px);
+    position: relative;
+}
+
+.tab-content-area .news-item {
+    padding: 8px 0;
+    font-size: 0.8rem;
+    min-height: calc(1.55em + 12px);
+}
+
+.news-item:last-child {
+    border-bottom: none;
+}
+
+/* ==========================================================================
+   News Item Content Layout
+   ========================================================================== */
+
+.news-item-content {
+    display: flex;
+    align-items: flex-start;
+}
+
+/* ==========================================================================
+   News Index
+   ========================================================================== */
+
+.news-index {
+    width: 18px;
+    flex-shrink: 0;
+    text-align: right;
+    color: #9ca3af;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    margin-top: 1px;
+    margin-right: 6px;
+}
+
+/* ==========================================================================
+   News Title
+   ========================================================================== */
+
+.news-title {
+    font-size: 0.85rem;
+    color: #1f2937;
+    line-height: 1.4;
+    margin-bottom: 0;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    flex: 1;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.news-title:visited {
+    color: inherit;
+}
+
+.tab-content-area .news-title {
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.news-title.nba-title {
+    font-size: 0.78rem;
+}
+
+/* ==========================================================================
+   News Subtitle
+   ========================================================================== */
+
+.news-subtitle {
+    font-size: 0.72rem;
+    line-height: 1.2;
+    color: #6b7280;
+    margin-top: 2px;
+    margin-left: 24px;
+    text-align: right;
+}
+
+/* ==========================================================================
+   News Meta
+   ========================================================================== */
+
+.news-meta {
+    display: flex;
+    gap: 10px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    color: #6b7280;
+    white-space: nowrap;
+}
+
+.rank-text {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #9ca3af;
+    letter-spacing: 0.2px;
+}
+
+/* ==========================================================================
+   News Item States - Preview/Hover/Focus
+   ========================================================================== */
+
+.news-item.preview .news-meta,
+.news-item:hover .news-meta,
+.news-item:focus-within .news-meta {
+    display: none;
+}
+
+.news-item.preview .news-title,
+.news-item:hover .news-title,
+.news-item:focus-within .news-title {
+    white-space: normal;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+/* ==========================================================================
+   News Item States - Hidden/Filtered
+   ========================================================================== */
+
+.news-item.filtered {
+    display: none !important;
+}
+
+.news-item.search-hidden {
+    display: none !important;
+}
+
+.news-item.paged-hidden {
+    display: none !important;
+}
+
+.news-item.nba-hidden {
+    display: none !important;
+}
+
+/* ==========================================================================
+   News Item States - Read
+   ========================================================================== */
+
+.news-item.read {
+    opacity: 0.62;
+}
+
+.news-item.read .news-title {
+    color: #6b7280;
+}
+
+.news-item.read:hover {
+    opacity: 0.85;
+}
+
+/* ==========================================================================
+   New Content Indicator (Red Dot)
+   ========================================================================== */
+
+.news-item .tr-new-dot {
+    width: 6px;
+    height: 6px;
+    background: #ef4444;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-right: 4px;
+    margin-top: 6px;
+    display: inline-block;
+}
+
+.news-item.read .tr-new-dot {
+    display: none;
+}
+
+/* ==========================================================================
+   Cross-Platform Highlight
+   ========================================================================== */
+
+.news-title.cross-platform {
+    color: var(--cross-platform-color);
+    font-weight: 600;
+    border-left: 3px solid var(--cross-platform-color);
+    padding-left: 8px;
+}
+
+.news-title.cross-platform:visited {
+    color: var(--cross-platform-color);
+}
+
+.news-title.cross-platform:hover {
+    color: #ea580c;
+}
+
+.cross-platform-badge {
+    display: inline-flex;
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    margin-left: 8px;
+    cursor: help;
+}
+
+/* ==========================================================================
+   News Actions Container
+   ========================================================================== */
+
+.news-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: auto;
+    position: static;
+}
+
+.news-ai-indicator {
+    display: none !important;
+}
+
+/* ==========================================================================
+   News Date
+   ========================================================================== */
+
+.tr-news-date {
+    flex-shrink: 0;
+    color: #9ca3af;
+    font-size: 12px;
+    white-space: nowrap;
+    transition: opacity 0.15s ease;
+}
+
+/* ==========================================================================
+   AI Summary Button
+   ========================================================================== */
+
+.news-summary-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 10px;
+    background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+    color: white;
+    border: none;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.news-summary-btn::before {
+    content: "AI ✨";
+}
+
+/* Has summary - green style */
+.news-summary-btn.has-summary {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.news-summary-btn.has-summary::before {
+    content: "AI ✓";
+}
+
+/* Summarized item - green index */
+.news-item.has-summary .news-index {
+    color: #22c55e;
+    font-weight: 600;
+}
+
+/* Desktop: hover to show AI button, hide date */
+@media (hover: hover) {
+    .news-item:hover .tr-news-date {
+        opacity: 0;
+    }
+    
+    .news-item:hover .news-summary-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Mobile: tap to expand */
+.news-item.expanded .tr-news-date {
+    opacity: 0;
+}
+
+.news-item.expanded .news-summary-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ==========================================================================
+   News Checkbox (Hidden by default)
+   ========================================================================== */
+
+.news-checkbox {
+    display: none !important;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    align-self: flex-start;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   RSS Catalog/Carousel News Items
+   ========================================================================== */
+
+#rssCategoryCarouselGrid .news-item-content,
+#rssCatalogPreviewGrid .news-item-content {
+    align-items: baseline;
+}
+
+#rssCategoryCarouselGrid .news-index,
+#rssCatalogPreviewGrid .news-index {
+    margin-top: 0;
+}
+
+#rssCategoryCarouselGrid .news-title,
+#rssCatalogPreviewGrid .news-title {
+    line-height: 1.45;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    line-clamp: unset;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: initial;
+}
+
+#rssCategoryCarouselGrid .news-item:not(.rss-entry-placeholder):hover,
+#rssCatalogPreviewGrid .news-item:not(.rss-entry-placeholder):hover {
+    background-color: rgba(250, 248, 243, 0.60);
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgba(200, 195, 185, 0.22);
+}
+
+#rssCategoryCarouselGrid .news-item.preview .news-title,
+#rssCatalogPreviewGrid .news-item.preview .news-title,
+#rssCategoryCarouselGrid .news-item:hover .news-title,
+#rssCatalogPreviewGrid .news-item:hover .news-title,
+#rssCategoryCarouselGrid .news-item:focus-within .news-title,
+#rssCatalogPreviewGrid .news-item:focus-within .news-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    line-clamp: unset;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: initial;
+}
+
+#rssCategoryCarouselGrid .news-item,
+#rssCatalogPreviewGrid .news-item {
+    padding: 6px 0;
+    min-height: calc(1.45em + 16px);
+}
+
+#rssCategoryCarouselGrid .news-title.tr-title-overflow-shrink,
+#rssCatalogPreviewGrid .news-title.tr-title-overflow-shrink {
+    font-size: 0.84rem !important;
+}
+
+#rssCategoryCarouselGrid .rss-entry-placeholder,
+#rssCatalogPreviewGrid .rss-entry-placeholder {
+    visibility: hidden;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ==========================================================================
+   Responsive - Mobile (640px)
+   ========================================================================== */
+
+@media (max-width: 640px) {
+    .news-title {
+        font-size: 0.95rem;
+    }
+
+    #rssCategoryCarouselGrid .news-item,
+    #rssCatalogPreviewGrid .news-item {
+        padding: 4px 0;
+    }
+}
