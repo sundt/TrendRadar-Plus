@@ -24,6 +24,12 @@ def _get_user_db_conn():
     return get_user_db_conn(project_root)
 
 
+def _get_online_db_conn():
+    """Get online database connection."""
+    from hotnews.web.db_online import get_online_db_conn
+    return get_online_db_conn(project_root)
+
+
 @router.get("/users")
 async def get_user_stats(request: Request):
     """Get user statistics overview."""
@@ -102,35 +108,110 @@ async def get_user_stats(request: Request):
         """, (today_start,))
         stats["sessions"]["today_logins"] = cur.fetchone()[0]
         
-        # AI Summary statistics
+        # AI Summary statistics - split into VIP usage and Token usage
         try:
-            # Users who used AI summary (tokens_used > 0)
-            cur = conn.execute("SELECT COUNT(*) FROM users WHERE tokens_used > 0")
-            stats["ai_summary"]["users_count"] = cur.fetchone()[0]
+            online_conn = _get_online_db_conn()
             
-            # Total tokens used
-            cur = conn.execute("SELECT SUM(tokens_used) FROM users WHERE tokens_used > 0")
-            stats["ai_summary"]["total_tokens_used"] = cur.fetchone()[0] or 0
+            # === VIP Usage Statistics (from user_subscriptions) ===
+            cur = online_conn.execute("""
+                SELECT user_id, plan_type, usage_used, usage_quota
+                FROM user_subscriptions
+                WHERE usage_used > 0
+                ORDER BY usage_used DESC
+                LIMIT 10
+            """)
+            vip_usage_rows = cur.fetchall()
+            
+            # Get user info for VIP users
+            vip_user_ids = [row[0] for row in vip_usage_rows]
+            vip_users = []
+            if vip_user_ids:
+                placeholders = ','.join('?' * len(vip_user_ids))
+                cur = conn.execute(f"""
+                    SELECT id, nickname, email FROM users WHERE id IN ({placeholders})
+                """, vip_user_ids)
+                user_info = {row[0]: {"nickname": row[1], "email": row[2]} for row in cur.fetchall()}
+                
+                for row in vip_usage_rows:
+                    user_id, plan_type, usage_used, usage_quota = row
+                    info = user_info.get(user_id, {})
+                    vip_users.append({
+                        "id": user_id,
+                        "nickname": info.get("nickname", "-"),
+                        "email": info.get("email", "-"),
+                        "plan_type": plan_type,
+                        "usage_used": usage_used,
+                        "usage_quota": usage_quota,
+                    })
+            
+            # === Token Usage Statistics (from token_usage_logs) ===
+            cur = online_conn.execute("""
+                SELECT user_id, SUM(tokens_used) as total_tokens, COUNT(*) as usage_count
+                FROM token_usage_logs
+                GROUP BY user_id
+                ORDER BY total_tokens DESC
+                LIMIT 10
+            """)
+            token_usage_rows = cur.fetchall()
+            
+            # Get user info for token users
+            token_user_ids = [row[0] for row in token_usage_rows]
+            token_users = []
+            if token_user_ids:
+                placeholders = ','.join('?' * len(token_user_ids))
+                cur = conn.execute(f"""
+                    SELECT id, nickname, email, token_balance FROM users WHERE id IN ({placeholders})
+                """, token_user_ids)
+                user_info = {row[0]: {"nickname": row[1], "email": row[2], "token_balance": row[3]} for row in cur.fetchall()}
+                
+                for row in token_usage_rows:
+                    user_id, total_tokens, usage_count = row
+                    info = user_info.get(user_id, {})
+                    token_users.append({
+                        "id": user_id,
+                        "nickname": info.get("nickname", "-"),
+                        "email": info.get("email", "-"),
+                        "tokens_used": total_tokens,
+                        "token_balance": info.get("token_balance", 0),
+                        "summary_count": usage_count,
+                    })
+            
+            # === Summary counts ===
+            # Total VIP usage
+            cur = online_conn.execute("SELECT COALESCE(SUM(usage_used), 0) FROM user_subscriptions")
+            total_vip_usage = cur.fetchone()[0] or 0
+            
+            # Total token usage
+            cur = online_conn.execute("SELECT COALESCE(SUM(tokens_used), 0) FROM token_usage_logs")
+            total_token_usage = cur.fetchone()[0] or 0
+            
+            # Users count
+            cur = online_conn.execute("SELECT COUNT(*) FROM user_subscriptions WHERE usage_used > 0")
+            vip_users_count = cur.fetchone()[0]
+            
+            cur = online_conn.execute("SELECT COUNT(DISTINCT user_id) FROM token_usage_logs")
+            token_users_count = cur.fetchone()[0]
             
             # Total summaries generated
             cur = conn.execute("SELECT COUNT(*) FROM user_favorites WHERE summary IS NOT NULL AND summary != ''")
-            stats["ai_summary"]["total_summaries"] = cur.fetchone()[0]
+            total_summaries = cur.fetchone()[0]
             
-            # Top AI summary users
-            cur = conn.execute("""
-                SELECT u.id, u.nickname, u.email, u.tokens_used, u.token_balance,
-                       COUNT(f.id) as summary_count
-                FROM users u
-                LEFT JOIN user_favorites f ON u.id = f.user_id AND f.summary IS NOT NULL AND f.summary != ''
-                WHERE u.tokens_used > 0
-                GROUP BY u.id
-                ORDER BY u.tokens_used DESC
-                LIMIT 10
-            """)
-            columns = [desc[0] for desc in cur.description]
-            stats["ai_summary"]["top_users"] = [dict(zip(columns, row)) for row in cur.fetchall()]
-        except Exception:
-            stats["ai_summary"] = {"users_count": 0, "total_tokens_used": 0, "total_summaries": 0, "top_users": []}
+            stats["ai_summary"] = {
+                "vip_users_count": vip_users_count,
+                "token_users_count": token_users_count,
+                "total_vip_usage": total_vip_usage,
+                "total_tokens_used": total_token_usage,
+                "total_summaries": total_summaries,
+                "vip_top_users": vip_users,
+                "token_top_users": token_users,
+                # Keep old field for compatibility
+                "users_count": vip_users_count + token_users_count,
+                "top_users": token_users,  # Backward compatibility
+            }
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            stats["ai_summary"] = {"users_count": 0, "total_tokens_used": 0, "total_summaries": 0, "top_users": [], "vip_top_users": [], "token_top_users": []}
         
         # Recent registered users (only users with auth methods, last 20)
         cur = conn.execute("""

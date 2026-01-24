@@ -1382,19 +1382,45 @@
         <h3>✨ AI 总结统计</h3>
         <div class="row" style="gap: 20px; flex-wrap: wrap; margin-bottom: 15px;">
           <div class="stat-card" style="flex: 1; min-width: 120px; background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%); color: white; padding: 16px; border-radius: 12px;">
-            <div style="font-size: 12px; opacity: 0.8;">使用用户数</div>
-            <div id="stat-ai-users" style="font-size: 28px; font-weight: bold;">-</div>
+            <div style="font-size: 12px; opacity: 0.8;">VIP 用户数</div>
+            <div id="stat-vip-users" style="font-size: 28px; font-weight: bold;">-</div>
+          </div>
+          <div class="stat-card" style="flex: 1; min-width: 120px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 16px; border-radius: 12px;">
+            <div style="font-size: 12px; opacity: 0.8;">VIP 总使用次数</div>
+            <div id="stat-vip-usage" style="font-size: 28px; font-weight: bold;">-</div>
           </div>
           <div class="stat-card" style="flex: 1; min-width: 120px; background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); color: white; padding: 16px; border-radius: 12px;">
-            <div style="font-size: 12px; opacity: 0.8;">总消耗 Token</div>
-            <div id="stat-ai-tokens" style="font-size: 28px; font-weight: bold;">-</div>
+            <div style="font-size: 12px; opacity: 0.8;">Token 用户数</div>
+            <div id="stat-token-users" style="font-size: 28px; font-weight: bold;">-</div>
           </div>
           <div class="stat-card" style="flex: 1; min-width: 120px; background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); color: white; padding: 16px; border-radius: 12px;">
-            <div style="font-size: 12px; opacity: 0.8;">总结次数</div>
-            <div id="stat-ai-summaries" style="font-size: 28px; font-weight: bold;">-</div>
+            <div style="font-size: 12px; opacity: 0.8;">Token 总消耗</div>
+            <div id="stat-ai-tokens" style="font-size: 28px; font-weight: bold;">-</div>
           </div>
         </div>
-        <h4 style="margin-top: 15px; margin-bottom: 10px;">Top 10 用户</h4>
+        
+        <!-- VIP Users Table -->
+        <h4 style="margin-top: 15px; margin-bottom: 10px;">🌟 VIP 用户使用排行</h4>
+        <div class="table-scroll">
+          <table id="vip-top-users-table">
+            <thead>
+              <tr>
+                <th style="width: 60px;">ID</th>
+                <th style="width: 150px;">昵称</th>
+                <th style="width: 200px;">邮箱</th>
+                <th style="width: 100px;">套餐</th>
+                <th style="width: 100px;">已用次数</th>
+                <th style="width: 100px;">总配额</th>
+              </tr>
+            </thead>
+            <tbody id="vip-top-users-tbody">
+              <tr><td colspan="6" class="muted">点击 "刷新统计" 加载数据...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Token Users Table -->
+        <h4 style="margin-top: 20px; margin-bottom: 10px;">🎫 Token 用户消耗排行</h4>
         <div class="table-scroll">
           <table id="ai-top-users-table">
             <thead>
@@ -1935,7 +1961,11 @@
           
           // Update AI Summary statistics
           const aiSummary = stats.ai_summary || {};
-          document.getElementById('stat-ai-users').textContent = aiSummary.users_count?.toLocaleString() || '0';
+          
+          // Update stat cards
+          document.getElementById('stat-vip-users').textContent = aiSummary.vip_users_count?.toLocaleString() || '0';
+          document.getElementById('stat-vip-usage').textContent = aiSummary.total_vip_usage?.toLocaleString() || '0';
+          document.getElementById('stat-token-users').textContent = aiSummary.token_users_count?.toLocaleString() || '0';
           
           // Format tokens (show in K or M)
           const totalTokens = aiSummary.total_tokens_used || 0;
@@ -1948,13 +1978,37 @@
             tokenDisplay = totalTokens.toString();
           }
           document.getElementById('stat-ai-tokens').textContent = tokenDisplay;
-          document.getElementById('stat-ai-summaries').textContent = aiSummary.total_summaries?.toLocaleString() || '0';
           
-          // Update AI top users table
+          // Update VIP top users table
+          const vipTopUsersTbody = document.getElementById('vip-top-users-tbody');
+          let vipUsersHtml = '';
+          
+          const planTypeNames = {
+            'monthly': '月度会员',
+            'yearly': '年度会员',
+            'free': '免费用户'
+          };
+          
+          for (const user of aiSummary.vip_top_users || []) {
+            const planName = planTypeNames[user.plan_type] || user.plan_type;
+            vipUsersHtml += `
+              <tr>
+                <td>#${user.id}</td>
+                <td>${user.nickname || '-'}</td>
+                <td style="font-size: 12px; color: #6b7280;">${user.email || '-'}</td>
+                <td><span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${planName}</span></td>
+                <td style="font-weight: 500; color: #ef4444;">${user.usage_used || 0}</td>
+                <td style="color: #6b7280;">${user.usage_quota || 0}</td>
+              </tr>
+            `;
+          }
+          vipTopUsersTbody.innerHTML = vipUsersHtml || '<tr><td colspan="6" class="muted">暂无 VIP 用户使用记录</td></tr>';
+          
+          // Update Token top users table
           const aiTopUsersTbody = document.getElementById('ai-top-users-tbody');
           let aiUsersHtml = '';
           
-          for (const user of aiSummary.top_users || []) {
+          for (const user of aiSummary.token_top_users || []) {
             const tokensUsed = user.tokens_used || 0;
             const tokenBalance = user.token_balance || 0;
             const usedDisplay = tokensUsed >= 1000 ? (tokensUsed / 1000).toFixed(1) + 'K' : tokensUsed;
@@ -1971,7 +2025,7 @@
               </tr>
             `;
           }
-          aiTopUsersTbody.innerHTML = aiUsersHtml || '<tr><td colspan="6" class="muted">暂无 AI 总结使用记录</td></tr>';
+          aiTopUsersTbody.innerHTML = aiUsersHtml || '<tr><td colspan="6" class="muted">暂无 Token 使用记录</td></tr>';
           
         } catch (e) {
           console.error('Error loading user stats:', e);
