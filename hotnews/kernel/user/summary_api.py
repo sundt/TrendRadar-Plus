@@ -353,6 +353,28 @@ async def generate_summary_stream(
         token_info = _get_user_token_info(request, user["id"])
         cached_tokens = row[2] or 0  # Original tokens used when generated
         
+        # Get tags from global cache
+        cached_tags = {'quality': None, 'category': []}
+        try:
+            from hotnews.web.db_online import get_online_db_conn
+            import hashlib
+            url_hash = hashlib.md5(url.encode()).hexdigest()
+            online_conn = get_online_db_conn(request.app.state.project_root)
+            tag_cur = online_conn.execute(
+                "SELECT quality_tag, category_tags FROM article_summaries WHERE url_hash = ?",
+                (url_hash,)
+            )
+            tag_row = tag_cur.fetchone()
+            if tag_row:
+                cached_tags['quality'] = tag_row[0] if tag_row[0] else None
+                try:
+                    cached_tags['category'] = json.loads(tag_row[1]) if tag_row[1] else []
+                except:
+                    cached_tags['category'] = []
+        except Exception as e:
+            import logging
+            logging.debug(f"Failed to get cached tags: {e}")
+        
         async def cached_stream():
             data = {
                 "type": "cached",
@@ -362,7 +384,8 @@ async def generate_summary_stream(
                 "news_id": news_id,
                 "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": cached_tokens},  # Show original consumption
                 "token_balance": token_info["token_balance"],
-                "tokens_used": token_info["tokens_used"]
+                "tokens_used": token_info["tokens_used"],
+                "tags": cached_tags
             }
             yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
         

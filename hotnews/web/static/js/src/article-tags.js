@@ -86,6 +86,7 @@ function generateTagsHtml(tags) {
         });
     }
     
+    console.log('[ArticleTags] generateTagsHtml:', { tags, html });
     return html;
 }
 
@@ -93,10 +94,16 @@ function generateTagsHtml(tags) {
  * Apply tags to a news item element
  */
 function applyTagsToNewsItem(newsItem, tags) {
-    if (!newsItem || !tags) return;
+    if (!newsItem || !tags) {
+        console.log('[ArticleTags] applyTags: missing newsItem or tags', { newsItem: !!newsItem, tags });
+        return;
+    }
     
     const titleLink = newsItem.querySelector('.news-title');
-    if (!titleLink) return;
+    if (!titleLink) {
+        console.log('[ArticleTags] applyTags: no .news-title found in newsItem');
+        return;
+    }
     
     // Remove existing tags
     titleLink.querySelectorAll('.article-tag-suffix').forEach(el => el.remove());
@@ -104,7 +111,10 @@ function applyTagsToNewsItem(newsItem, tags) {
     // Add new tags
     const tagsHtml = generateTagsHtml(tags);
     if (tagsHtml) {
+        console.log('[ArticleTags] Inserting tags HTML:', tagsHtml);
         titleLink.insertAdjacentHTML('beforeend', tagsHtml);
+    } else {
+        console.log('[ArticleTags] No tags HTML generated for:', tags);
     }
 }
 

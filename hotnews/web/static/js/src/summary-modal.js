@@ -407,6 +407,20 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             `;
                             showFooter(url, articleType, articleTypeName, true, tokenUsage, cachedFeedback, cachedBalanceInfo);
                             updateNewsItemButton(newsId, true);
+                            
+                            // Apply tags for cached summary too
+                            if (data.tags && window.ArticleTags) {
+                                console.log('[Summary] Applying cached tags for newsId:', newsId, 'tags:', data.tags);
+                                let cachedNewsItem = document.querySelector(`.news-item[data-news-id="${newsId}"]`);
+                                if (!cachedNewsItem) {
+                                    cachedNewsItem = document.querySelector(`.news-item[data-url="${url}"]`);
+                                }
+                                if (cachedNewsItem) {
+                                    console.log('[Summary] Found news item for cached, applying tags');
+                                    window.ArticleTags.applyTags(cachedNewsItem, data.tags);
+                                    cachedNewsItem.dataset.tagsLoaded = 'true';
+                                }
+                            }
                             return;
                             
                         case 'done':
@@ -428,10 +442,19 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             
                             // Apply tags immediately after summary completes
                             if (data.tags && window.ArticleTags) {
-                                const newsItem = document.querySelector(`.news-item[data-news-id="${newsId}"]`);
+                                console.log('[Summary] Applying tags for newsId:', newsId, 'tags:', data.tags);
+                                // Try multiple selectors to find the news item
+                                let newsItem = document.querySelector(`.news-item[data-news-id="${newsId}"]`);
+                                if (!newsItem) {
+                                    // Fallback: find by URL
+                                    newsItem = document.querySelector(`.news-item[data-url="${url}"]`);
+                                }
                                 if (newsItem) {
+                                    console.log('[Summary] Found news item, applying tags');
                                     window.ArticleTags.applyTags(newsItem, data.tags);
                                     newsItem.dataset.tagsLoaded = 'true';
+                                } else {
+                                    console.log('[Summary] News item not found in DOM');
                                 }
                             }
                             break;
