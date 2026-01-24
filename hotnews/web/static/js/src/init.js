@@ -8,8 +8,10 @@ import { authState } from './auth-state.js';
 import { AuthButton } from './auth-ui.js';
 import { openLoginModal } from './login-modal.js';
 import { initTodoButton, loadTodos } from './todo.js';
-import { openPaymentModal } from './payment.js';
 import { openSubscriptionModal } from './subscription.js';
+
+// 保留原 Token 充值功能（隐藏，仅内部使用）
+import { openPaymentModal as openTokenPaymentModal } from './payment.js';
 
 const MOBILE_TOP_COLLAPSE_STORAGE_KEY = 'hotnews_mobile_top_collapsed_v1';
 const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
@@ -27,8 +29,11 @@ function goToSettings() {
 
 // 暴露到全局
 window.goToSettings = goToSettings;
-window.openPaymentModal = openPaymentModal;
+// openPaymentModal 现在打开订阅弹窗（VIP）
+window.openPaymentModal = openSubscriptionModal;
 window.openSubscriptionModal = openSubscriptionModal;
+// 保留原 Token 充值功能（隐藏入口）
+window.openTokenPaymentModal = openTokenPaymentModal;
 
 function _isMobileNarrowScreen() {
     try {
