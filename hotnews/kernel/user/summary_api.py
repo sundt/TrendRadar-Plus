@@ -127,7 +127,7 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
         )
         online_conn.commit()
     except Exception as e:
-        import logging
+
         logging.warning(f"Failed to save to global cache: {e}")
 
 
@@ -139,7 +139,7 @@ def _get_user_token_info(request: Request, user_id: int) -> dict:
         tokens_used: Not used anymore (kept for compatibility)
         default_tokens: Default free quota
     """
-    import logging
+
     
     total_balance = 0
     
@@ -177,7 +177,7 @@ def _consume_user_tokens(request: Request, user_id: int, amount: int, news_id: s
         token_balance: New total balance after consumption
         tokens_used: Deprecated (always 0)
     """
-    import logging
+
     
     try:
         from hotnews.web.db_online import get_online_db_conn
@@ -290,7 +290,7 @@ async def generate_summary(
         conn.commit()
     except Exception as e:
         # Log but don't fail - summary is more important
-        import logging
+
         logging.warning(f"Failed to save favorite: {e}")
     
     return {
@@ -380,7 +380,7 @@ async def generate_summary_stream(
                 except:
                     cached_tags['category'] = []
         except Exception as e:
-            import logging
+
             logging.debug(f"Failed to get cached tags: {e}")
         
         async def cached_stream():
@@ -490,7 +490,7 @@ async def generate_summary_stream(
                     quality_tag = tags.get('quality') or ""
                     category_tags = tags.get('category') or []
                 except Exception as e:
-                    import logging
+
                     logging.debug(f"Tag extraction skipped: {e}")
                 
                 # Strip tags block from summary for display/storage
@@ -517,7 +517,7 @@ async def generate_summary_stream(
                     )
                     conn.commit()
                 except Exception as e:
-                    import logging
+
                     logging.warning(f"Failed to save favorite: {e}")
                 
                 # Save to global cache with tags
@@ -680,7 +680,7 @@ async def get_article_tags(request: Request, urls: str = ""):
         return {"ok": True, "tags": result}
         
     except Exception as e:
-        import logging
+
         logging.warning(f"Failed to get article tags: {e}")
         return {"ok": False, "error": str(e), "tags": {}}
 
@@ -745,6 +745,6 @@ async def get_article_tags_by_hash(request: Request, hashes: str = ""):
         return {"ok": True, "tags": result}
         
     except Exception as e:
-        import logging
+
         logging.warning(f"Failed to get article tags by hash: {e}")
         return {"ok": False, "error": str(e), "tags": {}}
