@@ -113,12 +113,16 @@ function applyTagsToNewsItem(newsItem, tags) {
  */
 async function loadTagsForVisibleItems() {
     // Collect URLs from visible news items that don't have tags yet
-    const newsItems = document.querySelectorAll('.news-item[data-url]');
+    // Support both data-url and data-news-url attributes for compatibility
+    const newsItems = document.querySelectorAll('.news-item[data-url], .news-item[data-news-url]');
     const urlsToLoad = [];
     const urlToItems = {};
     
+    console.log('[ArticleTags] Found', newsItems.length, 'news items with data-url or data-news-url');
+    
     newsItems.forEach(item => {
-        const url = item.dataset.url;
+        // Support both attribute names
+        const url = item.dataset.url || item.dataset.newsUrl;
         if (!url) return;
         
         // Skip if already has tags or already in cache
@@ -137,7 +141,12 @@ async function loadTagsForVisibleItems() {
         urlToItems[url].push(item);
     });
     
-    if (urlsToLoad.length === 0) return;
+    if (urlsToLoad.length === 0) {
+        console.log('[ArticleTags] No URLs to load (all cached or already loaded)');
+        return;
+    }
+    
+    console.log('[ArticleTags] Loading tags for', urlsToLoad.length, 'URLs');
     
     // Batch load tags (max 50 per request)
     const batchSize = 50;
@@ -149,6 +158,7 @@ async function loadTagsForVisibleItems() {
             if (!response.ok) continue;
             
             const data = await response.json();
+            console.log('[ArticleTags] API response:', data);
             if (!data.ok || !data.tags) continue;
             
             // Apply tags to items
@@ -159,6 +169,7 @@ async function loadTagsForVisibleItems() {
                 const items = urlToItems[url] || [];
                 items.forEach(item => {
                     if (tags) {
+                        console.log('[ArticleTags] Applying tags to item:', url, tags);
                         applyTagsToNewsItem(item, tags);
                     }
                     item.dataset.tagsLoaded = 'true';

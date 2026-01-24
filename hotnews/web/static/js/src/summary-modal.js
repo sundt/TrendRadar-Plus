@@ -425,6 +425,15 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             }
                             showFooter(url, articleType, articleTypeName, false, tokenUsage, null, doneBalanceInfo);
                             updateNewsItemButton(newsId, true);
+                            
+                            // Apply tags immediately after summary completes
+                            if (data.tags && window.ArticleTags) {
+                                const newsItem = document.querySelector(`.news-item[data-news-id="${newsId}"]`);
+                                if (newsItem) {
+                                    window.ArticleTags.applyTags(newsItem, data.tags);
+                                    newsItem.dataset.tagsLoaded = 'true';
+                                }
+                            }
                             break;
                             
                         case 'error':

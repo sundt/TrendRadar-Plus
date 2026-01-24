@@ -478,14 +478,18 @@ async def generate_summary_stream(
                     import logging
                     logging.debug(f"Tag update skipped: {e}")
                 
-                # Return done with token info
+                # Return done with token info and tags
                 done_data = {
                     'type': 'done',
                     'news_id': news_id,
                     'remaining': remaining - 1,
                     'token_usage': token_usage,
                     'token_balance': token_info["token_balance"],
-                    'tokens_used': token_info["tokens_used"]
+                    'tokens_used': token_info["tokens_used"],
+                    'tags': {
+                        'quality': quality_tag if quality_tag else None,
+                        'category': category_tags
+                    }
                 }
                 yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
     
