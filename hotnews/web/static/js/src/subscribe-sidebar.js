@@ -264,7 +264,12 @@ async function loadRecommendationsTab() {
             const resp = await fetch('/api/user/preferences/recommended-tags');
             if (!resp.ok) throw new Error('获取推荐失败');
             const data = await resp.json();
-            state.data = data.recommendations || [];
+            // API returns hot_tags, new_tags, related_tags - combine them
+            state.data = [
+                ...(data.hot_tags || []),
+                ...(data.new_tags || []),
+                ...(data.related_tags || [])
+            ];
             state.loaded = true;
         } catch (e) {
             state.error = e.message;
