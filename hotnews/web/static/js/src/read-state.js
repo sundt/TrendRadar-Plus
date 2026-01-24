@@ -52,7 +52,8 @@ export const readState = {
         for (const [id, info] of Object.entries(reads)) {
             const ageHours = (now - info.readAt) / (1000 * 60 * 60);
             if (ageHours >= EXPIRE_HOURS) {
-                const item = document.querySelector(`[data-news-id="${id}"]`);
+                // 兼容新旧属性名
+                const item = document.querySelector(`[data-id="${id}"], [data-news-id="${id}"]`);
                 if (item) {
                     item.classList.remove('read');
                     const checkbox = item.querySelector('.news-checkbox');
@@ -72,8 +73,11 @@ export const readState = {
 
     markAsRead(checkbox) {
         const item = checkbox.closest('.news-item');
-        const newsId = item.dataset.newsId;
-        const newsTitle = item.dataset.newsTitle || '';
+        // 兼容新旧属性名：data-id (新) 和 data-news-id (旧)
+        const newsId = item.dataset.id || item.dataset.newsId;
+        // 从标题元素获取标题文本
+        const titleEl = item.querySelector('.news-title');
+        const newsTitle = titleEl ? titleEl.textContent.trim() : (item.dataset.newsTitle || '');
         let reads = this.getReadNews();
 
         if (checkbox.checked) {
@@ -97,8 +101,10 @@ export const readState = {
     markItemAsRead(item) {
         try {
             if (!item) return;
-            const newsId = item.dataset.newsId;
-            const newsTitle = item.dataset.newsTitle || '';
+            // 兼容新旧属性名
+            const newsId = item.dataset.id || item.dataset.newsId;
+            const titleEl = item.querySelector('.news-title');
+            const newsTitle = titleEl ? titleEl.textContent.trim() : (item.dataset.newsTitle || '');
             if (!newsId) return;
 
             item.classList.add('read');
@@ -127,7 +133,8 @@ export const readState = {
     restoreReadState() {
         const reads = this.getReadNews();
         Object.keys(reads).forEach(id => {
-            const item = document.querySelector(`[data-news-id="${id}"]`);
+            // 兼容新旧属性名：data-id (新) 和 data-news-id (旧)
+            const item = document.querySelector(`[data-id="${id}"], [data-news-id="${id}"]`);
             if (item) {
                 item.classList.add('read');
                 const checkbox = item.querySelector('.news-checkbox');
@@ -167,6 +174,15 @@ window.clearAllRead = () => readState.clearAllRead();
 
 TR.readState = readState;
 
+// 事件委托：处理 checkbox 变化
+function initCheckboxDelegation() {
+    document.addEventListener('change', (e) => {
+        if (e.target.classList.contains('news-checkbox')) {
+            readState.markAsRead(e.target);
+        }
+    });
+}
+
 // 初始化
 ready(function() {
     readState.applyShowReadMode(readState.getShowReadModePref());
@@ -177,4 +193,5 @@ ready(function() {
     }
     readState.restoreReadState();
     readState.updateReadCount();
+    initCheckboxDelegation();
 });

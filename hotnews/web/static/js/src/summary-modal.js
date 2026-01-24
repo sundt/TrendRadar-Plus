@@ -909,6 +909,9 @@ function handleSummaryClick(event, newsId, title, url, sourceId, sourceName) {
  */
 async function loadSummarizedList() {
     try {
+        // Skip if user is not logged in
+        if (!authState.isLoggedIn()) return;
+        
         const res = await fetch('/api/summary/list');
         if (!res.ok) return;
         

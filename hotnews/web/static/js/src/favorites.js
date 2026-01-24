@@ -587,11 +587,57 @@ function initPanelResize() {
     handle.addEventListener('touchstart', onTouchStart, { passive: false });
 }
 
+// 事件委托：处理收藏按钮点击
+function initFavoriteButtonDelegation() {
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.news-favorite-btn');
+        if (!btn) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const user = authState.getUser();
+        if (!user) {
+            openLoginModal();
+            return;
+        }
+        
+        // 从 DOM 中获取新闻信息
+        const newsItem = btn.closest('.news-item');
+        if (!newsItem) return;
+        
+        const newsId = newsItem.dataset.id || newsItem.dataset.newsId;
+        const url = newsItem.dataset.url;
+        const titleEl = newsItem.querySelector('.news-title');
+        const title = titleEl ? titleEl.textContent.trim() : '';
+        
+        // 获取平台信息
+        const platformCard = newsItem.closest('.platform-card');
+        const sourceId = platformCard ? platformCard.dataset.platform : '';
+        const sourceNameEl = platformCard ? platformCard.querySelector('.platform-name') : null;
+        const sourceName = sourceNameEl ? sourceNameEl.textContent.replace('📱', '').trim() : '';
+        
+        const item = {
+            news_id: newsId,
+            title: title,
+            url: url,
+            source_id: sourceId,
+            source_name: sourceName
+        };
+        
+        toggleFavorite(item, btn);
+    });
+}
+
 // Initialize resize on DOM ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initPanelResize);
+    document.addEventListener('DOMContentLoaded', () => {
+        initPanelResize();
+        initFavoriteButtonDelegation();
+    });
 } else {
     initPanelResize();
+    initFavoriteButtonDelegation();
 }
 
 /**

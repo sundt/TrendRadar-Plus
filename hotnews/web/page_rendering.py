@@ -71,6 +71,62 @@ def _inject_source_subscription_category(data: Dict[str, Any]) -> Dict[str, Any]
         return data
 
 
+def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    优化 SSR 数据：只保留第一个激活栏目的完整数据，其他栏目只保留元数据。
+    这样可以大幅减少初始 HTML 大小，非激活栏目通过 AJAX 懒加载。
+    
+    NOTE: 暂时禁用此优化，直接返回原始数据
+    """
+    # 暂时禁用懒加载优化，直接返回原始数据
+    return data
+    
+    # 以下是原始优化逻辑（暂时禁用）
+    try:
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(cats, dict):
+            return data
+
+        # 特殊栏目不需要处理（它们有自己的加载逻辑）
+        special_cats = {"explore", "my-tags", "knowledge", "source-subscription"}
+        
+        # 找到第一个激活的栏目（非特殊栏目）
+        active_cat_id = None
+        for cat_id in cats.keys():
+            if cat_id not in special_cats:
+                active_cat_id = cat_id
+                break
+        
+        if not active_cat_id:
+            return data
+        
+        # 精简非激活栏目的数据
+        slimmed_cats = {}
+        for cat_id, cat_data in cats.items():
+            if cat_id in special_cats:
+                # 特殊栏目保持不变
+                slimmed_cats[cat_id] = cat_data
+            elif cat_id == active_cat_id:
+                # 激活栏目保留完整数据
+                slimmed_cats[cat_id] = cat_data
+            else:
+                # 非激活栏目只保留元数据，清空 platforms 中的 news
+                slimmed_cat = {
+                    "name": cat_data.get("name", ""),
+                    "icon": cat_data.get("icon", "📰"),
+                    "platforms": {},  # 清空平台数据
+                    "news_count": cat_data.get("news_count", 0),
+                    "filtered_count": cat_data.get("filtered_count", 0),
+                    "is_new": cat_data.get("is_new", False),
+                }
+                slimmed_cats[cat_id] = slimmed_cat
+        
+        data["categories"] = slimmed_cats
+        return data
+    except Exception:
+        return data
+
+
 def _inject_explore_category(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         cats = data.get("categories") if isinstance(data, dict) else None
@@ -330,6 +386,10 @@ async def render_viewer_page(
                 data = merge_rss_subscription_news_into_data(request=request, data=data)
             except Exception:
                 pass
+
+        # 优化：只保留第一个激活栏目的完整数据，其他栏目只保留元数据
+        # 这样可以大幅减少初始 HTML 大小
+        data = _slim_categories_for_ssr(data)
 
         cdn_base_url = _get_cdn_base_url(project_root)
         static_prefix = cdn_base_url if cdn_base_url else "/static"

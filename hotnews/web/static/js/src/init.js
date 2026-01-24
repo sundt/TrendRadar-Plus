@@ -178,7 +178,7 @@ ready(function () {
     setTimeout(() => {
         initTodoButton();
         // Reload todos when user logs in
-        authState.onAuthChange((user) => {
+        authState.subscribe((user) => {
             if (user) {
                 loadTodos();
             }

@@ -186,6 +186,16 @@ export const tabs = {
             TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });
         }
 
+        // 检查是否需要懒加载栏目数据
+        const isLazyLoad = paneEl.dataset.lazyLoad === '1';
+        const lazyPlaceholder = paneEl.querySelector('.category-lazy-placeholder');
+        
+        if (isLazyLoad && lazyPlaceholder) {
+            // 懒加载栏目数据
+            this._loadCategoryData(categoryId, paneEl, lazyPlaceholder);
+            return;
+        }
+
         try {
             const hasItems = !!paneEl.querySelector('.news-item');
             const hasPlaceholder = !!paneEl.querySelector('.news-placeholder');
@@ -201,6 +211,127 @@ export const tabs = {
         } catch (e) {
             // ignore
         }
+    },
+
+    async _loadCategoryData(categoryId, paneEl, placeholder) {
+        // 显示加载状态
+        const loadingDiv = placeholder.querySelector('.category-loading');
+        if (loadingDiv) {
+            loadingDiv.innerHTML = `
+                <div style="font-size:32px;margin-bottom:12px;">⏳</div>
+                <div style="font-size:14px;">加载中...</div>
+            `;
+        }
+
+        try {
+            const response = await fetch(`/api/category/${encodeURIComponent(categoryId)}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            const category = data.category;
+            
+            if (!category || !category.platforms) {
+                throw new Error('Invalid category data');
+            }
+
+            // 渲染栏目内容
+            const html = this._renderCategoryContent(categoryId, category);
+            
+            // 替换占位符
+            const grid = paneEl.querySelector('.platform-grid');
+            if (grid) {
+                grid.innerHTML = html;
+                grid.classList.remove('category-lazy-placeholder');
+            }
+
+            // 标记为已加载
+            paneEl.dataset.lazyLoad = '0';
+
+            // 恢复已读状态
+            if (TR.readState && typeof TR.readState.restoreReadState === 'function') {
+                TR.readState.restoreReadState();
+            }
+
+            // 更新计数
+            if (TR.counts && typeof TR.counts.updateAllCounts === 'function') {
+                TR.counts.updateAllCounts();
+            }
+
+        } catch (e) {
+            console.error('[Tabs] Failed to load category:', categoryId, e);
+            if (loadingDiv) {
+                loadingDiv.innerHTML = `
+                    <div style="font-size:32px;margin-bottom:12px;">❌</div>
+                    <div style="font-size:14px;color:#ef4444;">加载失败，点击重试</div>
+                `;
+                loadingDiv.style.cursor = 'pointer';
+                loadingDiv.onclick = () => this._loadCategoryData(categoryId, paneEl, placeholder);
+            }
+        }
+    },
+
+    _renderCategoryContent(categoryId, category) {
+        const platforms = category.platforms || {};
+        const platformEntries = Object.entries(platforms);
+        
+        if (platformEntries.length === 0) {
+            return '<div class="category-empty-state">暂无内容</div>';
+        }
+
+        return platformEntries.map(([platformId, platform], idx) => {
+            const news = platform.news || [];
+            const isRssPlatform = platformId.startsWith('rss-');
+            
+            const newsHtml = news.slice(0, 20).map((n, i) => {
+                const stableId = n.stable_id || '';
+                const title = n.display_title || n.title || '';
+                const url = n.url || '#';
+                const meta = n.meta || '';
+                const dateStr = n.timestamp ? String(n.timestamp).slice(5, 10) : '';
+                
+                return `
+                    <li class="news-item" data-id="${this._escapeHtml(stableId)}" data-url="${this._escapeHtml(url)}">
+                        <div class="news-item-content">
+                            <input type="checkbox" class="news-checkbox" title="标记已读" />
+                            <span class="news-index">${i + 1}</span>
+                            <a class="news-title" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+                                ${this._escapeHtml(title)}
+                            </a>
+                            ${dateStr ? `<span class="tr-news-date">${this._escapeHtml(dateStr)}</span>` : ''}
+                            <button class="news-favorite-btn" title="收藏">☆</button>
+                        </div>
+                        ${meta && !isRssPlatform ? `<div class="news-subtitle">${this._escapeHtml(meta)}</div>` : ''}
+                    </li>
+                `;
+            }).join('');
+
+            return `
+                <div class="platform-card" data-platform="${this._escapeHtml(platformId)}" 
+                     data-total-count="${news.length}" data-loaded-count="${Math.min(news.length, 20)}" 
+                     data-lazy="0" draggable="false">
+                    <div class="platform-header">
+                        <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
+                        <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
+                            📱 ${this._escapeHtml(platform.name || platformId)}
+                        </div>
+                        <div class="platform-header-actions"></div>
+                    </div>
+                    <ul class="news-list">${newsHtml}</ul>
+                    <div class="news-load-sentinel" aria-hidden="true"></div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    _escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     },
 
     restoreActiveTab() {

@@ -389,7 +389,8 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const crossCount = escapeHtml(n?.cross_platform_count ?? '');
         const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
         const crossClass = isCross ? 'cross-platform' : '';
-        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" onchange="markAsRead(this)" />';
+        // 移除内联事件处理器，使用事件委托
+        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" />';
         const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
         const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
         const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
@@ -404,12 +405,13 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
         const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
         
+        // 使用简化的 data 属性，移除内联事件处理器
         return `
-            <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
+            <li class="news-item${pagedHidden}" data-id="${stableId}" data-url="${url}">
                 <div class="news-item-content">
                     ${checkboxHtml}
                     ${indexHtml}
-                    <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
+                    <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer">
                         ${title}
                         ${crossBadge}
                     </a>
@@ -829,7 +831,8 @@ export const data = {
                         const crossCount = escapeHtml(n?.cross_platform_count ?? '');
                         const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
                         const crossClass = isCross ? 'cross-platform' : '';
-                        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" onchange="markAsRead(this)" />';
+                        // 移除内联事件处理器，使用事件委托
+                        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" />';
                         const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
                         const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
                         const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
@@ -844,12 +847,13 @@ export const data = {
                         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
                         const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
                         
+                        // 使用简化的 data 属性
                         return `
-                        <li class="news-item${pagedHidden}" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
+                        <li class="news-item${pagedHidden}" data-id="${stableId}" data-url="${url}">
                             <div class="news-item-content">
                                 ${checkboxHtml}
                                 ${indexHtml}
-                                <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
+                                <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer">
                                     ${title}
                                     ${crossBadge}
                                 </a>

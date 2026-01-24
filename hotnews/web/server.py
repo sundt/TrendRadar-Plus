@@ -2602,6 +2602,40 @@ async def api_news(
     return UnicodeJSONResponse(content=data)
 
 
+@app.get("/api/category/{category_id}")
+async def api_category(
+    request: Request,
+    category_id: str,
+    filter_mode: Optional[str] = Query(None)
+):
+    """API: 获取单个栏目的新闻数据（用于懒加载）"""
+    viewer_service, _ = get_services()
+    
+    # Load system settings
+    sys_settings = get_system_settings(project_root)
+    items_per_card = sys_settings.get("display", {}).get("items_per_card", 50)
+    
+    # 获取完整数据
+    data = viewer_service.get_categorized_news(
+        platforms=None,
+        limit=10000,
+        apply_filter=True,
+        filter_mode=filter_mode,
+        per_platform_limit=items_per_card
+    )
+    
+    cats = data.get("categories", {})
+    if category_id not in cats:
+        raise HTTPException(status_code=404, detail=f"Category '{category_id}' not found")
+    
+    category_data = cats[category_id]
+    
+    return UnicodeJSONResponse(content={
+        "category_id": category_id,
+        "category": category_data
+    })
+
+
 @app.get("/api/search")
 async def api_search(
     q: str = Query(..., description="搜索关键词"),
