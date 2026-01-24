@@ -1,4 +1,4 @@
-# 文章标签可视化方案 v2
+# 文章标签可视化方案 v3
 
 ## 概述
 
@@ -36,17 +36,53 @@
 
 ### 2. 内容分类标签（1-2 个）
 
-现有的 50+ 个分类标签，用于"我的关注"筛选：
+基于 AI_TAGGING_SYSTEM.md 的完整标签体系（62 个标签）：
 
+#### 大类标签（12 个，必选 1 个）
 ```
-tech, ai_ml, free_deal, finance, llm, tutorial, business, dev_tools, 
-deep_dive, politics, programming, breaking, world, database, official, 
-entertainment, cloud, opinion, sports, cybersecurity, interview, health, 
-hardware, tool_rec, science, mobile, career, lifestyle, web3, event, 
-education, gaming, robotics, iot, vr_ar, opensource, stock, crypto, 
-macro, banking, insurance, real_estate, personal_fin, startup, ecommerce, 
-marketing, hr, management, food, travel, books
+tech(科技), finance(财经), business(商业), politics(政治), 
+world(国际), entertainment(娱乐), sports(体育), health(健康), 
+science(科学), lifestyle(生活), education(教育), other(其他)
 ```
+
+#### 细分主题标签（50+ 个，选 0-1 个）
+
+**科技类**：
+- ai_ml(AI), llm(大模型), dev_tools(开发工具), programming(编程)
+- database(数据库), cloud(云计算), cybersecurity(安全), hardware(硬件)
+- mobile(移动), web3(区块链), gaming(游戏), robotics(机器人)
+- iot(物联网), vr_ar(VR/AR), opensource(开源)
+
+**财经类**：
+- stock(股票), crypto(加密货币), macro(宏观经济), banking(银行)
+- insurance(保险), real_estate(房产), personal_fin(理财)
+- **earnings(财报/业绩)**, **ipo(IPO/上市)**, fund(基金)
+
+**商业类**：
+- startup(创业), ecommerce(电商), marketing(营销), hr(人力)
+- management(管理), **merger(并购)**, **layoff(裁员)**
+
+**生活类**：
+- food(美食), travel(旅行), fashion(时尚), home(家居)
+- parenting(育儿), pets(宠物), automotive(汽车)
+
+**娱乐类**：
+- movies(电影), music(音乐), tv_shows(电视剧), celebrity(明星)
+- anime(动漫), books(书籍)
+
+#### 属性标签（10 个，选 0-1 个）
+```
+free_deal(免费/优惠), tutorial(教程), deep_dive(深度分析), 
+breaking(快讯), official(官方发布), opinion(观点), 
+interview(访谈), tool_rec(工具推荐), career(职业), event(活动)
+```
+
+#### 标签选择原则
+1. 财报、业绩公告类文章必须标记 `earnings`
+2. IPO、上市相关必须标记 `ipo`
+3. 裁员、组织调整必须标记 `layoff`
+4. 并购、收购必须标记 `merger`
+5. 优先选择细分主题标签，而非只选大类
 
 ## 展示样式
 
@@ -62,11 +98,8 @@ marketing, hr, management, food, travel, books
 **所有标签都存在 `article_summaries` 表**（只有总结过的文章才有标签）：
 
 ```sql
-ALTER TABLE article_summaries ADD COLUMN quality_tag TEXT DEFAULT '';
--- 存储单个质量标签：'ad', 'gem', 'clickbait' 等（可为空）
-
--- category_tags 已有字段，存储 JSON 数组
--- 例如：'["ai_ml", "tutorial"]'
+-- quality_tag: 单个质量标签，如 'gem', 'ad' 等（可为空）
+-- category_tags: JSON 数组，如 '["finance", "earnings"]'
 ```
 
 **设计原则：**
@@ -77,70 +110,58 @@ ALTER TABLE article_summaries ADD COLUMN quality_tag TEXT DEFAULT '';
 ## AI 输出格式
 
 ```markdown
----
-
-## 🏷️ 文章标签
-
-**质量评估**（从以下选择 0-1 个，大部分文章无需标记）：
-- 负面：ad(广告), sponsored(软文), clickbait(标题党), pr(公关稿), outdated(过时), low_quality(水文)
-- 正面：gem(精华), breaking(突发), exclusive(独家), practical(实用)
-
-**内容分类**（从预定义列表选择 1-2 个）：
-tech, ai_ml, tutorial, finance, ...
-
-**质量评估**: 
-**内容分类**: 
+[TAGS_START]
+**质量评估**: gem
+**内容分类**: finance, earnings
+[TAGS_END]
 ```
 
 ## 技术实现
 
-### Phase 1: 后端
+### Phase 1: 后端 ✅
 
-1. **更新 `prompts.py`**
-   - 新增完整的 `QUALITY_TAGS` 定义（10 个标签）
-   - 修改 `TAGS_OUTPUT_INSTRUCTION` 输出格式
-   - 确保 `LEARNING_FOOTER_WITH_TAGS` 包含标签指令
+1. **更新 `prompts.py`** ✅
+   - 完整的标签体系定义（62 个标签）
+   - 详细的 AI 标签选择指令
+   - 强调细分主题标签的使用
 
-2. **更新 `article_summary.py`**
-   - 修改 `extract_tags_from_summary()` 解析两类标签
-   - 返回 `{'quality': str|None, 'category': list}`
+2. **更新 `article_summary.py`** ✅
+   - `extract_tags_from_summary()` 解析两类标签
+   - `strip_tags_from_summary()` 移除标签块
 
-3. **更新 `db_online.py`**
-   - 添加 `article_summaries.quality_tag` 字段
+3. **更新 `db_online.py`** ✅
+   - `article_summaries.quality_tag` 字段
+   - `article_summaries.category_tags` 字段
 
-4. **更新 `summary_api.py`**
-   - 保存质量标签到 `article_summaries`
-   - 分类标签继续写入 `rss_entry_tags`
+4. **更新 `summary_api.py`** ✅
+   - 保存标签到 `article_summaries`
+   - `/api/summary/tags` 批量查询 API
 
-### Phase 2: 前端
+### Phase 2: 前端 ✅
 
-1. **新增 API** `/api/article-tags`
-   - 批量查询文章标签（质量+分类）
-   - 返回格式：`{url: {quality: 'gem', category: ['ai_ml', 'tutorial']}}`
+1. **`article-tags.js`** ✅
+   - 完整的标签中文映射
+   - 批量加载和显示逻辑
 
-2. **更新 `viewer.css`**
-   - 添加标签悬停显示样式
+2. **`viewer.css`** ✅
+   - 标签悬停显示样式
    - 质量标签颜色定义
+   - 护眼模式适配
 
-3. **更新 `viewer.html` / JS**
-   - 在新闻条目中添加标签 DOM
-   - 悬停/点击交互逻辑
-
-## 预览
-
-预览页面：`/static/tag-preview.html`
+3. **`viewer.html`** ✅
+   - `data-url` 属性已添加
 
 ## 状态
 
-- [x] 方案设计 v2
-- [x] 预览页面
-- [x] 后端 prompt 更新（10 个质量标签）
-- [x] 数据库字段添加（quality_tag, category_tags）
+- [x] 方案设计 v3（完整标签体系）
+- [x] 后端 prompt 更新（62 个标签）
+- [x] 数据库字段添加
 - [x] 标签解析函数更新
 - [x] 标签保存到 article_summaries
-- [x] 标签查询 API（/api/summary/tags）
+- [x] 标签查询 API
 - [x] 前端 CSS 样式
-- [x] 前端 JS 模块（article-tags.js）
-- [x] viewer.html 添加 data-url 属性
+- [x] 前端 JS 模块
+- [x] viewer.html data-url 属性
 - [ ] 构建 JS（npm run build:js）
 - [ ] 部署测试
+- [ ] 验证标签显示

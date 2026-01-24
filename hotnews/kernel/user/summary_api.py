@@ -423,6 +423,27 @@ async def generate_summary_stream(
                 total_tokens = token_usage.get("total_tokens", 0) if token_usage else 0
                 token_info = _consume_user_tokens(request, user["id"], total_tokens, news_id, title)
                 
+                # Extract tags before stripping
+                quality_tag = ""
+                category_tags = []
+                try:
+                    from hotnews.kernel.services.article_summary import extract_tags_from_summary, strip_tags_from_summary, update_entry_tags_from_summary
+                    from hotnews.web.db_online import get_online_db_conn
+                    
+                    tags = extract_tags_from_summary(full_summary)
+                    quality_tag = tags.get('quality') or ""
+                    category_tags = tags.get('category') or []
+                except Exception as e:
+                    import logging
+                    logging.debug(f"Tag extraction skipped: {e}")
+                
+                # Strip tags block from summary for display/storage
+                try:
+                    from hotnews.kernel.services.article_summary import strip_tags_from_summary
+                    display_summary = strip_tags_from_summary(full_summary)
+                except:
+                    display_summary = full_summary
+                
                 try:
                     conn.execute(
                         """
@@ -436,37 +457,26 @@ async def generate_summary_stream(
                             article_type = excluded.article_type,
                             summary_tokens = excluded.summary_tokens
                         """,
-                        (user["id"], news_id, title[:500], url[:2000], source_id, source_name, now, full_summary, now, model, article_type, total_tokens)
+                        (user["id"], news_id, title[:500], url[:2000], source_id, source_name, now, display_summary, now, model, article_type, total_tokens)
                     )
                     conn.commit()
                 except Exception as e:
                     import logging
                     logging.warning(f"Failed to save favorite: {e}")
                 
-                # Save to global cache
-                _save_to_global_cache(request, url, title, full_summary, article_type, model, user["id"], token_usage, fetch_method)
+                # Save to global cache with tags
+                _save_to_global_cache(request, url, title, display_summary, article_type, model, user["id"], token_usage, fetch_method, quality_tag, category_tags)
                 
-                # Extract and save tags from summary
-                quality_tag = ""
-                category_tags = []
+                # Also update rss_entry_tags for "我的关注" feature (category tags only)
                 try:
-                    from hotnews.kernel.services.article_summary import extract_tags_from_summary, update_entry_tags_from_summary
-                    from hotnews.web.db_online import get_online_db_conn
-                    
-                    tags = extract_tags_from_summary(full_summary)
-                    quality_tag = tags.get('quality') or ""
-                    category_tags = tags.get('category') or []
-                    
-                    # Update global cache with tags
-                    _save_to_global_cache(request, url, title, full_summary, article_type, model, user["id"], token_usage, fetch_method, quality_tag, category_tags)
-                    
-                    # Also update rss_entry_tags for "我的关注" feature (category tags only)
                     if category_tags:
+                        from hotnews.kernel.services.article_summary import update_entry_tags_from_summary
+                        from hotnews.web.db_online import get_online_db_conn
                         online_conn = get_online_db_conn(request.app.state.project_root)
                         update_entry_tags_from_summary(online_conn, url, {'category': category_tags})
                 except Exception as e:
                     import logging
-                    logging.debug(f"Tag extraction/update skipped: {e}")
+                    logging.debug(f"Tag update skipped: {e}")
                 
                 # Return done with token info
                 done_data = {

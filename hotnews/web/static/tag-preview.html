@@ -126,6 +126,11 @@
         .tag-suffix.suffix-practical { background: #ecfeff; color: #0891b2; }
         /* 内容分类标签 - 淡灰色 */
         .tag-suffix.tag-category { background: #f3f4f6; color: #6b7280; }
+        /* 特殊分类标签 - 高亮 */
+        .tag-suffix.suffix-earnings { background: #fef3c7; color: #b45309; }
+        .tag-suffix.suffix-ipo { background: #dbeafe; color: #1d4ed8; }
+        .tag-suffix.suffix-merger { background: #e0e7ff; color: #4338ca; }
+        .tag-suffix.suffix-layoff { background: #fee2e2; color: #b91c1c; }
 
         /* 图例 */
         .legend {
@@ -174,9 +179,16 @@
                 <div class="legend-item"><span class="legend-dot" style="background:#a855f7"></span><span>独家</span></div>
                 <div class="legend-item"><span class="legend-dot" style="background:#06b6d4"></span><span>实用</span></div>
             </div>
-            <h3 style="margin-top: 12px;">📂 内容分类标签（淡色）</h3>
+            <h3 style="margin-top: 12px;">📂 内容分类标签</h3>
             <div class="legend-grid">
-                <div class="legend-item"><span class="legend-dot" style="background:#9ca3af"></span><span>AI / 科技 / 教程 / 工具 / 深度 / 商业 ...</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#9ca3af"></span><span>普通分类（AI / 科技 / 教程 ...）</span></div>
+            </div>
+            <h3 style="margin-top: 12px;">⭐ 特殊分类标签（高亮）</h3>
+            <div class="legend-grid">
+                <div class="legend-item"><span class="legend-dot" style="background:#b45309"></span><span>财报</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#1d4ed8"></span><span>IPO</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#4338ca"></span><span>并购</span></div>
+                <div class="legend-item"><span class="legend-dot" style="background:#b91c1c"></span><span>裁员</span></div>
             </div>
         </div>
         
@@ -197,11 +209,30 @@
         
         // 内容分类标签
         const categoryLabels = {
-            tech: '科技', ai_ml: 'AI', tutorial: '教程', tool_rec: '工具',
-            dev_tools: '开发', deep_dive: '深度', programming: '编程',
-            business: '商业', finance: '财经', hardware: '硬件',
-            mobile: '移动', lifestyle: '生活', career: '职场'
+            // 大类
+            tech: '科技', finance: '财经', business: '商业', politics: '政治',
+            world: '国际', entertainment: '娱乐', sports: '体育', health: '健康',
+            science: '科学', lifestyle: '生活', education: '教育', other: '其他',
+            // 科技主题
+            ai_ml: 'AI', llm: '大模型', dev_tools: '开发工具', programming: '编程',
+            database: '数据库', cloud: '云计算', cybersecurity: '安全', hardware: '硬件',
+            mobile: '移动', web3: 'Web3', gaming: '游戏', robotics: '机器人',
+            iot: '物联网', vr_ar: 'VR/AR', opensource: '开源',
+            // 财经主题
+            stock: '股票', crypto: '加密货币', macro: '宏观', banking: '银行',
+            insurance: '保险', real_estate: '房产', personal_fin: '理财',
+            earnings: '财报', ipo: 'IPO', fund: '基金',
+            // 商业主题
+            startup: '创业', ecommerce: '电商', marketing: '营销', hr: '人力',
+            management: '管理', merger: '并购', layoff: '裁员',
+            // 属性
+            tutorial: '教程', tool_rec: '工具', deep_dive: '深度', career: '职场',
+            free_deal: '福利', breaking: '快讯', official: '官方', opinion: '观点',
+            interview: '访谈', event: '活动'
         };
+        
+        // 特殊高亮标签
+        const specialTags = ['earnings', 'ipo', 'merger', 'layoff'];
 
         // 模拟新闻数据
         const platforms = [
@@ -210,11 +241,11 @@
                 news: [
                     { title: 'OpenAI 正式发布 GPT-5：多模态能力大幅提升，推理速度提高 10 倍', date: '01-24', quality: 'breaking', category: ['ai_ml', 'tech'], hasSummary: true },
                     { title: '手把手教你用 Claude 搭建企业级 AI 助手：从零开始的完整指南', date: '01-24', quality: 'practical', category: ['tutorial', 'ai_ml'], hasSummary: true },
-                    { title: '某品牌新款旗舰手机深度体验：这可能是今年最值得购买的安卓机', date: '01-24', quality: 'sponsored', category: ['mobile', 'hardware'], hasSummary: true },
+                    { title: '特斯拉 2025 年 Q4 财报：营收超预期，毛利率创新高', date: '01-24', quality: null, category: ['finance', 'earnings'], hasSummary: true },
                     { title: '苹果 WWDC 2026 将于 6 月举办，iOS 20 有望带来重大更新', date: '01-23', quality: null, category: [], hasSummary: false },
-                    { title: '震惊！学会这个方法，普通人也能月入过万，99% 的人都不知道', date: '01-23', quality: 'clickbait', category: ['career'], hasSummary: true },
+                    { title: '字节跳动宣布裁员 10%，涉及多个业务线', date: '01-23', quality: null, category: ['business', 'layoff'], hasSummary: true },
                     { title: 'GitHub Copilot 免费版正式上线：个人开发者福音', date: '01-23', quality: 'gem', category: ['tool_rec', 'dev_tools'], hasSummary: true },
-                    { title: '特斯拉 Q4 财报超预期，股价大涨 8%', date: '01-22', quality: 'pr', category: ['business'], hasSummary: false },
+                    { title: '某品牌新款旗舰手机深度体验：这可能是今年最值得购买的安卓机', date: '01-22', quality: 'sponsored', category: ['mobile', 'hardware'], hasSummary: true },
                     { title: '2026 年最值得学习的 10 个编程语言：Python 依然稳居榜首', date: '01-22', quality: 'outdated', category: ['programming'], hasSummary: true },
                 ]
             },
@@ -222,10 +253,10 @@
                 name: '虎嗅', icon: '🐯',
                 news: [
                     { title: '字节跳动内部信曝光：2026 年将全面押注 AI，短视频业务或迎来重大调整', date: '01-24', quality: 'exclusive', category: ['business', 'ai_ml'], hasSummary: true },
-                    { title: '为什么说这款智能音箱是年度最佳？我们深度体验了一个月后有了答案', date: '01-24', quality: 'ad', category: ['hardware'], hasSummary: true },
+                    { title: '微软宣布以 500 亿美元收购 OpenAI 剩余股份', date: '01-24', quality: 'breaking', category: ['business', 'merger'], hasSummary: true },
                     { title: '深度解析：大模型的下一个突破点在哪里？业内专家给出了这些预测', date: '01-24', quality: 'gem', category: ['ai_ml', 'deep_dive'], hasSummary: true },
                     { title: '阿里云宣布核心产品降价 50%，云计算价格战全面升级', date: '01-23', quality: null, category: [], hasSummary: false },
-                    { title: '不看后悔一辈子！这个效率技巧能让你的工作效率翻倍，亲测有效', date: '01-23', quality: 'clickbait', category: ['career'], hasSummary: true },
+                    { title: '蚂蚁集团 IPO 重启：最快年内登陆港交所', date: '01-23', quality: null, category: ['finance', 'ipo'], hasSummary: true },
                     { title: '腾讯发布新一代混元大模型，性能对标 GPT-4', date: '01-23', quality: 'pr', category: ['ai_ml'], hasSummary: false },
                     { title: 'Notion AI 完全使用指南：从入门到精通', date: '01-22', quality: 'practical', category: ['tutorial', 'tool_rec'], hasSummary: true },
                     { title: '这篇文章内容很水，基本是东拼西凑的', date: '01-22', quality: 'low_quality', category: [], hasSummary: true },
@@ -260,9 +291,10 @@
                                 suffixHtml += `<span class="tag-suffix suffix-${news.quality}">${qualityLabels[news.quality]}</span>`;
                             }
                             if (news.category && news.category.length > 0) {
-                                suffixHtml += news.category.slice(0, 2).map(t => 
-                                    `<span class="tag-suffix tag-category">${categoryLabels[t] || t}</span>`
-                                ).join('');
+                                suffixHtml += news.category.slice(0, 2).map(t => {
+                                    const tagClass = specialTags.includes(t) ? `suffix-${t}` : 'tag-category';
+                                    return `<span class="tag-suffix ${tagClass}">${categoryLabels[t] || t}</span>`;
+                                }).join('');
                             }
                             
                             return `

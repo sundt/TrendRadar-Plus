@@ -5414,6 +5414,12 @@
 /* Category tags - neutral gray */
 .article-tag-suffix.tag-category { background: #f3f4f6; color: #6b7280; }
 
+/* Special category tags - highlighted for important business events */
+.article-tag-suffix.tag-earnings { background: #fef3c7; color: #b45309; }  /* 财报 - 金色 */
+.article-tag-suffix.tag-ipo { background: #dbeafe; color: #1d4ed8; }       /* IPO - 蓝色 */
+.article-tag-suffix.tag-merger { background: #e0e7ff; color: #4338ca; }    /* 并购 - 靛蓝 */
+.article-tag-suffix.tag-layoff { background: #fee2e2; color: #b91c1c; }    /* 裁员 - 红色 */
+
 /* Eye protection mode */
 body.eye-protection-mode .article-tag-suffix {
     opacity: 0;
@@ -5435,3 +5441,9 @@ body.eye-protection-mode .article-tag-suffix.tag-breaking { background: #1a2d3d;
 body.eye-protection-mode .article-tag-suffix.tag-exclusive { background: #2d1a3d; color: #c084fc; }
 body.eye-protection-mode .article-tag-suffix.tag-practical { background: #1a3d3d; color: #22d3d3; }
 body.eye-protection-mode .article-tag-suffix.tag-category { background: #2d2d2d; color: #9ca3af; }
+
+/* Eye protection mode - special category tags */
+body.eye-protection-mode .article-tag-suffix.tag-earnings { background: #3d3520; color: #fbbf24; }
+body.eye-protection-mode .article-tag-suffix.tag-ipo { background: #1a2d3d; color: #60a5fa; }
+body.eye-protection-mode .article-tag-suffix.tag-merger { background: #1a1a3d; color: #818cf8; }
+body.eye-protection-mode .article-tag-suffix.tag-layoff { background: #3d2020; color: #f87171; }

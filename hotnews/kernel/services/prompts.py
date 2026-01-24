@@ -7,17 +7,99 @@ Migrated from hotnews-summarizer plugin.
 """
 
 # 预定义标签列表（用于总结时生成标签）
-# 内容分类标签
-PREDEFINED_TAGS = [
-    "tech", "ai_ml", "free_deal", "finance", "llm", "tutorial", "business",
-    "dev_tools", "deep_dive", "politics", "programming", "breaking", "world",
-    "database", "official", "entertainment", "cloud", "opinion", "sports",
-    "cybersecurity", "interview", "health", "hardware", "tool_rec", "science",
-    "mobile", "career", "lifestyle", "web3", "event", "education", "gaming",
-    "robotics", "iot", "vr_ar", "opensource", "stock", "crypto", "macro",
-    "banking", "insurance", "real_estate", "personal_fin", "startup",
-    "ecommerce", "marketing", "hr", "management", "food", "travel", "books"
+# 内容分类标签 - 基于 AI_TAGGING_SYSTEM.md 的完整标签体系
+# 分为：大类(category)、主题(topic)、属性(attribute)
+
+# 大类标签 (12个) - 互斥，每篇文章只能属于一个大类
+CATEGORY_TAGS_LIST = [
+    "tech",           # 科技
+    "finance",        # 财经
+    "business",       # 商业
+    "politics",       # 政治
+    "world",          # 国际
+    "entertainment",  # 娱乐
+    "sports",         # 体育
+    "health",         # 健康
+    "science",        # 科学
+    "lifestyle",      # 生活
+    "education",      # 教育
+    "other",          # 其他
 ]
+
+# 主题标签 (50+个) - 细分主题，可多选
+TOPIC_TAGS_LIST = [
+    # 科技类主题
+    "ai_ml",          # AI/机器学习
+    "llm",            # 大语言模型
+    "dev_tools",      # 开发工具
+    "programming",    # 编程语言
+    "database",       # 数据库
+    "cloud",          # 云计算
+    "cybersecurity",  # 网络安全
+    "hardware",       # 硬件/芯片
+    "mobile",         # 移动开发
+    "web3",           # Web3/区块链
+    "gaming",         # 游戏
+    "robotics",       # 机器人
+    "iot",            # 物联网
+    "vr_ar",          # VR/AR
+    "opensource",     # 开源项目
+    
+    # 财经类主题
+    "stock",          # 股票
+    "crypto",         # 加密货币
+    "macro",          # 宏观经济
+    "banking",        # 银行
+    "insurance",      # 保险
+    "real_estate",    # 房地产
+    "personal_fin",   # 个人理财
+    "earnings",       # 财报/业绩
+    "ipo",            # IPO/上市
+    "fund",           # 基金/投资
+    
+    # 商业类主题
+    "startup",        # 创业/融资
+    "ecommerce",      # 电商
+    "marketing",      # 营销
+    "hr",             # 人力资源
+    "management",     # 企业管理
+    "merger",         # 并购/重组
+    "layoff",         # 裁员/调整
+    
+    # 生活类主题
+    "food",           # 美食
+    "travel",         # 旅行
+    "fashion",        # 时尚
+    "home",           # 家居
+    "parenting",      # 育儿
+    "pets",           # 宠物
+    "automotive",     # 汽车
+    
+    # 娱乐类主题
+    "movies",         # 电影
+    "music",          # 音乐
+    "tv_shows",       # 电视剧
+    "celebrity",      # 明星
+    "anime",          # 动漫
+    "books",          # 书籍
+]
+
+# 属性标签 (10个) - 内容特征，可多选
+ATTRIBUTE_TAGS_LIST = [
+    "free_deal",      # 免费/优惠（薅羊毛、免费资源、折扣活动）
+    "tutorial",       # 教程/实践（动手教程、代码实战）
+    "deep_dive",      # 深度分析（长文、研报、深度解读）
+    "breaking",       # 快讯/速报（突发新闻、即时消息）
+    "official",       # 官方发布（官方公告、新品发布）
+    "opinion",        # 观点/评论（专栏、评论文章）
+    "interview",      # 访谈（人物访谈、对话）
+    "tool_rec",       # 工具推荐（软件、服务推荐）
+    "career",         # 职业/求职（求职、招聘、职业发展）
+    "event",          # 活动/会议（大会、展会、活动）
+]
+
+# 合并所有标签（用于验证）
+PREDEFINED_TAGS = CATEGORY_TAGS_LIST + TOPIC_TAGS_LIST + ATTRIBUTE_TAGS_LIST
 
 # 质量评估标签（10 个，互斥，每篇文章最多 1 个）
 QUALITY_TAGS = {
@@ -39,24 +121,52 @@ QUALITY_TAGS = {
 QUALITY_TAGS_NEGATIVE = ["ad", "sponsored", "clickbait", "pr", "outdated", "low_quality"]
 QUALITY_TAGS_POSITIVE = ["gem", "breaking", "exclusive", "practical"]
 
-# 标签输出指令（附加到总结模板末尾）
+# 标签输出指令（附加到总结模板末尾，但不显示给用户）
+# AI 会在总结末尾输出标签，后端解析后存储，前端不显示这部分
 TAGS_OUTPUT_INSTRUCTION = """
 
 ---
+[TAGS_START]
+**质量评估**: 
+**内容分类**: 
+[TAGS_END]"""
 
-## 🏷️ 文章标签
-
-请根据文章内容打标签：
+# 给 AI 的标签生成指令（放在 system prompt 中）
+TAGS_SYSTEM_INSTRUCTION = """
+在总结末尾，请在 [TAGS_START] 和 [TAGS_END] 之间输出标签：
 
 **质量评估**（从以下选择 0-1 个，大部分文章无需标记，只标记特征明显的）：
 - 负面警示：ad(广告), sponsored(软文), clickbait(标题党), pr(公关稿), outdated(过时), low_quality(水文)
 - 正面推荐：gem(精华), breaking(突发), exclusive(独家), practical(实用)
 
-**内容分类**（从以下选择 1-2 个最相关的）：
-tech, ai_ml, free_deal, finance, llm, tutorial, business, dev_tools, deep_dive, politics, programming, breaking, world, database, official, entertainment, cloud, opinion, sports, cybersecurity, interview, health, hardware, tool_rec, science, mobile, career, lifestyle, web3, event, education, gaming, robotics, iot, vr_ar, opensource, stock, crypto, macro, banking, insurance, real_estate, personal_fin, startup, ecommerce, marketing, hr, management, food, travel, books
+**内容分类**（选择 1-2 个最精准的标签，优先选择细分主题标签）：
 
-**质量评估**: 
-**内容分类**: """
+大类（必选1个）：
+tech(科技), finance(财经), business(商业), politics(政治), world(国际), entertainment(娱乐), sports(体育), health(健康), science(科学), lifestyle(生活), education(教育), other(其他)
+
+细分主题（选0-1个，尽量选择）：
+- 科技：ai_ml(AI), llm(大模型), dev_tools(开发工具), programming(编程), database(数据库), cloud(云计算), cybersecurity(安全), hardware(硬件/芯片), mobile(移动), web3(区块链), gaming(游戏), robotics(机器人), iot(物联网), vr_ar(VR/AR), opensource(开源)
+- 财经：stock(股票), crypto(加密货币), macro(宏观经济), banking(银行), insurance(保险), real_estate(房产), personal_fin(理财), earnings(财报/业绩), ipo(IPO/上市), fund(基金)
+- 商业：startup(创业), ecommerce(电商), marketing(营销), hr(人力), management(管理), merger(并购), layoff(裁员)
+- 生活：food(美食), travel(旅行), fashion(时尚), home(家居), parenting(育儿), pets(宠物), automotive(汽车)
+- 娱乐：movies(电影), music(音乐), tv_shows(电视剧), celebrity(明星), anime(动漫), books(书籍)
+
+属性标签（选0-1个）：
+free_deal(免费/优惠), tutorial(教程), deep_dive(深度分析), breaking(快讯), official(官方发布), opinion(观点), interview(访谈), tool_rec(工具推荐), career(职业), event(活动)
+
+标签选择原则：
+1. 财报、业绩公告类文章必须标记 earnings
+2. IPO、上市相关必须标记 ipo
+3. 裁员、组织调整必须标记 layoff
+4. 并购、收购必须标记 merger
+5. 优先选择细分主题标签，而非只选大类
+
+格式示例：
+[TAGS_START]
+**质量评估**: gem
+**内容分类**: finance, earnings
+[TAGS_END]
+"""
 
 # 通用输出规范 - 拼接到所有模板末尾
 CORE_INSTRUCTIONS = """
@@ -68,7 +178,7 @@ CORE_INSTRUCTIONS = """
 5. 链接直达：文中涉及的产品、框架、工具，尽量附带官方链接（格式：[名称](URL)）。
 6. 术语解释：对于生僻专业名词或缩写，请简短解释。
 7. 表格规范：使用标准 Markdown 表格格式。
-"""
+""" + TAGS_SYSTEM_INSTRUCTION
 
 # 统一尾部 - 学习收获和行动清单
 LEARNING_FOOTER = """

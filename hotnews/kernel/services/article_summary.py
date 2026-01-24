@@ -666,9 +666,7 @@ async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -
 def extract_tags_from_summary(summary: str) -> dict:
     """
     Extract tags from summary text.
-    Looks for the two-category format:
-    **质量评估**: gem (or empty)
-    **内容分类**: ai_ml, tutorial
+    Looks for tags in [TAGS_START]...[TAGS_END] block or fallback formats.
     
     Returns dict with 'quality' (str or None) and 'category' (list).
     """
@@ -683,6 +681,10 @@ def extract_tags_from_summary(summary: str) -> dict:
     if not summary:
         return result
     
+    # Try to extract from [TAGS_START]...[TAGS_END] block first
+    tags_block_match = re.search(r'\[TAGS_START\](.*?)\[TAGS_END\]', summary, re.DOTALL | re.IGNORECASE)
+    search_text = tags_block_match.group(1) if tags_block_match else summary
+    
     # Extract quality tag: **质量评估**: gem
     quality_patterns = [
         r'\*\*质量评估\*\*[：:]\s*([a-z_]*)',
@@ -690,7 +692,7 @@ def extract_tags_from_summary(summary: str) -> dict:
     ]
     
     for pattern in quality_patterns:
-        match = re.search(pattern, summary, re.IGNORECASE)
+        match = re.search(pattern, search_text, re.IGNORECASE)
         if match:
             tag_str = match.group(1).strip().lower()
             if tag_str and tag_str not in ['无', 'none', '空', ''] and tag_str in QUALITY_TAGS:
@@ -698,14 +700,14 @@ def extract_tags_from_summary(summary: str) -> dict:
                 logger.info(f"Extracted quality tag: {result['quality']}")
             break
     
-    # Extract category tags: **内容分类**: ai_ml, tutorial
+    # Extract category tags: **内容分类**: finance, earnings
     category_patterns = [
         r'\*\*内容分类\*\*[：:]\s*([a-z_,\s]+)',
         r'内容分类[：:]\s*([a-z_,\s]+)',
     ]
     
     for pattern in category_patterns:
-        match = re.search(pattern, summary, re.IGNORECASE)
+        match = re.search(pattern, search_text, re.IGNORECASE)
         if match:
             tags_str = match.group(1).strip()
             raw_tags = [t.strip().lower() for t in tags_str.split(',')]
@@ -735,6 +737,25 @@ def extract_tags_from_summary(summary: str) -> dict:
                 break
     
     return result
+
+
+def strip_tags_from_summary(summary: str) -> str:
+    """
+    Remove the tags block from summary text for display.
+    Removes [TAGS_START]...[TAGS_END] block and old format tags section.
+    """
+    import re
+    
+    if not summary:
+        return summary
+    
+    # Remove [TAGS_START]...[TAGS_END] block
+    result = re.sub(r'\n*---\n*\[TAGS_START\].*?\[TAGS_END\]\s*', '', summary, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove old format tags section (## 🏷️ 文章标签 ...)
+    result = re.sub(r'\n*---\n*## 🏷️ 文章标签.*$', '', result, flags=re.DOTALL)
+    
+    return result.strip()
 
 
 def get_all_tags_from_summary(summary: str) -> list:

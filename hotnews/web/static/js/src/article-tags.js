@@ -21,29 +21,47 @@ const QUALITY_TAG_LABELS = {
     practical: '实用'
 };
 
-// Category tag labels (Chinese)
+// Category tag labels (Chinese) - 完整标签体系
 const CATEGORY_TAG_LABELS = {
-    tech: '科技', ai_ml: 'AI', tutorial: '教程', tool_rec: '工具',
-    dev_tools: '开发', deep_dive: '深度', programming: '编程',
-    business: '商业', finance: '财经', hardware: '硬件',
-    mobile: '移动', lifestyle: '生活', career: '职场',
-    llm: 'LLM', free_deal: '福利', politics: '政治',
-    breaking: '突发', world: '国际', database: '数据库',
-    official: '官方', entertainment: '娱乐', cloud: '云计算',
-    opinion: '观点', sports: '体育', cybersecurity: '安全',
-    interview: '访谈', health: '健康', science: '科学',
-    web3: 'Web3', event: '活动', education: '教育',
-    gaming: '游戏', robotics: '机器人', iot: '物联网',
-    vr_ar: 'VR/AR', opensource: '开源', stock: '股票',
-    crypto: '加密', macro: '宏观', banking: '银行',
+    // 大类标签
+    tech: '科技', finance: '财经', business: '商业', politics: '政治',
+    world: '国际', entertainment: '娱乐', sports: '体育', health: '健康',
+    science: '科学', lifestyle: '生活', education: '教育', other: '其他',
+    
+    // 科技类主题
+    ai_ml: 'AI', llm: '大模型', dev_tools: '开发工具', programming: '编程',
+    database: '数据库', cloud: '云计算', cybersecurity: '安全', hardware: '硬件',
+    mobile: '移动', web3: 'Web3', gaming: '游戏', robotics: '机器人',
+    iot: '物联网', vr_ar: 'VR/AR', opensource: '开源',
+    
+    // 财经类主题
+    stock: '股票', crypto: '加密货币', macro: '宏观', banking: '银行',
     insurance: '保险', real_estate: '房产', personal_fin: '理财',
-    startup: '创业', ecommerce: '电商', marketing: '营销',
-    hr: '人力', management: '管理', food: '美食',
-    travel: '旅行', books: '书籍'
+    earnings: '财报', ipo: 'IPO', fund: '基金',
+    
+    // 商业类主题
+    startup: '创业', ecommerce: '电商', marketing: '营销', hr: '人力',
+    management: '管理', merger: '并购', layoff: '裁员',
+    
+    // 生活类主题
+    food: '美食', travel: '旅行', fashion: '时尚', home: '家居',
+    parenting: '育儿', pets: '宠物', automotive: '汽车',
+    
+    // 娱乐类主题
+    movies: '电影', music: '音乐', tv_shows: '电视剧', celebrity: '明星',
+    anime: '动漫', books: '书籍',
+    
+    // 属性标签
+    free_deal: '福利', tutorial: '教程', deep_dive: '深度', breaking: '快讯',
+    official: '官方', opinion: '观点', interview: '访谈', tool_rec: '工具',
+    career: '职场', event: '活动'
 };
 
 // Cache for loaded tags
 let tagsCache = {};
+
+// Special category tags that get highlighted styling
+const SPECIAL_CATEGORY_TAGS = ['earnings', 'ipo', 'merger', 'layoff'];
 
 /**
  * Generate tag HTML for a news item
@@ -62,7 +80,9 @@ function generateTagsHtml(tags) {
     if (tags.category && tags.category.length > 0) {
         tags.category.slice(0, 2).forEach(cat => {
             const label = CATEGORY_TAG_LABELS[cat] || cat;
-            html += `<span class="article-tag-suffix tag-category">${label}</span>`;
+            // Use special class for highlighted tags, otherwise use generic tag-category
+            const tagClass = SPECIAL_CATEGORY_TAGS.includes(cat) ? `tag-${cat}` : 'tag-category';
+            html += `<span class="article-tag-suffix ${tagClass}">${label}</span>`;
         });
     }
     
