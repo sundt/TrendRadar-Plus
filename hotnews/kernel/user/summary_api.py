@@ -95,7 +95,7 @@ def _ensure_favorites_table(conn):
     conn.commit()
 
 
-def _save_to_global_cache(request: Request, url: str, title: str, summary: str, article_type: str, model: str, user_id: int, token_usage: dict = None, fetch_method: str = "", quality_tag: str = "", category_tags: list = None):
+def _save_to_global_cache(request: Request, url: str, title: str, summary: str, article_type: str, model: str, user_id: int, token_usage: dict = None, fetch_method: str = "", quality_tag: str = "", category_tags: list = None, generation_time_ms: int = 0):
     """Save summary to global cache for sharing across users."""
     try:
         from hotnews.web.db_online import get_online_db_conn
@@ -115,15 +115,15 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
         
         online_conn.execute(
             """
-            INSERT INTO article_summaries (url_hash, url, title, summary, article_type, model, created_at, created_by, hit_count, updated_at, prompt_tokens, completion_tokens, total_tokens, fetch_method, quality_tag, category_tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO article_summaries (url_hash, url, title, summary, article_type, model, created_at, created_by, hit_count, updated_at, prompt_tokens, completion_tokens, total_tokens, fetch_method, quality_tag, category_tags, generation_time_ms)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url_hash) DO UPDATE SET
                 hit_count = hit_count + 1,
                 updated_at = excluded.updated_at,
                 quality_tag = excluded.quality_tag,
                 category_tags = excluded.category_tags
             """,
-            (url_hash, url[:2000], title[:500], summary, article_type, model, now, user_id, now, prompt_tokens, completion_tokens, total_tokens, fetch_method or "", quality_tag or "", category_tags_json)
+            (url_hash, url[:2000], title[:500], summary, article_type, model, now, user_id, now, prompt_tokens, completion_tokens, total_tokens, fetch_method or "", quality_tag or "", category_tags_json, generation_time_ms)
         )
         online_conn.commit()
     except Exception as e:
@@ -469,6 +469,10 @@ async def generate_summary_stream(
     MIN_CONTENT_FOR_SUMMARY = 500
     
     async def stream_generator():
+        # Record start time for generation time tracking
+        import time
+        start_time_ms = int(time.time() * 1000)
+        
         # Step 1: Fetch article content
         yield f"data: {json.dumps({'type': 'status', 'message': '正在获取文章内容...'}, ensure_ascii=False)}\n\n"
         
@@ -664,8 +668,11 @@ async def generate_summary_stream(
 
                     logging.warning(f"Failed to save favorite: {e}")
                 
-                # Save to global cache with tags
-                _save_to_global_cache(request, url, title, display_summary, article_type, model, user["id"], token_usage, fetch_method, quality_tag, category_tags)
+                # Calculate generation time
+                generation_time_ms = int(time.time() * 1000) - start_time_ms
+                
+                # Save to global cache with tags and generation time
+                _save_to_global_cache(request, url, title, display_summary, article_type, model, user["id"], token_usage, fetch_method, quality_tag, category_tags, generation_time_ms)
                 
                 # Record success for domain stats
                 try:

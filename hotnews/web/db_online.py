@@ -530,6 +530,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # Migration: add tag columns for quality assessment and category tags
     _ensure_column("article_summaries", "quality_tag", "TEXT DEFAULT ''")
     _ensure_column("article_summaries", "category_tags", "TEXT DEFAULT '[]'")
+    
+    # Migration: add generation_time_ms column for performance tracking
+    _ensure_column("article_summaries", "generation_time_ms", "INTEGER DEFAULT 0")
 
     # ========== Payment Tables ==========
     # Initialize payment tables for WeChat Pay Token recharge

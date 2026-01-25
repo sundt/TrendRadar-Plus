@@ -16,10 +16,17 @@ let currentSourceName = null;
 let slowLoadingTimer = null;
 let hardTimeoutTimer = null;
 
-// Timeout before showing "view original" hint (in ms)
+// Timeout before showing countdown hint (in ms)
 const SLOW_LOADING_TIMEOUT = 5000;
+// Timeout before auto-opening original article (in ms)
+const AUTO_OPEN_TIMEOUT = 10000;
 // Timeout before giving up completely and recording failure (in ms)
-const HARD_TIMEOUT = 10000;
+const HARD_TIMEOUT = 15000;
+
+// Countdown timer for auto-open
+let countdownTimer = null;
+let countdownSeconds = 5;
+let autoOpenTimer = null;
 
 /**
  * Clear slow loading timer
@@ -42,11 +49,27 @@ function clearHardTimeoutTimer() {
 }
 
 /**
+ * Clear countdown timer
+ */
+function clearCountdownTimer() {
+    if (countdownTimer) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+    }
+    if (autoOpenTimer) {
+        clearTimeout(autoOpenTimer);
+        autoOpenTimer = null;
+    }
+    countdownSeconds = 5;
+}
+
+/**
  * Clear all timers
  */
 function clearAllTimers() {
     clearSlowLoadingTimer();
     clearHardTimeoutTimer();
+    clearCountdownTimer();
 }
 
 /**
@@ -354,54 +377,76 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 <div id="summaryStatusText">正在获取文章内容...</div>
                 <div class="summary-loading-hint">首次总结需要 10-30 秒</div>
                 <div id="summarySlowHint" class="summary-slow-hint" style="display:none;">
-                    <span>加载较慢？</span>
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-slow-link">先看原文 →</a>
+                    <span id="summaryCountdownText">加载较慢，即将为您打开原文...</span>
                 </div>
             </div>
         </div>
     `;
     footer.style.display = 'none';
     
-    // Start slow loading timer - after 5s, show hint (and auto-open on mobile)
+    // Start slow loading timer - after 5s, show countdown hint
     clearAllTimers();
     slowLoadingTimer = setTimeout(() => {
-        // Show slow loading hint but don't stop yet
+        console.log('[Summary] 5s timeout, starting countdown');
         const slowHint = document.getElementById('summarySlowHint');
+        const countdownText = document.getElementById('summaryCountdownText');
         if (slowHint) {
             slowHint.style.display = 'block';
         }
         
-        // On mobile, auto-open original article in new tab
-        // Keep the modal open so user can add to Todo/Favorites when they return
-        const isMobile = window.matchMedia && !window.matchMedia('(hover: hover)').matches;
-        if (isMobile && url) {
-            window.open(url, '_blank', 'noopener,noreferrer');
-        }
+        // Start countdown from 5 to 0
+        countdownSeconds = 5;
+        const updateCountdown = () => {
+            if (countdownText) {
+                countdownText.textContent = `加载较慢，${countdownSeconds} 秒后为您打开原文...`;
+            }
+        };
+        updateCountdown();
+        
+        countdownTimer = setInterval(() => {
+            countdownSeconds--;
+            if (countdownSeconds > 0) {
+                updateCountdown();
+            } else {
+                clearCountdownTimer();
+            }
+        }, 1000);
+        
+        // Auto-open after 5 more seconds (total 10s)
+        autoOpenTimer = setTimeout(() => {
+            console.log('[Summary] 10s timeout, opening original article');
+            clearAllTimers();
+            // Close modal and open original article
+            const modal = document.getElementById('summaryModal');
+            if (modal) {
+                modal.classList.remove('open');
+                document.body.style.overflow = '';
+            }
+            isModalOpen = false;
+            currentNewsId = null;
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+        }, AUTO_OPEN_TIMEOUT - SLOW_LOADING_TIMEOUT);
     }, SLOW_LOADING_TIMEOUT);
     
-    // Start hard timeout timer - after 10s, give up and record failure
+    // Start hard timeout timer - after 15s, give up and record failure (backup)
     hardTimeoutTimer = setTimeout(() => {
         // Record client timeout failure
         recordClientTimeout(url, sourceId, sourceName);
+        clearAllTimers();
         
-        // Stop the loading spinner and show direct link to original article
-        body.innerHTML = `
-            <div class="summary-access-error">
-                <div class="summary-access-error-icon">🛡️</div>
-                <div class="summary-access-error-title">暂时无法获取内容</div>
-                <div class="summary-access-error-text">该网站防护较强，建议直接阅读原文</div>
-                <div class="summary-access-error-actions">
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
-                        📖 阅读原文
-                    </a>
-                    <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
-                </div>
-                <div class="summary-timeout-actions">
-                    <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
-                    <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
-                </div>
-            </div>
-        `;
+        // Close modal and open original article
+        const modal = document.getElementById('summaryModal');
+        if (modal) {
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+        isModalOpen = false;
+        currentNewsId = null;
+        if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
     }, HARD_TIMEOUT);
     
     try {
@@ -409,27 +454,20 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
         const checkRes = await fetch(`/api/summary/failures/check?url=${encodeURIComponent(url)}`);
         if (checkRes.ok) {
             const checkData = await checkRes.json();
+            console.log('[Summary] Check result:', checkData);
             if (!checkData.summarizable) {
-                // URL is blocked - show warning and offer options
+                // URL is blocked - directly open original article
+                console.log('[Summary] URL blocked, opening original:', url);
                 clearAllTimers();
-                body.innerHTML = `
-                    <div class="summary-access-error">
-                        <div class="summary-access-error-icon">⚠️</div>
-                        <div class="summary-access-error-title">该来源暂不支持总结</div>
-                        <div class="summary-access-error-text">${checkData.warning || '该网站无法获取内容'}</div>
-                        ${checkData.source_name ? `<div class="summary-access-error-source">来源: ${checkData.source_name}</div>` : ''}
-                        <div class="summary-access-error-actions">
-                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
-                                📖 阅读原文
-                            </a>
-                            <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">仍要尝试</button>
-                        </div>
-                        <div class="summary-timeout-actions">
-                            <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
-                            <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
-                        </div>
-                    </div>
-                `;
+                // Close modal directly
+                const modal = document.getElementById('summaryModal');
+                if (modal) {
+                    modal.classList.remove('open');
+                    document.body.style.overflow = '';
+                }
+                isModalOpen = false;
+                currentNewsId = null;
+                window.open(url, '_blank');
                 return;
             } else if (checkData.warning) {
                 // Show warning but continue
