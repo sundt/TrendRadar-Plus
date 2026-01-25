@@ -290,7 +290,9 @@
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
-    position: static;
+    position: relative;
+    background: white;
+    padding-left: 8px;
 }
 
 .news-ai-indicator {
@@ -314,10 +316,6 @@
    ========================================================================== */
 
 .news-summary-btn {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -333,6 +331,10 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s ease;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .news-summary-btn::before {

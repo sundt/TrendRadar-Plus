@@ -80,6 +80,18 @@ cd ~/hotnews/docker && docker compose -f docker-compose-build.yml logs -f hotnew
 - ✅ 失败记录补全 source_id/source_name - `summary_failure_api.py`, `summary_failure_tracker.py`
 - ✅ analyze-before-action skill 增强
 - ✅ 创建 common-mistakes.md
+- ✅ **微信凭证有效期优化** - 从 cookie 读取实际过期时间，默认改为 24 小时
+  - `wechat_shared_credentials.py` - 默认有效期 4h → 24h
+  - `wechat_qr_login.py` - 从 `slave_sid` cookie 提取 `expires` 字段
+  - `wechat_admin.py`, `auth_api.py` - 适配新返回值
+- ✅ 创建 `docs/proposals/web-scraping-enhancement.md` - 网页抓取增强方案文档
+- ✅ **普通栏目添加 AI 按钮** - 移除收藏按钮，统一使用 AI 总结按钮
+  - `viewer.html` - 模板中 news-item 结构改为 news-actions + news-summary-btn
+  - `tabs.js` - 懒加载渲染也使用 AI 按钮
+  - `summary-modal.js` - 添加事件委托处理服务端渲染的按钮点击
+- ✅ **修复移动端水平溢出** - 页面可以左右滑动露出紫色背景
+  - `mobile.css`, `viewer.css` - `width: 100vw` → `width: 100%`
+  - 添加 `html, body { overflow-x: hidden }`
 
 ## 待办事项
 <!-- 在这里记录进行中的任务 -->

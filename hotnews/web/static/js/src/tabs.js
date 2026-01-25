@@ -298,8 +298,10 @@ export const tabs = {
                             <a class="news-title" href="${this._escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
                                 ${this._escapeHtml(title)}
                             </a>
-                            ${dateStr ? `<span class="tr-news-date">${this._escapeHtml(dateStr)}</span>` : ''}
-                            <button class="news-favorite-btn" title="收藏">☆</button>
+                            <div class="news-actions">
+                                ${dateStr ? `<span class="tr-news-date">${this._escapeHtml(dateStr)}</span>` : ''}
+                                <button class="news-summary-btn" data-news-id="${this._escapeHtml(stableId)}" data-title="${this._escapeHtml(title)}" data-url="${this._escapeHtml(url)}" data-source-id="${this._escapeHtml(platformId)}" data-source-name="${this._escapeHtml(platform.name || platformId)}"></button>
+                            </div>
                         </div>
                         ${meta && !isRssPlatform ? `<div class="news-subtitle">${this._escapeHtml(meta)}</div>` : ''}
                     </li>

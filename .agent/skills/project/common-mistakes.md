@@ -156,3 +156,19 @@ ssh -p 52222 root@120.77.222.205 "cd ~/hotnews && sqlite3 output/online.db 'SELE
 - 先用 `.schema table_name` 查看实际表结构
 - 使用实际存在的列名：`reason`, `attempt_count`, `first_failed_at`, `last_failed_at`
 - 不要凭记忆或猜测列名
+
+### 5. CSS/UI 问题修复时盲目尝试
+**日期**：2026-01-25
+**场景**：移动端页面可以水平滚动，右边露出紫色背景
+
+**错误**：
+- 第一次尝试：给 `.news-actions` 加白色背景 → 无效
+- 第二次尝试：修改 `.tab-content-area` 背景色 → 无效
+- 没有先分析根本原因就开始修改
+
+**正确做法**：
+- 当第一次修复无效时，**停下来全面分析**
+- 向用户询问更多细节（如：是否可以水平滚动？在哪个区域出现？）
+- 分析可能的原因并列出方案
+- 确认原因后再修复
+- 本例根本原因是 `width: 100vw` 包含滚动条宽度导致溢出，应改为 `width: 100%` + `overflow-x: hidden`

@@ -1204,6 +1204,28 @@ async function addCurrentToFavorites() {
     }
 }
 
+// Event delegation for summary buttons (handles server-rendered buttons without onclick)
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.news-summary-btn');
+    if (!btn) return;
+    
+    // Skip if button already has onclick handler (dynamically generated)
+    if (btn.hasAttribute('onclick')) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const newsId = btn.dataset.newsId;
+    const title = btn.dataset.title || '';
+    const url = btn.dataset.url || '';
+    const sourceId = btn.dataset.sourceId || '';
+    const sourceName = btn.dataset.sourceName || '';
+    
+    if (newsId) {
+        handleSummaryClick(e, newsId, title, url, sourceId, sourceName);
+    }
+});
+
 // Expose to window
 window.openSummaryModal = openSummaryModal;
 window.closeSummaryModal = closeSummaryModal;

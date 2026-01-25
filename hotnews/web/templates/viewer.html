@@ -279,10 +279,12 @@
                                         </span>
                                         {% endif %}
                                     </a>
-                                    {% if news.timestamp %}
-                                    <span class="tr-news-date">{{ news.timestamp[5:10] }}</span>
-                                    {% endif %}
-                                    <button class="news-favorite-btn" title="收藏">☆</button>
+                                    <div class="news-actions">
+                                        {% if news.timestamp %}
+                                        <span class="tr-news-date">{{ news.timestamp[5:10] }}</span>
+                                        {% endif %}
+                                        <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
+                                    </div>
                                 </div>
                                 {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{
                                     news.meta }}</div>{% endif %}
@@ -338,10 +340,12 @@
                                         </span>
                                         {% endif %}
                                     </a>
-                                    {% if news.timestamp %}
-                                    <span class="tr-news-date">{{ news.timestamp[5:10] }}</span>
-                                    {% endif %}
-                                    <button class="news-favorite-btn" title="收藏">☆</button>
+                                    <div class="news-actions">
+                                        {% if news.timestamp %}
+                                        <span class="tr-news-date">{{ news.timestamp[5:10] }}</span>
+                                        {% endif %}
+                                        <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
+                                    </div>
                                 </div>
                                 {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{
                                     news.meta }}</div>{% endif %}

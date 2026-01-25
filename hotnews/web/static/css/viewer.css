@@ -358,11 +358,16 @@
         }
 
         @media (max-width: 640px) {
+            html, body {
+                overflow-x: hidden;
+            }
+            
             .main-container {
-                width: 100vw;
-                max-width: none;
+                width: 100%;
+                max-width: 100%;
                 padding: 0 4px;
                 gap: 8px;
+                overflow-x: hidden;
             }
 
             .header-card {
@@ -2557,7 +2562,9 @@
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
-    position: static; /* Let .news-summary-btn position relative to .news-item */
+    position: relative;
+    background: white;
+    padding-left: 8px;
 }
 
 /* News item needs relative positioning */
