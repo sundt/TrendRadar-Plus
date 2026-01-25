@@ -36,7 +36,7 @@ logger = logging.getLogger("uvicorn.error")
 
 # ========== 风控配置 ==========
 MAX_POOL_SIZE = 5                    # 池子最大容量
-CREDENTIAL_EXPIRE_SECONDS = 4 * 3600 # 凭证有效期 4 小时
+CREDENTIAL_EXPIRE_SECONDS = 24 * 3600 # 凭证有效期 24 小时（观察实际过期时间）
 MAX_USE_PER_HOUR = 30                # 单凭证每小时最多使用次数
 MIN_USE_INTERVAL = 10                # 同一凭证两次使用最小间隔（秒）
 COOLDOWN_AFTER_ERROR = 300           # 出错后冷却时间（秒）

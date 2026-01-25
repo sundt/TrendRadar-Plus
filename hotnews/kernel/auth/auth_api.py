@@ -921,8 +921,8 @@ async def qr_login_complete(request: Request, temp_user_id: int):
     from hotnews.kernel.services.wechat_qr_login import complete_login, cancel_login
     from hotnews.kernel.auth.auth_service import oauth_login_or_register
     
-    # 完成微信登录，获取 Cookie 和 Token
-    success, message, cookie_str, mp_token = complete_login(temp_user_id)
+    # 完成微信登录，获取 Cookie 和 Token（现在返回 expires_at）
+    success, message, cookie_str, mp_token, expires_at = complete_login(temp_user_id)
     
     if not success:
         return {"ok": False, "error": message}
@@ -952,11 +952,11 @@ async def qr_login_complete(request: Request, temp_user_id: int):
     if not login_success:
         return {"ok": False, "error": login_message}
     
-    # 同时保存公众号 Cookie 到用户的 wechat_auth
+    # 同时保存公众号 Cookie 到用户的 wechat_auth（使用实际过期时间）
     # 这样用户登录后就自动完成了公众号授权
     try:
         from hotnews.kernel.admin.wechat_admin import save_wechat_credentials
-        save_wechat_credentials(conn, user_info["id"], cookie_str)
+        save_wechat_credentials(conn, user_info["id"], cookie_str, expires_at)
     except Exception as e:
         print(f"[AUTH] Failed to save wechat credentials: {e}")
     

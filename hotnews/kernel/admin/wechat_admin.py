@@ -575,7 +575,7 @@ async def complete_qr_login(request: Request) -> Dict[str, Any]:
     user_id = user["id"]
     conn = _get_user_db_conn(request)
     
-    success, message, cookie, token = complete_login(user_id)
+    success, message, cookie, token, expires_at = complete_login(user_id)
     
     if not success or not cookie or not token:
         return {"ok": False, "error": message}
@@ -587,9 +587,11 @@ async def complete_qr_login(request: Request) -> Dict[str, Any]:
     if not test_result.ok:
         return {"ok": False, "error": f"认证验证失败: {test_result.error_message}"}
     
-    # 保存到数据库
+    # 保存到数据库（使用从 cookie 提取的实际过期时间）
     now = _now_ts()
-    expires_at = now + (2 * 60 * 60)  # 2 小时后过期
+    # 如果没有提取到过期时间，使用默认 24 小时
+    if not expires_at:
+        expires_at = now + (24 * 60 * 60)
     
     try:
         encrypted_cookie = encrypt_cookie(cookie)
@@ -610,7 +612,9 @@ async def complete_qr_login(request: Request) -> Dict[str, Any]:
         )
         conn.commit()
         
-        logger.info(f"[QRLogin] Saved auth for user {user_id}")
+        # 计算剩余时间用于日志
+        remaining_hours = (expires_at - now) / 3600
+        logger.info(f"[QRLogin] Saved auth for user {user_id}, expires in {remaining_hours:.1f} hours")
         return {"ok": True, "message": "登录成功", "expires_at": expires_at}
     except Exception as e:
         logger.error(f"[QRLogin] Failed to save auth: {e}")
@@ -1255,7 +1259,7 @@ async def proxy_wechat_image(
 
 # ========== Helper Function for QR Login ==========
 
-def save_wechat_credentials(conn, user_id: int, cookie_str: str) -> bool:
+def save_wechat_credentials(conn, user_id: int, cookie_str: str, expires_at: int = None) -> bool:
     """
     Save WeChat MP credentials for a user.
     
@@ -1265,6 +1269,7 @@ def save_wechat_credentials(conn, user_id: int, cookie_str: str) -> bool:
         conn: Database connection
         user_id: User ID
         cookie_str: Cookie string from WeChat MP login
+        expires_at: Cookie expiry timestamp (optional, defaults to 24 hours)
         
     Returns:
         True if saved successfully, False otherwise
@@ -1273,7 +1278,9 @@ def save_wechat_credentials(conn, user_id: int, cookie_str: str) -> bool:
         return False
     
     now = _now_ts()
-    expires_at = now + (2 * 60 * 60)  # 2 hours
+    # 如果没有传入过期时间，使用默认 24 小时
+    if not expires_at:
+        expires_at = now + (24 * 60 * 60)
     
     try:
         encrypted_cookie = encrypt_cookie(cookie_str)
@@ -1295,7 +1302,8 @@ def save_wechat_credentials(conn, user_id: int, cookie_str: str) -> bool:
         )
         conn.commit()
         
-        logger.info(f"[QRLogin] Saved WeChat credentials for user {user_id}")
+        remaining_hours = (expires_at - now) / 3600
+        logger.info(f"[QRLogin] Saved WeChat credentials for user {user_id}, expires in {remaining_hours:.1f} hours")
         return True
     except Exception as e:
         logger.error(f"[QRLogin] Failed to save credentials: {e}")
@@ -1488,8 +1496,8 @@ async def complete_qr_login_and_share(request: Request) -> Dict[str, Any]:
     user_id = user["id"]
     conn = _get_user_db_conn(request)
     
-    # 完成登录
-    success, message, cookie, token = complete_login(user_id)
+    # 完成登录（现在返回 expires_at）
+    success, message, cookie, token, expires_at = complete_login(user_id)
     
     if not success or not cookie or not token:
         return {"ok": False, "error": message}
@@ -1501,9 +1509,14 @@ async def complete_qr_login_and_share(request: Request) -> Dict[str, Any]:
     if not test_result.ok:
         return {"ok": False, "error": f"认证验证失败: {test_result.error_message}"}
     
-    # 保存到用户账号
+    # 保存到用户账号（使用从 cookie 提取的实际过期时间）
     now = _now_ts()
-    expires_at = now + (2 * 60 * 60)  # 2 小时
+    # 如果没有提取到过期时间，使用默认 24 小时
+    if not expires_at:
+        expires_at = now + (24 * 60 * 60)
+    
+    # 计算剩余秒数用于共享池
+    expires_in = expires_at - now
     
     try:
         encrypted_cookie = encrypt_cookie(cookie)
@@ -1527,17 +1540,18 @@ async def complete_qr_login_and_share(request: Request) -> Dict[str, Any]:
         logger.error(f"[QRLogin] Failed to save auth: {e}")
         return {"ok": False, "error": f"保存认证信息失败: {e}"}
     
-    # 自动贡献到共享池
+    # 自动贡献到共享池（使用实际的过期时间）
     from hotnews.kernel.services.wechat_shared_credentials import add_shared_credential
     
     add_shared_credential(
         cookie=cookie,
         token=token,
         contributed_by=user_id,
-        expires_in=2 * 60 * 60,
+        expires_in=expires_in,
     )
     
-    logger.info(f"[QRLogin] User {user_id} logged in and contributed to shared pool")
+    remaining_hours = expires_in / 3600
+    logger.info(f"[QRLogin] User {user_id} logged in and contributed to shared pool, expires in {remaining_hours:.1f} hours")
     
     return {
         "ok": True,
@@ -1545,3 +1559,4 @@ async def complete_qr_login_and_share(request: Request) -> Dict[str, Any]:
         "expires_at": expires_at,
         "shared": True,
     }
+

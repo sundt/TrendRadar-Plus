@@ -338,19 +338,20 @@ def check_scan_status(user_id: int) -> Dict[str, Any]:
         return {"ok": False, "status": "error", "message": str(e), "need_refresh": False}
 
 
-def complete_login(user_id: int) -> Tuple[bool, str, Optional[str], Optional[str]]:
+def complete_login(user_id: int) -> Tuple[bool, str, Optional[str], Optional[str], Optional[int]]:
     """
     完成登录，获取 Cookie 和 Token
     
     Returns:
-        (success, message, cookie, token)
+        (success, message, cookie, token, expires_at)
+        expires_at: Cookie 过期时间戳（从 slave_sid cookie 提取），如果无法提取则为 None
     """
     session = _login_sessions.get(user_id)
     if not session:
-        return False, "请先创建登录会话", None, None
+        return False, "请先创建登录会话", None, None, None
     
     if session.status != "confirmed":
-        return False, "请先完成扫码确认", None, None
+        return False, "请先完成扫码确认", None, None, None
     
     try:
         url = f"{MP_BASE_URL}/cgi-bin/bizlogin"
@@ -372,14 +373,14 @@ def complete_login(user_id: int) -> Tuple[bool, str, Optional[str], Optional[str
         resp = requests.post(url, params=params, data=data, headers=headers, timeout=15)
         
         if resp.status_code != 200:
-            return False, f"登录失败: HTTP {resp.status_code}", None, None
+            return False, f"登录失败: HTTP {resp.status_code}", None, None, None
         
         result = resp.json()
         base_resp = result.get("base_resp", {})
         
         if base_resp.get("ret") != 0:
             err_msg = base_resp.get("err_msg", "未知错误")
-            return False, f"登录失败: {err_msg}", None, None
+            return False, f"登录失败: {err_msg}", None, None, None
         
         # 从 redirect_url 中提取 token
         redirect_url = result.get("redirect_url", "")
@@ -388,12 +389,21 @@ def complete_login(user_id: int) -> Tuple[bool, str, Optional[str], Optional[str
             token = redirect_url.split("token=")[1].split("&")[0]
         
         if not token:
-            return False, "未获取到 token", None, None
+            return False, "未获取到 token", None, None, None
         
-        # 收集所有 Cookie
+        # 收集所有 Cookie 并提取过期时间
         cookies_list = []
+        expires_at = None
+        
         for cookie in resp.cookies:
             cookies_list.append(f"{cookie.name}={cookie.value}")
+            # 尝试从 slave_sid cookie 提取过期时间（微信公众号后台的关键 session cookie）
+            if cookie.name == "slave_sid" and cookie.expires:
+                try:
+                    expires_at = int(cookie.expires)
+                    logger.info(f"[QRLogin] Extracted expires_at from slave_sid: {expires_at}")
+                except (ValueError, TypeError):
+                    pass
         
         # 从 Set-Cookie header 中也提取
         set_cookie_header = resp.headers.get("Set-Cookie", "")
@@ -405,23 +415,50 @@ def complete_login(user_id: int) -> Tuple[bool, str, Optional[str], Optional[str
                     name_value = part.split(";")[0].strip()
                     if name_value and "=" in name_value:
                         cookies_list.append(name_value)
+                    
+                    # 尝试从 Set-Cookie header 提取 slave_sid 的过期时间
+                    if "slave_sid=" in part and expires_at is None:
+                        # 查找 expires= 或 max-age=
+                        for attr in part.split(";"):
+                            attr = attr.strip().lower()
+                            if attr.startswith("expires="):
+                                try:
+                                    from email.utils import parsedate_to_datetime
+                                    exp_str = attr.split("=", 1)[1].strip()
+                                    exp_dt = parsedate_to_datetime(exp_str)
+                                    expires_at = int(exp_dt.timestamp())
+                                    logger.info(f"[QRLogin] Extracted expires_at from header: {expires_at}")
+                                except Exception as e:
+                                    logger.debug(f"[QRLogin] Failed to parse expires: {e}")
+                            elif attr.startswith("max-age="):
+                                try:
+                                    max_age = int(attr.split("=", 1)[1].strip())
+                                    expires_at = int(time.time()) + max_age
+                                    logger.info(f"[QRLogin] Calculated expires_at from max-age: {expires_at}")
+                                except (ValueError, TypeError):
+                                    pass
         
         cookie_str = "; ".join(cookies_list)
+        
+        # 如果没有提取到过期时间，使用默认值（24小时）
+        if expires_at is None:
+            expires_at = int(time.time()) + 24 * 3600
+            logger.info(f"[QRLogin] Using default expires_at (24h): {expires_at}")
         
         # 更新会话
         session.cookies = cookie_str
         session.token = token
         session.status = "completed"
         
-        logger.info(f"[QRLogin] Login completed for user {user_id}, token={token[:8]}...")
-        return True, "登录成功", cookie_str, token
+        logger.info(f"[QRLogin] Login completed for user {user_id}, token={token[:8]}..., expires_at={expires_at}")
+        return True, "登录成功", cookie_str, token, expires_at
         
     except requests.RequestException as e:
         logger.error(f"[QRLogin] Complete login error: {e}")
-        return False, f"网络错误: {e}", None, None
+        return False, f"网络错误: {e}", None, None, None
     except Exception as e:
         logger.error(f"[QRLogin] Complete login error: {e}")
-        return False, f"登录失败: {e}", None, None
+        return False, f"登录失败: {e}", None, None, None
 
 
 def cancel_login(user_id: int) -> bool:
