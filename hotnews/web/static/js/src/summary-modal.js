@@ -323,6 +323,10 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
                     📖 阅读原文
                 </a>
+                <div class="summary-timeout-actions">
+                    <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                    <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                </div>
             </div>
         `;
     }, SLOW_LOADING_TIMEOUT);
@@ -561,6 +565,10 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             📖 阅读原文
                         </a>
                         <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
+                    </div>
+                    <div class="summary-timeout-actions">
+                        <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                        <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
                     </div>
                 </div>
             `;
@@ -1056,6 +1064,60 @@ async function addActionListToTodo() {
     });
 }
 
+/**
+ * Add current article to Todo (for timeout/error states)
+ */
+async function addCurrentToTodo() {
+    if (!currentNewsId || !currentNewsTitle) {
+        if (window.showToast) window.showToast('无法获取文章信息');
+        return;
+    }
+    
+    try {
+        await addTodo({
+            title: currentNewsTitle,
+            url: currentNewsUrl || '',
+            newsId: currentNewsId
+        });
+        if (window.showToast) window.showToast('已加入 Todo');
+    } catch (e) {
+        console.error('[Summary] Add to todo error:', e);
+        if (window.showToast) window.showToast('添加失败');
+    }
+}
+
+/**
+ * Add current article to Favorites (for timeout/error states)
+ */
+async function addCurrentToFavorites() {
+    if (!currentNewsId || !currentNewsTitle) {
+        if (window.showToast) window.showToast('无法获取文章信息');
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/favorites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                news_id: currentNewsId,
+                title: currentNewsTitle,
+                url: currentNewsUrl || ''
+            })
+        });
+        
+        if (res.ok) {
+            if (window.showToast) window.showToast('已收藏');
+        } else {
+            const data = await res.json();
+            if (window.showToast) window.showToast(data.detail || '收藏失败');
+        }
+    } catch (e) {
+        console.error('[Summary] Add to favorites error:', e);
+        if (window.showToast) window.showToast('收藏失败');
+    }
+}
+
 // Expose to window
 window.openSummaryModal = openSummaryModal;
 window.closeSummaryModal = closeSummaryModal;
@@ -1068,6 +1130,8 @@ window.openCurrentTodoPanel = openCurrentTodoPanel;
 window.toggleCurrentTodoPanel = toggleCurrentTodoPanel;
 window.addActionListToTodo = addActionListToTodo;
 window.forceSummary = forceSummary;
+window.addCurrentToTodo = addCurrentToTodo;
+window.addCurrentToFavorites = addCurrentToFavorites;
 
 export {
     openSummaryModal,

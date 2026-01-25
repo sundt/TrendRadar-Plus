@@ -6799,3 +6799,35 @@ body.eye-protection-mode .footer-qr-trigger {
         height: 150px;
     }
 }
+
+/* ==========================================================================
+   Summary Timeout/Error Action Buttons
+   ========================================================================== */
+
+.summary-timeout-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    justify-content: center;
+}
+
+.summary-action-btn {
+    padding: 10px 20px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    color: #475569;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.summary-action-btn:hover {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+    color: #334155;
+}
+
+.summary-action-btn:active {
+    transform: scale(0.98);
+}
