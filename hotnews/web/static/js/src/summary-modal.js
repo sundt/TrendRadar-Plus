@@ -1074,12 +1074,14 @@ async function addCurrentToTodo() {
     }
     
     try {
-        await addTodo({
-            title: currentNewsTitle,
-            url: currentNewsUrl || '',
-            newsId: currentNewsId
+        // addTodo expects (text, source) where source has groupId, groupTitle, groupUrl, isCustom
+        const result = await addTodo(currentNewsTitle, {
+            groupId: currentNewsId,
+            groupTitle: currentNewsTitle,
+            groupUrl: currentNewsUrl || '',
+            isCustom: false
         });
-        if (window.showToast) window.showToast('已加入 Todo');
+        // addTodo already shows toast on success/failure
     } catch (e) {
         console.error('[Summary] Add to todo error:', e);
         if (window.showToast) window.showToast('添加失败');
@@ -1095,22 +1097,19 @@ async function addCurrentToFavorites() {
         return;
     }
     
+    // Import addFavorite dynamically to avoid circular dependency
     try {
-        const res = await fetch('/api/favorites', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                news_id: currentNewsId,
-                title: currentNewsTitle,
-                url: currentNewsUrl || ''
-            })
+        const { addFavorite } = await import('./favorites.js');
+        const result = await addFavorite({
+            news_id: currentNewsId,
+            title: currentNewsTitle,
+            url: currentNewsUrl || ''
         });
         
-        if (res.ok) {
+        if (result.ok) {
             if (window.showToast) window.showToast('已收藏');
-        } else {
-            const data = await res.json();
-            if (window.showToast) window.showToast(data.detail || '收藏失败');
+        } else if (result.error) {
+            if (window.showToast) window.showToast(result.error);
         }
     } catch (e) {
         console.error('[Summary] Add to favorites error:', e);
