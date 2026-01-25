@@ -498,8 +498,65 @@ async def generate_summary_stream(
             yield f"data: {json.dumps({'type': 'error', 'message': error}, ensure_ascii=False)}\n\n"
             return
         
-        # Check if content is too short for summary (skip if force=1)
+        # Check for anti-crawler/CAPTCHA content patterns
+        # These indicate the page couldn't be properly fetched
+        ANTI_CRAWLER_PATTERNS = [
+            "环境异常",
+            "当前环境异常",
+            "请完成验证",
+            "验证码",
+            "CAPTCHA",
+            "请输入验证码",
+            "访问验证",
+            "安全验证",
+            "人机验证",
+            "请先登录",
+            "需要登录",
+            "登录后查看",
+            "请使用微信扫码",
+        ]
+        
+        content_lower = (content or "").lower()
+        is_anti_crawler = False
+        detected_pattern = None
+        
+        for pattern in ANTI_CRAWLER_PATTERNS:
+            if pattern.lower() in content_lower:
+                is_anti_crawler = True
+                detected_pattern = pattern
+                break
+        
+        # Also check if content is suspiciously short AND contains warning keywords
         content_length = len(content) if content else 0
+        if content_length < 800 and any(kw in content_lower for kw in ["warning", "error", "异常", "失败", "无法"]):
+            is_anti_crawler = True
+            detected_pattern = "suspicious_short_content"
+        
+        if is_anti_crawler:
+            # Record as fetch_blocked failure
+            try:
+                from hotnews.web.db_online import get_online_db_conn
+                from hotnews.kernel.services.summary_failure_tracker import record_summary_failure
+                
+                online_conn = get_online_db_conn(request.app.state.project_root)
+                error_detail = f"检测到反爬/验证码页面: {detected_pattern}"
+                record_summary_failure(
+                    online_conn, url, "fetch_blocked", error_detail, fetch_method, user["id"],
+                    source_id=source_id, source_name=source_name
+                )
+                logging.info(f"Recorded anti-crawler detection for {url}: {detected_pattern}")
+            except Exception as e:
+                logging.warning(f"Failed to record anti-crawler failure: {e}")
+            
+            # Show error to user
+            error_data = {
+                'type': 'error',
+                'message': '该网站需要验证，暂时无法获取内容。建议直接阅读原文 📖'
+            }
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+            return
+        
+        # Check if content is too short for summary (skip if force=1)
         if not force_summary and content_length < MIN_CONTENT_FOR_SUMMARY:
             # Content too short - suggest reading original
             # Get a preview (first 300 chars, clean up)

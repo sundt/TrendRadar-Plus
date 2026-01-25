@@ -9,6 +9,7 @@ Provides endpoints for:
 """
 
 import json
+import re
 import time
 import hashlib
 from typing import Optional, List
@@ -16,6 +17,73 @@ from typing import Optional, List
 from fastapi import APIRouter, Request, HTTPException, Body, Query
 
 router = APIRouter(prefix="/api/user/preferences", tags=["preferences"])
+
+
+# ==================== Title Deduplication Helpers ====================
+
+def _normalize_title(title: str) -> str:
+    """Remove punctuation and spaces for comparison."""
+    return re.sub(r'[^\w\u4e00-\u9fff]', '', title.lower())
+
+
+def _is_similar_title(t1: str, t2: str, threshold: float = 0.9) -> bool:
+    """Check if two titles are similar using character overlap."""
+    n1, n2 = _normalize_title(t1), _normalize_title(t2)
+    if not n1 or not n2:
+        return False
+    # Quick exact match
+    if n1 == n2:
+        return True
+    # Length difference too big
+    if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.15:
+        return False
+    # Character-based similarity (simple and fast)
+    shorter, longer = (n1, n2) if len(n1) <= len(n2) else (n2, n1)
+    # Check if shorter is mostly contained in longer
+    matches = sum(1 for c in shorter if c in longer)
+    return matches / len(shorter) >= threshold
+
+
+def _deduplicate_news_by_title(news_rows: list, limit: int) -> list:
+    """
+    Deduplicate news items by title similarity.
+    
+    Args:
+        news_rows: List of tuples (id, title, url, published_at, source_id)
+        limit: Maximum number of items to return
+    
+    Returns:
+        List of deduplicated news dicts
+    """
+    seen_titles = []
+    news_items = []
+    
+    for row in news_rows:
+        title = row[1]
+        
+        # Check against all seen titles for similarity
+        is_dup = False
+        for seen in seen_titles:
+            if _is_similar_title(title, seen):
+                is_dup = True
+                break
+        
+        if is_dup:
+            continue
+        
+        seen_titles.append(title)
+        news_items.append({
+            "id": row[0],
+            "title": title,
+            "url": row[2],
+            "published_at": row[3],
+            "source_id": row[4],
+        })
+        
+        if len(news_items) >= limit:
+            break
+    
+    return news_items
 
 
 def _now_ts() -> int:
@@ -519,6 +587,7 @@ async def get_followed_news(
                 continue
             
             # Query news matching this tag using rss_entry_tags table
+            # Fetch more results for deduplication
             news_cur = online_conn.execute(
                 """
                 SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
@@ -531,20 +600,17 @@ async def get_followed_news(
                 ORDER BY e.published_at DESC
                 LIMIT ?
                 """,
-                (tag_id, MIN_TIMESTAMP, MAX_TIMESTAMP, limit)
+                (tag_id, MIN_TIMESTAMP, MAX_TIMESTAMP, limit * 2)
             )
-            news_items = []
+            
+            # Filter by timestamp and deduplicate by title similarity
+            valid_rows = []
             for row in news_cur.fetchall() or []:
                 published_at = row[3]
-                if published_at < MIN_TIMESTAMP or published_at > MAX_TIMESTAMP:
-                    continue
-                news_items.append({
-                    "id": row[0],
-                    "title": row[1],
-                    "url": row[2],
-                    "published_at": published_at,
-                    "source_id": row[4],
-                })
+                if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                    valid_rows.append(row)
+            
+            news_items = _deduplicate_news_by_title(valid_rows, limit)
             
             result.append({
                 "tag": tag_details[tag_id],
@@ -565,7 +631,7 @@ async def get_followed_news(
         source_url = src_row[1] if src_row else ""
         source_category = src_row[2] if src_row else ""
         
-        # Query news from this source
+        # Query news from this source (fetch more for deduplication)
         news_cur = online_conn.execute(
             """
             SELECT id, title, url, published_at
@@ -577,20 +643,18 @@ async def get_followed_news(
             ORDER BY published_at DESC
             LIMIT ?
             """,
-            (source_id, MIN_TIMESTAMP, MAX_TIMESTAMP, limit)
+            (source_id, MIN_TIMESTAMP, MAX_TIMESTAMP, limit * 2)
         )
-        news_items = []
+        
+        # Filter by timestamp and deduplicate by title similarity
+        valid_rows = []
         for row in news_cur.fetchall() or []:
             published_at = row[3]
-            if published_at < MIN_TIMESTAMP or published_at > MAX_TIMESTAMP:
-                continue
-            news_items.append({
-                "id": row[0],
-                "title": row[1],
-                "url": row[2],
-                "published_at": published_at,
-                "source_id": source_id,
-            })
+            if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                # Add source_id as 5th element for compatibility with _deduplicate_news_by_title
+                valid_rows.append((row[0], row[1], row[2], row[3], source_id))
+        
+        news_items = _deduplicate_news_by_title(valid_rows, limit)
         
         result.append({
             "tag": {
@@ -626,61 +690,14 @@ async def get_followed_news(
             (search_pattern, MIN_TIMESTAMP, MAX_TIMESTAMP, limit * 3)
         )
         
-        # Deduplicate by similarity (>90% similar = duplicate)
-        import re
-        
-        def normalize_title(t):
-            """Remove punctuation and spaces for comparison"""
-            return re.sub(r'[^\w\u4e00-\u9fff]', '', t.lower())
-        
-        def is_similar(t1, t2, threshold=0.9):
-            """Check if two titles are similar using character overlap"""
-            n1, n2 = normalize_title(t1), normalize_title(t2)
-            if not n1 or not n2:
-                return False
-            # Quick exact match
-            if n1 == n2:
-                return True
-            # Length difference too big
-            if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.15:
-                return False
-            # Character-based similarity (simple and fast)
-            shorter, longer = (n1, n2) if len(n1) <= len(n2) else (n2, n1)
-            # Check if shorter is mostly contained in longer
-            matches = sum(1 for c in shorter if c in longer)
-            return matches / len(shorter) >= threshold
-        
-        seen_titles = []
-        news_items = []
-        
+        # Filter by timestamp and deduplicate by title similarity
+        valid_rows = []
         for row in news_cur.fetchall() or []:
             published_at = row[3]
-            if published_at < MIN_TIMESTAMP or published_at > MAX_TIMESTAMP:
-                continue
-            
-            title = row[1]
-            
-            # Check against all seen titles for similarity
-            is_dup = False
-            for seen in seen_titles:
-                if is_similar(title, seen):
-                    is_dup = True
-                    break
-            
-            if is_dup:
-                continue
-            
-            seen_titles.append(title)
-            news_items.append({
-                "id": row[0],
-                "title": title,
-                "url": row[2],
-                "published_at": published_at,
-                "source_id": row[4],
-            })
-            
-            if len(news_items) >= limit:
-                break
+            if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                valid_rows.append(row)
+        
+        news_items = _deduplicate_news_by_title(valid_rows, limit)
         
         result.append({
             "tag": {

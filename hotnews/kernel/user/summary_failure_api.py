@@ -249,3 +249,51 @@ async def get_recent_failures(
         })
     
     return {"ok": True, "failures": failures}
+
+
+@router.post("/record")
+async def record_failure(
+    request: Request,
+    url: str = Body(...),
+    reason: str = Body(...),
+    error_detail: str = Body(None),
+    source_id: str = Body(None),
+    source_name: str = Body(None)
+):
+    """
+    记录总结失败（供前端调用）
+    
+    Body:
+        url: 失败的 URL
+        reason: 失败原因代码
+        error_detail: 详细错误信息
+        source_id: RSS 源 ID
+        source_name: RSS 源名称
+    """
+    from hotnews.kernel.services.summary_failure_tracker import record_summary_failure
+    
+    # 获取用户（可选，未登录也可以记录）
+    user_id = None
+    try:
+        user = _get_current_user(request)
+        user_id = user.get("id")
+    except:
+        pass
+    
+    conn = _get_online_db_conn(request)
+    
+    try:
+        record_summary_failure(
+            conn=conn,
+            url=url,
+            reason=reason,
+            error_detail=error_detail,
+            fetch_method="client",
+            user_id=user_id,
+            source_id=source_id,
+            source_name=source_name
+        )
+        return {"ok": True, "message": "已记录"}
+    except Exception as e:
+        logging.warning(f"Failed to record failure: {e}")
+        return {"ok": False, "error": str(e)}

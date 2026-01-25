@@ -11,10 +11,15 @@ let isModalOpen = false;
 let currentNewsId = null;
 let currentNewsTitle = null;
 let currentNewsUrl = null;
+let currentSourceId = null;
+let currentSourceName = null;
 let slowLoadingTimer = null;
+let hardTimeoutTimer = null;
 
 // Timeout before showing "view original" hint (in ms)
-const SLOW_LOADING_TIMEOUT = 10000;
+const SLOW_LOADING_TIMEOUT = 5000;
+// Timeout before giving up completely and recording failure (in ms)
+const HARD_TIMEOUT = 10000;
 
 /**
  * Clear slow loading timer
@@ -23,6 +28,46 @@ function clearSlowLoadingTimer() {
     if (slowLoadingTimer) {
         clearTimeout(slowLoadingTimer);
         slowLoadingTimer = null;
+    }
+}
+
+/**
+ * Clear hard timeout timer
+ */
+function clearHardTimeoutTimer() {
+    if (hardTimeoutTimer) {
+        clearTimeout(hardTimeoutTimer);
+        hardTimeoutTimer = null;
+    }
+}
+
+/**
+ * Clear all timers
+ */
+function clearAllTimers() {
+    clearAllTimers();
+    clearHardTimeoutTimer();
+}
+
+/**
+ * Record client-side timeout failure
+ */
+async function recordClientTimeout(url, sourceId, sourceName) {
+    try {
+        await fetch('/api/summary/failures/record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: url,
+                reason: 'client_timeout',
+                error_detail: '客户端 10 秒超时',
+                source_id: sourceId || null,
+                source_name: sourceName || null
+            })
+        });
+        console.log('[Summary] Recorded client timeout for:', url);
+    } catch (e) {
+        console.error('[Summary] Failed to record client timeout:', e);
     }
 }
 
@@ -276,6 +321,8 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     currentNewsId = newsId;
     currentNewsTitle = title;
     currentNewsUrl = url;
+    currentSourceId = sourceId;
+    currentSourceName = sourceName;
     isModalOpen = true;
     
     // Expose to window for selection todo
@@ -311,9 +358,21 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     `;
     footer.style.display = 'none';
     
-    // Start slow loading timer - after timeout, stop spinner and show direct link
-    clearSlowLoadingTimer();
+    // Start slow loading timer - after 5s, show hint
+    clearAllTimers();
     slowLoadingTimer = setTimeout(() => {
+        // Show slow loading hint but don't stop yet
+        const slowHint = document.getElementById('summarySlowHint');
+        if (slowHint) {
+            slowHint.style.display = 'block';
+        }
+    }, SLOW_LOADING_TIMEOUT);
+    
+    // Start hard timeout timer - after 10s, give up and record failure
+    hardTimeoutTimer = setTimeout(() => {
+        // Record client timeout failure
+        recordClientTimeout(url, sourceId, sourceName);
+        
         // Stop the loading spinner and show direct link to original article
         body.innerHTML = `
             <div class="summary-access-error">
@@ -321,7 +380,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 <div class="summary-access-error-title">暂时无法获取内容</div>
                 <div class="summary-access-error-text">该网站防护较强，建议直接阅读原文</div>
                 <div class="summary-access-error-actions">
-                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn" onclick="closeSummaryModal()">
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
                         📖 阅读原文
                     </a>
                     <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
@@ -332,7 +391,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 </div>
             </div>
         `;
-    }, SLOW_LOADING_TIMEOUT);
+    }, HARD_TIMEOUT);
     
     try {
         // Check if URL is summarizable before making request
@@ -341,7 +400,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
             const checkData = await checkRes.json();
             if (!checkData.summarizable) {
                 // URL is blocked - show warning and offer options
-                clearSlowLoadingTimer();
+                clearAllTimers();
                 body.innerHTML = `
                     <div class="summary-access-error">
                         <div class="summary-access-error-icon">⚠️</div>
@@ -349,7 +408,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                         <div class="summary-access-error-text">${checkData.warning || '该网站无法获取内容'}</div>
                         ${checkData.source_name ? `<div class="summary-access-error-source">来源: ${checkData.source_name}</div>` : ''}
                         <div class="summary-access-error-actions">
-                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn" onclick="closeSummaryModal()">
+                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
                                 📖 阅读原文
                             </a>
                             <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">仍要尝试</button>
@@ -430,7 +489,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             if (!isStreaming) {
                                 // First chunk - switch to content view
                                 isStreaming = true;
-                                clearSlowLoadingTimer(); // Content arrived, no need for slow hint
+                                clearAllTimers(); // Content arrived, no need for slow hint
                                 body.innerHTML = `
                                     <div class="summary-content summary-streaming" id="summaryStreamContent">
                                         <div class="summary-cursor"></div>
@@ -453,7 +512,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             
                         case 'cached':
                             // Cached summary - render immediately with token usage and feedback
-                            clearSlowLoadingTimer(); // Content arrived
+                            clearAllTimers(); // Content arrived
                             fullContent = data.summary;
                             articleType = data.article_type;
                             articleTypeName = data.article_type_name;
@@ -532,7 +591,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             
                         case 'short_content':
                             // Content too short - show suggestion to read original
-                            clearSlowLoadingTimer();
+                            clearAllTimers();
                             body.innerHTML = `
                                 <div class="summary-short-content">
                                     <div class="short-content-icon">📄</div>
@@ -579,7 +638,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
         
     } catch (e) {
         console.error('[Summary] Error:', e);
-        clearSlowLoadingTimer();
+        clearAllTimers();
         
         // Check if it's a content access error
         const isAccessError = e.message && (
@@ -596,7 +655,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                     <div class="summary-access-error-title">暂时无法获取内容</div>
                     <div class="summary-access-error-text">该网站设置了访问保护，建议直接阅读原文</div>
                     <div class="summary-access-error-actions">
-                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn" onclick="closeSummaryModal()">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
                             📖 阅读原文
                         </a>
                         <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
@@ -712,7 +771,7 @@ function closeSummaryModal() {
         modal.classList.remove('open');
         document.body.style.overflow = '';
     }
-    clearSlowLoadingTimer();
+    clearAllTimers();
     isModalOpen = false;
     currentNewsId = null;
 }

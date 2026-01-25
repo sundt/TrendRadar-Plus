@@ -34,6 +34,7 @@ FAILURE_REASONS = {
     "ai_error": {"name": "AI服务错误", "retryable": True},
     "ai_timeout": {"name": "AI响应超时", "retryable": True},
     "parse_failed": {"name": "内容解析失败", "retryable": False},
+    "client_timeout": {"name": "客户端超时", "retryable": True},
     "unknown": {"name": "未知错误", "retryable": True},
 }
 
@@ -111,7 +112,9 @@ def record_summary_failure(
     reason: str,
     error_detail: str = None,
     fetch_method: str = None,
-    user_id: int = None
+    user_id: int = None,
+    source_id: str = None,
+    source_name: str = None
 ) -> None:
     """
     记录总结失败
@@ -123,6 +126,8 @@ def record_summary_failure(
         error_detail: 详细错误信息
         fetch_method: 尝试的抓取方式
         user_id: 报告用户 ID
+        source_id: RSS 源 ID（可选，前端传入）
+        source_name: RSS 源名称（可选，前端传入）
     """
     url_hash = hashlib.md5(url.encode()).hexdigest()
     domain = urlparse(url).netloc
@@ -132,8 +137,11 @@ def record_summary_failure(
     if reason not in FAILURE_REASONS:
         reason = "unknown"
     
-    # 查找关联的 RSS 源
-    source_id, source_name = _find_source_for_url(conn, url)
+    # 如果前端没传 source_id/source_name，尝试从数据库查找
+    if not source_id or not source_name:
+        found_id, found_name = _find_source_for_url(conn, url)
+        source_id = source_id or found_id
+        source_name = source_name or found_name
     
     try:
         # Upsert 失败记录

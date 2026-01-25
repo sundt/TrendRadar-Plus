@@ -19,7 +19,7 @@ RATE_LIMIT_MAX = 20  # max requests per window
 
 # Content limits
 MAX_CONTENT_LENGTH = 8000  # characters
-REQUEST_TIMEOUT = 30  # seconds
+REQUEST_TIMEOUT = 10  # seconds (reduced from 30 for faster feedback)
 
 
 def check_rate_limit(user_id: int) -> Tuple[bool, int]:
