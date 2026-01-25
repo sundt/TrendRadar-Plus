@@ -412,20 +412,14 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
             }
         }, 1000);
         
-        // Auto-open after 5 more seconds (total 10s)
+        // After 10s total, just update hint to let user click (don't auto-open)
         autoOpenTimer = setTimeout(() => {
-            console.log('[Summary] 10s timeout, opening original article');
-            clearAllTimers();
-            // Close modal and open original article
-            const modal = document.getElementById('summaryModal');
-            if (modal) {
-                modal.classList.remove('open');
-                document.body.style.overflow = '';
-            }
-            isModalOpen = false;
-            currentNewsId = null;
-            if (url) {
-                window.open(url, '_blank', 'noopener,noreferrer');
+            console.log('[Summary] 10s timeout, showing click hint');
+            clearCountdownTimer();
+            // Update hint to show "click to read original"
+            const slowHint = document.getElementById('summarySlowHint');
+            if (slowHint) {
+                slowHint.innerHTML = '加载较慢，请 <a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: underline;">点击阅读原文</a>';
             }
         }, AUTO_OPEN_TIMEOUT - SLOW_LOADING_TIMEOUT);
     }, SLOW_LOADING_TIMEOUT);
@@ -937,20 +931,14 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
             }
         }, 1000);
         
-        // Auto-open after 5 more seconds (total 10s)
+        // After 10s total, just update hint to let user click (don't auto-open)
         autoOpenTimer = setTimeout(() => {
-            console.log('[Summary Force] 10s timeout, opening original article');
-            clearAllTimers();
-            // Close modal and open original article
-            const modal = document.getElementById('summaryModal');
-            if (modal) {
-                modal.classList.remove('open');
-                document.body.style.overflow = '';
-            }
-            isModalOpen = false;
-            currentNewsId = null;
-            if (url) {
-                window.open(url, '_blank', 'noopener,noreferrer');
+            console.log('[Summary Force] 10s timeout, showing click hint');
+            clearCountdownTimer();
+            // Update hint to show "click to read original"
+            const slowHint = document.getElementById('summarySlowHint');
+            if (slowHint) {
+                slowHint.innerHTML = '加载较慢，请 <a href="' + url + '" target="_blank" rel="noopener noreferrer" style="color: #3b82f6; text-decoration: underline;">点击阅读原文</a>';
             }
         }, AUTO_OPEN_TIMEOUT - SLOW_LOADING_TIMEOUT);
     }, SLOW_LOADING_TIMEOUT);
