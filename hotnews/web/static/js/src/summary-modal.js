@@ -45,7 +45,7 @@ function clearHardTimeoutTimer() {
  * Clear all timers
  */
 function clearAllTimers() {
-    clearAllTimers();
+    clearSlowLoadingTimer();
     clearHardTimeoutTimer();
 }
 
@@ -129,6 +129,10 @@ function renderMarkdown(text) {
     let html = text
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<\/br>/gi, '\n');
+    
+    // Remove checkbox markers [ ] from action lists
+    html = html.replace(/- \[ \]/g, '-');
+    html = html.replace(/- \[\]/g, '-');
     
     // Escape HTML
     html = html
@@ -358,13 +362,20 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     `;
     footer.style.display = 'none';
     
-    // Start slow loading timer - after 5s, show hint
+    // Start slow loading timer - after 5s, show hint (and auto-open on mobile)
     clearAllTimers();
     slowLoadingTimer = setTimeout(() => {
         // Show slow loading hint but don't stop yet
         const slowHint = document.getElementById('summarySlowHint');
         if (slowHint) {
             slowHint.style.display = 'block';
+        }
+        
+        // On mobile, auto-open original article in new tab
+        // Keep the modal open so user can add to Todo/Favorites when they return
+        const isMobile = window.matchMedia && !window.matchMedia('(hover: hover)').matches;
+        if (isMobile && url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
         }
     }, SLOW_LOADING_TIMEOUT);
     

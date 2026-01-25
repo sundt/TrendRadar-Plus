@@ -74,6 +74,16 @@ cd ~/hotnews/docker && docker compose -f docker-compose-build.yml logs -f hotnew
 ## 最近改动
 
 ### 2026-01-25
+- ✅ **修复 AI 总结定时器 bug** - `clearAllTimers()` 递归调用导致无限循环
+  - `summary-modal.js` - 修复 `clearAllTimers()` 调用 `clearSlowLoadingTimer()`
+- ✅ **移除总结中的 [ ] 复选框** - 行动清单不再显示空方括号
+  - `prompts.py` - 模板中移除 `- [ ]` 格式
+  - `summary-modal.js` - 渲染时过滤 `[ ]` 标记
+- ✅ **移动端 5 秒自动打开原文** - 加载慢时自动跳转，保留弹窗可添加 Todo/收藏
+  - `summary-modal.js` - slowLoadingTimer 中检测移动端并自动打开
+- ✅ **移动端总结弹窗安全区域** - 避免被浏览器地址栏/工具栏遮挡
+  - `mobile.css` - 使用 `dvh` 和 `env(safe-area-inset-*)` 
+  - `viewer.html` - viewport 添加 `viewport-fit=cover`
 - ✅ 阅读原文不关闭弹窗 - `summary-modal.js`
 - ✅ 总结失败追踪功能 - `summary_failure_tracker.py`, `summary_failure_api.py`, `summary-modal.js`
 - ✅ 反爬/验证码页面检测 - `summary_api.py`（检测微信验证码等，记录为 fetch_blocked）

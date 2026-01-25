@@ -172,3 +172,27 @@ ssh -p 52222 root@120.77.222.205 "cd ~/hotnews && sqlite3 output/online.db 'SELE
 - 分析可能的原因并列出方案
 - 确认原因后再修复
 - 本例根本原因是 `width: 100vw` 包含滚动条宽度导致溢出，应改为 `width: 100%` + `overflow-x: hidden`
+
+### 6. 函数内递归调用自身而非目标函数
+**日期**：2026-01-25
+**场景**：AI 总结弹窗超过 5 秒不显示"查看原文"按钮，JS 无报错
+
+**错误**：
+```javascript
+function clearAllTimers() {
+    clearSlowLoadingTimer();
+    clearAllTimers();  // ❌ 错误：递归调用自身
+}
+```
+应该是：
+```javascript
+function clearAllTimers() {
+    clearSlowLoadingTimer();
+    clearShortContentTimer();  // ✅ 正确：调用另一个清理函数
+}
+```
+
+**正确做法**：
+- 复制粘贴代码时仔细检查函数名
+- 当功能"静默失败"（无报错但不工作）时，检查是否有无限递归
+- 递归调用会导致栈溢出，但如果函数很简单可能不会立即报错，只是逻辑不执行

@@ -28,6 +28,9 @@
         width: 100%;
         max-width: 100%;
         padding: 0;
+        /* Add safe area padding for notch/home indicator */
+        padding-top: env(safe-area-inset-top, 0);
+        padding-bottom: env(safe-area-inset-bottom, 0);
         gap: 8px;
         overflow-x: hidden;
     }
@@ -189,10 +192,12 @@
     .summary-modal-content {
         width: calc(100% - 16px);
         max-width: calc(100% - 16px);
-        height: calc(100vh - 16px);
-        max-height: calc(100vh - 16px);
+        /* Use dvh for dynamic viewport height, with safe area fallback */
+        height: calc(100dvh - 16px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
+        max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0) - env(safe-area-inset-bottom, 0));
         border-radius: 16px;
-        margin: 8px;
+        /* Center with safe area offset */
+        margin: calc(8px + env(safe-area-inset-top, 0)) 8px calc(8px + env(safe-area-inset-bottom, 0)) 8px;
     }
     
     .summary-modal-header {
