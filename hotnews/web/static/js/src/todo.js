@@ -556,6 +556,11 @@ function renderTodoSidebar() {
             <button class="todo-group-summary-btn" title="查看总结" data-group-id="${escapeHtml(group.groupId)}" data-group-title="${escapeHtml(group.groupTitle)}" data-group-url="${escapeHtml(group.groupUrl || '')}">✨</button>
         ` : '';
         
+        // 链接按钮 - 有 URL 时显示
+        const linkBtn = group.groupUrl ? `
+            <a href="${escapeHtml(group.groupUrl)}" target="_blank" rel="noopener noreferrer" class="todo-group-link-btn" title="查看原文" onclick="event.stopPropagation()">🔗</a>
+        ` : '';
+        
         html += `
             <div class="todo-group ${isCollapsed ? 'collapsed' : ''}" data-group-id="${escapeHtml(group.groupId)}">
                 <div class="todo-group-header">
@@ -563,6 +568,7 @@ function renderTodoSidebar() {
                     <span class="todo-group-title" title="${escapeHtml(group.groupTitle)}">${escapeHtml(group.groupTitle)}</span>
                     <span class="todo-group-count">${unfinishedCount}/${totalCount}</span>
                     <div class="todo-group-actions">
+                        ${linkBtn}
                         ${summaryBtn}
                         <button class="todo-group-add-btn" title="添加 Todo">+</button>
                     </div>

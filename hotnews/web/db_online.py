@@ -536,6 +536,11 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     from hotnews.kernel.user.payment_api import init_payment_tables
     init_payment_tables(conn)
 
+    # ========== Summary Failure Tracking Tables ==========
+    # 总结失败追踪表（用于标记无法总结的网页/订阅源）
+    from hotnews.kernel.services.summary_failure_tracker import init_failure_tables
+    init_failure_tables(conn)
+
     conn.commit()
 
     _online_db_conn = conn

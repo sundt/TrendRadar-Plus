@@ -316,13 +316,16 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     slowLoadingTimer = setTimeout(() => {
         // Stop the loading spinner and show direct link to original article
         body.innerHTML = `
-            <div class="summary-timeout">
-                <div class="summary-timeout-icon">🛡️</div>
-                <div class="summary-timeout-text">该网站防护较强，暂时无法获取内容</div>
-                <div class="summary-timeout-subtext">建议直接阅读原文，体验更佳</div>
-                <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
-                    📖 阅读原文
-                </a>
+            <div class="summary-access-error">
+                <div class="summary-access-error-icon">🛡️</div>
+                <div class="summary-access-error-title">暂时无法获取内容</div>
+                <div class="summary-access-error-text">该网站防护较强，建议直接阅读原文</div>
+                <div class="summary-access-error-actions">
+                    <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn" onclick="closeSummaryModal()">
+                        📖 阅读原文
+                    </a>
+                    <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
+                </div>
                 <div class="summary-timeout-actions">
                     <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
                     <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
@@ -332,6 +335,38 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     }, SLOW_LOADING_TIMEOUT);
     
     try {
+        // Check if URL is summarizable before making request
+        const checkRes = await fetch(`/api/summary/failures/check?url=${encodeURIComponent(url)}`);
+        if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (!checkData.summarizable) {
+                // URL is blocked - show warning and offer options
+                clearSlowLoadingTimer();
+                body.innerHTML = `
+                    <div class="summary-access-error">
+                        <div class="summary-access-error-icon">⚠️</div>
+                        <div class="summary-access-error-title">该来源暂不支持总结</div>
+                        <div class="summary-access-error-text">${checkData.warning || '该网站无法获取内容'}</div>
+                        ${checkData.source_name ? `<div class="summary-access-error-source">来源: ${checkData.source_name}</div>` : ''}
+                        <div class="summary-access-error-actions">
+                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn" onclick="closeSummaryModal()">
+                                📖 阅读原文
+                            </a>
+                            <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">仍要尝试</button>
+                        </div>
+                        <div class="summary-timeout-actions">
+                            <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                            <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                        </div>
+                    </div>
+                `;
+                return;
+            } else if (checkData.warning) {
+                // Show warning but continue
+                console.log('[Summary] Warning:', checkData.warning);
+            }
+        }
+        
         // Use streaming endpoint
         const res = await fetch('/api/summary/stream', {
             method: 'POST',
@@ -561,7 +596,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                     <div class="summary-access-error-title">暂时无法获取内容</div>
                     <div class="summary-access-error-text">该网站设置了访问保护，建议直接阅读原文</div>
                     <div class="summary-access-error-actions">
-                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn" onclick="closeSummaryModal()">
                             📖 阅读原文
                         </a>
                         <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
@@ -573,16 +608,9 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 </div>
             `;
         } else {
-            body.innerHTML = `
-                <div class="summary-error">
-                    <div class="summary-error-icon">😅</div>
-                    <div class="summary-error-text">${e.message}</div>
-                    <div class="summary-error-actions">
-                        <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
-                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-link-btn-secondary">查看原文</a>
-                    </div>
-                </div>
-            `;
+            // Generic error - just close modal, don't show another error page
+            closeSummaryModal();
+            return;
         }
     }
 }

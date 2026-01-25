@@ -474,6 +474,27 @@ async def generate_summary_stream(
         
         content, error, fetch_method = await fetch_article_content(url)
         if error:
+            # Record failure for tracking
+            try:
+                from hotnews.web.db_online import get_online_db_conn
+                from hotnews.kernel.services.summary_failure_tracker import record_summary_failure
+                
+                online_conn = get_online_db_conn(request.app.state.project_root)
+                # Map error message to reason code
+                reason = "fetch_error"
+                if "超时" in error:
+                    reason = "fetch_timeout"
+                elif "403" in error or "反爬" in error or "限制" in error:
+                    reason = "fetch_blocked"
+                elif "404" in error or "不存在" in error:
+                    reason = "fetch_404"
+                elif "无法获取" in error or "内容" in error:
+                    reason = "content_empty"
+                
+                record_summary_failure(online_conn, url, reason, error, fetch_method, user["id"])
+            except Exception as e:
+                logging.warning(f"Failed to record summary failure: {e}")
+            
             yield f"data: {json.dumps({'type': 'error', 'message': error}, ensure_ascii=False)}\n\n"
             return
         
@@ -506,6 +527,20 @@ async def generate_summary_stream(
         
         async for chunk, is_done, a_type, err, usage, conf in generate_smart_summary_stream(content, api_key, model, source_name=source_name):
             if err:
+                # Record AI failure for tracking
+                try:
+                    from hotnews.web.db_online import get_online_db_conn
+                    from hotnews.kernel.services.summary_failure_tracker import record_summary_failure
+                    
+                    online_conn = get_online_db_conn(request.app.state.project_root)
+                    reason = "ai_error"
+                    if "超时" in err:
+                        reason = "ai_timeout"
+                    
+                    record_summary_failure(online_conn, url, reason, err, fetch_method, user["id"])
+                except Exception as e:
+                    logging.warning(f"Failed to record AI failure: {e}")
+                
                 yield f"data: {json.dumps({'type': 'error', 'message': err}, ensure_ascii=False)}\n\n"
                 return
             
@@ -574,6 +609,13 @@ async def generate_summary_stream(
                 
                 # Save to global cache with tags
                 _save_to_global_cache(request, url, title, display_summary, article_type, model, user["id"], token_usage, fetch_method, quality_tag, category_tags)
+                
+                # Record success for domain stats
+                try:
+                    from hotnews.kernel.services.summary_failure_tracker import record_summary_success
+                    record_summary_success(online_conn, url)
+                except Exception as e:
+                    logging.debug(f"Failed to record summary success: {e}")
                 
                 # Also update rss_entry_tags for "我的关注" feature (category tags only)
                 try:

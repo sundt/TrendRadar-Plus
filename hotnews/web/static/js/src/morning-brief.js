@@ -293,6 +293,11 @@ async function _loadNextBatch() {
             // Calculate which card number this is (0-based)
             const cardIndex = Math.floor(_mbOffset / getItemsPerCard());
             _appendCard(items, cardIndex, grid);
+            
+            // Restore read state for newly loaded items
+            try {
+                TR.readState?.restoreReadState?.();
+            } catch (e) { /* ignore */ }
         }
 
         _mbOffset += items.length;
@@ -315,49 +320,86 @@ async function _loadNextBatch() {
  */
 async function _loadTimeline() {
     const grid = _getGrid();
-    if (!grid) return;
+    if (!grid) {
+        console.warn('[MorningBrief] Grid not found, skipping load');
+        return;
+    }
+
+    // Save existing content in case of error
+    const previousContent = grid.innerHTML;
+    const hadContent = grid.querySelectorAll('.tr-morning-brief-card .news-item').length > 0;
 
     // Reset state
     _mbOffset = 0;
     _mbFinished = false;
-    grid.innerHTML = ''; // Clear all
-
-    // Create Sentinel immediately so we can insert before it
-    _createSentinel(grid);
-
-    // Fetch Initial Batch (3 cards = 150 items)
-    const limit = getItemsPerCard();
-    const initialLimit = limit * INITIAL_CARDS;
-    const items = await _fetchTimelineBatch(initialLimit, 0);
-
-    if (!items.length) {
-        grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
-        return;
+    
+    // Show loading state instead of clearing immediately
+    if (!hadContent) {
+        grid.innerHTML = '<div class="mb-loading-state" style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⏳</div>加载中...</div>';
     }
 
-    // Chunk into cards
-    for (let i = 0; i < items.length; i += limit) {
-        const chunk = items.slice(i, i + limit);
-        const cardIndex = Math.floor(i / limit); // 0, 1, 2, ...
-        _appendCard(chunk, cardIndex, grid);
-    }
+    try {
+        // Fetch Initial Batch (10 cards = 500 items)
+        const limit = getItemsPerCard();
+        const initialLimit = limit * INITIAL_CARDS;
+        const items = await _fetchTimelineBatch(initialLimit, 0);
 
-    _mbOffset = items.length;
+        // Clear grid only after successful fetch
+        grid.innerHTML = '';
 
-    if (items.length < initialLimit) {
-        // No more data
-        _mbFinished = true;
-        const s = document.getElementById('mb-load-sentinel');
-        if (s) s.remove();
-    } else {
-        // Setup observer for next batches
-        _attachObserver();
+        if (!items.length) {
+            grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+            return;
+        }
+
+        // Create Sentinel for infinite scroll
+        _createSentinel(grid);
+
+        // Chunk into cards
+        for (let i = 0; i < items.length; i += limit) {
+            const chunk = items.slice(i, i + limit);
+            const cardIndex = Math.floor(i / limit); // 0, 1, 2, ...
+            _appendCard(chunk, cardIndex, grid);
+        }
+
+        _mbOffset = items.length;
+
+        if (items.length < initialLimit) {
+            // No more data
+            _mbFinished = true;
+            const s = document.getElementById('mb-load-sentinel');
+            if (s) s.remove();
+        } else {
+            // Setup observer for next batches
+            _attachObserver();
+        }
+        
+        // Restore read state for dynamically loaded items
+        try {
+            TR.readState?.restoreReadState?.();
+        } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error('[MorningBrief] Failed to load timeline:', e);
+        // Restore previous content if we had any, otherwise show error
+        if (hadContent) {
+            grid.innerHTML = previousContent;
+        } else {
+            grid.innerHTML = `
+                <div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">
+                    <div style="font-size:24px;margin-bottom:8px;">⚠️</div>
+                    <div>加载失败，请稍后重试</div>
+                    <button onclick="window.TR?.morningBrief?.refresh?.()" style="margin-top:12px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:6px;cursor:pointer;">重新加载</button>
+                </div>`;
+        }
     }
 }
 
 async function _refreshTimelineIfNeeded(opts = {}) {
     const force = opts.force === true;
-    if (_getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
+    const skipTabCheck = opts.skipTabCheck === true;
+    
+    // Skip tab check only for initial load
+    if (!skipTabCheck && _getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
 
     // Simple cooldown if not forced
     const now = Date.now();
@@ -404,9 +446,24 @@ function _attachHandlersOnce() {
 }
 
 async function _initialLoad() {
-    if (!_ensureLayout()) return;
+    // Retry up to 3 times if layout is not ready (DOM might not be fully rendered)
+    let retries = 3;
+    while (retries > 0) {
+        if (_ensureLayout()) break;
+        retries--;
+        if (retries > 0) {
+            await new Promise(r => setTimeout(r, 100)); // Wait 100ms before retry
+        }
+    }
+    
+    if (!_ensureLayout()) {
+        console.warn('[MorningBrief] Layout not ready after retries');
+        return;
+    }
+    
     _attachHandlersOnce();
-    await _refreshTimelineIfNeeded({ force: false });
+    // Skip tab check for initial load - always load data
+    await _refreshTimelineIfNeeded({ force: false, skipTabCheck: true });
 }
 
 function _ensurePolling() {
@@ -440,6 +497,8 @@ function _patchRenderHook() {
     TR.morningBrief = {
         ...(TR.morningBrief || {}),
         _patched: true,
+        // Expose refresh method for manual retry
+        refresh: () => _refreshTimelineIfNeeded({ force: true }),
     };
 }
 

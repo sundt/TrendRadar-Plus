@@ -568,6 +568,12 @@
     text-align: center;
 }
 
+.summary-access-error-source {
+    color: #9ca3af;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
 .summary-access-error-actions {
     display: flex;
     gap: 12px;
