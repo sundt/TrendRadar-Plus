@@ -74,14 +74,13 @@ cd ~/hotnews/docker && docker compose -f docker-compose-build.yml logs -f hotnew
 ## 最近改动
 
 ### 2026-01-25
-- ✅ 阅读原文不关闭弹窗 - `summary-modal.js`（移除 onclick 关闭事件）
+- ✅ 阅读原文不关闭弹窗 - `summary-modal.js`
 - ✅ 总结失败追踪功能 - `summary_failure_tracker.py`, `summary_failure_api.py`, `summary-modal.js`
-  - 前端 5s 显示加载提示，10s 硬超时并记录失败
-  - 新增 `/api/summary/failures/record` 接口
-  - 后端 HTTP 超时从 30s 改为 10s
-- ✅ analyze-before-action skill 增强 - 添加影响分析、服务器信息、强制更新 project-context、错误记录机制
-- ✅ 创建 common-mistakes.md - 记录 AI 常见错误避免重复
+- ✅ 反爬/验证码页面检测 - `summary_api.py`（检测微信验证码等，记录为 fetch_blocked）
+- ✅ 失败记录补全 source_id/source_name - `summary_failure_api.py`, `summary_failure_tracker.py`
+- ✅ analyze-before-action skill 增强
+- ✅ 创建 common-mistakes.md
 
 ## 待办事项
 <!-- 在这里记录进行中的任务 -->
-- [ ] 以上改动待部署到服务器
+- 无
