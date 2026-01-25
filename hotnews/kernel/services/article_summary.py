@@ -3,8 +3,10 @@
 Article Summary Service
 
 Provides article content extraction and AI summarization.
+Supports multiple AI providers: Baidu Qianfan (default), Alibaba DashScope (fallback)
 """
 
+import os
 import time
 import logging
 import httpx
@@ -20,6 +22,12 @@ RATE_LIMIT_MAX = 20  # max requests per window
 # Content limits
 MAX_CONTENT_LENGTH = 8000  # characters
 REQUEST_TIMEOUT = 10  # seconds (reduced from 30 for faster feedback)
+
+# AI Provider configuration
+# Priority: Baidu Qianfan > Alibaba DashScope
+QIANFAN_API_URL = "https://qianfan.baidubce.com/v2/chat/completions"
+QIANFAN_DEFAULT_MODEL = "ernie-5.0-thinking-preview"  # Default model, can be overridden
+DASHSCOPE_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
 
 
 def check_rate_limit(user_id: int) -> Tuple[bool, int]:
@@ -432,16 +440,17 @@ async def generate_summary(content: str, api_key: str, model: str = "qwen-turbo"
 async def classify_article(
     content: str, 
     api_key: str, 
-    model: str = "qwen-turbo",
+    model: str = None,
     source_name: str = None
 ) -> dict:
     """
     Classify article type using AI with confidence score.
+    Supports Baidu Qianfan and Alibaba DashScope.
     
     Args:
         content: Article content
-        api_key: DashScope API key
-        model: Model name
+        api_key: API key (Qianfan or DashScope)
+        model: Model name (auto-detected based on provider)
         source_name: Source name for hints (e.g., "36氪")
     
     Returns:
@@ -457,19 +466,30 @@ async def classify_article(
     if not api_key:
         return default_result
     
+    # Determine provider and URL based on API key or environment
+    qianfan_key = os.environ.get("QIANFAN_API_KEY", "")
+    use_qianfan = bool(qianfan_key)
+    
+    if use_qianfan:
+        url = QIANFAN_API_URL
+        actual_key = qianfan_key
+        actual_model = model or os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
+    else:
+        url = DASHSCOPE_API_URL
+        actual_key = api_key
+        actual_model = model or "qwen-turbo"
+    
     # Use first 2000 chars for classification (save tokens)
     content_preview = content[:2000] if len(content) > 2000 else content
     system_prompt, user_prompt = get_classify_prompt(content_preview, source_name)
     
-    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-    
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {actual_key}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": model,
+        "model": actual_model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
@@ -549,24 +569,25 @@ async def classify_article_simple(
 async def generate_smart_summary(
     content: str, 
     api_key: str, 
-    model: str = "qwen-turbo",
+    model: str = None,
     article_type: str = None,
     source_name: str = None
 ) -> Tuple[Optional[str], Optional[str], str, float]:
     """
     Generate summary using smart template selection.
+    Supports Baidu Qianfan and Alibaba DashScope.
     
     Args:
         content: Article content
-        api_key: DashScope API key
-        model: Model name
+        api_key: API key (Qianfan or DashScope)
+        model: Model name (auto-detected based on provider)
         article_type: Override article type (skip classification)
         source_name: Source name for classification hints
     
     Returns:
         (summary, error_message, article_type, confidence)
     """
-    from hotnews.kernel.services.prompts import get_template
+    from hotnews.kernel.services.prompts import get_template, get_length_instruction
     
     if not api_key:
         return None, "AI 服务未配置", "general", 0.0
@@ -582,24 +603,43 @@ async def generate_smart_summary(
     # Step 2: Get template for this type
     template = get_template(article_type)
     
-    # Step 3: Generate summary with specialized template
-    user_prompt = template['user'].format(content=content)
+    # Step 3: Get length instruction based on content length (V5)
+    content_length = len(content)
+    length_instruction = get_length_instruction(content_length, article_type)
     
-    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    # Step 4: Determine provider and URL
+    qianfan_key = os.environ.get("QIANFAN_API_KEY", "")
+    use_qianfan = bool(qianfan_key)
+    
+    if use_qianfan:
+        url = QIANFAN_API_URL
+        actual_key = qianfan_key
+        actual_model = model or os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
+    else:
+        url = DASHSCOPE_API_URL
+        actual_key = api_key
+        actual_model = model or "qwen-turbo"
+    
+    # Step 5: Generate summary with specialized template
+    # V5: Insert length instruction before content
+    user_prompt = template['user'].replace(
+        '【文章内容】：\n{content}',
+        f'{length_instruction}\n\n---\n【文章内容】（{content_length} 字）：\n{{content}}'
+    ).format(content=content)
     
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {actual_key}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": model,
+        "model": actual_model,
         "messages": [
             {"role": "system", "content": template['system']},
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 2500  # V4: increased from 2000
+        "max_tokens": 2500
     }
     
     try:
@@ -617,7 +657,7 @@ async def generate_smart_summary(
     except httpx.TimeoutException:
         return None, "AI 服务响应超时", article_type, confidence
     except httpx.HTTPStatusError as e:
-        logger.error(f"DashScope API error: {e.response.text}")
+        logger.error(f"AI API error: {e.response.text}")
         return None, f"AI 服务错误: {e.response.status_code}", article_type, confidence
     except Exception as e:
         logger.error(f"Summary generation error: {e}")
@@ -627,17 +667,18 @@ async def generate_smart_summary(
 async def generate_smart_summary_stream(
     content: str, 
     api_key: str, 
-    model: str = "qwen-turbo",
+    model: str = None,
     article_type: str = None,
     source_name: str = None
 ):
     """
     Generate summary with streaming output.
+    Supports Baidu Qianfan and Alibaba DashScope.
     
     Args:
         content: Article content
-        api_key: DashScope API key
-        model: Model name
+        api_key: API key (Qianfan or DashScope)
+        model: Model name (auto-detected based on provider)
         article_type: Override article type (skip classification)
         source_name: Source name for classification hints
     
@@ -650,7 +691,7 @@ async def generate_smart_summary_stream(
         - token_usage: dict with prompt_tokens, completion_tokens, total_tokens (only on done)
         - confidence: Classification confidence (0.0-1.0)
     """
-    from hotnews.kernel.services.prompts import get_template
+    from hotnews.kernel.services.prompts import get_template, get_length_instruction
     
     if not api_key:
         yield None, True, "general", "AI 服务未配置", None, 0.0
@@ -670,24 +711,45 @@ async def generate_smart_summary_stream(
     # Step 2: Get template for this type
     template = get_template(article_type)
     
-    # Step 3: Generate summary with streaming
-    user_prompt = template['user'].format(content=content)
+    # Step 3: Get length instruction based on content length (V5)
+    content_length = len(content)
+    length_instruction = get_length_instruction(content_length, article_type)
     
-    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    # Step 4: Determine provider and URL
+    qianfan_key = os.environ.get("QIANFAN_API_KEY", "")
+    use_qianfan = bool(qianfan_key)
+    
+    if use_qianfan:
+        url = QIANFAN_API_URL
+        actual_key = qianfan_key
+        actual_model = model or os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
+    else:
+        url = DASHSCOPE_API_URL
+        actual_key = api_key
+        actual_model = model or "qwen-turbo"
+    
+    logger.info(f"Using AI provider: {'Qianfan' if use_qianfan else 'DashScope'}, model: {actual_model}")
+    
+    # Step 5: Generate summary with streaming
+    # V5: Insert length instruction before content
+    user_prompt = template['user'].replace(
+        '【文章内容】：\n{content}',
+        f'{length_instruction}\n\n---\n【文章内容】（{content_length} 字）：\n{{content}}'
+    ).format(content=content)
     
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {actual_key}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": model,
+        "model": actual_model,
         "messages": [
             {"role": "system", "content": template['system']},
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.7,
-        "max_tokens": 2500,  # V4: increased from 2000
+        "max_tokens": 2500,
         "stream": True,
         "stream_options": {"include_usage": True}  # Request usage in stream
     }
@@ -738,7 +800,7 @@ async def generate_smart_summary_stream(
     except httpx.TimeoutException:
         yield None, True, article_type, "AI 服务响应超时", None, confidence
     except httpx.HTTPStatusError as e:
-        logger.error(f"DashScope API error: {e.response.status_code}")
+        logger.error(f"AI API error: {e.response.status_code}")
         yield None, True, article_type, f"AI 服务错误: {e.response.status_code}", None, confidence
     except Exception as e:
         logger.error(f"Summary generation error: {e}")

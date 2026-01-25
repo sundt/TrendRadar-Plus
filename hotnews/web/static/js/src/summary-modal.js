@@ -891,17 +891,88 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
     currentNewsId = newsId;
     currentNewsTitle = title;
     currentNewsUrl = url;
+    currentSourceId = sourceId;
+    currentSourceName = sourceName;
     
-    // Show loading state
+    // Show loading state with slow hint placeholder
     body.innerHTML = `
         <div class="summary-loading">
             <div class="summary-loading-spinner"></div>
             <div class="summary-loading-text">
                 <div id="summaryStatusText">正在生成总结...</div>
+                <div class="summary-loading-hint">首次总结需要 10-30 秒</div>
+                <div id="summarySlowHint" class="summary-slow-hint" style="display:none;">
+                    <span id="summaryCountdownText">加载较慢，即将为您打开原文...</span>
+                </div>
             </div>
         </div>
     `;
     footer.style.display = 'none';
+    
+    // Start slow loading timer - after 5s, show countdown hint
+    clearAllTimers();
+    slowLoadingTimer = setTimeout(() => {
+        console.log('[Summary Force] 5s timeout, starting countdown');
+        const slowHint = document.getElementById('summarySlowHint');
+        const countdownText = document.getElementById('summaryCountdownText');
+        if (slowHint) {
+            slowHint.style.display = 'block';
+        }
+        
+        // Start countdown from 5 to 0
+        countdownSeconds = 5;
+        const updateCountdown = () => {
+            if (countdownText) {
+                countdownText.textContent = `加载较慢，${countdownSeconds} 秒后为您打开原文...`;
+            }
+        };
+        updateCountdown();
+        
+        countdownTimer = setInterval(() => {
+            countdownSeconds--;
+            if (countdownSeconds > 0) {
+                updateCountdown();
+            } else {
+                clearCountdownTimer();
+            }
+        }, 1000);
+        
+        // Auto-open after 5 more seconds (total 10s)
+        autoOpenTimer = setTimeout(() => {
+            console.log('[Summary Force] 10s timeout, opening original article');
+            clearAllTimers();
+            // Close modal and open original article
+            const modal = document.getElementById('summaryModal');
+            if (modal) {
+                modal.classList.remove('open');
+                document.body.style.overflow = '';
+            }
+            isModalOpen = false;
+            currentNewsId = null;
+            if (url) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+        }, AUTO_OPEN_TIMEOUT - SLOW_LOADING_TIMEOUT);
+    }, SLOW_LOADING_TIMEOUT);
+    
+    // Start hard timeout timer - after 15s, give up and record failure (backup)
+    hardTimeoutTimer = setTimeout(() => {
+        // Record client timeout failure
+        recordClientTimeout(url, sourceId, sourceName);
+        clearAllTimers();
+        
+        // Close modal and open original article
+        const modal = document.getElementById('summaryModal');
+        if (modal) {
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+        isModalOpen = false;
+        currentNewsId = null;
+        if (url) {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+    }, HARD_TIMEOUT);
     
     try {
         // Use force endpoint
@@ -959,6 +1030,7 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
                         case 'chunk':
                             if (!isStreaming) {
                                 isStreaming = true;
+                                clearAllTimers(); // Content arrived, no need for slow hint
                                 body.innerHTML = `
                                     <div class="summary-content summary-streaming" id="summaryStreamContent">
                                         <div class="summary-cursor"></div>
@@ -968,12 +1040,16 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
                             fullContent += data.content;
                             const contentEl = document.getElementById('summaryStreamContent');
                             if (contentEl) {
-                                contentEl.innerHTML = renderMarkdown(fullContent) + '<span class="summary-cursor">▌</span>';
+                                // Strip incomplete tags block during streaming
+                                let displayContent = fullContent;
+                                displayContent = displayContent.replace(/\[TAGS_?START\][\s\S]*$/gi, '');
+                                contentEl.innerHTML = renderMarkdown(displayContent) + '<span class="summary-cursor">▌</span>';
                                 contentEl.scrollTop = contentEl.scrollHeight;
                             }
                             break;
                             
                         case 'done':
+                            clearAllTimers(); // Ensure timers are cleared
                             tokenUsage = data.token_usage || null;
                             const doneBalanceInfo = (data.token_balance !== undefined) ? {
                                 token_balance: data.token_balance,
@@ -1011,13 +1087,39 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
         
     } catch (e) {
         console.error('[Summary] Force error:', e);
-        body.innerHTML = `
-            <div class="summary-error">
-                <div class="summary-error-icon">❌</div>
-                <div class="summary-error-text">${e.message}</div>
-                <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
-            </div>
-        `;
+        clearAllTimers();
+        
+        // Check if it's a content access error
+        const isAccessError = e.message && (
+            e.message.includes('访问限制') || 
+            e.message.includes('无法获取') ||
+            e.message.includes('无法访问') ||
+            e.message.includes('请求失败')
+        );
+        
+        if (isAccessError) {
+            body.innerHTML = `
+                <div class="summary-access-error">
+                    <div class="summary-access-error-icon">🔒</div>
+                    <div class="summary-access-error-title">暂时无法获取内容</div>
+                    <div class="summary-access-error-text">该网站设置了访问保护，建议直接阅读原文</div>
+                    <div class="summary-access-error-actions">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                            📖 阅读原文
+                        </a>
+                        <button class="summary-retry-btn-secondary" onclick="retrySummaryModal()">重试</button>
+                    </div>
+                    <div class="summary-timeout-actions">
+                        <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                        <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Generic error - just close modal
+            closeSummaryModal();
+            return;
+        }
     }
 }
 
