@@ -467,13 +467,15 @@ async def classify_article(
         return default_result
     
     # Determine provider and URL based on API key or environment
+    # Priority: Qianfan > DashScope
     qianfan_key = os.environ.get("QIANFAN_API_KEY", "")
     use_qianfan = bool(qianfan_key)
     
     if use_qianfan:
         url = QIANFAN_API_URL
         actual_key = qianfan_key
-        actual_model = model or os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
+        # Always use QIANFAN_MODEL when using Qianfan (ignore passed model param)
+        actual_model = os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
     else:
         url = DASHSCOPE_API_URL
         actual_key = api_key
@@ -608,13 +610,15 @@ async def generate_smart_summary(
     length_instruction = get_length_instruction(content_length, article_type)
     
     # Step 4: Determine provider and URL
+    # Priority: Qianfan > DashScope
     qianfan_key = os.environ.get("QIANFAN_API_KEY", "")
     use_qianfan = bool(qianfan_key)
     
     if use_qianfan:
         url = QIANFAN_API_URL
         actual_key = qianfan_key
-        actual_model = model or os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
+        # Always use QIANFAN_MODEL when using Qianfan (ignore passed model param)
+        actual_model = os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
     else:
         url = DASHSCOPE_API_URL
         actual_key = api_key
@@ -716,13 +720,15 @@ async def generate_smart_summary_stream(
     length_instruction = get_length_instruction(content_length, article_type)
     
     # Step 4: Determine provider and URL
+    # Priority: Qianfan > DashScope
     qianfan_key = os.environ.get("QIANFAN_API_KEY", "")
     use_qianfan = bool(qianfan_key)
     
     if use_qianfan:
         url = QIANFAN_API_URL
         actual_key = qianfan_key
-        actual_model = model or os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
+        # Always use QIANFAN_MODEL when using Qianfan (ignore passed model param)
+        actual_model = os.environ.get("QIANFAN_MODEL", QIANFAN_DEFAULT_MODEL)
     else:
         url = DASHSCOPE_API_URL
         actual_key = api_key
