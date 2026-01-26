@@ -343,11 +343,17 @@ async def generate_summary_stream(
     news_id: Optional[str] = Body(None),
     source_id: Optional[str] = Body(None),
     source_name: Optional[str] = Body(None),
+    content: Optional[str] = Body(None),  # 插件提取的页面内容（优先使用）
+    contribute: Optional[bool] = Body(False),  # 是否贡献内容到缓存
     force: Optional[int] = None,  # Query param: force=1 to skip short content check
 ):
     """
     Generate smart summary with streaming output (SSE).
     Returns Server-Sent Events for progressive rendering.
+    
+    Body params:
+        content: Pre-extracted page content from browser extension (preferred over fetching)
+        contribute: Whether to contribute content to cache for other users
     
     Query params:
         force: Set to 1 to skip short content check
@@ -469,14 +475,28 @@ async def generate_summary_stream(
     MIN_CONTENT_FOR_SUMMARY = 500
     
     async def stream_generator():
+        nonlocal content  # 使用外部传入的 content 参数
+        
         # Record start time for generation time tracking
         import time
         start_time_ms = int(time.time() * 1000)
         
-        # Step 1: Fetch article content
-        yield f"data: {json.dumps({'type': 'status', 'message': '正在获取文章内容...'}, ensure_ascii=False)}\n\n"
+        # Step 1: Get article content (prefer plugin-provided content)
+        fetch_method = "plugin"  # 默认标记为插件提供
+        error = None
         
-        content, error, fetch_method = await fetch_article_content(url)
+        # 检查插件是否提供了有效内容
+        plugin_content = content.strip() if content else ""
+        if plugin_content and len(plugin_content) >= 100:
+            # 使用插件提供的内容
+            content = plugin_content
+            fetch_method = "plugin"
+            yield f"data: {json.dumps({'type': 'status', 'message': '使用浏览器提取的内容...'}, ensure_ascii=False)}\n\n"
+            logging.info(f"[Summary] Using plugin-provided content for {url[:50]}, length={len(content)}")
+        else:
+            # 插件没有提供有效内容，回退到服务器抓取
+            yield f"data: {json.dumps({'type': 'status', 'message': '正在获取文章内容...'}, ensure_ascii=False)}\n\n"
+            content, error, fetch_method = await fetch_article_content(url)
         if error:
             # Record failure for tracking
             try:

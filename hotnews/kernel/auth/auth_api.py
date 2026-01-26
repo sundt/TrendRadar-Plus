@@ -52,12 +52,17 @@ def _set_session_cookie(response: Response, session_token: str, request: Request
         if forwarded_proto == "https":
             is_secure = True
     
+    # Use SameSite=None for cross-site requests (browser extension support)
+    # SameSite=None requires Secure=True
+    # Fallback to Lax for non-HTTPS environments (local development)
+    samesite_value = "none" if is_secure else "lax"
+    
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_token,
         max_age=SESSION_COOKIE_MAX_AGE,
         httponly=True,
-        samesite="lax",
+        samesite=samesite_value,
         secure=is_secure,
         path="/",  # Ensure cookie is available site-wide
     )
@@ -71,9 +76,12 @@ def _clear_session_cookie(response: Response, request: Request = None) -> None:
         if forwarded_proto == "https":
             is_secure = True
     
+    # Match the samesite value used when setting the cookie
+    samesite_value = "none" if is_secure else "lax"
+    
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
-        samesite="lax",
+        samesite=samesite_value,
         secure=is_secure,
         path="/",  # Must match the path used when setting
     )
