@@ -456,17 +456,22 @@ app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # CORS 配置 - 通过环境变量控制允许的域名
 # 格式: HOTNEWS_CORS_ORIGINS=https://example.com,https://app.example.com
+# 设置为 * 则允许所有来源（但会禁用 credentials）
 # 留空则只允许同源请求
 _cors_origins_env = os.environ.get("HOTNEWS_CORS_ORIGINS", "").strip()
 _cors_origins = [o.strip() for o in _cors_origins_env.split(",") if o.strip()] if _cors_origins_env else []
+
+# 检查是否允许所有来源
+_allow_all_origins = _cors_origins == ["*"]
 
 if _cors_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_credentials=not _allow_all_origins,  # 当允许所有来源时，不能使用 credentials
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
+        expose_headers=["*"],  # 暴露所有响应头
     )
 
 if _rss_admin_router: app.include_router(_rss_admin_router)

@@ -458,9 +458,10 @@ async def generate_summary_stream(
             cached_stream(),
             media_type="text/event-stream",
             headers={
-                "Cache-Control": "no-cache",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
                 "Connection": "keep-alive",
-                "X-Accel-Buffering": "no"
+                "X-Accel-Buffering": "no",
+                "X-Content-Type-Options": "nosniff",
             }
         )
     
@@ -733,9 +734,13 @@ async def generate_summary_stream(
         stream_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
+            "X-Accel-Buffering": "no",
+            "X-Content-Type-Options": "nosniff",
+            "Transfer-Encoding": "chunked",
+            # Cloudflare specific
+            "CF-Cache-Status": "DYNAMIC",
         }
     )
 
