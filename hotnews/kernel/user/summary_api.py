@@ -132,99 +132,91 @@ def _save_to_global_cache(request: Request, url: str, title: str, summary: str, 
 
 
 def _get_user_token_info(request: Request, user_id: int) -> dict:
-    """Get user's token balance and subscription status.
+    """Get user's usage quota and subscription status.
     
     Returns:
-        token_balance: Total available tokens (for free users)
-        tokens_used: Not used anymore (kept for compatibility)
-        default_tokens: Default free quota
+        usage_remaining: Remaining usage count
+        usage_quota: Total quota for the month
+        usage_used: Used count this month
         is_vip: Whether user is VIP
-        usage_remaining: VIP usage remaining (if VIP)
-        permission_type: Current permission type
+        plan_type: Subscription plan type
     """
     
-    total_balance = 0
-    is_vip = False
     usage_remaining = 0
-    permission_type = "token"
+    usage_quota = 50
+    usage_used = 0
+    is_vip = False
+    plan_type = "free"
     
     try:
         from hotnews.web.db_online import get_online_db_conn
-        from hotnews.kernel.user.payment_api import get_user_token_balance, ensure_user_free_quota
         from hotnews.kernel.user.permission_checker import can_use_summary
-        from hotnews.kernel.user.subscription_service import ensure_user_subscription
+        from hotnews.kernel.user.subscription_service import ensure_user_subscription, get_subscription_status
         
         online_conn = get_online_db_conn(request.app.state.project_root)
         
-        # Ensure user has free quota and subscription record
-        ensure_user_free_quota(online_conn, user_id)
+        # Ensure user has subscription record
         ensure_user_subscription(online_conn, user_id)
         
-        # Check permission
-        can_use, perm_type, extra_info = can_use_summary(online_conn, user_id)
-        permission_type = perm_type
+        # Get subscription status
+        status = get_subscription_status(online_conn, user_id)
         
-        if perm_type == "vip":
-            is_vip = True
-            usage_remaining = extra_info.get("usage_remaining", 0)
+        usage_remaining = status.get("usage_remaining", 0)
+        usage_quota = status.get("usage_quota", 50)
+        usage_used = status.get("usage_used", 0)
+        is_vip = status.get("is_vip", False)
+        plan_type = status.get("plan_type", "free")
         
-        # Get total token balance (for display)
-        recharge_balance = get_user_token_balance(online_conn, user_id)
-        total_balance = recharge_balance.get("total", 0)
-        
-        logging.debug(f"[TokenInfo] user_id={user_id}, total_balance={total_balance}, is_vip={is_vip}, perm={permission_type}")
+        logging.debug(f"[TokenInfo] user_id={user_id}, remaining={usage_remaining}/{usage_quota}, is_vip={is_vip}")
     except Exception as e:
-        logging.warning(f"[TokenInfo] Failed to get token balance: {e}")
-        total_balance = 100000  # Fallback to default
+        logging.warning(f"[TokenInfo] Failed to get usage info: {e}")
     
     return {
-        "token_balance": total_balance,
-        "tokens_used": 0,  # Deprecated, kept for compatibility
-        "default_tokens": 100000,
-        "is_vip": is_vip,
         "usage_remaining": usage_remaining,
-        "permission_type": permission_type,
+        "usage_quota": usage_quota,
+        "usage_used": usage_used,
+        "is_vip": is_vip,
+        "plan_type": plan_type,
+        # Deprecated fields for compatibility
+        "token_balance": usage_remaining,
+        "tokens_used": usage_used,
+        "default_tokens": usage_quota,
     }
 
 
 def _consume_user_tokens(request: Request, user_id: int, amount: int, news_id: str = None, title: str = None) -> dict:
     """
-    Consume tokens/quota from user account based on permission type.
-    VIP users: consume usage quota, log tokens (no deduction)
-    Free users: consume tokens from balance
+    Consume one usage quota from user account.
     
     Returns:
-        token_balance: New total balance after consumption
-        tokens_used: Deprecated (always 0)
+        usage_remaining: Remaining usage count after consumption
+        usage_quota: Total quota for the month
         is_vip: Whether user is VIP
-        usage_remaining: VIP usage remaining (if VIP)
     """
     
     try:
         from hotnews.web.db_online import get_online_db_conn
         from hotnews.kernel.user.permission_checker import can_use_summary, consume_quota
         from hotnews.kernel.user.subscription_service import ensure_user_subscription
-        from hotnews.kernel.user.payment_api import ensure_user_free_quota
         
         online_conn = get_online_db_conn(request.app.state.project_root)
         
-        # Ensure user has records
-        ensure_user_free_quota(online_conn, user_id)
+        # Ensure user has subscription record
         ensure_user_subscription(online_conn, user_id)
         
         # Check permission type
         can_use, perm_type, extra_info = can_use_summary(online_conn, user_id)
         
         if can_use:
-            # Consume based on permission type
+            # Consume one usage
             consume_quota(online_conn, user_id, perm_type, amount, news_id, title)
-            logging.info(f"[TokenConsume] Consumed: user={user_id}, type={perm_type}, amount={amount}")
+            logging.info(f"[UsageConsume] Consumed: user={user_id}, type={perm_type}")
         else:
-            logging.warning(f"[TokenConsume] No permission: user={user_id}, type={perm_type}")
+            logging.warning(f"[UsageConsume] No permission: user={user_id}, type={perm_type}")
     except Exception as e:
-        logging.warning(f"[TokenConsume] Failed to consume tokens: {e}")
+        logging.warning(f"[UsageConsume] Failed to consume usage: {e}")
     
-    # Return updated token info
+    # Return updated usage info
     return _get_user_token_info(request, user_id)
 
 
@@ -378,15 +370,13 @@ async def generate_summary_stream(
     if not is_allowed:
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试（每小时限制20次）")
     
-    # Check permission (VIP or token balance)
+    # Check permission (usage quota)
     try:
         from hotnews.web.db_online import get_online_db_conn
         from hotnews.kernel.user.permission_checker import can_use_summary, get_permission_error_message
         from hotnews.kernel.user.subscription_service import ensure_user_subscription
-        from hotnews.kernel.user.payment_api import ensure_user_free_quota
         
         online_conn = get_online_db_conn(request.app.state.project_root)
-        ensure_user_free_quota(online_conn, user["id"])
         ensure_user_subscription(online_conn, user["id"])
         
         can_use, perm_type, extra_info = can_use_summary(online_conn, user["id"])
@@ -447,9 +437,8 @@ async def generate_summary_stream(
                 "article_type": row[1] or "other",
                 "article_type_name": get_type_name(row[1] or "other"),
                 "news_id": news_id,
-                "token_usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": cached_tokens},  # Show original consumption
-                "token_balance": token_info["token_balance"],
-                "tokens_used": token_info["tokens_used"],
+                "usage_remaining": token_info["usage_remaining"],
+                "usage_quota": token_info["usage_quota"],
                 "tags": cached_tags
             }
             yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -715,14 +704,12 @@ async def generate_summary_stream(
                 except Exception as e:
                     logging.warning(f"[MyTags] Tag update failed: {e}")
                 
-                # Return done with token info and tags
+                # Return done with usage info and tags
                 done_data = {
                     'type': 'done',
                     'news_id': news_id,
-                    'remaining': remaining - 1,
-                    'token_usage': token_usage,
-                    'token_balance': token_info["token_balance"],
-                    'tokens_used': token_info["tokens_used"],
+                    'usage_remaining': token_info["usage_remaining"],
+                    'usage_quota': token_info["usage_quota"],
                     'tags': {
                         'quality': quality_tag if quality_tag else None,
                         'category': category_tags
