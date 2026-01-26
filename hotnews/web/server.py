@@ -65,6 +65,7 @@ _keyword_router = None
 _favorites_router = None
 _summary_router = None
 _summary_failure_router = None
+_share_router = None
 _user_token_router = None
 _todo_router = None
 _tag_candidate_admin_router = None
@@ -124,6 +125,9 @@ try:
     
     from hotnews.kernel.user import summary_failure_api
     _summary_failure_router = summary_failure_api.router
+    
+    from hotnews.kernel.user import share_api
+    _share_router = share_api.router
     
     from hotnews.kernel.user import todo_api
     _todo_router = todo_api.router
@@ -508,6 +512,11 @@ if _tag_candidate_admin_router:
 if _user_stats_admin_router: app.include_router(_user_stats_admin_router)
 if _wechat_mp_callback_router: app.include_router(_wechat_mp_callback_router)
 if _wechat_qr_login_router: app.include_router(_wechat_qr_login_router)
+if _share_router: app.include_router(_share_router)
+
+# Share page routes (public HTML pages)
+from hotnews.web.share_routes import router as _share_page_router
+app.include_router(_share_page_router)
 
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
