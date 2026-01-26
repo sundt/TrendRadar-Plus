@@ -73,6 +73,21 @@ cd ~/hotnews/docker && docker compose -f docker-compose-build.yml logs -f hotnew
 
 ## 最近改动
 
+### 2026-01-26
+- ✅ **AI 总结支持百度千帆** - 添加 Qianfan provider 支持，优先级高于 DashScope
+  - `article_summary.py` - 添加 Qianfan API 支持，修复 model 参数覆盖问题
+  - `docker-compose-build.yml` - 添加 QIANFAN_API_KEY/QIANFAN_MODEL 环境变量
+  - 当前配置：千帆已禁用（API_KEY 为空），使用阿里千问
+- ✅ **10s 超时改为显示链接** - 不再自动关闭弹窗，显示"点击阅读原文"链接
+  - `summary-modal.js` - 修改 10s 超时行为
+- ✅ **解除微信公众号 block** - `mp.weixin.qq.com` 被误标记为 blocked
+  - 服务器执行 SQL 解除 block
+- ✅ **日期格式统一为 MM-DD** - 移除年份显示
+  - `explore-timeline.js`, `morning-brief.js` - `_fmtTime()` 改为 MM-DD
+- ✅ **日期背景透明** - 移除白色背景，融入卡片
+  - `news-item.css`, `viewer.css` - `.news-actions` background: white → transparent
+- ✅ **创建 AI 总结流程文档** - `docs/ai/ai-summary-flow.md`
+
 ### 2026-01-25
 - ✅ **修复 AI 总结定时器 bug** - `clearAllTimers()` 递归调用导致无限循环
   - `summary-modal.js` - 修复 `clearAllTimers()` 调用 `clearSlowLoadingTimer()`
