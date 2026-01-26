@@ -291,7 +291,7 @@
     flex-shrink: 0;
     margin-left: auto;
     position: relative;
-    background: white;
+    background: transparent;
     padding-left: 8px;
 }
 

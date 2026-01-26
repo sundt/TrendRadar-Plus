@@ -58,10 +58,9 @@ function _fmtTime(tsSec) {
     if (!ts) return '';
     try {
         const d = new Date(ts * 1000);
-        const YYYY = String(d.getFullYear());
         const MM = String(d.getMonth() + 1).padStart(2, '0');
         const DD = String(d.getDate()).padStart(2, '0');
-        return `${YYYY}-${MM}-${DD}`;
+        return `${MM}-${DD}`;
     } catch (e) {
         return '';
     }
