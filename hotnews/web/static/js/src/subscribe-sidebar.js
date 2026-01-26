@@ -340,18 +340,48 @@ function renderTagsTab() {
     const body = document.getElementById('subscribeSidebarBody');
     const state = tabStates.tags;
     
-    let html = `
-        <div class="subscribe-search-box">
-            <input type="text" class="subscribe-search-input" id="tagSearchInput" 
-                   placeholder="搜索标签..." value="${escapeHtml(state.searchQuery)}">
-        </div>
-        <div class="subscribe-filters" id="tagFilters">
-            <button class="subscribe-filter-btn ${state.categoryFilter === 'all' ? 'active' : ''}" data-filter="all">全部</button>
-            <button class="subscribe-filter-btn ${state.categoryFilter === 'category' ? 'active' : ''}" data-filter="category">大类</button>
-            <button class="subscribe-filter-btn ${state.categoryFilter === 'topic' ? 'active' : ''}" data-filter="topic">主题</button>
-            <button class="subscribe-filter-btn ${state.categoryFilter === 'attribute' ? 'active' : ''}" data-filter="attribute">属性</button>
-        </div>
-    `;
+    // Check if we need to create the structure or just update the list
+    let listContainer = body.querySelector('.subscribe-list');
+    let emptyContainer = body.querySelector('.subscribe-empty');
+    const searchInput = document.getElementById('tagSearchInput');
+    
+    // If structure doesn't exist, create it
+    if (!searchInput) {
+        let html = `
+            <div class="subscribe-search-box">
+                <input type="text" class="subscribe-search-input" id="tagSearchInput" 
+                       placeholder="搜索标签..." value="${escapeHtml(state.searchQuery)}">
+            </div>
+            <div class="subscribe-filters" id="tagFilters">
+                <button class="subscribe-filter-btn ${state.categoryFilter === 'all' ? 'active' : ''}" data-filter="all">全部</button>
+                <button class="subscribe-filter-btn ${state.categoryFilter === 'category' ? 'active' : ''}" data-filter="category">大类</button>
+                <button class="subscribe-filter-btn ${state.categoryFilter === 'topic' ? 'active' : ''}" data-filter="topic">主题</button>
+                <button class="subscribe-filter-btn ${state.categoryFilter === 'attribute' ? 'active' : ''}" data-filter="attribute">属性</button>
+            </div>
+            <div class="subscribe-list-container" id="tagListContainer"></div>
+        `;
+        body.innerHTML = html;
+        
+        // Bind search (only once when structure is created)
+        const newSearchInput = document.getElementById('tagSearchInput');
+        newSearchInput?.addEventListener('input', debounce((e) => {
+            state.searchQuery = e.target.value;
+            renderTagsTab();
+        }, 300));
+        
+        // Bind filters
+        const filters = document.getElementById('tagFilters');
+        filters?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.subscribe-filter-btn');
+            if (!btn) return;
+            state.categoryFilter = btn.dataset.filter;
+            // Update filter button states
+            filters.querySelectorAll('.subscribe-filter-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.filter === state.categoryFilter);
+            });
+            renderTagsTab();
+        });
+    }
     
     // Filter tags
     let filtered = state.allTags;
@@ -363,36 +393,22 @@ function renderTagsTab() {
         filtered = filtered.filter(t => t.type === state.categoryFilter);
     }
     
-    if (filtered.length === 0) {
-        html += '<div class="subscribe-empty">没有找到匹配的标签</div>';
-    } else {
-        html += '<div class="subscribe-list">';
-        for (const tag of filtered) {
-            const isFollowed = state.followedIds.has(tag.id);
-            html += renderTagItem(tag, isFollowed);
+    // Update only the list container
+    const listContainerEl = document.getElementById('tagListContainer');
+    if (listContainerEl) {
+        if (filtered.length === 0) {
+            listContainerEl.innerHTML = '<div class="subscribe-empty">没有找到匹配的标签</div>';
+        } else {
+            let listHtml = '<div class="subscribe-list">';
+            for (const tag of filtered) {
+                const isFollowed = state.followedIds.has(tag.id);
+                listHtml += renderTagItem(tag, isFollowed);
+            }
+            listHtml += '</div>';
+            listContainerEl.innerHTML = listHtml;
         }
-        html += '</div>';
+        bindTagItemEvents(listContainerEl);
     }
-    
-    body.innerHTML = html;
-    
-    // Bind search
-    const searchInput = document.getElementById('tagSearchInput');
-    searchInput?.addEventListener('input', debounce((e) => {
-        state.searchQuery = e.target.value;
-        renderTagsTab();
-    }, 300));
-    
-    // Bind filters
-    const filters = document.getElementById('tagFilters');
-    filters?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.subscribe-filter-btn');
-        if (!btn) return;
-        state.categoryFilter = btn.dataset.filter;
-        renderTagsTab();
-    });
-    
-    bindTagItemEvents(body);
 }
 
 function renderTagItem(tag, isFollowed) {
@@ -508,17 +524,47 @@ function renderSourcesTab() {
     const rssCount = state.allSources.filter(s => s.type === 'rss').length;
     const customCount = state.allSources.filter(s => s.type === 'custom').length;
     
-    let html = `
-        <div class="subscribe-search-box">
-            <input type="text" class="subscribe-search-input" id="sourceSearchInput" 
-                   placeholder="搜索订阅源/添加新的请联系管理员..." value="${escapeHtml(state.searchQuery)}">
-        </div>
-        <div class="subscribe-filters" id="sourceFilters">
-            <button class="subscribe-filter-btn ${state.typeFilter === 'all' ? 'active' : ''}" data-filter="all">全部 (${state.allSources.length})</button>
-            <button class="subscribe-filter-btn ${state.typeFilter === 'rss' ? 'active' : ''}" data-filter="rss">📰 RSS (${rssCount})</button>
-            <button class="subscribe-filter-btn ${state.typeFilter === 'custom' ? 'active' : ''}" data-filter="custom">🔗 自定义 (${customCount})</button>
-        </div>
-    `;
+    // Check if we need to create the structure or just update the list
+    const searchInput = document.getElementById('sourceSearchInput');
+    
+    // If structure doesn't exist, create it
+    if (!searchInput) {
+        let html = `
+            <div class="subscribe-search-box">
+                <input type="text" class="subscribe-search-input" id="sourceSearchInput" 
+                       placeholder="搜索订阅源/添加新的请联系管理员..." value="${escapeHtml(state.searchQuery)}">
+            </div>
+            <div class="subscribe-filters" id="sourceFilters">
+                <button class="subscribe-filter-btn ${state.typeFilter === 'all' ? 'active' : ''}" data-filter="all">全部 (${state.allSources.length})</button>
+                <button class="subscribe-filter-btn ${state.typeFilter === 'rss' ? 'active' : ''}" data-filter="rss">📰 RSS (${rssCount})</button>
+                <button class="subscribe-filter-btn ${state.typeFilter === 'custom' ? 'active' : ''}" data-filter="custom">🔗 自定义 (${customCount})</button>
+            </div>
+            <div class="subscribe-list-container" id="sourceListContainer"></div>
+        `;
+        body.innerHTML = html;
+        
+        // Bind search (only once when structure is created)
+        const newSearchInput = document.getElementById('sourceSearchInput');
+        newSearchInput?.addEventListener('input', debounce((e) => {
+            state.searchQuery = e.target.value;
+            state.displayCount = 100; // Reset display count on search
+            renderSourcesTab();
+        }, 300));
+        
+        // Bind type filters
+        const filters = document.getElementById('sourceFilters');
+        filters?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.subscribe-filter-btn');
+            if (!btn) return;
+            state.typeFilter = btn.dataset.filter;
+            state.displayCount = 100; // Reset display count on filter change
+            // Update filter button states
+            filters.querySelectorAll('.subscribe-filter-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.filter === state.typeFilter);
+            });
+            renderSourcesTab();
+        });
+    }
     
     // Filter sources
     let filtered = state.allSources;
@@ -542,57 +588,43 @@ function renderSourcesTab() {
     const displaySources = filtered.slice(0, displayCount);
     const hasMore = displayCount < totalFiltered && !state.searchQuery;
     
-    if (filtered.length === 0) {
-        html += '<div class="subscribe-empty">没有找到订阅源</div>';
-    } else {
-        html += '<div class="subscribe-list subscribe-sources-list">';
-        for (const source of displaySources) {
-            const isSubscribed = state.subscribedIds.has(source.id);
-            html += renderSourceItem(source, isSubscribed);
+    // Update only the list container
+    const listContainerEl = document.getElementById('sourceListContainer');
+    if (listContainerEl) {
+        let listHtml = '';
+        if (filtered.length === 0) {
+            listHtml = '<div class="subscribe-empty">没有找到订阅源</div>';
+        } else {
+            listHtml = '<div class="subscribe-list subscribe-sources-list">';
+            for (const source of displaySources) {
+                const isSubscribed = state.subscribedIds.has(source.id);
+                listHtml += renderSourceItem(source, isSubscribed);
+            }
+            listHtml += '</div>';
+            
+            // Show "load more" button if there are more sources
+            if (hasMore) {
+                const remaining = totalFiltered - displayCount;
+                listHtml += `
+                    <div class="subscribe-load-more">
+                        <button class="subscribe-load-more-btn" id="loadMoreSourcesBtn">
+                            加载更多 (还有 ${remaining} 个)
+                        </button>
+                    </div>
+                `;
+            }
         }
-        html += '</div>';
+        listContainerEl.innerHTML = listHtml;
         
-        // Show "load more" button if there are more sources
-        if (hasMore) {
-            const remaining = totalFiltered - displayCount;
-            html += `
-                <div class="subscribe-load-more">
-                    <button class="subscribe-load-more-btn" id="loadMoreSourcesBtn">
-                        加载更多 (还有 ${remaining} 个)
-                    </button>
-                </div>
-            `;
-        }
+        // Bind load more button
+        const loadMoreBtn = document.getElementById('loadMoreSourcesBtn');
+        loadMoreBtn?.addEventListener('click', () => {
+            state.displayCount += 100;
+            renderSourcesTab();
+        });
+        
+        bindSourceItemEvents(listContainerEl);
     }
-    
-    body.innerHTML = html;
-    
-    // Bind search
-    const searchInput = document.getElementById('sourceSearchInput');
-    searchInput?.addEventListener('input', debounce((e) => {
-        state.searchQuery = e.target.value;
-        state.displayCount = 100; // Reset display count on search
-        renderSourcesTab();
-    }, 300));
-    
-    // Bind type filters
-    const filters = document.getElementById('sourceFilters');
-    filters?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.subscribe-filter-btn');
-        if (!btn) return;
-        state.typeFilter = btn.dataset.filter;
-        state.displayCount = 100; // Reset display count on filter change
-        renderSourcesTab();
-    });
-    
-    // Bind load more button
-    const loadMoreBtn = document.getElementById('loadMoreSourcesBtn');
-    loadMoreBtn?.addEventListener('click', () => {
-        state.displayCount += 100;
-        renderSourcesTab();
-    });
-    
-    bindSourceItemEvents(body);
 }
 
 function renderSourceItem(source, isSubscribed) {
