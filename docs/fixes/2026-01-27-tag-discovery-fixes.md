@@ -50,12 +50,19 @@ async def approve_candidate(request: Request, tag_id: str, body: ApproveRequest 
 - 添加 `.subscribe-item-date` 样式
 
 ### 5. 我的关注卡片右键取消关注
-**文件**: `hotnews/web/static/js/src/context-menu.js`
+**文件**: 
+- `hotnews/web/static/js/src/context-menu.js`
+- `hotnews/web/static/js/src/index.js`
+- `hotnews/web/static/js/src/platform-reorder.js`
 
 **新增功能**:
 - 在"我的关注"页面，右键点击卡片标题显示"不再关注"选项
 - 点击后调用 API 取消关注，卡片淡出消失
 - 清除本地缓存，显示 toast 提示
+
+**修改**:
+- `platform-reorder.js`: 排除 `my-tags` 分类，不显示置顶/置底菜单
+- `index.js`: 添加 `context-menu.js` 导入，确保模块被构建
 
 ---
 
@@ -78,6 +85,13 @@ async def approve_candidate(request: Request, tag_id: str, body: ApproveRequest 
 - 如果前端发送 JSON 对象，应使用 Pydantic 模型
 - 或使用 `Body(..., embed=True)` 让单个参数嵌入 JSON 对象中
 
+### 错误 4: 忘记将新模块添加到构建入口
+**问题**: 创建了 `context-menu.js` 模块实现取消关注功能，但忘记在 `index.js` 中导入它，导致模块没有被构建到最终的 bundle 中。
+
+**正确做法**: 
+- 创建新的 JS 模块后，必须在 `index.js` 中添加导入
+- 构建后检查功能是否包含在 bundle 中（如 `grep '关键字' index.js`）
+
 ---
 
 ## 相关文件
@@ -85,5 +99,7 @@ async def approve_candidate(request: Request, tag_id: str, body: ApproveRequest 
 - `hotnews/kernel/services/tag_discovery.py` - 标签发现服务
 - `hotnews/kernel/user/preferences_api.py` - 用户偏好 API
 - `hotnews/web/static/js/src/subscribe-sidebar.js` - 订阅侧边栏
-- `hotnews/web/static/js/src/context-menu.js` - 右键菜单
+- `hotnews/web/static/js/src/context-menu.js` - 右键菜单（取消关注功能）
+- `hotnews/web/static/js/src/platform-reorder.js` - 平台卡片排序（置顶/置底菜单）
+- `hotnews/web/static/js/src/index.js` - JS 模块入口
 - `hotnews/kernel/templates/admin_rss_sources.html` - 管理后台模板
