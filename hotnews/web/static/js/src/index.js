@@ -37,6 +37,7 @@ import './login-modal.js';
 import './summary-modal.js';
 import './favorites.js';
 import './article-tags.js';
+import './context-menu.js';
 
 // 异步加载非关键 heavy 模块 (Code Splitting)
 import('./platform-reorder.js');
