@@ -597,6 +597,65 @@
 }
 
 /* ==========================================================================
+   Blocked State (URL not summarizable)
+   ========================================================================== */
+
+.summary-blocked {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    gap: 12px;
+    min-height: 280px;
+}
+
+.summary-blocked-icon {
+    font-size: 48px;
+    margin-bottom: 8px;
+}
+
+.summary-blocked-title {
+    color: #374151;
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.summary-blocked-text {
+    color: #6b7280;
+    font-size: 14px;
+    text-align: center;
+}
+
+.summary-blocked-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.summary-blocked-secondary {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.summary-blocked-secondary .summary-action-btn {
+    padding: 8px 16px;
+    border-radius: 16px;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.summary-blocked-secondary .summary-action-btn:hover {
+    background: #e5e7eb;
+}
+
+/* ==========================================================================
    Timeout State
    ========================================================================== */
 
