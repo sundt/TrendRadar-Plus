@@ -177,6 +177,16 @@ services:
       timeout: 5s
       retries: 6
 
+    # 资源限制（2核2G服务器）
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
   hotnews-mcp:
     build:
       context: ..
