@@ -393,46 +393,76 @@ async def get_recommended_tags(request: Request, limit: int = Query(10, ge=1, le
     except Exception:
         hot_tags = []
     
-    # 2. New tags: High-quality candidates from AI discovery (show up to 20)
+    # 2. New tags: Candidates that meet fast-track or standard promotion criteria
+    # Use the same criteria as defined in tag_discovery.py
     try:
-        # Get high-quality candidates that haven't been promoted yet
-        # These are the "newest" discoveries from AI labeling
+        from datetime import datetime
+        
+        # Time boundaries for fast-track criteria
+        hours_4_ago = now - 4 * 3600
+        hours_12_ago = now - 12 * 3600
+        hours_24_ago = now - 24 * 3600
+        days_3_ago = now - 3 * 86400
+        
+        # Get all pending candidates, we'll filter in Python to match the complex criteria
         cand_cur = online_conn.execute(
             """
             SELECT tag_id, name, name_en, type, NULL as icon, NULL as color, 
                    first_seen_at, occurrence_count, avg_confidence
             FROM tag_candidates
-            WHERE status = 'pending' 
-              AND occurrence_count >= 3
-              AND avg_confidence >= 0.8
-            ORDER BY first_seen_at DESC, occurrence_count DESC
-            LIMIT 40
+            WHERE status = 'pending'
+            ORDER BY first_seen_at DESC
+            LIMIT 200
             """,
         )
+        
         new_tags = []
         seen_ids = set()
+        
         for row in cand_cur.fetchall() or []:
             tag_id = row[0]
-            if tag_id not in followed and tag_id not in [t["id"] for t in hot_tags]:
-                first_seen_ts = row[6] or now
-                # Format first seen date
-                from datetime import datetime
-                first_seen_date = datetime.fromtimestamp(first_seen_ts).strftime("%m-%d")
-                new_tags.append({
-                    "id": tag_id, "name": row[1], "name_en": row[2],
-                    "type": row[3], "icon": row[4] or "🏷️", "color": row[5],
-                    "is_dynamic": True,
-                    "is_candidate": True,
-                    "occurrence_count": row[7],
-                    "confidence": round(row[8], 2) if row[8] else None,
-                    "first_seen_at": first_seen_ts,
-                    "first_seen_date": first_seen_date,
-                    "badge": "new",
-                    "reason": f"首次发现: {first_seen_date}"
-                })
-                seen_ids.add(tag_id)
-                if len(new_tags) >= 20:
-                    break
+            if tag_id in followed or tag_id in [t["id"] for t in hot_tags]:
+                continue
+                
+            first_seen_ts = row[6] or now
+            occurrence_count = row[7] or 0
+            avg_confidence = row[8] or 0
+            
+            # Check if meets any promotion criteria:
+            # 1. Fast-track 4h: first_seen >= 4h ago, occurrence >= 8, confidence >= 0.9
+            # 2. Fast-track 12h: first_seen >= 12h ago, occurrence >= 15, confidence >= 0.9
+            # 3. Fast-track 24h: first_seen >= 24h ago, occurrence >= 20, confidence >= 0.8
+            # 4. Standard: first_seen <= 3 days ago, occurrence >= 10, confidence >= 0.7
+            
+            qualifies = False
+            if first_seen_ts >= hours_4_ago and occurrence_count >= 8 and avg_confidence >= 0.9:
+                qualifies = True
+            elif first_seen_ts >= hours_12_ago and occurrence_count >= 15 and avg_confidence >= 0.9:
+                qualifies = True
+            elif first_seen_ts >= hours_24_ago and occurrence_count >= 20 and avg_confidence >= 0.8:
+                qualifies = True
+            elif first_seen_ts <= days_3_ago and occurrence_count >= 10 and avg_confidence >= 0.7:
+                qualifies = True
+            
+            if not qualifies:
+                continue
+            
+            first_seen_date = datetime.fromtimestamp(first_seen_ts).strftime("%m-%d")
+            new_tags.append({
+                "id": tag_id, "name": row[1], "name_en": row[2],
+                "type": row[3], "icon": row[4] or "🏷️", "color": row[5],
+                "is_dynamic": True,
+                "is_candidate": True,
+                "occurrence_count": occurrence_count,
+                "confidence": round(avg_confidence, 2) if avg_confidence else None,
+                "first_seen_at": first_seen_ts,
+                "first_seen_date": first_seen_date,
+                "badge": "new",
+                "reason": f"首次发现: {first_seen_date}"
+            })
+            seen_ids.add(tag_id)
+            if len(new_tags) >= 20:
+                break
         
         # Also include recently promoted dynamic tags
         if len(new_tags) < 20:
@@ -449,7 +479,6 @@ async def get_recommended_tags(request: Request, limit: int = Query(10, ge=1, le
                 tag_id = row[0]
                 if tag_id not in followed and tag_id not in seen_ids and tag_id not in [t["id"] for t in hot_tags]:
                     created_ts = row[6] or now
-                    from datetime import datetime
                     created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
                     new_tags.append({
                         "id": tag_id, "name": row[1], "name_en": row[2],
