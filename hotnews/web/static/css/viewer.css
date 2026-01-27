@@ -3386,6 +3386,338 @@
     }
 }
 
+/* ========== Blocked URL V2 Styles ========== */
+.summary-blocked-v2 {
+    display: flex;
+    flex-direction: column;
+    padding: 32px 24px;
+    min-height: 320px;
+}
+
+.blocked-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.blocked-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border-radius: 20px;
+    margin-bottom: 16px;
+}
+
+.blocked-icon-badge .icon-main {
+    font-size: 32px;
+}
+
+.blocked-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 8px;
+}
+
+.blocked-subtitle {
+    font-size: 14px;
+    color: #6b7280;
+    line-height: 1.5;
+    max-width: 360px;
+    margin: 0 auto;
+}
+
+/* Extension Promo Card */
+.blocked-extension-promo {
+    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+}
+
+.promo-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.promo-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.promo-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e40af;
+}
+
+.promo-features {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.promo-feature {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #374151;
+}
+
+.promo-feature .feature-icon {
+    font-size: 16px;
+}
+
+.promo-install-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 280px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.promo-install-btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+    color: white;
+    text-decoration: none;
+}
+
+.promo-install-btn .btn-icon {
+    font-size: 18px;
+}
+
+.promo-install-btn .btn-arrow {
+    opacity: 0.8;
+    transition: transform 0.2s;
+}
+
+.promo-install-btn:hover .btn-arrow {
+    transform: translateX(3px);
+}
+
+.promo-browsers {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+/* Divider */
+.blocked-divider {
+    display: flex;
+    align-items: center;
+    margin: 24px 0;
+    color: #9ca3af;
+    font-size: 13px;
+}
+
+.blocked-divider::before,
+.blocked-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.blocked-divider span {
+    padding: 0 16px;
+}
+
+/* Fallback Section */
+.blocked-fallback {
+    text-align: center;
+}
+
+.fallback-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    color: #6b7280;
+    font-size: 14px;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.fallback-link:hover {
+    color: #374151;
+    background: #f3f4f6;
+    text-decoration: none;
+}
+
+.fallback-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.fallback-btn {
+    padding: 8px 16px;
+    background: #f3f4f6;
+    border: none;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fallback-btn:hover {
+    background: #e5e7eb;
+    color: #374151;
+}
+
+/* Extension Ready State (when extension is installed) */
+.blocked-extension-ready {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+}
+
+.ready-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: rgba(16, 185, 129, 0.15);
+    border-radius: 20px;
+    margin-bottom: 16px;
+}
+
+.ready-icon {
+    font-size: 16px;
+}
+
+.ready-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #059669;
+}
+
+.ready-open-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 280px;
+    padding: 14px 24px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.ready-open-btn:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+    color: white;
+    text-decoration: none;
+}
+
+.ready-open-btn .btn-icon {
+    font-size: 18px;
+}
+
+.ready-open-btn .btn-arrow {
+    opacity: 0.8;
+    transition: transform 0.2s;
+}
+
+.ready-open-btn:hover .btn-arrow {
+    transform: translateX(3px);
+}
+
+.ready-hint {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+/* Blocked V2 Mobile Responsive */
+@media (max-width: 640px) {
+    .summary-blocked-v2 {
+        padding: 24px 16px;
+    }
+    
+    .blocked-icon-badge {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+    }
+    
+    .blocked-icon-badge .icon-main {
+        font-size: 28px;
+    }
+    
+    .blocked-title {
+        font-size: 16px;
+    }
+    
+    .blocked-subtitle {
+        font-size: 13px;
+    }
+    
+    .blocked-extension-promo,
+    .blocked-extension-ready {
+        padding: 20px 16px;
+    }
+    
+    .promo-features {
+        gap: 8px;
+    }
+    
+    .promo-feature {
+        font-size: 13px;
+    }
+    
+    .promo-install-btn,
+    .ready-open-btn {
+        padding: 12px 20px;
+        font-size: 14px;
+    }
+}
+
 /* ========== Login Modal Styles ========== */
 .login-modal-overlay {
     position: fixed;

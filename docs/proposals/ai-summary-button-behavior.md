@@ -343,6 +343,47 @@ function handleSummaryClick(event, newsId, title, url, sourceId, sourceName) {
 
 ---
 
+## 实现过程中的问题与解决
+
+### 问题 1：前端 JS 缓存未更新
+
+**现象**：修改了 `summary-modal.js` 后部署到服务器，但浏览器仍然加载旧版本代码。
+
+**原因**：
+- 前端使用 esbuild 打包，`summary-modal.js` 是通过 `index.js` 导入的模块
+- `asset_rev` 是基于 `index.js` 和 `viewer.css` 的 MD5 哈希生成的
+- 修改模块文件后，`index.js` 的哈希不会自动变化
+
+**解决方案**：
+- 修改前端代码后，需要运行 `npm run build:js` 重新构建
+- 构建会生成新的 chunk 文件名（带哈希），从而触发浏览器重新加载
+
+### 问题 2：Chrome 侧边栏无法自动打开
+
+**现象**：从 hotnews 网站点击「阅读原文」跳转到新页面后，插件无法自动打开侧边栏。
+
+**原因**：
+- Chrome 的安全限制：`chrome.sidePanel.open()` 必须在用户手势（user gesture）的回调中调用
+- 页面加载时自动调用 `sidePanel.open()` 会被 Chrome 拒绝
+
+**解决方案**：
+- 在 URL 中添加参数 `?hotnews_auto_summarize=1` 标记需要自动总结
+- 插件检测到该参数后，显示一个提示框引导用户点击
+- 用户点击「立即总结」按钮后，在点击事件回调中调用 `sidePanel.open()`
+
+### 问题 3：微信登录提示「未配置」
+
+**现象**：微信扫码登录显示「微信登录未配置」。
+
+**原因**：
+- Docker 容器重启后，环境变量 `WECHAT_MP_APP_ID` 和 `WECHAT_MP_APP_SECRET` 未正确传入
+- 需要 `--force-recreate` 重建容器才能获取新的环境变量
+
+**解决方案**：
+- 使用 `docker compose up -d --force-recreate hotnews-viewer` 重建容器
+
+---
+
 ## 变更日志
 
 | 日期 | 变更内容 |
@@ -351,3 +392,6 @@ function handleSummaryClick(event, newsId, title, url, sourceId, sourceName) {
 | 2026-01-27 | 补充边界情况处理：插件检测时机、超时兜底、移动端检测改进、事件命名 |
 | 2026-01-27 | 添加实现 Todo 清单 |
 | 2026-01-27 | 完成 Phase 1 & 2 实现 |
+| 2026-01-27 | 修订方案：改为模态框流程 + 插件提示，而非直接打开侧边栏 |
+| 2026-01-27 | 实现自动总结提示功能（绕过 Chrome user gesture 限制） |
+| 2026-01-27 | 创建插件安装引导页 `/extension/install` |
