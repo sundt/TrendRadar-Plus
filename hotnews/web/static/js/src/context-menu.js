@@ -337,11 +337,12 @@ function handleContextMenu(e) {
     if (!target) return;
     
     // Check if right-clicking on a tag card header in my-tags
+    const platformHeader = target.closest('.platform-header');
     const platformName = target.closest('.platform-name');
     const platformCard = target.closest('.platform-card[data-tag-id]');
     const isInMyTags = target.closest('#myTagsGrid');
     
-    if (platformName && platformCard && isInMyTags) {
+    if ((platformHeader || platformName) && platformCard && isInMyTags) {
         const tagData = getTagDataFromElement(target);
         if (tagData) {
             e.preventDefault();

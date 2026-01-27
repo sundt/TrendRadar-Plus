@@ -641,8 +641,8 @@ export const platformReorder = {
 
             if (!card || !grid || !categoryId) return;
 
-            // Exclude special categories: explore and knowledge (morning brief)
-            if (categoryId === 'explore' || categoryId === 'knowledge') return;
+            // Exclude special categories: explore, knowledge (morning brief), and my-tags
+            if (categoryId === 'explore' || categoryId === 'knowledge' || categoryId === 'my-tags') return;
 
             e.preventDefault();
             showContextMenu(e, card, grid, categoryId);
