@@ -481,7 +481,7 @@ async def generate_summary_stream(
             # 使用插件提供的内容
             content = plugin_content
             fetch_method = "plugin"
-            yield f"data: {json.dumps({'type': 'status', 'message': '使用浏览器提取的内容...'}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'status', 'message': '正在分析页面内容...'}, ensure_ascii=False)}\n\n"
             logging.info(f"[Summary] Using plugin-provided content for {url[:50]}, length={len(content)}")
         else:
             # 插件没有提供有效内容，回退到服务器抓取
