@@ -9,6 +9,7 @@ import { openLoginModal } from './login-modal.js';
 let menuEl = null;
 let backdropEl = null;
 let currentNewsData = null;
+let currentTagData = null;  // For tag unfollow
 let longPressTimer = null;
 let longPressTarget = null;
 
@@ -30,7 +31,24 @@ function ensureMenuExists() {
     // Menu
     menuEl = document.createElement('div');
     menuEl.className = 'tr-context-menu';
-    menuEl.innerHTML = `
+    document.body.appendChild(menuEl);
+}
+
+/**
+ * Build menu HTML based on context type
+ */
+function buildMenuHtml(type, data) {
+    if (type === 'tag') {
+        return `
+            <div class="tr-context-menu-item" data-action="unfollow">
+                <span class="tr-context-menu-item-icon">🚫</span>
+                <span>不再关注</span>
+            </div>
+        `;
+    }
+    
+    // Default: news item menu
+    return `
         <div class="tr-context-menu-item" data-action="summary">
             <span class="tr-context-menu-item-icon">✨</span>
             <span>AI 智能总结</span>
@@ -45,30 +63,36 @@ function ensureMenuExists() {
             <span>复制链接</span>
         </div>
     `;
-    
-    menuEl.addEventListener('click', handleMenuClick);
-    document.body.appendChild(menuEl);
 }
 
 /**
  * Show context menu at position
  */
-function showMenu(x, y, newsData) {
+function showMenu(x, y, newsData, tagData = null) {
     ensureMenuExists();
     
     currentNewsData = newsData;
+    currentTagData = tagData;
     
-    // Update menu item state
-    const summaryItem = menuEl.querySelector('[data-action="summary"]');
-    if (summaryItem) {
-        const hasSummary = newsData.hasSummary;
-        summaryItem.classList.toggle('has-summary', hasSummary);
-        summaryItem.querySelector('span:last-child').textContent = hasSummary ? '查看总结' : 'AI 智能总结';
+    // Build menu based on context
+    const menuType = tagData ? 'tag' : 'news';
+    menuEl.innerHTML = buildMenuHtml(menuType, tagData || newsData);
+    menuEl.removeEventListener('click', handleMenuClick);
+    menuEl.addEventListener('click', handleMenuClick);
+    
+    // Update menu item state for news menu
+    if (!tagData && newsData) {
+        const summaryItem = menuEl.querySelector('[data-action="summary"]');
+        if (summaryItem) {
+            const hasSummary = newsData.hasSummary;
+            summaryItem.classList.toggle('has-summary', hasSummary);
+            summaryItem.querySelector('span:last-child').textContent = hasSummary ? '查看总结' : 'AI 智能总结';
+        }
     }
     
     // Position menu
     const menuWidth = 200;
-    const menuHeight = 160;
+    const menuHeight = tagData ? 50 : 160;
     const padding = 10;
     
     let finalX = x;
@@ -112,6 +136,7 @@ function hideMenu() {
         backdropEl.classList.remove('show');
     }
     currentNewsData = null;
+    currentTagData = null;
     clearLongPress();
 }
 
@@ -120,22 +145,24 @@ function hideMenu() {
  */
 function handleMenuClick(e) {
     const item = e.target.closest('.tr-context-menu-item');
-    if (!item || !currentNewsData) return;
+    if (!item) return;
     
     const action = item.dataset.action;
-    const data = currentNewsData;
     
     hideMenu();
     
     switch (action) {
         case 'summary':
-            handleSummaryAction(data);
+            if (currentNewsData) handleSummaryAction(currentNewsData);
             break;
         case 'open':
-            window.open(data.url, '_blank', 'noopener,noreferrer');
+            if (currentNewsData) window.open(currentNewsData.url, '_blank', 'noopener,noreferrer');
             break;
         case 'copy':
-            copyToClipboard(data.url);
+            if (currentNewsData) copyToClipboard(currentNewsData.url);
+            break;
+        case 'unfollow':
+            if (currentTagData) handleUnfollowTag(currentTagData);
             break;
     }
 }
@@ -242,13 +269,88 @@ function clearLongPress() {
 }
 
 /**
+ * Handle unfollow tag action
+ */
+async function handleUnfollowTag(tagData) {
+    const user = authState.getUser();
+    if (!user) {
+        openLoginModal();
+        return;
+    }
+    
+    try {
+        const resp = await fetch('/api/user/preferences/tag-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ tag_id: tagData.tagId, preference: 'neutral' })
+        });
+        
+        if (!resp.ok) throw new Error('取消关注失败');
+        
+        // Remove the card from DOM
+        const card = document.querySelector(`.platform-card[data-tag-id="${tagData.tagId}"]`);
+        if (card) {
+            card.style.transition = 'opacity 0.3s, transform 0.3s';
+            card.style.opacity = '0';
+            card.style.transform = 'scale(0.95)';
+            setTimeout(() => card.remove(), 300);
+        }
+        
+        // Clear my-tags cache
+        try { localStorage.removeItem('hotnews_my_tags_cache'); } catch {}
+        
+        // Show toast
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show(`已取消关注「${tagData.tagName}」`, { variant: 'success', durationMs: 2000 });
+        }
+    } catch (e) {
+        console.error('Unfollow tag failed:', e);
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show('操作失败，请重试', { variant: 'error', durationMs: 2000 });
+        }
+    }
+}
+
+/**
+ * Get tag data from platform card header
+ */
+function getTagDataFromElement(el) {
+    const card = el.closest('.platform-card[data-tag-id]');
+    if (!card) return null;
+    
+    const tagId = card.dataset.tagId;
+    const nameEl = card.querySelector('.platform-name');
+    const tagName = nameEl?.textContent?.replace(/\(.*\)/, '').trim() || tagId;
+    
+    return {
+        tagId,
+        tagName
+    };
+}
+
+/**
  * Handle context menu (right click)
  */
 function handleContextMenu(e) {
     const target = e.target;
     if (!target) return;
     
-    // Only handle on news titles
+    // Check if right-clicking on a tag card header in my-tags
+    const platformName = target.closest('.platform-name');
+    const platformCard = target.closest('.platform-card[data-tag-id]');
+    const isInMyTags = target.closest('#myTagsGrid');
+    
+    if (platformName && platformCard && isInMyTags) {
+        const tagData = getTagDataFromElement(target);
+        if (tagData) {
+            e.preventDefault();
+            showMenu(e.clientX, e.clientY, null, tagData);
+            return;
+        }
+    }
+    
+    // Default: handle on news titles
     const titleEl = target.closest('.news-title');
     if (!titleEl) return;
     
