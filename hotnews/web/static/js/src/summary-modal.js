@@ -554,7 +554,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                         <div class="summary-blocked-title">该网站暂不支持 AI 总结</div>
                         <div class="summary-blocked-text">该网站设置了访问保护，建议直接阅读原文</div>
                         <div class="summary-blocked-actions">
-                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                            <a href="${url}${url.includes('?') ? '&' : '?'}hotnews_auto_summarize=1" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
                                 📖 阅读原文
                             </a>
                             ${extensionHint}
