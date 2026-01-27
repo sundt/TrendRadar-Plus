@@ -21,6 +21,10 @@ let _tabSwitchDebounceTimer = null;
 let _mbOffset = 0;
 let _mbObserver = null;
 let _mbFinished = false;
+let _mbInitialized = false;
+let _mbRetryCount = 0;
+const MAX_RETRY_COUNT = 3;
+const RETRY_DELAY_MS = 500;
 
 function _getActiveTabId() {
     try {
@@ -106,12 +110,21 @@ function _buildNewsItemsHtml(items, opts = {}) {
 }
 
 function _getPane() {
-    return document.getElementById(`tab-${MORNING_BRIEF_CATEGORY_ID}`);
+    const pane = document.getElementById(`tab-${MORNING_BRIEF_CATEGORY_ID}`);
+    if (!pane) {
+        console.warn('[MorningBrief] Pane not found: tab-knowledge');
+    }
+    return pane;
 }
 
 function _getGrid() {
     const pane = _getPane();
-    return pane ? pane.querySelector('.platform-grid') : null;
+    if (!pane) return null;
+    const grid = pane.querySelector('.platform-grid');
+    if (!grid) {
+        console.warn('[MorningBrief] Grid not found in pane');
+    }
+    return grid;
 }
 
 function _ensureLayout() {
@@ -321,8 +334,19 @@ async function _loadTimeline() {
     const grid = _getGrid();
     if (!grid) {
         console.warn('[MorningBrief] Grid not found, skipping load');
+        // Schedule retry if not too many attempts
+        if (_mbRetryCount < MAX_RETRY_COUNT) {
+            _mbRetryCount++;
+            console.log(`[MorningBrief] Scheduling retry ${_mbRetryCount}/${MAX_RETRY_COUNT}`);
+            setTimeout(() => {
+                _initialLoad().catch(() => {});
+            }, RETRY_DELAY_MS * _mbRetryCount);
+        }
         return;
     }
+
+    // Reset retry count on successful grid find
+    _mbRetryCount = 0;
 
     // Save existing content in case of error
     const previousContent = grid.innerHTML;
@@ -343,25 +367,34 @@ async function _loadTimeline() {
         const initialLimit = limit * INITIAL_CARDS;
         const items = await _fetchTimelineBatch(initialLimit, 0);
 
+        // Verify grid still exists after async operation
+        const currentGrid = _getGrid();
+        if (!currentGrid) {
+            console.warn('[MorningBrief] Grid disappeared during fetch, aborting');
+            return;
+        }
+
         // Clear grid only after successful fetch
-        grid.innerHTML = '';
+        currentGrid.innerHTML = '';
 
         if (!items.length) {
-            grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+            currentGrid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+            _mbInitialized = true;
             return;
         }
 
         // Create Sentinel for infinite scroll
-        _createSentinel(grid);
+        _createSentinel(currentGrid);
 
         // Chunk into cards
         for (let i = 0; i < items.length; i += limit) {
             const chunk = items.slice(i, i + limit);
             const cardIndex = Math.floor(i / limit); // 0, 1, 2, ...
-            _appendCard(chunk, cardIndex, grid);
+            _appendCard(chunk, cardIndex, currentGrid);
         }
 
         _mbOffset = items.length;
+        _mbInitialized = true;
 
         if (items.length < initialLimit) {
             // No more data
@@ -379,11 +412,15 @@ async function _loadTimeline() {
         } catch (e) { /* ignore */ }
     } catch (e) {
         console.error('[MorningBrief] Failed to load timeline:', e);
+        // Verify grid still exists
+        const currentGrid = _getGrid();
+        if (!currentGrid) return;
+        
         // Restore previous content if we had any, otherwise show error
-        if (hadContent) {
-            grid.innerHTML = previousContent;
+        if (hadContent && previousContent) {
+            currentGrid.innerHTML = previousContent;
         } else {
-            grid.innerHTML = `
+            currentGrid.innerHTML = `
                 <div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">
                     <div style="font-size:24px;margin-bottom:8px;">⚠️</div>
                     <div>加载失败，请稍后重试</div>
@@ -406,7 +443,16 @@ async function _refreshTimelineIfNeeded(opts = {}) {
         return false;
     }
 
-    if (!_ensureLayout()) return false;
+    // If already in flight, queue a refresh for after completion
+    if (_mbInFlight) {
+        console.log('[MorningBrief] Refresh already in flight, will retry after completion');
+        return false;
+    }
+
+    if (!_ensureLayout()) {
+        console.warn('[MorningBrief] Layout not ready');
+        return false;
+    }
 
     _mbInFlight = true;
     try {
@@ -414,6 +460,7 @@ async function _refreshTimelineIfNeeded(opts = {}) {
         _mbLastRefreshAt = Date.now();
         return true;
     } catch (e) {
+        console.error('[MorningBrief] Refresh failed:', e);
         return false;
     } finally {
         _mbInFlight = false;
@@ -445,24 +492,37 @@ function _attachHandlersOnce() {
 }
 
 async function _initialLoad() {
+    console.log('[MorningBrief] Starting initial load');
+    
+    // Reset state for fresh load (important when called from renderViewerFromData patch)
+    _mbInFlight = false;
+    _mbFinished = false;
+    _mbOffset = 0;
+    
     // Retry up to 3 times if layout is not ready (DOM might not be fully rendered)
     let retries = 3;
     while (retries > 0) {
         if (_ensureLayout()) break;
         retries--;
         if (retries > 0) {
+            console.log(`[MorningBrief] Layout not ready, retrying... (${3 - retries}/3)`);
             await new Promise(r => setTimeout(r, 100)); // Wait 100ms before retry
         }
     }
     
     if (!_ensureLayout()) {
-        console.warn('[MorningBrief] Layout not ready after retries');
+        console.warn('[MorningBrief] Layout not ready after retries, scheduling delayed retry');
+        // Schedule a delayed retry
+        setTimeout(() => {
+            _initialLoad().catch(() => {});
+        }, 500);
         return;
     }
     
     _attachHandlersOnce();
     // Skip tab check for initial load - always load data
     await _refreshTimelineIfNeeded({ force: false, skipTabCheck: true });
+    console.log('[MorningBrief] Initial load complete');
 }
 
 function _ensurePolling() {
@@ -489,8 +549,30 @@ function _patchRenderHook() {
     TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
         orig.call(TR.data, data, state);
         try {
-            _initialLoad().catch(() => { });
-        } catch (e) { }
+            // Reset morning brief state when DOM is rebuilt
+            _mbInFlight = false;
+            _mbFinished = false;
+            _mbOffset = 0;
+            _mbInitialized = false;
+            _mbRetryCount = 0;
+            
+            // Disconnect old observer since DOM is rebuilt
+            if (_mbObserver) {
+                try {
+                    _mbObserver.disconnect();
+                } catch (e) { /* ignore */ }
+                _mbObserver = null;
+            }
+            
+            // Small delay to ensure DOM is fully rendered
+            setTimeout(() => {
+                _initialLoad().catch((e) => {
+                    console.error('[MorningBrief] Initial load failed after render:', e);
+                });
+            }, 50);
+        } catch (e) {
+            console.error('[MorningBrief] Error in render hook:', e);
+        }
     };
 
     TR.morningBrief = {
@@ -498,6 +580,15 @@ function _patchRenderHook() {
         _patched: true,
         // Expose refresh method for manual retry
         refresh: () => _refreshTimelineIfNeeded({ force: true }),
+        // Expose status for debugging
+        getStatus: () => ({
+            inFlight: _mbInFlight,
+            finished: _mbFinished,
+            offset: _mbOffset,
+            initialized: _mbInitialized,
+            retryCount: _mbRetryCount,
+            lastRefreshAt: _mbLastRefreshAt,
+        }),
     };
 }
 
