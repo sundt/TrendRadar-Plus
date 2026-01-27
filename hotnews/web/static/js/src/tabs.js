@@ -13,6 +13,11 @@ const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const EXPLORE_MODAL_OPENED_EVENT = 'tr_explore_modal_opened';
 const EXPLORE_MODAL_CLOSED_EVENT = 'tr_explore_modal_closed';
 
+// Memory optimization: max number of tabs to keep DOM content
+const MAX_CACHED_TABS = 3;
+// Track recently visited tabs for LRU cleanup
+let _recentTabs = [];
+
 let _explorePrevTabId = null;
 let _explorePrevScrollY = 0;
 
@@ -132,6 +137,55 @@ function _restoreFromExploreModal() {
     });
 }
 
+/**
+ * Memory optimization: Clean up DOM content of inactive tabs
+ * Uses LRU strategy to keep only MAX_CACHED_TABS tabs with content
+ */
+function _cleanupInactiveTabs(currentTabId) {
+    // Update recent tabs list (LRU)
+    _recentTabs = _recentTabs.filter(id => id !== currentTabId);
+    _recentTabs.unshift(currentTabId);
+    
+    // Keep only MAX_CACHED_TABS
+    if (_recentTabs.length <= MAX_CACHED_TABS) return;
+    
+    const tabsToClean = _recentTabs.slice(MAX_CACHED_TABS);
+    _recentTabs = _recentTabs.slice(0, MAX_CACHED_TABS);
+    
+    // Clean up old tabs
+    tabsToClean.forEach(tabId => {
+        try {
+            // Skip special tabs that shouldn't be cleaned
+            if (['explore', 'knowledge', 'my-tags', 'rsscol-rss'].includes(tabId)) return;
+            
+            const pane = document.getElementById(`tab-${tabId}`);
+            if (!pane) return;
+            
+            // Count items before cleanup
+            const itemCount = pane.querySelectorAll('.news-item').length;
+            if (itemCount === 0) return;
+            
+            // Clean up news items but keep card structure
+            pane.querySelectorAll('.platform-card').forEach(card => {
+                const list = card.querySelector('.news-list');
+                if (!list) return;
+                
+                // Mark card as needing reload
+                card.dataset.lazy = '1';
+                card.dataset.loadedDone = '0';
+                card.dataset.loadedCount = '0';
+                
+                // Replace content with placeholder
+                list.innerHTML = '<li class="news-placeholder" aria-hidden="true">待加载...</li>';
+            });
+            
+            // console.log(`[Memory] Cleaned ${itemCount} items from tab: ${tabId}`);
+        } catch (e) {
+            // ignore
+        }
+    });
+}
+
 export const tabs = {
     TAB_STORAGE_KEY,
 
@@ -165,6 +219,9 @@ export const tabs = {
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         paneEl.classList.add('active');
         storage.setRaw(TAB_STORAGE_KEY, categoryId);
+
+        // Memory optimization: clean up inactive tabs after a short delay
+        setTimeout(() => _cleanupInactiveTabs(categoryId), 500);
 
         try {
             window.dispatchEvent(new CustomEvent(TAB_SWITCHED_EVENT, { detail: { categoryId, hasUpdate } }));

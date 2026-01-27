@@ -253,3 +253,55 @@ TR.toast = {
         _toastState.items.delete(String(id || ''));
     }
 };
+
+/**
+ * Memory cleanup utilities
+ * Helps reduce memory usage by cleaning up unused DOM and caches
+ */
+TR.cleanup = {
+    /**
+     * Get current memory stats (if available)
+     */
+    getMemoryStats() {
+        try {
+            if (performance && performance.memory) {
+                return {
+                    usedJSHeapSize: Math.round(performance.memory.usedJSHeapSize / 1024 / 1024),
+                    totalJSHeapSize: Math.round(performance.memory.totalJSHeapSize / 1024 / 1024),
+                    jsHeapSizeLimit: Math.round(performance.memory.jsHeapSizeLimit / 1024 / 1024),
+                };
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    },
+
+    /**
+     * Count DOM nodes for debugging
+     */
+    countDOMNodes() {
+        try {
+            const newsItems = document.querySelectorAll('.news-item').length;
+            const platformCards = document.querySelectorAll('.platform-card').length;
+            const totalNodes = document.getElementsByTagName('*').length;
+            return { newsItems, platformCards, totalNodes };
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /**
+     * Force garbage collection hint (not guaranteed)
+     */
+    hint() {
+        try {
+            // Create and discard large objects to hint GC
+            const arr = new Array(1000000);
+            arr.fill(0);
+            arr.length = 0;
+        } catch (e) {
+            // ignore
+        }
+    }
+};
