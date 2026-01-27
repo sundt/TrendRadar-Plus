@@ -383,7 +383,7 @@ class TagDiscoveryService:
         
         return results
     
-    def promote_candidate(self, tag_id: str, icon: str = "🏷️") -> bool:
+    def promote_candidate(self, tag_id: str, icon: str = "🏷️") -> dict:
         """
         Promote a candidate tag to official tag.
         
@@ -392,7 +392,7 @@ class TagDiscoveryService:
             icon: Emoji icon for the tag
             
         Returns:
-            True if promoted successfully
+            Dict with 'success' bool and 'error' message if failed
         """
         now = int(time.time())
         
@@ -408,8 +408,36 @@ class TagDiscoveryService:
         )
         row = cur.fetchone()
         if not row:
-            logger.warning(f"Candidate {tag_id} not found or not pending")
-            return False
+            # Check if candidate exists with different status
+            cur = self.conn.execute(
+                "SELECT tag_id, status FROM tag_candidates WHERE tag_id = ?",
+                (tag_id,)
+            )
+            existing = cur.fetchone()
+            if existing:
+                logger.warning(f"Candidate {tag_id} exists but status is '{existing[1]}', not 'pending'")
+                return {"success": False, "error": f"候选标签 '{tag_id}' 状态是 '{existing[1]}'，不是 pending"}
+            else:
+                logger.warning(f"Candidate {tag_id} not found in tag_candidates table")
+                return {"success": False, "error": f"候选标签 '{tag_id}' 不存在"}
+        
+        # Check if tag already exists in official tags
+        cur = self.conn.execute("SELECT 1 FROM tags WHERE id = ?", (tag_id,))
+        if cur.fetchone():
+            logger.warning(f"Tag {tag_id} already exists in official tags")
+            return {"success": False, "error": f"标签 '{tag_id}' 已存在于正式标签中"}
+        
+        # Check if required columns exist in tags table
+        try:
+            cur = self.conn.execute("PRAGMA table_info(tags)")
+            columns = {row[1] for row in cur.fetchall()}
+            required_columns = {'is_dynamic', 'lifecycle', 'usage_count', 'promoted_from'}
+            missing = required_columns - columns
+            if missing:
+                logger.error(f"Missing columns in tags table: {missing}")
+                return {"success": False, "error": f"数据库缺少列: {', '.join(missing)}，请重启服务以执行迁移"}
+        except Exception as e:
+            logger.error(f"Failed to check table schema: {e}")
         
         # Insert into official tags
         try:
@@ -454,12 +482,12 @@ class TagDiscoveryService:
             linked_count = self.link_tag_to_entries(tag_id, days_back=30)
             logger.info(f"Auto-linked {linked_count} entries for new tag {tag_id}")
             
-            return True
+            return {"success": True, "linked_count": linked_count}
             
         except Exception as e:
             logger.error(f"Failed to promote candidate {tag_id}: {e}")
             self.conn.rollback()
-            return False
+            return {"success": False, "error": f"数据库操作失败: {str(e)}"}
     
     def reject_candidate(self, tag_id: str, reason: str = "") -> bool:
         """

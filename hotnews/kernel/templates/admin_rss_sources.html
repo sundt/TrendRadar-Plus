@@ -2105,14 +2105,14 @@
             body: JSON.stringify({ icon: '🏷️' })
           });
           const data = await resp.json();
-          if (data.ok) {
-            showToast('✅ 标签已晋升');
+          if (resp.ok && data.ok) {
+            showToast('✅ 标签已晋升' + (data.linked_count ? ` (关联 ${data.linked_count} 条)` : ''));
             loadTagCandidates();
           } else {
-            showToast('❌ 晋升失败: ' + (data.detail || '未知错误'));
+            showToast('❌ 晋升失败: ' + (data.detail || data.error || '未知错误'));
           }
         } catch (e) {
-          showToast('❌ 请求失败');
+          showToast('❌ 请求失败: ' + e.message);
         }
       }
 

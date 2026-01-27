@@ -11,6 +11,7 @@ Endpoints:
 import time
 from typing import Optional
 from fastapi import APIRouter, Request, Query, Body, HTTPException
+from pydantic import BaseModel
 
 from hotnews.kernel.services.tag_discovery import TagDiscoveryService
 from hotnews.web.db_online import get_online_db_conn
@@ -125,11 +126,19 @@ async def get_candidate_detail(request: Request, tag_id: str):
     }
 
 
+class ApproveRequest(BaseModel):
+    icon: str = "🏷️"
+
+
+class RejectRequest(BaseModel):
+    reason: str = ""
+
+
 @router.post("/{tag_id}/approve")
 async def approve_candidate(
     request: Request,
     tag_id: str,
-    icon: str = Body("🏷️", description="Emoji icon for the tag"),
+    body: ApproveRequest = Body(default=ApproveRequest()),
 ):
     """Approve and promote a candidate tag to official tags."""
     _require_admin(request)
@@ -137,14 +146,16 @@ async def approve_candidate(
     conn = _get_online_db_conn()
     service = TagDiscoveryService(conn)
     
-    success = service.promote_candidate(tag_id, icon=icon)
+    result = service.promote_candidate(tag_id, icon=body.icon)
     
-    if not success:
-        raise HTTPException(status_code=400, detail="Failed to promote candidate")
+    if not result.get("success"):
+        error_msg = result.get("error", "未知错误")
+        raise HTTPException(status_code=400, detail=error_msg)
     
     return {
         "ok": True,
-        "message": f"Candidate '{tag_id}' promoted to official tag",
+        "message": f"候选标签 '{tag_id}' 已晋升为正式标签",
+        "linked_count": result.get("linked_count", 0),
     }
 
 
@@ -152,7 +163,7 @@ async def approve_candidate(
 async def reject_candidate(
     request: Request,
     tag_id: str,
-    reason: str = Body("", description="Rejection reason"),
+    body: RejectRequest = Body(default=RejectRequest()),
 ):
     """Reject a candidate tag."""
     _require_admin(request)
@@ -160,7 +171,7 @@ async def reject_candidate(
     conn = _get_online_db_conn()
     service = TagDiscoveryService(conn)
     
-    success = service.reject_candidate(tag_id, reason=reason)
+    success = service.reject_candidate(tag_id, reason=body.reason)
     
     if not success:
         raise HTTPException(status_code=400, detail="Failed to reject candidate")
