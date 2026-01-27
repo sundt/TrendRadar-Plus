@@ -73,6 +73,14 @@ cd ~/hotnews/docker && docker compose -f docker-compose-build.yml logs -f hotnew
 
 ## 最近改动
 
+### 2026-01-27
+- ✅ **AI 按钮行为优化** - blocked URL 点击 AI 按钮显示弹窗，点"阅读原文"在新标签打开，扩展显示提示引导用户点击总结
+  - `summary-modal.js` - 简化流程，blocked URL 统一走弹窗流程，URL 添加 `?hotnews_auto_summarize=1` 参数
+  - `summary-modal.css` - 添加 `.summary-extension-hint` 样式
+  - `misc_routes.py` - 添加 `/extension/install` 重定向路由
+  - `extension-install.html` - 创建扩展安装引导页面
+  - `hotnews-summarizer/content.js` - 检测 URL 参数，显示 10 秒可点击提示引导打开侧边栏
+
 ### 2026-01-26
 - ✅ **AI 总结支持百度千帆** - 添加 Qianfan provider 支持，优先级高于 DashScope
   - `article_summary.py` - 添加 Qianfan API 支持，修复 model 参数覆盖问题

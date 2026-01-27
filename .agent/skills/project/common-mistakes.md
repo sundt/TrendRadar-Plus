@@ -196,3 +196,37 @@ function clearAllTimers() {
 - 复制粘贴代码时仔细检查函数名
 - 当功能"静默失败"（无报错但不工作）时，检查是否有无限递归
 - 递归调用会导致栈溢出，但如果函数很简单可能不会立即报错，只是逻辑不执行
+
+### 7. 修改前端 JS 后忘记重新构建
+**日期**：2026-01-27
+**场景**：修改 `summary-modal.js` 实现 AI 按钮新流程，但浏览器行为没变化
+
+**错误**：直接修改 `static/js/src/summary-modal.js` 后部署，但浏览器加载的是 `static/js/dist/` 下的打包文件
+
+**正确做法**：
+- 修改 `static/js/src/*.js` 后，必须运行 `npm run build:js` 重新打包
+- 打包后再部署或刷新页面测试
+- 本项目前端 JS 使用 esbuild 打包，源文件在 `src/`，输出在 `dist/`
+
+### 8. 假设浏览器 API 可以自动调用
+**日期**：2026-01-27
+**场景**：实现"打开新标签页后自动打开侧边栏总结"功能
+
+**错误**：假设 Chrome 扩展的 `sidePanel.open()` 可以在页面加载时自动调用
+
+**正确做法**：
+- Chrome 的 `sidePanel.open()` API 需要用户手势（user gesture）才能调用
+- 不能在 `DOMContentLoaded` 或定时器中自动调用
+- 解决方案：显示一个可点击的提示，让用户点击后触发 `sidePanel.open()`
+- 类似限制的 API 还有：`window.open()`（部分场景）、`Notification.requestPermission()` 等
+
+### 9. Docker 容器环境变量更新后只 restart
+**日期**：2026-01-27
+**场景**：修改 `.env` 文件添加微信/邮箱配置后，容器内环境变量仍为空
+
+**错误**：使用 `docker compose restart` 重启容器，但环境变量没有更新
+
+**正确做法**：
+- 环境变量变更后，需要使用 `docker compose up -d --force-recreate <service>` 重建容器
+- `restart` 只是重启进程，不会重新读取 `.env` 文件
+- 或者使用 `docker compose down && docker compose up -d` 完全重建
