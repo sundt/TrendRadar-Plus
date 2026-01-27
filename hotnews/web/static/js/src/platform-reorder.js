@@ -543,13 +543,25 @@ export const platformReorder = {
         const showContextMenu = (e, card, grid, categoryId) => {
             hideContextMenu();
 
+            const isMyTags = categoryId === 'my-tags';
+            const tagId = card.dataset?.tagId;
+
             contextMenuEl = document.createElement('div');
             contextMenuEl.className = 'tr-platform-context-menu';
-            contextMenuEl.innerHTML = `
+            
+            // Build menu items
+            let menuHtml = `
                 <div class="tr-ctx-item" data-action="top">⬆️ 置顶</div>
                 <div class="tr-ctx-item" data-action="bottom">⬇️ 置底</div>
                 <div class="tr-ctx-item" data-action="edit" style="border-top:1px solid #e5e7eb;">⚙️ 编辑顺序</div>
             `;
+            
+            // Add unfollow option for my-tags
+            if (isMyTags && tagId) {
+                menuHtml += `<div class="tr-ctx-item" data-action="unfollow" style="border-top:1px solid #e5e7eb;color:#ef4444;">🚫 取消关注</div>`;
+            }
+            
+            contextMenuEl.innerHTML = menuHtml;
             contextMenuEl.style.cssText = `
                 position: fixed;
                 left: ${e.clientX}px;
@@ -597,6 +609,37 @@ export const platformReorder = {
                     return;
                 }
 
+                if (action === 'unfollow' && isMyTags && tagId) {
+                    hideContextMenu();
+                    // Call unfollow API
+                    const tagName = card.querySelector('.platform-name')?.textContent?.replace(/\(.*\)/, '').trim() || tagId;
+                    fetch('/api/user/preferences/tag-settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ tag_id: tagId, preference: 'neutral' })
+                    }).then(resp => {
+                        if (!resp.ok) throw new Error('取消关注失败');
+                        // Remove card with animation
+                        card.style.transition = 'opacity 0.3s, transform 0.3s';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.95)';
+                        setTimeout(() => card.remove(), 300);
+                        // Clear cache
+                        try { localStorage.removeItem('hotnews_my_tags_cache'); } catch {}
+                        // Show toast
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show(`已取消关注「${tagName}」`, { variant: 'success', durationMs: 2000 });
+                        }
+                    }).catch(err => {
+                        console.error('Unfollow failed:', err);
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show('操作失败，请重试', { variant: 'error', durationMs: 2000 });
+                        }
+                    });
+                    return;
+                }
+
                 const cards = Array.from(grid.querySelectorAll('.platform-card'));
                 if (action === 'top') {
                     grid.insertBefore(card, cards[0]);
@@ -641,8 +684,9 @@ export const platformReorder = {
 
             if (!card || !grid || !categoryId) return;
 
-            // Exclude special categories: explore, knowledge (morning brief), and my-tags
-            if (categoryId === 'explore' || categoryId === 'knowledge' || categoryId === 'my-tags') return;
+            // Exclude special categories: explore, knowledge (morning brief)
+            // my-tags is handled separately with additional "unfollow" option
+            if (categoryId === 'explore' || categoryId === 'knowledge') return;
 
             e.preventDefault();
             showContextMenu(e, card, grid, categoryId);

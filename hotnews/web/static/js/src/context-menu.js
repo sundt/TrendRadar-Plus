@@ -336,22 +336,8 @@ function handleContextMenu(e) {
     const target = e.target;
     if (!target) return;
     
-    // Check if right-clicking on a tag card header in my-tags
-    const platformHeader = target.closest('.platform-header');
-    const platformName = target.closest('.platform-name');
-    const platformCard = target.closest('.platform-card[data-tag-id]');
-    const isInMyTags = target.closest('#myTagsGrid');
-    
-    if ((platformHeader || platformName) && platformCard && isInMyTags) {
-        const tagData = getTagDataFromElement(target);
-        if (tagData) {
-            e.preventDefault();
-            showMenu(e.clientX, e.clientY, null, tagData);
-            return;
-        }
-    }
-    
-    // Default: handle on news titles
+    // my-tags card headers are handled by platform-reorder.js
+    // Only handle news titles here
     const titleEl = target.closest('.news-title');
     if (!titleEl) return;
     
