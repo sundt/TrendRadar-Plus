@@ -2316,6 +2316,22 @@
             z-index: 10;
         }
 
+        /* NEW text badge for settings button */
+        .new-badge-text {
+            position: absolute;
+            top: -6px;
+            right: -12px;
+            padding: 1px 4px;
+            background: linear-gradient(135deg, #8b5cf6, #a855f7);
+            color: white;
+            font-size: 9px;
+            font-weight: 700;
+            border-radius: 3px;
+            display: none;
+            z-index: 10;
+            animation: badge-pulse 2s ease-in-out infinite;
+        }
+
         /* Adjust stats-row to align better */
         .stats-row {
             align-items: center;
@@ -6288,13 +6304,47 @@ body.eye-protection-mode .article-tag-suffix.tag-layoff { background: #3d2020; c
 }
 
 .subscribe-item-name {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 14px;
     font-weight: 500;
     color: #1e293b;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Badge styles for recommended tags */
+.subscribe-item-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.subscribe-badge-new {
+    background: linear-gradient(135deg, #8b5cf6, #a855f7);
+    color: white;
+    animation: badge-pulse 2s ease-in-out infinite;
+}
+
+.subscribe-badge-hot {
+    background: linear-gradient(135deg, #f97316, #ef4444);
+    color: white;
+}
+
+.subscribe-badge-related {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+@keyframes badge-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
 }
 
 .subscribe-item-desc {
@@ -6657,6 +6707,11 @@ body.eye-protection-mode .subscribe-item {
 
 body.eye-protection-mode .subscribe-item-name {
     color: #e5e5e5;
+}
+
+body.eye-protection-mode .subscribe-badge-related {
+    background: #1e3a5f;
+    color: #7dd3fc;
 }
 
 body.eye-protection-mode .subscribe-item-desc {

@@ -51,6 +51,25 @@ PROMOTION_CRITERIA = {
     "min_time_span_days": 3,     # Must persist for 3+ days
 }
 
+# Fast-track promotion criteria (for trending topics)
+FAST_TRACK_CRITERIA = [
+    {
+        "hours": 4,              # Within 4 hours
+        "min_occurrence": 8,     # At least 8 occurrences
+        "min_confidence": 0.9,   # Average confidence >= 0.9
+    },
+    {
+        "hours": 12,             # Within 12 hours
+        "min_occurrence": 15,    # At least 15 occurrences
+        "min_confidence": 0.9,   # Average confidence >= 0.9
+    },
+    {
+        "hours": 24,             # Within 24 hours
+        "min_occurrence": 20,    # At least 20 occurrences
+        "min_confidence": 0.8,   # Average confidence >= 0.8
+    },
+]
+
 
 class TagDiscoveryService:
     """Service for discovering and managing AI-suggested tags."""
@@ -479,12 +498,19 @@ class TagDiscoveryService:
         """
         Get candidates that meet promotion criteria.
         
+        Includes both:
+        1. Standard criteria (10+ occurrences, 0.7+ confidence, 3+ days)
+        2. Fast-track criteria for trending topics:
+           - 12h: 15+ occurrences, 0.9+ confidence
+           - 24h: 20+ occurrences, 0.8+ confidence
+        
         Returns:
             List of qualified candidate dictionaries
         """
         now = int(time.time())
         min_first_seen = now - (PROMOTION_CRITERIA["min_time_span_days"] * 86400)
         
+        # Standard criteria query
         cur = self.conn.execute(
             """
             SELECT * FROM tag_candidates
@@ -503,13 +529,56 @@ class TagDiscoveryService:
         
         columns = [desc[0] for desc in cur.description]
         results = []
+        seen_tag_ids = set()
+        
         for row in cur.fetchall():
             item = dict(zip(columns, row))
+            item["promotion_reason"] = "standard"
             try:
                 item["sample_titles"] = json.loads(item.get("sample_titles") or "[]")
             except:
                 item["sample_titles"] = []
             results.append(item)
+            seen_tag_ids.add(item.get("tag_id"))
+        
+        # Fast-track criteria queries
+        for criteria in FAST_TRACK_CRITERIA:
+            hours = criteria["hours"]
+            min_occurrence = criteria["min_occurrence"]
+            min_confidence = criteria["min_confidence"]
+            
+            # Calculate time window - candidates first seen within the last N hours
+            min_first_seen_fast = now - (hours * 3600)
+            
+            cur = self.conn.execute(
+                """
+                SELECT * FROM tag_candidates
+                WHERE status = 'pending'
+                  AND occurrence_count >= ?
+                  AND avg_confidence >= ?
+                  AND first_seen_at >= ?
+                ORDER BY occurrence_count DESC
+                """,
+                (min_occurrence, min_confidence, min_first_seen_fast)
+            )
+            
+            for row in cur.fetchall():
+                item = dict(zip(columns, row))
+                tag_id = item.get("tag_id")
+                
+                # Skip if already in results
+                if tag_id in seen_tag_ids:
+                    continue
+                
+                item["promotion_reason"] = f"fast_track_{hours}h"
+                try:
+                    item["sample_titles"] = json.loads(item.get("sample_titles") or "[]")
+                except:
+                    item["sample_titles"] = []
+                results.append(item)
+                seen_tag_ids.add(tag_id)
+                
+                logger.info(f"Fast-track candidate: {tag_id} ({hours}h, {item.get('occurrence_count')} occurrences, {item.get('avg_confidence'):.2f} confidence)")
         
         return results
     

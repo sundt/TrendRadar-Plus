@@ -84,11 +84,11 @@ function ensureSubscribeSidebarExists() {
                 </div>
             </div>
             <div class="subscribe-tabs" id="subscribeTabs">
-                <button class="subscribe-tab active" data-tab="recommendations">✨推荐</button>
-                <button class="subscribe-tab" data-tab="tags">🏷️标签</button>
-                <button class="subscribe-tab" data-tab="sources">📡订阅源</button>
-                <button class="subscribe-tab" data-tab="keywords">🔑关键词</button>
+                <button class="subscribe-tab active" data-tab="recommendations">🔥热门</button>
                 <button class="subscribe-tab" data-tab="wechat">💬公众号</button>
+                <button class="subscribe-tab" data-tab="sources">📡订阅源</button>
+                <button class="subscribe-tab" data-tab="tags">🏷️标签</button>
+                <button class="subscribe-tab" data-tab="keywords">�关键词</button>
             </div>
             <div class="subscribe-sidebar-body" id="subscribeSidebarBody">
                 <div class="subscribe-loading">加载中...</div>
@@ -265,9 +265,10 @@ async function loadRecommendationsTab() {
             if (!resp.ok) throw new Error('获取推荐失败');
             const data = await resp.json();
             // API returns hot_tags, new_tags, related_tags - combine them
+            // New tags first (AI discovered), then hot tags, then related
             state.data = [
-                ...(data.hot_tags || []),
                 ...(data.new_tags || []),
+                ...(data.hot_tags || []),
                 ...(data.related_tags || [])
             ];
             state.loaded = true;
@@ -412,11 +413,21 @@ function renderTagsTab() {
 }
 
 function renderTagItem(tag, isFollowed) {
+    // Badge display: new (AI discovered), hot (trending), related (co-occurrence)
+    let badgeHtml = '';
+    if (tag.badge === 'new') {
+        badgeHtml = '<span class="subscribe-item-badge subscribe-badge-new">NEW</span>';
+    } else if (tag.badge === 'hot') {
+        badgeHtml = '<span class="subscribe-item-badge subscribe-badge-hot">🔥</span>';
+    } else if (tag.badge === 'related') {
+        badgeHtml = '<span class="subscribe-item-badge subscribe-badge-related">相关</span>';
+    }
+    
     return `
         <div class="subscribe-item" data-id="${escapeHtml(tag.id)}" data-type="tag">
             <span class="subscribe-item-icon">${tag.icon || '🏷️'}</span>
             <div class="subscribe-item-info">
-                <span class="subscribe-item-name">${escapeHtml(tag.name)}</span>
+                <span class="subscribe-item-name">${escapeHtml(tag.name)}${badgeHtml}</span>
                 ${tag.description ? `<span class="subscribe-item-desc">${escapeHtml(tag.description)}</span>` : ''}
             </div>
             <button class="subscribe-item-btn ${isFollowed ? 'followed' : ''}" data-action="${isFollowed ? 'unfollow' : 'follow'}">

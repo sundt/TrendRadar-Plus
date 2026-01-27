@@ -2131,7 +2131,8 @@ async def _tag_promotion_loop() -> None:
                     success = service.promote_candidate(tag_id, icon="🏷️")
                     if success:
                         promoted_count += 1
-                        logger.info(f"tag_promotion.promoted tag_id={tag_id} name={candidate.get('name')}")
+                        reason = candidate.get("promotion_reason", "standard")
+                        logger.info(f"tag_promotion.promoted tag_id={tag_id} name={candidate.get('name')} reason={reason}")
                 except Exception as e:
                     logger.warning(f"tag_promotion.failed tag_id={tag_id} error={e}")
             

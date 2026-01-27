@@ -28,6 +28,12 @@ def _get_online_db_conn():
     return get_online_db_conn(project_root)
 
 
+def _require_admin(request: Request):
+    """Verify admin authentication."""
+    if hasattr(request.app.state, "require_admin"):
+        request.app.state.require_admin(request)
+
+
 @router.get("")
 async def list_tag_candidates(
     request: Request,
@@ -126,6 +132,8 @@ async def approve_candidate(
     icon: str = Body("🏷️", description="Emoji icon for the tag"),
 ):
     """Approve and promote a candidate tag to official tags."""
+    _require_admin(request)
+    
     conn = _get_online_db_conn()
     service = TagDiscoveryService(conn)
     
@@ -147,6 +155,8 @@ async def reject_candidate(
     reason: str = Body("", description="Rejection reason"),
 ):
     """Reject a candidate tag."""
+    _require_admin(request)
+    
     conn = _get_online_db_conn()
     service = TagDiscoveryService(conn)
     
