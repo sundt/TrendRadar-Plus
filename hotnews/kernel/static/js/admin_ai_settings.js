@@ -161,6 +161,85 @@ async function submitBatchImport() {
     }
 }
 
+// Action: Delete Model
+async function deleteAIModel(modelId) {
+    if (!confirm(`确定删除模型 "${modelId}"？`)) return;
+
+    // Remove from local array
+    const idx = aiModels.findIndex(m => m.id === modelId);
+    if (idx === -1) {
+        showToast('Model not found', 'error');
+        return;
+    }
+    
+    aiModels.splice(idx, 1);
+
+    // Save to server
+    try {
+        const res = await fetch('/api/admin/ai/models', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'admin-token': getAdminToken()
+            },
+            body: JSON.stringify({ models: aiModels })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+            showToast('Model deleted!', 'success');
+            renderAIModels();
+        } else {
+            // Reload to restore state
+            await loadAIConfig();
+            renderAIModels();
+            showToast('Delete failed: ' + data.detail, 'error');
+        }
+    } catch (e) {
+        await loadAIConfig();
+        renderAIModels();
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// Action: Delete Provider
+async function deleteAIProvider(providerId) {
+    if (!confirm(`确定删除供应商 "${providerId}"？\n注意：关联的模型不会被删除，但会变为无效。`)) return;
+
+    const idx = aiProviders.findIndex(p => p.id === providerId);
+    if (idx === -1) {
+        showToast('Provider not found', 'error');
+        return;
+    }
+    
+    aiProviders.splice(idx, 1);
+
+    try {
+        const res = await fetch('/api/admin/ai/providers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'admin-token': getAdminToken()
+            },
+            body: JSON.stringify({ providers: aiProviders })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+            showToast('Provider deleted!', 'success');
+            renderAIProviders();
+        } else {
+            await loadAIConfig();
+            renderAIProviders();
+            showToast('Delete failed: ' + data.detail, 'error');
+        }
+    } catch (e) {
+        await loadAIConfig();
+        renderAIProviders();
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
 // Action: Test Rotation
 async function testAIRotation() {
     const resultDiv = document.getElementById('ai-test-result');
