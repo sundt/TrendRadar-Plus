@@ -88,7 +88,7 @@ function ensureSubscribeSidebarExists() {
                 <button class="subscribe-tab" data-tab="wechat">💬公众号</button>
                 <button class="subscribe-tab" data-tab="sources">📡订阅源</button>
                 <button class="subscribe-tab" data-tab="tags">🏷️标签</button>
-                <button class="subscribe-tab" data-tab="keywords">�关键词</button>
+                <button class="subscribe-tab" data-tab="keywords">🔍关键词</button>
             </div>
             <div class="subscribe-sidebar-body" id="subscribeSidebarBody">
                 <div class="subscribe-loading">加载中...</div>

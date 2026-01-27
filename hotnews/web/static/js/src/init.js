@@ -187,11 +187,8 @@ ready(function () {
         });
     }, 200);
 
-    // 检查栏目设置 NEW 标记是否应该隐藏
-    if (localStorage.getItem('category_settings_badge_dismissed') === 'true') {
-        const badge = document.getElementById('categorySettingsNewBadge');
-        if (badge) badge.style.display = 'none';
-    }
+    // 检查栏目设置 NEW 标记是否应该隐藏 - 现在始终显示 NEW
+    // (已移除隐藏逻辑，让 NEW 标记一直显示)
 
     if (localStorage.getItem('rss_subscription_badge_dismissed') === 'true') {
         const badge = document.getElementById('rssSubscriptionNewBadge');

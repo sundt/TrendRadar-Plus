@@ -271,12 +271,7 @@ export const settings = {
     },
 
     async openCategorySettings() {
-        // 隐藏 NEW 标记并记录到 localStorage
-        const newBadge = document.getElementById('categorySettingsNewBadge');
-        if (newBadge) {
-            newBadge.style.display = 'none';
-            localStorage.setItem('category_settings_badge_dismissed', 'true');
-        }
+        // NEW 标记现在始终显示，不再隐藏
         // Always fetch fresh categories to ensure admin-added categories appear
         try {
             const response = await fetch('/api/news');
