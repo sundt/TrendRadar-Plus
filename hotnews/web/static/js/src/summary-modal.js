@@ -613,20 +613,25 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                         </div>
                     `;
                 } else {
-                    // Mobile: simple blocked message
+                    // Mobile: styled blocked message (same as PC v2 style)
                     body.innerHTML = `
-                        <div class="summary-blocked">
-                            <div class="summary-blocked-icon">🔒</div>
-                            <div class="summary-blocked-title">该网站暂不支持 AI 总结</div>
-                            <div class="summary-blocked-text">该网站设置了访问保护，建议直接阅读原文</div>
-                            <div class="summary-blocked-actions">
-                                <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                        <div class="summary-blocked-v2">
+                            <div class="blocked-header">
+                                <div class="blocked-icon-badge">
+                                    <span class="icon-main">🔒</span>
+                                </div>
+                                <div class="blocked-title">该网站暂不支持 AI 总结</div>
+                                <div class="blocked-subtitle">该网站设置了访问保护，建议直接阅读原文</div>
+                            </div>
+                            
+                            <div class="blocked-fallback">
+                                <a href="${url}" target="_blank" rel="noopener noreferrer" class="fallback-link">
                                     📖 阅读原文
                                 </a>
-                            </div>
-                            <div class="summary-blocked-secondary">
-                                <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
-                                <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                                <div class="fallback-actions">
+                                    <button class="fallback-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                                    <button class="fallback-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                                </div>
                             </div>
                         </div>
                     `;
