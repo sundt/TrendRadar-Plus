@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>安装浏览器插件 - uihash 总结助手</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --accent: #007aff;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.8;
+      padding: 40px 20px;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--card);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    .header-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 16px;
+    }
+    
+    .download-section {
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+      border-radius: 16px;
+      padding: 32px;
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 32px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+    }
+    
+    .download-btn:hover {
+      background: #0066d6;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 122, 255, 0.4);
+    }
+    
+    .download-info {
+      margin-top: 16px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    .version-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+    
+    h2 {
+      font-size: 20px;
+      margin: 32px 0 20px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .step {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 24px;
+      padding: 20px;
+      background: #fafafa;
+      border-radius: 12px;
+    }
+    
+    .step-number {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 16px;
+    }
+    
+    .step-content {
+      flex: 1;
+    }
+    
+    .step-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    
+    .step-desc {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    .step-desc code {
+      background: #e2e8f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+    }
+    
+    .highlight-box {
+      background: #fffbeb;
+      border-left: 4px solid var(--warning);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    
+    .highlight-box strong {
+      color: #b45309;
+    }
+    
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+    
+    .feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+    
+    .feature-icon {
+      font-size: 24px;
+    }
+    
+    .feature-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    
+    .feature-text strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    
+    .browser-support {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin: 24px 0;
+    }
+    
+    .browser {
+      text-align: center;
+      padding: 16px 24px;
+      background: #f8fafc;
+      border-radius: 12px;
+    }
+    
+    .browser-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    
+    .browser-name {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    
+    .browser.supported .browser-name {
+      color: var(--success);
+      font-weight: 500;
+    }
+    
+    .footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 640px) {
+      .container {
+        padding: 24px;
+      }
+      
+      .step {
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .features {
+        grid-template-columns: 1fr;
+      }
+      
+      .browser-support {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-icon">✨</div>
+      <h1>uihash 总结助手</h1>
+      <p class="subtitle">一键 AI 总结，让阅读更高效</p>
+    </div>
+    
+    <div class="download-section">
+      <a href="/static/downloads/uihash-summarizer-v1.3.0.zip" class="download-btn" download>
+        📥 下载插件
+        <span class="version-badge">v1.3.0</span>
+      </a>
+      <p class="download-info">
+        适用于 Chrome、Edge、Arc 等 Chromium 内核浏览器
+      </p>
+    </div>
+    
+    <h2>📋 安装步骤</h2>
+    
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <div class="step-title">下载并解压</div>
+        <div class="step-desc">
+          点击上方按钮下载 ZIP 文件，解压到一个固定位置（如桌面或文档文件夹）。
+          <br><strong>注意：</strong>解压后请勿删除或移动该文件夹。
+        </div>
+      </div>
+    </div>
+    
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <div class="step-title">打开扩展管理页面</div>
+        <div class="step-desc">
+          在浏览器地址栏输入 <code>chrome://extensions</code> 并回车。
+          <br>或点击浏览器右上角菜单 → 扩展程序 → 管理扩展程序。
+        </div>
+      </div>
+    </div>
+    
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <div class="step-title">开启开发者模式</div>
+        <div class="step-desc">
+          在扩展管理页面右上角，打开「开发者模式」开关。
+        </div>
+      </div>
+    </div>
+    
+    <div class="step">
+      <div class="step-number">4</div>
+      <div class="step-content">
+        <div class="step-title">加载已解压的扩展</div>
+        <div class="step-desc">
+          点击「加载已解压的扩展程序」按钮，选择刚才解压的文件夹。
+        </div>
+      </div>
+    </div>
+    
+    <div class="step">
+      <div class="step-number">5</div>
+      <div class="step-content">
+        <div class="step-title">固定到工具栏（推荐）</div>
+        <div class="step-desc">
+          点击浏览器右上角的拼图图标 🧩，找到「uihash 总结助手」，点击📌固定。
+        </div>
+      </div>
+    </div>
+    
+    <div class="highlight-box">
+      <strong>💡 提示：</strong>安装完成后，访问任意网页时会看到右下角的浮动按钮。点击即可打开侧边栏进行 AI 总结。
+    </div>
+    
+    <h2>✨ 功能特点</h2>
+    
+    <div class="features">
+      <div class="feature">
+        <div class="feature-icon">🤖</div>
+        <div class="feature-text">
+          <strong>智能总结</strong>
+          一键提取文章核心内容，支持多种文章类型
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">📋</div>
+        <div class="feature-text">
+          <strong>行动清单</strong>
+          自动提取待办事项，一键添加到 Todo
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">💬</div>
+        <div class="feature-text">
+          <strong>智能问答</strong>
+          基于文章内容进行深度对话
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔄</div>
+        <div class="feature-text">
+          <strong>多端同步</strong>
+          登录后数据自动同步
+        </div>
+      </div>
+    </div>
+    
+    <h2>🌐 支持的浏览器</h2>
+    
+    <div class="browser-support">
+      <div class="browser supported">
+        <div class="browser-icon">🌐</div>
+        <div class="browser-name">Chrome ✓</div>
+      </div>
+      <div class="browser supported">
+        <div class="browser-icon">🔷</div>
+        <div class="browser-name">Edge ✓</div>
+      </div>
+      <div class="browser supported">
+        <div class="browser-icon">🌈</div>
+        <div class="browser-name">Arc ✓</div>
+      </div>
+      <div class="browser supported">
+        <div class="browser-icon">🟢</div>
+        <div class="browser-name">Brave ✓</div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>
+        遇到问题？查看 <a href="/static/privacy.html">隐私政策</a> | 
+        访问 <a href="/">uihash 首页</a>
+      </p>
+      <p style="margin-top: 8px;">© 2026 uihash. 保留所有权利。</p>
+    </div>
+  </div>
+</body>
+</html>

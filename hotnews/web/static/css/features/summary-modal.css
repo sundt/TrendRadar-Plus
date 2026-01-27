@@ -859,3 +859,85 @@
         justify-content: center;
     }
 }
+
+
+/* ==========================================================================
+   Extension Hint (for blocked URLs)
+   ========================================================================== */
+
+.summary-extension-hint {
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.summary-extension-hint.installed {
+    background: rgba(16, 185, 129, 0.1);
+    color: #059669;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.summary-extension-hint.installed .hint-icon {
+    font-size: 16px;
+}
+
+.summary-extension-hint.not-installed {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px dashed rgba(59, 130, 246, 0.3);
+}
+
+.summary-extension-hint .hint-title {
+    color: #374151;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 12px;
+}
+
+.summary-extension-hint .hint-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.summary-extension-hint .hint-install-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.summary-extension-hint .hint-install-btn:hover {
+    background: #2563eb;
+    color: white;
+    text-decoration: none;
+}
+
+/* Adjust blocked actions layout when extension hint is present */
+.summary-blocked-actions {
+    flex-direction: column;
+    align-items: center;
+}
+
+@media (max-width: 640px) {
+    .summary-extension-hint {
+        margin-top: 12px;
+        padding: 10px 14px;
+    }
+    
+    .summary-extension-hint .hint-title {
+        font-size: 13px;
+    }
+}

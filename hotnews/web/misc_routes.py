@@ -5,10 +5,16 @@ from datetime import date
 
 import requests
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse, Response, PlainTextResponse
+from fastapi.responses import JSONResponse, Response, PlainTextResponse, RedirectResponse
 
 
 router = APIRouter()
+
+
+@router.get("/extension/install")
+async def extension_install_redirect():
+    """Redirect to extension installation guide page"""
+    return RedirectResponse(url="/static/extension-install.html", status_code=302)
 
 
 class UnicodeJSONResponse(Response):

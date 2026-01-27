@@ -16,6 +16,10 @@ let currentSourceName = null;
 let slowLoadingTimer = null;
 let hardTimeoutTimer = null;
 
+// Sidepanel ack state for extension communication
+let sidepanelAckReceived = false;
+let sidepanelTimeoutId = null;
+
 // Timeout before showing countdown hint (in ms)
 const SLOW_LOADING_TIMEOUT = 5000;
 // Timeout before auto-opening original article (in ms)
@@ -27,6 +31,66 @@ const HARD_TIMEOUT = 15000;
 let countdownTimer = null;
 let countdownSeconds = 5;
 let autoOpenTimer = null;
+
+// Listen for sidepanel ack from extension
+window.addEventListener('hotnews-summarizer-sidepanel-ack', () => {
+    sidepanelAckReceived = true;
+    if (sidepanelTimeoutId) {
+        clearTimeout(sidepanelTimeoutId);
+        sidepanelTimeoutId = null;
+    }
+});
+
+/**
+ * Detect if current device is mobile
+ * Prioritizes UA detection to avoid false positives when PC window is resized
+ */
+function isMobile() {
+    // Priority: UA detection
+    const uaIsMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (uaIsMobile) return true;
+    
+    // Fallback: touch + small screen (excludes laptops with touchscreen)
+    const hasTouchScreen = navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth <= 768;
+    
+    // Only consider mobile if both conditions are met
+    return hasTouchScreen && isSmallScreen;
+}
+
+/**
+ * Detect if hotnews-summarizer extension is installed
+ */
+function hasExtension() {
+    return document.documentElement.getAttribute('data-hotnews-summarizer') === 'installed';
+}
+
+/**
+ * Get extension version (optional, for compatibility checks)
+ */
+function getExtensionVersion() {
+    return document.documentElement.getAttribute('data-hotnews-summarizer-version') || null;
+}
+
+/**
+ * Open sidepanel via extension with timeout fallback
+ */
+function openSidepanel(url, title, newsId, sourceId, sourceName) {
+    sidepanelAckReceived = false;
+    
+    // Dispatch event to extension
+    window.dispatchEvent(new CustomEvent('hotnews-summarizer-open-sidepanel', {
+        detail: { url, title, newsId }
+    }));
+    
+    // Timeout fallback: if no ack within 500ms, fall back to modal
+    sidepanelTimeoutId = setTimeout(() => {
+        if (!sidepanelAckReceived) {
+            console.log('[Summary] Sidepanel timeout, fallback to modal');
+            openSummaryModal(newsId, title, url, sourceId, sourceName);
+        }
+    }, 500);
+}
 
 /**
  * Clear slow loading timer
@@ -453,6 +517,37 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 // URL is blocked - show modal with actions instead of auto-opening
                 console.log('[Summary] URL blocked, showing blocked UI:', url);
                 clearAllTimers();
+                
+                // Check if extension is installed (PC only)
+                const extensionInstalled = !isMobile() && hasExtension();
+                const extensionVersion = extensionInstalled ? getExtensionVersion() : null;
+                
+                // Build extension hint section
+                let extensionHint = '';
+                if (!isMobile()) {
+                    if (extensionInstalled) {
+                        // Extension installed: show auto-summary hint (shares login with website)
+                        extensionHint = `
+                            <div class="summary-extension-hint installed">
+                                <span class="hint-icon">✨</span>
+                                <span class="hint-text">打开后自动总结</span>
+                            </div>
+                        `;
+                    } else {
+                        // No extension: show install prompt
+                        extensionHint = `
+                            <div class="summary-extension-hint not-installed">
+                                <div class="hint-title">💡 安装浏览器插件，阅读时自动总结</div>
+                                <div class="hint-actions">
+                                    <a href="/extension/install" target="_blank" class="hint-install-btn">
+                                        📥 下载插件
+                                    </a>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                
                 body.innerHTML = `
                     <div class="summary-blocked">
                         <div class="summary-blocked-icon">🔒</div>
@@ -462,6 +557,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                             <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
                                 📖 阅读原文
                             </a>
+                            ${extensionHint}
                         </div>
                         <div class="summary-blocked-secondary">
                             <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
@@ -1139,10 +1235,13 @@ function updateNewsItemButton(newsId, hasSummary) {
 
 /**
  * Handle summary button click (called from news list)
+ * Always uses modal - extension detection is used for blocked URL hints
  */
 function handleSummaryClick(event, newsId, title, url, sourceId, sourceName) {
     event.preventDefault();
     event.stopPropagation();
+    
+    // Always use modal (extension hints are shown in blocked URL state)
     openSummaryModal(newsId, title, url, sourceId, sourceName);
 }
 
