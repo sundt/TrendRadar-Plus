@@ -30,6 +30,12 @@ async def wechat_mp_verify(token: str):
     return PlainTextResponse(content=token)
 
 
+@router.get("/googlee986168f72b86e7c.html")
+async def google_site_verify():
+    """Google Search Console 域名验证文件"""
+    return PlainTextResponse(content="google-site-verification: googlee986168f72b86e7c.html")
+
+
 @router.get("/api/nba-today")
 async def api_nba_today():
     today = date.today().strftime("%Y-%m-%d")
