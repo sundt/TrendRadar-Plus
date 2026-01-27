@@ -6324,6 +6324,7 @@ body.eye-protection-mode .article-tag-suffix.tag-layoff { background: #3d2020; c
     font-size: 10px;
     font-weight: 600;
     flex-shrink: 0;
+    margin-left: 6px;
 }
 
 .subscribe-badge-new {
@@ -6345,6 +6346,12 @@ body.eye-protection-mode .article-tag-suffix.tag-layoff { background: #3d2020; c
 @keyframes badge-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
+}
+
+.subscribe-item-date {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-left: 6px;
 }
 
 .subscribe-item-desc {

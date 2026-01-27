@@ -417,6 +417,10 @@ function renderTagItem(tag, isFollowed) {
     let badgeHtml = '';
     if (tag.badge === 'new') {
         badgeHtml = '<span class="subscribe-item-badge subscribe-badge-new">NEW</span>';
+        // Add first seen date after badge for new tags
+        if (tag.first_seen_date) {
+            badgeHtml += `<span class="subscribe-item-date">发现于${escapeHtml(tag.first_seen_date)}</span>`;
+        }
     } else if (tag.badge === 'hot') {
         badgeHtml = '<span class="subscribe-item-badge subscribe-badge-hot">🔥</span>';
     } else if (tag.badge === 'related') {
@@ -424,11 +428,10 @@ function renderTagItem(tag, isFollowed) {
     }
     
     return `
-        <div class="subscribe-item" data-id="${escapeHtml(tag.id)}" data-type="tag">
+        <div class="subscribe-item" data-id="${escapeHtml(tag.id)}" data-type="tag" ${tag.is_candidate ? 'data-candidate="true"' : ''}>
             <span class="subscribe-item-icon">${tag.icon || '🏷️'}</span>
             <div class="subscribe-item-info">
                 <span class="subscribe-item-name">${escapeHtml(tag.name)}${badgeHtml}</span>
-                ${tag.description ? `<span class="subscribe-item-desc">${escapeHtml(tag.description)}</span>` : ''}
             </div>
             <button class="subscribe-item-btn ${isFollowed ? 'followed' : ''}" data-action="${isFollowed ? 'unfollow' : 'follow'}">
                 ${isFollowed ? '已关注' : '+关注'}

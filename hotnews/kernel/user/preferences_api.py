@@ -393,32 +393,76 @@ async def get_recommended_tags(request: Request, limit: int = Query(10, ge=1, le
     except Exception:
         hot_tags = []
     
-    # 2. New tags: Recently promoted dynamic tags
+    # 2. New tags: High-quality candidates from AI discovery (show up to 20)
     try:
-        new_cur = online_conn.execute(
+        # Get high-quality candidates that haven't been promoted yet
+        # These are the "newest" discoveries from AI labeling
+        cand_cur = online_conn.execute(
             """
-            SELECT id, name, name_en, type, icon, color, created_at
-            FROM tags
-            WHERE is_dynamic = 1 AND lifecycle = 'active' AND created_at >= ?
-            ORDER BY created_at DESC
-            LIMIT 10
+            SELECT tag_id, name, name_en, type, NULL as icon, NULL as color, 
+                   first_seen_at, occurrence_count, avg_confidence
+            FROM tag_candidates
+            WHERE status = 'pending' 
+              AND occurrence_count >= 3
+              AND avg_confidence >= 0.8
+            ORDER BY first_seen_at DESC, occurrence_count DESC
+            LIMIT 40
             """,
-            (days_7_ago,)
         )
         new_tags = []
-        for row in new_cur.fetchall() or []:
+        seen_ids = set()
+        for row in cand_cur.fetchall() or []:
             tag_id = row[0]
             if tag_id not in followed and tag_id not in [t["id"] for t in hot_tags]:
-                days_old = (now - (row[6] or now)) // 86400
+                first_seen_ts = row[6] or now
+                # Format first seen date
+                from datetime import datetime
+                first_seen_date = datetime.fromtimestamp(first_seen_ts).strftime("%m-%d")
                 new_tags.append({
                     "id": tag_id, "name": row[1], "name_en": row[2],
-                    "type": row[3], "icon": row[4], "color": row[5],
+                    "type": row[3], "icon": row[4] or "🏷️", "color": row[5],
                     "is_dynamic": True,
+                    "is_candidate": True,
+                    "occurrence_count": row[7],
+                    "confidence": round(row[8], 2) if row[8] else None,
+                    "first_seen_at": first_seen_ts,
+                    "first_seen_date": first_seen_date,
                     "badge": "new",
-                    "reason": f"AI发现的新标签，{days_old}天前"
+                    "reason": f"首次发现: {first_seen_date}"
                 })
-                if len(new_tags) >= 5:
+                seen_ids.add(tag_id)
+                if len(new_tags) >= 20:
                     break
+        
+        # Also include recently promoted dynamic tags
+        if len(new_tags) < 20:
+            new_cur = online_conn.execute(
+                """
+                SELECT id, name, name_en, type, icon, color, created_at
+                FROM tags
+                WHERE is_dynamic = 1 AND lifecycle = 'active'
+                ORDER BY created_at DESC
+                LIMIT 20
+                """,
+            )
+            for row in new_cur.fetchall() or []:
+                tag_id = row[0]
+                if tag_id not in followed and tag_id not in seen_ids and tag_id not in [t["id"] for t in hot_tags]:
+                    created_ts = row[6] or now
+                    from datetime import datetime
+                    created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
+                    new_tags.append({
+                        "id": tag_id, "name": row[1], "name_en": row[2],
+                        "type": row[3], "icon": row[4], "color": row[5],
+                        "is_dynamic": True,
+                        "first_seen_at": created_ts,
+                        "first_seen_date": created_date,
+                        "badge": "new",
+                        "reason": f"首次发现: {created_date}"
+                    })
+                    seen_ids.add(tag_id)
+                    if len(new_tags) >= 20:
+                        break
     except Exception:
         new_tags = []
     
