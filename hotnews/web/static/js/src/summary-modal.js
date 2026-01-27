@@ -522,49 +522,115 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 const extensionInstalled = !isMobile() && hasExtension();
                 const extensionVersion = extensionInstalled ? getExtensionVersion() : null;
                 
-                // Build extension hint section
-                let extensionHint = '';
-                if (!isMobile()) {
-                    if (extensionInstalled) {
-                        // Extension installed: show auto-summary hint (shares login with website)
-                        extensionHint = `
-                            <div class="summary-extension-hint installed">
-                                <span class="hint-icon">✨</span>
-                                <span class="hint-text">打开后自动总结</span>
+                // Build content based on extension status
+                if (!isMobile() && !extensionInstalled) {
+                    // PC without extension: show prominent install guide
+                    body.innerHTML = `
+                        <div class="summary-blocked-v2">
+                            <div class="blocked-header">
+                                <div class="blocked-icon-badge">
+                                    <span class="icon-main">🔒</span>
+                                </div>
+                                <div class="blocked-title">该网站需要插件支持</div>
+                                <div class="blocked-subtitle">部分网站设置了访问保护，需要通过浏览器插件在原文页面进行总结</div>
                             </div>
-                        `;
-                    } else {
-                        // No extension: show install prompt
-                        extensionHint = `
-                            <div class="summary-extension-hint not-installed">
-                                <div class="hint-title">💡 安装浏览器插件，阅读时自动总结</div>
-                                <div class="hint-actions">
-                                    <a href="/extension/install" target="_blank" class="hint-install-btn">
-                                        📥 下载插件
-                                    </a>
+                            
+                            <div class="blocked-extension-promo">
+                                <div class="promo-header">
+                                    <span class="promo-badge">推荐</span>
+                                    <span class="promo-title">安装 uihash 总结助手</span>
+                                </div>
+                                <div class="promo-features">
+                                    <div class="promo-feature">
+                                        <span class="feature-icon">✨</span>
+                                        <span>打开原文自动弹出总结</span>
+                                    </div>
+                                    <div class="promo-feature">
+                                        <span class="feature-icon">🔄</span>
+                                        <span>与网站账号自动同步</span>
+                                    </div>
+                                    <div class="promo-feature">
+                                        <span class="feature-icon">💬</span>
+                                        <span>支持智能问答对话</span>
+                                    </div>
+                                </div>
+                                <a href="/extension/install" target="_blank" class="promo-install-btn">
+                                    <span class="btn-icon">📥</span>
+                                    <span class="btn-text">免费安装插件</span>
+                                    <span class="btn-arrow">→</span>
+                                </a>
+                                <div class="promo-browsers">
+                                    支持 Chrome / Edge / Arc / Brave
                                 </div>
                             </div>
-                        `;
-                    }
+                            
+                            <div class="blocked-divider">
+                                <span>或者</span>
+                            </div>
+                            
+                            <div class="blocked-fallback">
+                                <a href="${url}" target="_blank" rel="noopener noreferrer" class="fallback-link">
+                                    📖 直接阅读原文
+                                </a>
+                                <div class="fallback-actions">
+                                    <button class="fallback-btn" onclick="addCurrentToTodo()">📋 Todo</button>
+                                    <button class="fallback-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (!isMobile() && extensionInstalled) {
+                    // PC with extension: show simple prompt
+                    body.innerHTML = `
+                        <div class="summary-blocked-v2">
+                            <div class="blocked-header">
+                                <div class="blocked-icon-badge">
+                                    <span class="icon-main">🔒</span>
+                                </div>
+                                <div class="blocked-title">该网站需要在原文页面总结</div>
+                                <div class="blocked-subtitle">部分网站设置了访问保护，请打开原文后使用插件总结</div>
+                            </div>
+                            
+                            <div class="blocked-extension-ready">
+                                <div class="ready-badge">
+                                    <span class="ready-icon">✅</span>
+                                    <span class="ready-text">插件已就绪</span>
+                                </div>
+                                <a href="${url}${url.includes('?') ? '&' : '?'}hotnews_auto_summarize=1" target="_blank" rel="noopener noreferrer" class="ready-open-btn">
+                                    <span class="btn-icon">📖</span>
+                                    <span class="btn-text">打开原文并总结</span>
+                                    <span class="btn-arrow">→</span>
+                                </a>
+                                <div class="ready-hint">打开后会自动提示开始总结</div>
+                            </div>
+                            
+                            <div class="blocked-fallback" style="margin-top: 20px;">
+                                <div class="fallback-actions">
+                                    <button class="fallback-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                                    <button class="fallback-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Mobile: simple blocked message
+                    body.innerHTML = `
+                        <div class="summary-blocked">
+                            <div class="summary-blocked-icon">🔒</div>
+                            <div class="summary-blocked-title">该网站暂不支持 AI 总结</div>
+                            <div class="summary-blocked-text">该网站设置了访问保护，建议直接阅读原文</div>
+                            <div class="summary-blocked-actions">
+                                <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                                    📖 阅读原文
+                                </a>
+                            </div>
+                            <div class="summary-blocked-secondary">
+                                <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
+                                <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                            </div>
+                        </div>
+                    `;
                 }
-                
-                body.innerHTML = `
-                    <div class="summary-blocked">
-                        <div class="summary-blocked-icon">🔒</div>
-                        <div class="summary-blocked-title">该网站暂不支持 AI 总结</div>
-                        <div class="summary-blocked-text">该网站设置了访问保护，建议直接阅读原文</div>
-                        <div class="summary-blocked-actions">
-                            <a href="${url}${url.includes('?') ? '&' : '?'}hotnews_auto_summarize=1" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
-                                📖 阅读原文
-                            </a>
-                            ${extensionHint}
-                        </div>
-                        <div class="summary-blocked-secondary">
-                            <button class="summary-action-btn" onclick="addCurrentToTodo()">📋 加入 Todo</button>
-                            <button class="summary-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
-                        </div>
-                    </div>
-                `;
                 footer.style.display = 'none';
                 return;
             } else if (checkData.warning) {
