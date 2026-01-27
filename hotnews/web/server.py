@@ -2331,6 +2331,16 @@ def _redirect_to_root(request: Request) -> RedirectResponse:
     return RedirectResponse(url=url, status_code=307)
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy():
+    """隐私政策页面"""
+    from pathlib import Path
+    privacy_file = Path(__file__).parent / "static" / "privacy.html"
+    if privacy_file.exists():
+        return HTMLResponse(content=privacy_file.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Privacy Policy</h1><p>Coming soon...</p>")
+
+
 @app.get("/index.html", response_class=HTMLResponse)
 async def index_html(request: Request):
     return _redirect_to_root(request)
