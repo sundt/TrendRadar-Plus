@@ -914,31 +914,49 @@ async def get_discovery_news(
     result = []
     
     def _is_similar_tag(new_tag: dict, existing_tags: list) -> bool:
-        """Check if new tag is similar to any existing tag (should be skipped)."""
+        """Check if new tag is similar to any existing tag (should be skipped).
+        
+        Strategy: Keep the tag with higher occurrence_count (more popular).
+        If new_tag has higher count, we should NOT skip it (return False),
+        and we should remove the existing similar tag.
+        """
         new_name = new_tag.get("name", "")
         new_id = new_tag.get("id", "")
+        new_count = new_tag.get("occurrence_count", 0)
         
-        for existing in existing_tags:
+        for i, existing in enumerate(existing_tags):
             existing_name = existing.get("name", "")
             existing_id = existing.get("id", "")
+            existing_count = existing.get("occurrence_count", 0)
             
-            # Rule 1: Name contains relationship (skip shorter one)
+            is_similar = False
+            
+            # Rule 1: Name contains relationship
             if new_name and existing_name:
-                if new_name in existing_name:
-                    return True  # Skip new_tag, keep existing (longer)
-                # If existing is shorter, we'll keep new_tag
+                if new_name in existing_name or existing_name in new_name:
+                    is_similar = True
             
             # Rule 2: ID contains relationship
-            if new_id and existing_id:
-                if new_id in existing_id:
-                    return True
+            if not is_similar and new_id and existing_id:
+                if new_id in existing_id or existing_id in new_id:
+                    is_similar = True
             
             # Rule 3: Same base name after removing version numbers
-            if new_name and existing_name:
+            if not is_similar and new_name and existing_name:
                 import re
                 new_base = re.sub(r'\s*[vV]?\d+(\.\d+)*$', '', new_name).strip()
                 existing_base = re.sub(r'\s*[vV]?\d+(\.\d+)*$', '', existing_name).strip()
                 if new_base and existing_base and new_base == existing_base:
+                    is_similar = True
+            
+            if is_similar:
+                # Keep the one with higher occurrence_count
+                if new_count > existing_count:
+                    # New tag is more popular, remove existing and keep new
+                    existing_tags.pop(i)
+                    return False  # Don't skip new_tag
+                else:
+                    # Existing is more popular (or equal), skip new_tag
                     return True
         
         return False
