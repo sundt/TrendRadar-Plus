@@ -498,6 +498,7 @@ function openCategoryModal(cat = null) {
   const nameInput = document.getElementById('cat-name');
   const iconInput = document.getElementById('cat-icon');
   const orderInput = document.getElementById('cat-order');
+  const deleteBtn = document.getElementById('cat-delete-btn');
 
   if (cat) {
     title.innerText = "编辑栏目";
@@ -506,6 +507,8 @@ function openCategoryModal(cat = null) {
     nameInput.value = cat.name;
     iconInput.value = cat.icon;
     orderInput.value = cat.sort_order;
+    // Show delete button for existing categories
+    if (deleteBtn) deleteBtn.style.display = 'inline-block';
   } else {
     title.innerText = "新建栏目";
     idInput.value = "";
@@ -513,12 +516,41 @@ function openCategoryModal(cat = null) {
     nameInput.value = "";
     iconInput.value = "📰";
     orderInput.value = 0;
+    // Hide delete button for new categories
+    if (deleteBtn) deleteBtn.style.display = 'none';
   }
   modal.style.display = "block";
 }
 
 function closeCategoryModal() {
   document.getElementById('category-modal').style.display = "none";
+}
+
+async function deleteCategory() {
+  const id = document.getElementById('cat-id').value.trim();
+  if (!id) {
+    showToast("栏目ID不能为空", "error");
+    return;
+  }
+
+  // Get category name for confirmation
+  const cat = unifiedCategories.find(c => c.id === id);
+  const catName = cat ? `${cat.icon} ${cat.name}` : id;
+
+  if (!confirm(`确定要删除栏目「${catName}」吗？\n\n注意：删除后该栏目下的平台不会被删除，只是不再显示在该栏目中。`)) {
+    return;
+  }
+
+  try {
+    await fetchWithAuth(`/api/platform/categories/${id}`, {
+      method: 'DELETE'
+    });
+    showToast("删除成功");
+    closeCategoryModal();
+    loadCategories();
+  } catch (e) {
+    showToast("删除失败: " + e.message, "error");
+  }
 }
 
 async function saveCategory() {

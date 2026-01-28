@@ -161,6 +161,53 @@ export const settings = {
 
         // Get server's category order (already sorted by sort_order from backend)
         const serverOrder = Object.keys(_defaultCategories);
+        const serverCategorySet = new Set(serverOrder);
+        const customCategoryIds = new Set((merged.customCategories || []).map(c => c.id));
+
+        // Clean up deleted categories from user config
+        let configChanged = false;
+        
+        // Remove deleted categories from categoryOrder
+        const originalOrderLength = merged.categoryOrder.length;
+        merged.categoryOrder = merged.categoryOrder.filter(catId => {
+            // Keep if it's a server category, custom category, or special category (my-tags)
+            return serverCategorySet.has(catId) || customCategoryIds.has(catId) || catId === 'my-tags';
+        });
+        if (merged.categoryOrder.length !== originalOrderLength) configChanged = true;
+
+        // Remove deleted categories from hiddenDefaultCategories
+        const originalHiddenLength = merged.hiddenDefaultCategories.length;
+        merged.hiddenDefaultCategories = merged.hiddenDefaultCategories.filter(catId => serverCategorySet.has(catId));
+        if (merged.hiddenDefaultCategories.length !== originalHiddenLength) configChanged = true;
+
+        // Remove deleted categories from platformOrder
+        const platformOrderKeys = Object.keys(merged.platformOrder);
+        platformOrderKeys.forEach(catId => {
+            if (!serverCategorySet.has(catId) && !customCategoryIds.has(catId) && catId !== 'my-tags') {
+                delete merged.platformOrder[catId];
+                configChanged = true;
+            }
+        });
+
+        // Remove deleted categories from categoryFilters
+        if (merged.categoryFilters) {
+            const filterKeys = Object.keys(merged.categoryFilters);
+            filterKeys.forEach(catId => {
+                if (!serverCategorySet.has(catId) && !customCategoryIds.has(catId) && catId !== 'my-tags') {
+                    delete merged.categoryFilters[catId];
+                    configChanged = true;
+                }
+            });
+        }
+
+        // Save cleaned config if changed
+        if (configChanged && userConfig) {
+            userConfig.categoryOrder = merged.categoryOrder;
+            userConfig.hiddenDefaultCategories = merged.hiddenDefaultCategories;
+            userConfig.platformOrder = merged.platformOrder;
+            userConfig.categoryFilters = merged.categoryFilters;
+            this.saveCategoryConfig(userConfig);
+        }
 
         // Insert missing categories at their proper position based on server order
         serverOrder.forEach((catId, serverIndex) => {
