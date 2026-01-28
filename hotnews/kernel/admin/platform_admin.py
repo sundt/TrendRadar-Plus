@@ -76,7 +76,7 @@ async def list_categories(request: Request): # Public read access for viewer
     """List all platform categories."""
     conn = _get_conn(request)
     try:
-        # 1. Fetch existing
+        # 1. Fetch all existing categories (including disabled/deleted ones)
         cur = conn.execute(
             """SELECT id, name, icon, sort_order, enabled, created_at, updated_at 
                FROM platform_categories"""
@@ -84,12 +84,28 @@ async def list_categories(request: Request): # Public read access for viewer
         existing_rows = cur.fetchall()
         existing_ids = {r[0] for r in existing_rows}
         
-        # 2. Check for missing defaults and insert
+        # 2. Build set of deleted category IDs (soft-deleted categories have id like "deleted_sports_xxx")
+        # Extract original category id from deleted entries
+        deleted_original_ids = set()
+        for row_id in existing_ids:
+            if row_id.startswith("deleted_"):
+                # Format: deleted_{original_id}_{timestamp}
+                parts = row_id.split("_", 2)  # Split into at most 3 parts
+                if len(parts) >= 2:
+                    # The original id is between "deleted_" and the last "_timestamp"
+                    # e.g., "deleted_sports_1234567890" -> "sports"
+                    original_id = "_".join(parts[1:-1]) if len(parts) > 2 else parts[1]
+                    # Handle case where original_id might contain underscores
+                    # Try to match against known PLATFORM_CATEGORIES
+                    for known_id in PLATFORM_CATEGORIES.keys():
+                        if row_id.startswith(f"deleted_{known_id}_"):
+                            deleted_original_ids.add(known_id)
+                            break
+        
+        # 3. Check for missing defaults and insert (but skip deleted ones)
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         added_new = False
         
-        # Use a default order map if possible, otherwise just append
-        # We can iterate PLATFORM_CATEGORIES
         default_order_map = {
             "explore": 0,
             "knowledge": 10,
@@ -102,28 +118,32 @@ async def list_categories(request: Request): # Public read access for viewer
         }
 
         for cat_id, cat_def in PLATFORM_CATEGORIES.items():
-            if cat_id not in existing_ids:
-                # Insert missing
-                name = cat_def["name"]
-                icon = cat_def.get("icon", "📰")
-                order = default_order_map.get(cat_id, 99)
+            # Skip if already exists OR if it was deleted
+            if cat_id in existing_ids or cat_id in deleted_original_ids:
+                continue
                 
-                try:
-                    conn.execute(
-                        "INSERT INTO platform_categories (id, name, icon, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
-                        (cat_id, name, icon, order, now, now)
-                    )
-                    added_new = True
-                except Exception:
-                    pass
+            # Insert missing (not deleted) category
+            name = cat_def["name"]
+            icon = cat_def.get("icon", "📰")
+            order = default_order_map.get(cat_id, 99)
+            
+            try:
+                conn.execute(
+                    "INSERT INTO platform_categories (id, name, icon, sort_order, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)",
+                    (cat_id, name, icon, order, now, now)
+                )
+                added_new = True
+            except Exception:
+                pass
 
         if added_new:
             conn.commit()
 
-        # 3. Re-fetch sorted
+        # 4. Re-fetch sorted - only return enabled categories (not deleted ones)
         cur = conn.execute(
             """SELECT id, name, icon, sort_order, enabled, created_at, updated_at 
                FROM platform_categories 
+               WHERE enabled = 1
                ORDER BY sort_order ASC, created_at ASC"""
         )
         rows = cur.fetchall()
@@ -219,13 +239,28 @@ async def update_category(category_id: str, category: PlatformCategory, request:
 
 @router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, request: Request, _=Depends(_require_admin)):
-    """Delete a category."""
+    """Delete a category (soft delete by setting enabled=0 and adding deleted_ prefix)."""
     conn = _get_conn(request)
     try:
-        conn.execute("DELETE FROM platform_categories WHERE id = ?", (category_id,))
+        # Check if category exists
+        cur = conn.execute("SELECT id FROM platform_categories WHERE id = ?", (category_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail=f"Category '{category_id}' not found")
+        
+        # Soft delete: mark as disabled and rename to prevent auto-sync from re-enabling
+        # The auto-sync in list_categories checks by id, so we rename to avoid collision
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        deleted_id = f"deleted_{category_id}_{int(datetime.now().timestamp())}"
+        
+        conn.execute(
+            "UPDATE platform_categories SET id = ?, enabled = 0, updated_at = ? WHERE id = ?",
+            (deleted_id, now, category_id)
+        )
         conn.commit()
         _trigger_viewer_reload(request)
-        return {"success": True}
+        return {"success": True, "message": f"Category '{category_id}' deleted"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

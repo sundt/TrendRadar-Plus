@@ -542,9 +542,15 @@ async function deleteCategory() {
   }
 
   try {
-    await fetchWithAuth(`/api/platform/categories/${id}`, {
+    const res = await fetchWithAuth(`/api/platform/categories/${id}`, {
       method: 'DELETE'
     });
+    
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+    }
+    
     showToast("删除成功");
     closeCategoryModal();
     loadCategories();

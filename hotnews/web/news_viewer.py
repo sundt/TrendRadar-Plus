@@ -190,8 +190,21 @@ class NewsViewerService:
             # 1. Load Categories
             categories = {}
             name_to_id = {}
+            deleted_category_ids = set()  # Track soft-deleted categories
             
             try:
+                # First, get all deleted category IDs (format: deleted_{original_id}_{timestamp})
+                cur = conn.execute("SELECT id FROM platform_categories WHERE enabled=0 AND id LIKE 'deleted_%'")
+                for r in cur.fetchall():
+                    deleted_id = r[0]
+                    # Extract original category id from deleted entries
+                    # Format: deleted_{original_id}_{timestamp}
+                    for known_id in PLATFORM_CATEGORIES.keys():
+                        if deleted_id.startswith(f"deleted_{known_id}_"):
+                            deleted_category_ids.add(known_id)
+                            break
+                
+                # Now load enabled categories
                 cur = conn.execute("SELECT id, name, icon, sort_order FROM platform_categories WHERE enabled=1 ORDER BY sort_order ASC")
                 rows = cur.fetchall()
                 if rows:
@@ -210,7 +223,11 @@ class NewsViewerService:
             
             # Fallback to defaults (filtered by what might be in DB if partial)
             # Fix: Always ensure default categories exist even if DB has some other categories
+            # BUT skip categories that have been soft-deleted
             for k, v in PLATFORM_CATEGORIES.items():
+                if k in deleted_category_ids:
+                    # Skip soft-deleted categories
+                    continue
                 if k not in categories:
                     categories[k] = {**v, "platforms": [], "_sort_order": 999}
                     if v["name"] not in name_to_id:
