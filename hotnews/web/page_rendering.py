@@ -72,6 +72,46 @@ def _inject_discovery_category(data: Dict[str, Any]) -> Dict[str, Any]:
         return data
 
 
+def _inject_featured_mps_category(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Inject 'featured-mps' category after 'knowledge' (每日AI早报)."""
+    try:
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(cats, dict):
+            return data
+        if "featured-mps" in cats:
+            return data
+
+        featured_mps = {
+            "id": "featured-mps",
+            "name": "精选公众号",
+            "icon": "📱",
+            "platforms": {},
+            "news_count": 0,
+            "filtered_count": 0,
+            "is_new": False,
+            "requires_auth": False,
+            "is_dynamic": True,
+        }
+        
+        # Insert after knowledge (每日AI早报)
+        new_cats = {}
+        inserted = False
+        for k, v in cats.items():
+            new_cats[k] = v
+            if k == "knowledge":
+                new_cats["featured-mps"] = featured_mps
+                inserted = True
+        
+        # If knowledge not found, insert at the end
+        if not inserted:
+            new_cats["featured-mps"] = featured_mps
+        
+        data["categories"] = new_cats
+        return data
+    except Exception:
+        return data
+
+
 def _inject_source_subscription_category(data: Dict[str, Any]) -> Dict[str, Any]:
     """Inject 'source-subscription' category tab for subscribed sources."""
     try:
@@ -414,6 +454,7 @@ async def render_viewer_page(
         data = _inject_explore_category(data)
         data = _inject_my_tags_category(data)
         data = _inject_discovery_category(data)
+        data = _inject_featured_mps_category(data)
         # Removed: source-subscription tab is now integrated into user settings page
         # data = _inject_source_subscription_category(data)
 

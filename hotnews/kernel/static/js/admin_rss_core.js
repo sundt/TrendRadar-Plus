@@ -74,6 +74,7 @@ function initTabs() {
       if (targetPanel === 'newsnow' && typeof loadNewsNowPlatforms === 'function') loadNewsNowPlatforms();
       if (targetPanel === 'unified' && typeof loadUnifiedData === 'function') loadUnifiedData();
       if (targetPanel === 'settings' && typeof initSettingsTab === 'function') initSettingsTab();
+      if (targetPanel === 'featured-mps' && typeof loadFeaturedMpList === 'function') loadFeaturedMpList();
 
       window.location.hash = targetPanel;
     });

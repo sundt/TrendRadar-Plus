@@ -7,6 +7,88 @@
   <meta name="admin-token" content="{{ token }}" />
   <title>RSS Source Admin</title>
   <link rel="stylesheet" href="/static_kernel/css/admin_rss_sources.css" />
+  <style>
+    /* Featured MP Styles */
+    .fmp-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #f3f4f6;
+    }
+    .fmp-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .fmp-name {
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .fmp-signature {
+      font-size: 12px;
+      color: #6b7280;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .fmp-status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .fmp-status-enabled {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .fmp-status-disabled {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .fmp-search-result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .fmp-search-result-item:hover {
+      background: #f9fafb;
+      border-color: #d1d5db;
+    }
+    .fmp-search-result-item.is-featured {
+      background: #fef3c7;
+      border-color: #fcd34d;
+    }
+    .fmp-import-preview-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .fmp-import-preview-item:last-child {
+      border-bottom: none;
+    }
+    .fmp-import-status {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .fmp-import-status-found { background: #d1fae5; color: #065f46; }
+    .fmp-import-status-exists { background: #fef3c7; color: #92400e; }
+    .fmp-import-status-conflict { background: #fef3c7; color: #92400e; }
+    .fmp-import-status-not_found { background: #fee2e2; color: #991b1b; }
+    .fmp-import-status-error { background: #fee2e2; color: #991b1b; }
+    .fmp-import-status-duplicate { background: #e5e7eb; color: #4b5563; }
+  </style>
 </head>
 
 <body>
@@ -105,6 +187,7 @@
       <button data-tab="usage">📊 使用统计</button>
       <button data-tab="user-stats">👥 用户统计</button>
       <button data-tab="tag-candidates">🏷️ 标签发现</button>
+      <button data-tab="featured-mps">📱 精选公众号</button>
     </div>
 
 
@@ -1528,6 +1611,163 @@
       </div>
     </div>
 
+    <!-- Tab Panel: Featured WeChat MPs (精选公众号) -->
+    <div class="tab-panel" data-panel="featured-mps">
+      <h2>精选公众号管理</h2>
+      
+      <!-- Action Buttons -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="row" style="gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="openFeaturedMpAddModal()">➕ 添加公众号</button>
+          <button class="btn" onclick="openFeaturedMpImportModal()">📥 批量导入</button>
+          <button class="btn" onclick="downloadFeaturedMpTemplate()">📄 下载模板</button>
+          <button class="btn" onclick="exportFeaturedMpList()">📤 导出列表</button>
+          <button class="btn btn-danger" onclick="batchDeleteFeaturedMps()">🗑️ 批量删除</button>
+          <div style="flex: 1;"></div>
+          <span id="fmp-selection-info" style="color: #6b7280; font-size: 14px; align-self: center;">已选: 0</span>
+          <button class="btn btn-primary" onclick="manualFetchAllFeaturedMps()">🔄 手动抓取全部</button>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
+          <select id="fmp-filter-category" onchange="loadFeaturedMpList()" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+            <option value="">所有分类</option>
+            <option value="tech">科技</option>
+            <option value="finance">财经</option>
+            <option value="news">新闻</option>
+            <option value="general">综合</option>
+          </select>
+          <select id="fmp-filter-status" onchange="loadFeaturedMpList()" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+            <option value="">所有状态</option>
+            <option value="enabled">已启用</option>
+            <option value="disabled">已禁用</option>
+          </select>
+          <div style="flex: 1;"></div>
+          <span id="fmp-total-count" style="color: #6b7280; font-size: 14px;">共 0 个公众号</span>
+        </div>
+      </div>
+
+      <!-- MP List -->
+      <div class="card">
+        <div class="table-scroll">
+          <table id="fmp-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;"><input type="checkbox" id="fmp-select-all" onclick="toggleFeaturedMpSelectAll()"></th>
+                <th style="width: 250px;">公众号</th>
+                <th style="width: 100px;">分类</th>
+                <th style="width: 80px;">状态</th>
+                <th style="width: 80px;">排序</th>
+                <th style="width: 120px;">最后抓取</th>
+                <th style="width: 150px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="fmp-tbody">
+              <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">点击刷新加载数据...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Featured MP Add/Search Modal -->
+    <div id="fmp-add-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="width: 500px; max-width: 90%;">
+        <span class="close" onclick="closeFeaturedMpAddModal()">&times;</span>
+        <h2>添加精选公众号</h2>
+        <div class="form-group">
+          <label>搜索公众号</label>
+          <div class="row" style="gap: 8px;">
+            <input type="text" id="fmp-search-keyword" placeholder="输入公众号名称" style="flex: 1;" onkeydown="if(event.key==='Enter')searchFeaturedMp()">
+            <button class="btn btn-primary" onclick="searchFeaturedMp()" id="fmp-search-btn">搜索</button>
+          </div>
+          <small class="muted">搜索间隔需 ≥3 秒</small>
+        </div>
+        <div id="fmp-search-results" style="max-height: 300px; overflow-y: auto; margin-top: 16px;"></div>
+      </div>
+    </div>
+
+    <!-- Featured MP Edit Modal -->
+    <div id="fmp-edit-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="width: 400px;">
+        <span class="close" onclick="closeFeaturedMpEditModal()">&times;</span>
+        <h2>编辑公众号</h2>
+        <input type="hidden" id="fmp-edit-fakeid">
+        <div class="form-group">
+          <label>公众号名称</label>
+          <input type="text" id="fmp-edit-nickname" disabled style="background: #f3f4f6;">
+        </div>
+        <div class="form-group">
+          <label>分类</label>
+          <select id="fmp-edit-category" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+            <option value="tech">科技</option>
+            <option value="finance">财经</option>
+            <option value="news">新闻</option>
+            <option value="general">综合</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>排序权重 (数字越小越靠前)</label>
+          <input type="number" id="fmp-edit-sort-order" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label><input type="checkbox" id="fmp-edit-enabled" checked> 启用</label>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button class="btn btn-primary" onclick="saveFeaturedMpEdit()">保存</button>
+          <button class="btn btn-danger" onclick="confirmDeleteFeaturedMp()">删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Featured MP Import Modal -->
+    <div id="fmp-import-modal" class="modal" style="display: none;">
+      <div class="modal-content" style="width: 600px; max-width: 90%;">
+        <span class="close" onclick="closeFeaturedMpImportModal()">&times;</span>
+        <h2>📥 批量导入公众号</h2>
+        
+        <!-- Step 1: Upload -->
+        <div id="fmp-import-step-1">
+          <div class="form-group">
+            <label>上传 CSV 文件或粘贴内容</label>
+            <input type="file" id="fmp-import-file" accept=".csv,.txt" onchange="handleFeaturedMpFileSelect()" style="margin-bottom: 8px;">
+            <textarea id="fmp-import-text" placeholder="或直接粘贴内容，每行一个公众号名称&#10;格式: 公众号名称,分类&#10;例如:&#10;36氪,tech&#10;虎嗅,tech" style="width: 100%; height: 150px; font-family: monospace;"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" onclick="previewFeaturedMpImport()">预览</button>
+            <button class="btn" onclick="downloadFeaturedMpTemplate()">下载模板</button>
+          </div>
+        </div>
+
+        <!-- Step 2: Preview -->
+        <div id="fmp-import-step-2" style="display: none;">
+          <div id="fmp-import-progress" style="margin-bottom: 16px; display: none;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>正在搜索匹配...</span>
+              <span id="fmp-progress-text">0/0</span>
+            </div>
+            <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+              <div id="fmp-progress-fill" style="height: 100%; background: #4f46e5; transition: width 0.3s; width: 0%;"></div>
+            </div>
+          </div>
+          <div id="fmp-import-summary" style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;"></div>
+          <div id="fmp-import-preview-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px;"></div>
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button class="btn" onclick="backToFeaturedMpStep1()">返回</button>
+            <button class="btn btn-primary" onclick="confirmFeaturedMpImport()" id="fmp-confirm-import-btn">确认导入</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Result -->
+        <div id="fmp-import-step-3" style="display: none;">
+          <div id="fmp-import-result" style="padding: 20px; text-align: center;"></div>
+          <button class="btn btn-primary" onclick="closeFeaturedMpImportModal()" style="width: 100%;">完成</button>
+        </div>
+      </div>
+    </div>
+
     <!-- RSS Source Edit Modal -->
     <div id="rss-edit-modal" class="modal-overlay"
       style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
@@ -1862,6 +2102,8 @@
     <script src="/static_kernel/js/admin_rss_rules.js">
     </script>
     <script src="/static_kernel/js/admin_rss_sources.js?v=20260118">
+    </script>
+    <script src="/static_kernel/js/admin_featured_mps.js?v=20260128">
     </script>
     <script>
       // Logout handler

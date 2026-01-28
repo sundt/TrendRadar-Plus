@@ -71,6 +71,8 @@ _todo_router = None
 _tag_candidate_admin_router = None
 _user_stats_admin_router = None
 _wechat_admin_router = None
+_featured_mp_admin_router = None
+_featured_mp_page_router = None
 _payment_router = None
 _subscription_router = None
 _wechat_mp_callback_router = None
@@ -140,6 +142,10 @@ try:
     
     from hotnews.kernel.admin import wechat_admin
     _wechat_admin_router = wechat_admin.router
+    
+    from hotnews.kernel.admin import featured_mp_admin
+    _featured_mp_admin_router = featured_mp_admin.router
+    _featured_mp_page_router = featured_mp_admin.page_router
     
     from hotnews.kernel.admin import tag_candidate_admin
     _tag_candidate_admin_router = tag_candidate_admin.router
@@ -505,6 +511,8 @@ if _todo_router: app.include_router(_todo_router)
 if _payment_router: app.include_router(_payment_router)
 if _subscription_router: app.include_router(_subscription_router)
 if _wechat_admin_router: app.include_router(_wechat_admin_router)
+if _featured_mp_admin_router: app.include_router(_featured_mp_admin_router)
+if _featured_mp_page_router: app.include_router(_featured_mp_page_router)
 if _tag_candidate_admin_router: 
     app.include_router(_tag_candidate_admin_router)
     from hotnews.kernel.admin.tag_candidate_admin import evolution_router

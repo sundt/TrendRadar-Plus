@@ -33,6 +33,7 @@ import './click-tracker.js';
 import './auth.js';
 import './my-tags.js';
 import './discovery.js';
+import './featured-mps.js';
 import './source-subscription.js';
 import './login-modal.js';
 import './summary-modal.js';

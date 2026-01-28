@@ -304,7 +304,23 @@ input[type=text] {
   transition: all 0.2s;
 }
 
-.tabs button:hover {
+.tabs a {
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  white-space: nowrap;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.tabs button:hover,
+.tabs a:hover {
   color: #2563eb;
   background: #eff6ff;
 }

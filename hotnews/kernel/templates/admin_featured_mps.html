@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="admin-token" content="{{ token }}" />
+  <title>精选公众号管理</title>
+  <link rel="stylesheet" href="/static_kernel/css/admin_rss_sources.css" />
+  <style>
+    .mp-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #f3f4f6;
+    }
+    .mp-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .mp-name {
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .mp-signature {
+      font-size: 12px;
+      color: #6b7280;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-enabled {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status-disabled {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .search-result-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .search-result-item:hover {
+      background: #f9fafb;
+      border-color: #d1d5db;
+    }
+    .search-result-item.is-featured {
+      background: #fef3c7;
+      border-color: #fcd34d;
+    }
+    .import-preview-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .import-preview-item:last-child {
+      border-bottom: none;
+    }
+    .import-status {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .import-status-found { background: #d1fae5; color: #065f46; }
+    .import-status-exists { background: #fef3c7; color: #92400e; }
+    .import-status-not_found { background: #fee2e2; color: #991b1b; }
+    .import-status-error { background: #fee2e2; color: #991b1b; }
+    .import-status-duplicate { background: #e5e7eb; color: #4b5563; }
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: #4f46e5;
+      transition: width 0.3s;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .back-link:hover {
+      color: #4f46e5;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <div class="wrap">
+    <a href="/admin/rss-sources?token={{ token }}" class="back-link">← 返回 RSS 管理</a>
+    
+    <div class="admin-header">
+      <h1>📱 精选公众号管理</h1>
+      <button class="btn-logout" onclick="handleLogout()" title="退出登录">🚪 退出</button>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="row" style="gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-primary" onclick="openAddModal()">➕ 添加公众号</button>
+        <button class="btn" onclick="openImportModal()">📥 批量导入</button>
+        <button class="btn" onclick="downloadTemplate()">📄 下载模板</button>
+        <button class="btn" onclick="exportList()">📤 导出列表</button>
+        <div style="flex: 1;"></div>
+        <button class="btn btn-primary" onclick="manualFetchAll()">🔄 手动抓取全部</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
+        <select id="filter-category" onchange="loadList()" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+          <option value="">所有分类</option>
+          <option value="tech">科技</option>
+          <option value="finance">财经</option>
+          <option value="news">新闻</option>
+          <option value="general">综合</option>
+        </select>
+        <select id="filter-status" onchange="loadList()" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+          <option value="">所有状态</option>
+          <option value="enabled">已启用</option>
+          <option value="disabled">已禁用</option>
+        </select>
+        <div style="flex: 1;"></div>
+        <span id="total-count" style="color: #6b7280; font-size: 14px;">共 0 个公众号</span>
+      </div>
+    </div>
+
+    <!-- MP List -->
+    <div class="card">
+      <div class="table-scroll">
+        <table id="mp-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll()"></th>
+              <th style="width: 250px;">公众号</th>
+              <th style="width: 100px;">分类</th>
+              <th style="width: 80px;">状态</th>
+              <th style="width: 80px;">排序</th>
+              <th style="width: 120px;">最后抓取</th>
+              <th style="width: 150px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="mp-tbody">
+            <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Search Modal -->
+  <div id="add-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="width: 500px; max-width: 90%;">
+      <span class="close" onclick="closeAddModal()">&times;</span>
+      <h2>添加精选公众号</h2>
+      <div class="form-group">
+        <label>搜索公众号</label>
+        <div class="row" style="gap: 8px;">
+          <input type="text" id="search-keyword" placeholder="输入公众号名称" style="flex: 1;" onkeydown="if(event.key==='Enter')searchMP()">
+          <button class="btn btn-primary" onclick="searchMP()" id="search-btn">搜索</button>
+        </div>
+        <small class="muted">搜索间隔需 ≥3 秒</small>
+      </div>
+      <div id="search-results" style="max-height: 300px; overflow-y: auto; margin-top: 16px;"></div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="edit-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="width: 400px;">
+      <span class="close" onclick="closeEditModal()">&times;</span>
+      <h2>编辑公众号</h2>
+      <input type="hidden" id="edit-fakeid">
+      <div class="form-group">
+        <label>公众号名称</label>
+        <input type="text" id="edit-nickname" disabled style="background: #f3f4f6;">
+      </div>
+      <div class="form-group">
+        <label>分类</label>
+        <select id="edit-category" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+          <option value="tech">科技</option>
+          <option value="finance">财经</option>
+          <option value="news">新闻</option>
+          <option value="general">综合</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>排序权重 (数字越小越靠前)</label>
+        <input type="number" id="edit-sort-order" value="0" min="0">
+      </div>
+      <div class="form-group">
+        <label><input type="checkbox" id="edit-enabled" checked> 启用</label>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+        <button class="btn btn-danger" onclick="confirmDelete()">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="import-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="width: 600px; max-width: 90%;">
+      <span class="close" onclick="closeImportModal()">&times;</span>
+      <h2>📥 批量导入公众号</h2>
+      
+      <!-- Step 1: Upload -->
+      <div id="import-step-1">
+        <div class="form-group">
+          <label>上传 CSV 文件或粘贴内容</label>
+          <input type="file" id="import-file" accept=".csv,.txt" onchange="handleFileSelect()" style="margin-bottom: 8px;">
+          <textarea id="import-text" placeholder="或直接粘贴内容，每行一个公众号名称&#10;格式: 公众号名称,分类&#10;例如:&#10;36氪,tech&#10;虎嗅,tech" style="width: 100%; height: 150px; font-family: monospace;"></textarea>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary" onclick="previewImport()">预览</button>
+          <button class="btn" onclick="downloadTemplate()">下载模板</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Preview -->
+      <div id="import-step-2" style="display: none;">
+        <div id="import-progress" style="margin-bottom: 16px; display: none;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span>正在搜索匹配...</span>
+            <span id="progress-text">0/0</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="progress-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+        <div id="import-summary" style="margin-bottom: 16px; padding: 12px; background: #f9fafb; border-radius: 8px;"></div>
+        <div id="import-preview-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 8px;"></div>
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+          <button class="btn" onclick="backToStep1()">返回</button>
+          <button class="btn btn-primary" onclick="confirmImport()" id="confirm-import-btn">确认导入</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Result -->
+      <div id="import-step-3" style="display: none;">
+        <div id="import-result" style="padding: 20px; text-align: center;"></div>
+        <button class="btn btn-primary" onclick="closeImportModal()" style="width: 100%;">完成</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static_kernel/js/admin_featured_mps.js"></script>
+</body>
+</html>

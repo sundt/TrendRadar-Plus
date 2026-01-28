@@ -350,6 +350,29 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_dedup ON wechat_mp_articles(dedup_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_publish ON wechat_mp_articles(publish_time DESC)")
 
+    # ========== Featured WeChat MPs (精选公众号) ==========
+    # 管理员精选的公众号列表
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS featured_wechat_mps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fakeid TEXT NOT NULL UNIQUE,
+            nickname TEXT NOT NULL,
+            round_head_img TEXT DEFAULT '',
+            signature TEXT DEFAULT '',
+            category TEXT DEFAULT 'general',
+            sort_order INTEGER DEFAULT 0,
+            enabled INTEGER DEFAULT 1,
+            article_count INTEGER DEFAULT 50,
+            last_fetch_at INTEGER DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_featured_mps_enabled ON featured_wechat_mps(enabled, sort_order)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_featured_mps_category ON featured_wechat_mps(category, enabled)")
+
     # ========== WeChat MP Stats (智能调度统计) ==========
     # 公众号抓取统计，用于智能调度
     conn.execute(
