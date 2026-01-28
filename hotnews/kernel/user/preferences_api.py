@@ -916,7 +916,10 @@ async def get_discovery_news(
     try:
         from datetime import datetime
         
-        # Get all pending candidates
+        qualifying_tags = []
+        seen_ids = set()
+        
+        # Part 1: Get pending candidates that meet promotion criteria
         cand_cur = online_conn.execute(
             """
             SELECT tag_id, name, name_en, type, NULL as icon, NULL as color, 
@@ -928,8 +931,6 @@ async def get_discovery_news(
             """,
         )
         
-        qualifying_tags = []
-        
         for row in cand_cur.fetchall() or []:
             tag_id = row[0]
             first_seen_ts = row[6] or now
@@ -937,17 +938,17 @@ async def get_discovery_news(
             avg_confidence = row[8] or 0
             
             # Check if meets any promotion criteria:
-            # 1. Fast-track 4h: first_seen >= 4h ago, occurrence >= 8, confidence >= 0.9
-            # 2. Fast-track 12h: first_seen >= 12h ago, occurrence >= 15, confidence >= 0.9
-            # 3. Fast-track 24h: first_seen >= 24h ago, occurrence >= 20, confidence >= 0.8
-            # 4. Standard: first_seen <= 3 days ago, occurrence >= 10, confidence >= 0.7
+            # 1. Fast-track 4h: discovered within last 4h, occurrence >= 8, confidence >= 0.9
+            # 2. Fast-track 12h: discovered within last 12h, occurrence >= 15, confidence >= 0.9
+            # 3. Fast-track 24h: discovered within last 24h, occurrence >= 20, confidence >= 0.8
+            # 4. Standard: discovered within last 3 days, occurrence >= 10, confidence >= 0.7
             
             qualifies = False
-            if first_seen_ts <= hours_4_ago and occurrence_count >= 8 and avg_confidence >= 0.9:
+            if first_seen_ts >= hours_4_ago and occurrence_count >= 8 and avg_confidence >= 0.9:
                 qualifies = True
-            elif first_seen_ts <= hours_12_ago and occurrence_count >= 15 and avg_confidence >= 0.9:
+            elif first_seen_ts >= hours_12_ago and occurrence_count >= 15 and avg_confidence >= 0.9:
                 qualifies = True
-            elif first_seen_ts <= hours_24_ago and occurrence_count >= 20 and avg_confidence >= 0.8:
+            elif first_seen_ts >= hours_24_ago and occurrence_count >= 20 and avg_confidence >= 0.8:
                 qualifies = True
             elif first_seen_ts >= days_3_ago and occurrence_count >= 10 and avg_confidence >= 0.7:
                 qualifies = True
@@ -970,9 +971,47 @@ async def get_discovery_news(
                 "badge": "new",
                 "is_candidate": True,
             })
+            seen_ids.add(tag_id)
             
             if len(qualifying_tags) >= tag_limit:
                 break
+        
+        # Part 2: Also include recently promoted dynamic tags (last 7 days)
+        days_7_ago = now - 7 * 86400
+        if len(qualifying_tags) < tag_limit:
+            dyn_cur = online_conn.execute(
+                """
+                SELECT id, name, name_en, type, icon, color, created_at
+                FROM tags
+                WHERE is_dynamic = 1 AND lifecycle = 'active' AND created_at >= ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (days_7_ago, tag_limit - len(qualifying_tags))
+            )
+            for row in dyn_cur.fetchall() or []:
+                tag_id = row[0]
+                if tag_id in seen_ids:
+                    continue
+                created_ts = row[6] or now
+                created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
+                qualifying_tags.append({
+                    "id": tag_id,
+                    "name": row[1],
+                    "name_en": row[2],
+                    "type": row[3],
+                    "icon": row[4] or "🏷️",
+                    "color": row[5],
+                    "first_seen_at": created_ts,
+                    "first_seen_date": created_date,
+                    "occurrence_count": 0,
+                    "confidence": None,
+                    "badge": "new",
+                    "is_candidate": False,
+                })
+                seen_ids.add(tag_id)
+                if len(qualifying_tags) >= tag_limit:
+                    break
         
         # Sort by occurrence_count descending
         qualifying_tags.sort(key=lambda x: x["occurrence_count"], reverse=True)
