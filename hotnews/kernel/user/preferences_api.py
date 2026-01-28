@@ -1089,41 +1089,38 @@ async def get_discovery_news(
         for tag_data in qualifying_tags:
             tag_id = tag_data["id"]
             tag_name = tag_data.get("name", "")
+            tag_name_en = tag_data.get("name_en", "")
             is_candidate = tag_data.get("is_candidate", False)
             sample_titles = tag_data.get("sample_titles", [])
             
             news_items = []
             
             if is_candidate:
-                # For candidates: search by sample_titles first (exact match), then by name
-                # sample_titles are the actual news titles that triggered this tag
-                found_ids = set()
+                # For candidates: search by multiple keywords
+                # Build comprehensive keyword list
+                keywords = set()
                 
-                # Strategy 1: Search by sample titles (most accurate)
-                if sample_titles:
-                    for sample_title in sample_titles[:5]:  # Use up to 5 sample titles
-                        if not sample_title or len(sample_title) < 5:
-                            continue
-                        # Search for exact or partial match
-                        news_cur = online_conn.execute(
-                            """
-                            SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
-                            FROM rss_entries e
-                            WHERE e.title LIKE ?
-                              AND e.published_at > 0
-                              AND e.published_at >= ?
-                              AND e.published_at <= ?
-                            ORDER BY e.published_at DESC
-                            LIMIT 20
-                            """,
-                            (f"%{sample_title[:30]}%", MIN_TIMESTAMP, MAX_TIMESTAMP)
-                        )
-                        for row in news_cur.fetchall() or []:
-                            if row[0] not in found_ids:
-                                found_ids.add(row[0])
+                # Add tag name (Chinese)
+                if tag_name and len(tag_name) >= 2:
+                    keywords.add(tag_name)
+                    # Also add base name without year/version
+                    import re
+                    base_name = re.sub(r'\s*\d{4}$', '', tag_name).strip()  # Remove year like "2026"
+                    base_name = re.sub(r'\s*[vV]?\d+(\.\d+)*$', '', base_name).strip()  # Remove version
+                    if base_name and len(base_name) >= 2 and base_name != tag_name:
+                        keywords.add(base_name)
                 
-                # Strategy 2: Search by tag name and tag_id as keywords
-                keywords = [k for k in [tag_name, tag_id] if k and len(k) >= 2]
+                # Add tag_id (often English name)
+                if tag_id and len(tag_id) >= 2:
+                    keywords.add(tag_id)
+                    # Convert underscore to space for search
+                    keywords.add(tag_id.replace('_', ' '))
+                
+                # Add name_en if different
+                if tag_name_en and len(tag_name_en) >= 2 and tag_name_en != tag_id:
+                    keywords.add(tag_name_en)
+                
+                # Build search query
                 if keywords:
                     like_conditions = []
                     params = []
