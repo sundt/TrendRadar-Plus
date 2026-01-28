@@ -871,6 +871,157 @@ async def get_followed_news(
 
 # ==================== Settings Page ====================
 
+# ==================== Discovery News (Public) ====================
+
+@router.get("/discovery-news")
+async def get_discovery_news(
+    request: Request,
+    news_limit: int = Query(50, ge=1, le=100),
+    tag_limit: int = Query(30, ge=1, le=50),
+):
+    """Get discovery tags and their news (public endpoint, no auth required).
+    
+    Returns NEW tags that meet promotion criteria with their related news.
+    """
+    online_conn = _get_online_db_conn(request)
+    
+    # Try to get from global cache first
+    from hotnews.web.timeline_cache import discovery_news_cache
+    
+    cache_key = {"news_limit": news_limit, "tag_limit": tag_limit}
+    cached_result = discovery_news_cache.get(config=cache_key)
+    if cached_result is not None:
+        return {
+            "ok": True,
+            "tags": cached_result,
+            "cached": True,
+            "cache_age": round(discovery_news_cache.age_seconds, 1),
+        }
+    
+    # Cache miss - fetch from database
+    now = _now_ts()
+    
+    # Time boundaries for fast-track criteria
+    hours_4_ago = now - 4 * 3600
+    hours_12_ago = now - 12 * 3600
+    hours_24_ago = now - 24 * 3600
+    days_3_ago = now - 3 * 86400
+    
+    # Define valid timestamp range
+    MIN_TIMESTAMP = 946684800  # 2000-01-01 00:00:00 UTC
+    MAX_TIMESTAMP = now + (7 * 24 * 60 * 60)  # Current + 7 days
+    
+    result = []
+    
+    try:
+        from datetime import datetime
+        
+        # Get all pending candidates
+        cand_cur = online_conn.execute(
+            """
+            SELECT tag_id, name, name_en, type, NULL as icon, NULL as color, 
+                   first_seen_at, occurrence_count, avg_confidence
+            FROM tag_candidates
+            WHERE status = 'pending'
+            ORDER BY occurrence_count DESC, first_seen_at DESC
+            LIMIT 200
+            """,
+        )
+        
+        qualifying_tags = []
+        
+        for row in cand_cur.fetchall() or []:
+            tag_id = row[0]
+            first_seen_ts = row[6] or now
+            occurrence_count = row[7] or 0
+            avg_confidence = row[8] or 0
+            
+            # Check if meets any promotion criteria:
+            # 1. Fast-track 4h: first_seen >= 4h ago, occurrence >= 8, confidence >= 0.9
+            # 2. Fast-track 12h: first_seen >= 12h ago, occurrence >= 15, confidence >= 0.9
+            # 3. Fast-track 24h: first_seen >= 24h ago, occurrence >= 20, confidence >= 0.8
+            # 4. Standard: first_seen <= 3 days ago, occurrence >= 10, confidence >= 0.7
+            
+            qualifies = False
+            if first_seen_ts <= hours_4_ago and occurrence_count >= 8 and avg_confidence >= 0.9:
+                qualifies = True
+            elif first_seen_ts <= hours_12_ago and occurrence_count >= 15 and avg_confidence >= 0.9:
+                qualifies = True
+            elif first_seen_ts <= hours_24_ago and occurrence_count >= 20 and avg_confidence >= 0.8:
+                qualifies = True
+            elif first_seen_ts >= days_3_ago and occurrence_count >= 10 and avg_confidence >= 0.7:
+                qualifies = True
+            
+            if not qualifies:
+                continue
+            
+            first_seen_date = datetime.fromtimestamp(first_seen_ts).strftime("%m-%d")
+            qualifying_tags.append({
+                "id": tag_id,
+                "name": row[1],
+                "name_en": row[2],
+                "type": row[3],
+                "icon": row[4] or "🏷️",
+                "color": row[5],
+                "first_seen_at": first_seen_ts,
+                "first_seen_date": first_seen_date,
+                "occurrence_count": occurrence_count,
+                "confidence": round(avg_confidence, 2) if avg_confidence else None,
+                "badge": "new",
+                "is_candidate": True,
+            })
+            
+            if len(qualifying_tags) >= tag_limit:
+                break
+        
+        # Sort by occurrence_count descending
+        qualifying_tags.sort(key=lambda x: x["occurrence_count"], reverse=True)
+        
+        # Fetch news for each qualifying tag
+        for tag_data in qualifying_tags:
+            tag_id = tag_data["id"]
+            
+            # Query news matching this tag using rss_entry_tags table
+            news_cur = online_conn.execute(
+                """
+                SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
+                FROM rss_entries e
+                JOIN rss_entry_tags t ON e.source_id = t.source_id AND e.dedup_key = t.dedup_key
+                WHERE t.tag_id = ?
+                  AND e.published_at > 0
+                  AND e.published_at >= ?
+                  AND e.published_at <= ?
+                ORDER BY e.published_at DESC
+                LIMIT ?
+                """,
+                (tag_id, MIN_TIMESTAMP, MAX_TIMESTAMP, news_limit * 2)
+            )
+            
+            # Filter and deduplicate
+            valid_rows = []
+            for row in news_cur.fetchall() or []:
+                published_at = row[3]
+                if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                    valid_rows.append(row)
+            
+            news_items = _deduplicate_news_by_title(valid_rows, news_limit)
+            
+            result.append({
+                "tag": tag_data,
+                "news": news_items,
+                "count": len(news_items),
+            })
+        
+    except Exception as e:
+        print(f"[Discovery] Error fetching discovery news: {e}")
+        return {"ok": False, "error": str(e), "tags": []}
+    
+    # Store in cache
+    discovery_news_cache.set(result, config=cache_key)
+    
+    return {"ok": True, "tags": result, "cached": False}
+
+
 @router.get("/page", include_in_schema=False)
 async def settings_page(request: Request):
     """Serve the user settings HTML page."""

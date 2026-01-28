@@ -7246,3 +7246,101 @@ body.eye-protection-mode .footer-qr-trigger {
 .summary-action-btn:active {
     transform: scale(0.98);
 }
+
+/* ==========================================================================
+   Discovery Tab Styles
+   ========================================================================== */
+
+/* Discovery card styling */
+.discovery-card {
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.discovery-card:hover {
+    border-color: #10b981;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+/* NEW badge for discovery tags */
+.discovery-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    margin-left: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    animation: discovery-pulse 2s ease-in-out infinite;
+}
+
+@keyframes discovery-pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.85;
+        transform: scale(1.02);
+    }
+}
+
+/* Discovery date styling */
+.discovery-date {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-left: 8px;
+    font-weight: 400;
+}
+
+/* Discovery count styling */
+.discovery-count {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-left: 4px;
+    font-weight: 400;
+}
+
+/* Discovery loading state */
+.discovery-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6b7280;
+    width: 100%;
+}
+
+/* Eye protection mode adjustments */
+body.eye-protection-mode .discovery-badge {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+body.eye-protection-mode .discovery-card:hover {
+    border-color: #059669;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.2);
+}
+
+body.eye-protection-mode .discovery-date,
+body.eye-protection-mode .discovery-count {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+    .discovery-badge {
+        padding: 1px 6px;
+        font-size: 9px;
+    }
+    
+    .discovery-date {
+        font-size: 10px;
+        display: block;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+    
+    .discovery-count {
+        font-size: 10px;
+    }
+}

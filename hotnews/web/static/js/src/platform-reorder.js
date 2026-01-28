@@ -544,21 +544,32 @@ export const platformReorder = {
             hideContextMenu();
 
             const isMyTags = categoryId === 'my-tags';
+            const isDiscovery = categoryId === 'discovery';
             const tagId = card.dataset?.tagId;
 
             contextMenuEl = document.createElement('div');
             contextMenuEl.className = 'tr-platform-context-menu';
             
             // Build menu items
-            let menuHtml = `
-                <div class="tr-ctx-item" data-action="top">⬆️ 置顶</div>
-                <div class="tr-ctx-item" data-action="bottom">⬇️ 置底</div>
-                <div class="tr-ctx-item" data-action="edit" style="border-top:1px solid #e5e7eb;">⚙️ 编辑顺序</div>
-            `;
+            let menuHtml = '';
             
-            // Add unfollow option for my-tags
-            if (isMyTags && tagId) {
-                menuHtml += `<div class="tr-ctx-item" data-action="unfollow" style="border-top:1px solid #e5e7eb;color:#ef4444;">🚫 取消关注</div>`;
+            if (isDiscovery && tagId) {
+                // Discovery tab: show "一键关注" option
+                menuHtml = `
+                    <div class="tr-ctx-item" data-action="follow">➕ 一键关注</div>
+                `;
+            } else {
+                // Normal tabs: show reorder options
+                menuHtml = `
+                    <div class="tr-ctx-item" data-action="top">⬆️ 置顶</div>
+                    <div class="tr-ctx-item" data-action="bottom">⬇️ 置底</div>
+                    <div class="tr-ctx-item" data-action="edit" style="border-top:1px solid #e5e7eb;">⚙️ 编辑顺序</div>
+                `;
+                
+                // Add unfollow option for my-tags
+                if (isMyTags && tagId) {
+                    menuHtml += `<div class="tr-ctx-item" data-action="unfollow" style="border-top:1px solid #e5e7eb;color:#ef4444;">🚫 取消关注</div>`;
+                }
             }
             
             contextMenuEl.innerHTML = menuHtml;
@@ -606,6 +617,56 @@ export const platformReorder = {
                             }
                         }, 100);
                     }
+                    return;
+                }
+
+                if (action === 'follow' && isDiscovery && tagId) {
+                    hideContextMenu();
+                    // Check if user is logged in
+                    const authState = window.authState || (window.HotNews && window.HotNews.authState);
+                    let isLoggedIn = false;
+                    try {
+                        if (authState && typeof authState.isLoggedIn === 'function') {
+                            isLoggedIn = authState.isLoggedIn();
+                        } else if (authState && typeof authState.getUser === 'function') {
+                            isLoggedIn = !!authState.getUser();
+                        }
+                    } catch (e) {
+                        console.error('Auth check failed:', e);
+                    }
+                    
+                    if (!isLoggedIn) {
+                        // Open login modal
+                        if (typeof window.openLoginModal === 'function') {
+                            window.openLoginModal();
+                        }
+                        return;
+                    }
+                    
+                    // Call follow API
+                    const tagName = card.querySelector('.platform-name')?.textContent?.replace(/NEW.*$/, '').replace(/发现于.*$/, '').replace(/\(.*\)/, '').trim() || tagId;
+                    fetch('/api/user/preferences/tag-settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ tag_id: tagId, preference: 'follow' })
+                    }).then(resp => {
+                        if (!resp.ok) throw new Error('关注失败');
+                        return resp.json();
+                    }).then(data => {
+                        if (!data.ok) throw new Error(data.error || '关注失败');
+                        // Clear my-tags cache
+                        try { localStorage.removeItem('hotnews_my_tags_cache'); } catch {}
+                        // Show toast
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show(`已关注「${tagName}」`, { variant: 'success', durationMs: 2000 });
+                        }
+                    }).catch(err => {
+                        console.error('Follow failed:', err);
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show('关注失败，请重试', { variant: 'error', durationMs: 2000 });
+                        }
+                    });
                     return;
                 }
 
@@ -686,6 +747,7 @@ export const platformReorder = {
 
             // Exclude special categories: explore, knowledge (morning brief)
             // my-tags is handled separately with additional "unfollow" option
+            // discovery is handled separately with "follow" option
             if (categoryId === 'explore' || categoryId === 'knowledge') return;
 
             e.preventDefault();

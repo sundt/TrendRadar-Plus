@@ -260,6 +260,7 @@ class UserTimelineCache:
 brief_timeline_cache = TimelineCache(ttl_seconds=300, max_items=1000)
 explore_timeline_cache = TimelineCache(ttl_seconds=300, max_items=1000)
 my_tags_cache = UserTimelineCache(ttl_seconds=300, max_items_per_user=500, max_users=100)  # Per-user cache
+discovery_news_cache = TimelineCache(ttl_seconds=600, max_items=1500)  # 10 minutes TTL, global cache for discovery
 
 
 def clear_all_timeline_caches() -> Dict[str, bool]:
@@ -267,10 +268,12 @@ def clear_all_timeline_caches() -> Dict[str, bool]:
     brief_timeline_cache.invalidate()
     explore_timeline_cache.invalidate()
     my_tags_cache.invalidate()
+    discovery_news_cache.invalidate()
     return {
         "brief_cleared": True,
         "explore_cleared": True,
         "my_tags_cleared": True,
+        "discovery_cleared": True,
     }
 
 
@@ -292,5 +295,10 @@ def get_cache_status() -> Dict[str, Any]:
             "item_count": my_tags_cache.item_count,
             "user_count": my_tags_cache.user_count,
             "age_seconds": round(my_tags_cache.age_seconds, 1),
+        },
+        "discovery": {
+            "valid": discovery_news_cache.is_valid,
+            "item_count": discovery_news_cache.item_count,
+            "age_seconds": round(discovery_news_cache.age_seconds, 1),
         },
     }
