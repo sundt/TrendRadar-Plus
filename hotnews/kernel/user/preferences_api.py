@@ -1019,31 +1019,71 @@ async def get_discovery_news(
         # Fetch news for each qualifying tag
         for tag_data in qualifying_tags:
             tag_id = tag_data["id"]
+            tag_name = tag_data.get("name", "")
+            is_candidate = tag_data.get("is_candidate", False)
             
-            # Query news matching this tag using rss_entry_tags table
-            news_cur = online_conn.execute(
-                """
-                SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
-                FROM rss_entries e
-                JOIN rss_entry_tags t ON e.source_id = t.source_id AND e.dedup_key = t.dedup_key
-                WHERE t.tag_id = ?
-                  AND e.published_at > 0
-                  AND e.published_at >= ?
-                  AND e.published_at <= ?
-                ORDER BY e.published_at DESC
-                LIMIT ?
-                """,
-                (tag_id, MIN_TIMESTAMP, MAX_TIMESTAMP, news_limit * 2)
-            )
+            news_items = []
             
-            # Filter and deduplicate
-            valid_rows = []
-            for row in news_cur.fetchall() or []:
-                published_at = row[3]
-                if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
-                    valid_rows.append(row)
-            
-            news_items = _deduplicate_news_by_title(valid_rows, news_limit)
+            if is_candidate:
+                # For candidates: search by tag name in title (not yet in rss_entry_tags)
+                # Build search keywords from name and tag_id
+                keywords = [k for k in [tag_name, tag_id] if k and len(k) >= 2]
+                
+                if keywords:
+                    like_conditions = []
+                    params = []
+                    for kw in keywords:
+                        like_conditions.append("e.title LIKE ?")
+                        params.append(f"%{kw}%")
+                    
+                    where_clause = " OR ".join(like_conditions)
+                    params.extend([MIN_TIMESTAMP, MAX_TIMESTAMP, news_limit * 2])
+                    
+                    news_cur = online_conn.execute(
+                        f"""
+                        SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
+                        FROM rss_entries e
+                        WHERE ({where_clause})
+                          AND e.published_at > 0
+                          AND e.published_at >= ?
+                          AND e.published_at <= ?
+                        ORDER BY e.published_at DESC
+                        LIMIT ?
+                        """,
+                        params
+                    )
+                    
+                    valid_rows = []
+                    for row in news_cur.fetchall() or []:
+                        published_at = row[3]
+                        if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                            valid_rows.append(row)
+                    
+                    news_items = _deduplicate_news_by_title(valid_rows, news_limit)
+            else:
+                # For promoted tags: use rss_entry_tags table
+                news_cur = online_conn.execute(
+                    """
+                    SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
+                    FROM rss_entries e
+                    JOIN rss_entry_tags t ON e.source_id = t.source_id AND e.dedup_key = t.dedup_key
+                    WHERE t.tag_id = ?
+                      AND e.published_at > 0
+                      AND e.published_at >= ?
+                      AND e.published_at <= ?
+                    ORDER BY e.published_at DESC
+                    LIMIT ?
+                    """,
+                    (tag_id, MIN_TIMESTAMP, MAX_TIMESTAMP, news_limit * 2)
+                )
+                
+                valid_rows = []
+                for row in news_cur.fetchall() or []:
+                    published_at = row[3]
+                    if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                        valid_rows.append(row)
+                
+                news_items = _deduplicate_news_by_title(valid_rows, news_limit)
             
             result.append({
                 "tag": tag_data,
