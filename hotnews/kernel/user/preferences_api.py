@@ -913,6 +913,36 @@ async def get_discovery_news(
     
     result = []
     
+    def _is_similar_tag(new_tag: dict, existing_tags: list) -> bool:
+        """Check if new tag is similar to any existing tag (should be skipped)."""
+        new_name = new_tag.get("name", "")
+        new_id = new_tag.get("id", "")
+        
+        for existing in existing_tags:
+            existing_name = existing.get("name", "")
+            existing_id = existing.get("id", "")
+            
+            # Rule 1: Name contains relationship (skip shorter one)
+            if new_name and existing_name:
+                if new_name in existing_name:
+                    return True  # Skip new_tag, keep existing (longer)
+                # If existing is shorter, we'll keep new_tag
+            
+            # Rule 2: ID contains relationship
+            if new_id and existing_id:
+                if new_id in existing_id:
+                    return True
+            
+            # Rule 3: Same base name after removing version numbers
+            if new_name and existing_name:
+                import re
+                new_base = re.sub(r'\s*[vV]?\d+(\.\d+)*$', '', new_name).strip()
+                existing_base = re.sub(r'\s*[vV]?\d+(\.\d+)*$', '', existing_name).strip()
+                if new_base and existing_base and new_base == existing_base:
+                    return True
+        
+        return False
+    
     try:
         from datetime import datetime
         import json as json_module
@@ -965,7 +995,7 @@ async def get_discovery_news(
                 continue
             
             first_seen_date = datetime.fromtimestamp(first_seen_ts).strftime("%m-%d")
-            qualifying_tags.append({
+            new_tag = {
                 "id": tag_id,
                 "name": row[1],
                 "name_en": row[2],
@@ -979,7 +1009,13 @@ async def get_discovery_news(
                 "badge": "new",
                 "is_candidate": True,
                 "sample_titles": sample_titles,  # Keep for news search
-            })
+            }
+            
+            # Skip if similar to existing tag (deduplication)
+            if _is_similar_tag(new_tag, qualifying_tags):
+                continue
+            
+            qualifying_tags.append(new_tag)
             seen_ids.add(tag_id)
             
             if len(qualifying_tags) >= tag_limit:
@@ -1004,7 +1040,7 @@ async def get_discovery_news(
                     continue
                 created_ts = row[6] or now
                 created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
-                qualifying_tags.append({
+                new_tag = {
                     "id": tag_id,
                     "name": row[1],
                     "name_en": row[2],
@@ -1017,7 +1053,13 @@ async def get_discovery_news(
                     "confidence": None,
                     "badge": "new",
                     "is_candidate": False,
-                })
+                }
+                
+                # Skip if similar to existing tag
+                if _is_similar_tag(new_tag, qualifying_tags):
+                    continue
+                
+                qualifying_tags.append(new_tag)
                 seen_ids.add(tag_id)
                 if len(qualifying_tags) >= tag_limit:
                     break
