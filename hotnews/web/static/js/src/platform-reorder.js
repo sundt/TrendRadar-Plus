@@ -49,6 +49,37 @@ function persistPlatformOrder(categoryId, orderedPlatformIds) {
     TR.settings.saveCategoryConfig(config);
 }
 
+function hidePlatformCard(cardEl, platformId, categoryId) {
+    if (!platformId) return;
+    
+    // Get platform name for toast
+    const platformName = cardEl?.querySelector('.platform-name')?.textContent?.replace(/📱\s*/, '').replace(/NEW$/, '').trim() || platformId;
+    
+    // Get current config
+    const base = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+    const config = TR.settings.normalizeCategoryConfig(base);
+    
+    // Add to hiddenPlatforms
+    if (!config.hiddenPlatforms.includes(platformId)) {
+        config.hiddenPlatforms.push(platformId);
+    }
+    
+    TR.settings.saveCategoryConfig(config);
+    
+    // Remove card from DOM with animation
+    if (cardEl) {
+        cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
+        cardEl.style.opacity = '0';
+        cardEl.style.transform = 'scale(0.95)';
+        setTimeout(() => cardEl.remove(), 300);
+    }
+    
+    // Show toast
+    if (window.TR?.toast?.show) {
+        window.TR.toast.show(`已隐藏「${platformName}」，可在栏目设置中恢复`, { variant: 'success', durationMs: 2500 });
+    }
+}
+
 export const platformReorder = {
     _draggingCard: null,
     _draggingPlatformId: null,
@@ -546,6 +577,7 @@ export const platformReorder = {
             const isMyTags = categoryId === 'my-tags';
             const isDiscovery = categoryId === 'discovery';
             const tagId = card.dataset?.tagId;
+            const platformId = card.dataset?.platform;
 
             contextMenuEl = document.createElement('div');
             contextMenuEl.className = 'tr-platform-context-menu';
@@ -563,6 +595,7 @@ export const platformReorder = {
                 menuHtml = `
                     <div class="tr-ctx-item" data-action="top">⬆️ 置顶</div>
                     <div class="tr-ctx-item" data-action="bottom">⬇️ 置底</div>
+                    <div class="tr-ctx-item" data-action="hide" style="border-top:1px solid #e5e7eb;">👁️‍🗨️ 隐藏卡片</div>
                     <div class="tr-ctx-item" data-action="edit" style="border-top:1px solid #e5e7eb;">⚙️ 编辑顺序</div>
                 `;
                 
@@ -617,6 +650,12 @@ export const platformReorder = {
                             }
                         }, 100);
                     }
+                    return;
+                }
+
+                if (action === 'hide' && platformId) {
+                    hideContextMenu();
+                    hidePlatformCard(card, platformId, categoryId);
                     return;
                 }
 

@@ -100,60 +100,217 @@ function _observeTabRerenders() {
 }
 
 function _enableLongPressHint() {
-    // Minimal mobile-friendly behavior: long-press on tab bar reveals drag handles for a short time.
+    // Mobile: long-press on tab shows context menu
     const root = document.body;
     if (!root) return;
 
-    let timer = 0;
-    let hideTimer = 0;
-    let active = false;
+    let longPressTimer = 0;
+    let longPressTab = null;
+    let startX = 0;
+    let startY = 0;
+    const LONG_PRESS_DURATION = 500; // ms
+    const MOVE_THRESHOLD = 10; // px
 
-    const clearTimers = () => {
-        if (timer) {
-            window.clearTimeout(timer);
-            timer = 0;
+    const clearLongPress = () => {
+        if (longPressTimer) {
+            window.clearTimeout(longPressTimer);
+            longPressTimer = 0;
         }
-        if (hideTimer) {
-            window.clearTimeout(hideTimer);
-            hideTimer = 0;
+        if (longPressTab) {
+            longPressTab.classList.remove('long-pressing');
+            longPressTab = null;
         }
-    };
-
-    const hide = () => {
-        active = false;
-        root.classList.remove('category-tabs-drag-mode');
     };
 
     document.addEventListener(
-        'pointerdown',
+        'touchstart',
         (e) => {
-            const tabs = e.target?.closest?.('.category-tabs');
-            if (!tabs) return;
             const tab = e.target?.closest?.('.category-tab');
             if (!tab) return;
+            
+            const tabsEl = tab.closest('.category-tabs');
+            if (!tabsEl) return;
+            
+            // Don't trigger on drag handle
             const handle = e.target?.closest?.('.category-drag-handle');
             if (handle) return;
 
-            clearTimers();
-            timer = window.setTimeout(() => {
-                active = true;
-                root.classList.add('category-tabs-drag-mode');
-                hideTimer = window.setTimeout(() => {
-                    hide();
-                }, 2500);
-            }, 380);
+            clearLongPress();
+            
+            const touch = e.touches?.[0];
+            if (!touch) return;
+            
+            startX = touch.clientX;
+            startY = touch.clientY;
+            longPressTab = tab;
+            tab.classList.add('long-pressing');
+            
+            longPressTimer = window.setTimeout(() => {
+                if (!longPressTab) return;
+                
+                // Haptic feedback
+                if (navigator.vibrate) {
+                    navigator.vibrate(10);
+                }
+                
+                // Show context menu at touch position
+                _showCategoryContextMenu({ clientX: startX, clientY: startY }, longPressTab);
+                clearLongPress();
+            }, LONG_PRESS_DURATION);
         },
-        true
+        { passive: true }
     );
 
-    const cancel = () => {
-        clearTimers();
-        if (active) hide();
-    };
+    document.addEventListener(
+        'touchmove',
+        (e) => {
+            if (!longPressTimer) return;
+            
+            const touch = e.touches?.[0];
+            if (!touch) return;
+            
+            // Cancel if moved too much
+            const dx = Math.abs(touch.clientX - startX);
+            const dy = Math.abs(touch.clientY - startY);
+            if (dx > MOVE_THRESHOLD || dy > MOVE_THRESHOLD) {
+                clearLongPress();
+            }
+        },
+        { passive: true }
+    );
 
-    document.addEventListener('pointerup', cancel, true);
-    document.addEventListener('pointercancel', cancel, true);
-    document.addEventListener('scroll', cancel, true);
+    document.addEventListener('touchend', clearLongPress, { passive: true });
+    document.addEventListener('touchcancel', clearLongPress, { passive: true });
+}
+
+// ============ Category Tab Context Menu ============
+let _categoryContextMenuEl = null;
+
+function _hideCategoryContextMenu() {
+    if (_categoryContextMenuEl && _categoryContextMenuEl.parentNode) {
+        _categoryContextMenuEl.parentNode.removeChild(_categoryContextMenuEl);
+    }
+    _categoryContextMenuEl = null;
+}
+
+function _showCategoryContextMenu(e, tab) {
+    _hideCategoryContextMenu();
+    
+    const categoryId = tab?.dataset?.category;
+    if (!categoryId) return;
+    
+    const categoryName = tab.querySelector('.category-tab-name')?.textContent?.replace(/NEW$/, '').trim() || categoryId;
+    
+    _categoryContextMenuEl = document.createElement('div');
+    _categoryContextMenuEl.className = 'tr-category-context-menu';
+    _categoryContextMenuEl.innerHTML = `
+        <div class="tr-cat-ctx-item" data-action="hide">👁️‍🗨️ 隐藏栏目</div>
+        <div class="tr-cat-ctx-item" data-action="settings" style="border-top:1px solid #e5e7eb;">⚙️ 栏目设置</div>
+    `;
+    
+    _categoryContextMenuEl.style.cssText = `
+        position: fixed;
+        left: ${e.clientX}px;
+        top: ${e.clientY}px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        min-width: 130px;
+        overflow: hidden;
+    `;
+    
+    const itemStyle = `
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background 0.15s;
+    `;
+    _categoryContextMenuEl.querySelectorAll('.tr-cat-ctx-item').forEach(item => {
+        item.style.cssText = itemStyle;
+        item.addEventListener('mouseenter', () => item.style.background = '#f3f4f6');
+        item.addEventListener('mouseleave', () => item.style.background = 'white');
+    });
+    
+    _categoryContextMenuEl.addEventListener('click', (ev) => {
+        const action = ev.target?.dataset?.action;
+        if (!action) return;
+        
+        _hideCategoryContextMenu();
+        
+        if (action === 'hide') {
+            _hideCategory(categoryId, categoryName, tab);
+        } else if (action === 'settings') {
+            if (window.openCategorySettings) {
+                window.openCategorySettings();
+            }
+        }
+    });
+    
+    document.body.appendChild(_categoryContextMenuEl);
+    
+    // Adjust position if menu goes off screen
+    const rect = _categoryContextMenuEl.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        _categoryContextMenuEl.style.left = `${window.innerWidth - rect.width - 10}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+        _categoryContextMenuEl.style.top = `${window.innerHeight - rect.height - 10}px`;
+    }
+    
+    // Close on click outside
+    setTimeout(() => {
+        document.addEventListener('click', _hideCategoryContextMenu, { once: true });
+    }, 0);
+}
+
+function _hideCategory(categoryId, categoryName, tabEl) {
+    // Get current config
+    const base = TR.settings.getCategoryConfig() || TR.settings.getDefaultCategoryConfig();
+    const config = TR.settings.normalizeCategoryConfig(base);
+    
+    // Check if it's a custom category
+    const isCustom = config.customCategories?.some(c => c.id === categoryId);
+    
+    if (isCustom) {
+        // For custom categories, remove from customCategories array
+        config.customCategories = config.customCategories.filter(c => c.id !== categoryId);
+        config.categoryOrder = config.categoryOrder.filter(id => id !== categoryId);
+    } else {
+        // For default categories, add to hiddenDefaultCategories
+        if (!config.hiddenDefaultCategories.includes(categoryId)) {
+            config.hiddenDefaultCategories.push(categoryId);
+        }
+    }
+    
+    TR.settings.saveCategoryConfig(config);
+    
+    // Remove tab from DOM with animation
+    if (tabEl) {
+        tabEl.style.transition = 'opacity 0.3s, transform 0.3s';
+        tabEl.style.opacity = '0';
+        tabEl.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+            tabEl.remove();
+            // Also remove the corresponding tab pane
+            const pane = document.getElementById(`tab-${categoryId}`);
+            if (pane) pane.remove();
+            
+            // If the hidden tab was active, switch to first visible tab
+            const firstTab = document.querySelector('.category-tab');
+            if (firstTab && !document.querySelector('.category-tab.active')) {
+                const firstCatId = firstTab.dataset?.category;
+                if (firstCatId && window.switchTab) {
+                    window.switchTab(firstCatId);
+                }
+            }
+        }, 300);
+    }
+    
+    // Show toast
+    if (window.TR?.toast?.show) {
+        window.TR.toast.show(`已隐藏「${categoryName}」，可在栏目设置中恢复`, { variant: 'success', durationMs: 2500 });
+    }
 }
 
 export const categoryTabReorder = {
@@ -177,6 +334,23 @@ export const categoryTabReorder = {
                 if (!handle) return;
                 e.preventDefault();
                 e.stopPropagation();
+            },
+            true
+        );
+
+        // Right-click context menu for category tabs
+        document.addEventListener(
+            'contextmenu',
+            (e) => {
+                const tab = e.target?.closest?.('.category-tab');
+                if (!tab) return;
+                
+                // Make sure we're in the category-tabs container
+                const tabsEl = tab.closest('.category-tabs');
+                if (!tabsEl) return;
+                
+                e.preventDefault();
+                _showCategoryContextMenu(e, tab);
             },
             true
         );

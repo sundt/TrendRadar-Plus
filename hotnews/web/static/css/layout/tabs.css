@@ -187,3 +187,25 @@ body.categories-ready.category-tabs-drag-mode .category-drag-handle {
 .tab-pane.active {
     display: block;
 }
+
+/* Long press visual feedback */
+.category-tab.long-pressing {
+    transform: scale(0.95);
+    opacity: 0.8;
+}
+
+/* Category tab context menu */
+.tr-category-context-menu {
+    animation: categoryMenuFadeIn 0.15s ease-out;
+}
+
+@keyframes categoryMenuFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

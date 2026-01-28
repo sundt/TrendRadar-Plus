@@ -947,12 +947,30 @@ function createTodoButton() {
     return btn;
 }
 
+function createCategorySettingsButton() {
+    const btn = document.createElement('button');
+    btn.className = 'icon-btn category-settings-header-btn';
+    btn.id = 'categorySettingsHeaderBtn';
+    btn.title = '栏目设置';
+    btn.innerHTML = `⚙️`;
+    btn.addEventListener('click', () => {
+        if (window.openCategorySettings) {
+            window.openCategorySettings();
+        }
+    });
+    return btn;
+}
+
 function initTodoButton() {
     // Find favorites button and insert todo button before it
     const favBtn = document.getElementById('favoritesBtn');
     if (favBtn && favBtn.parentNode) {
         const todoBtn = createTodoButton();
         favBtn.parentNode.insertBefore(todoBtn, favBtn);
+        
+        // Insert category settings button before todo button
+        const categorySettingsBtn = createCategorySettingsButton();
+        favBtn.parentNode.insertBefore(categorySettingsBtn, todoBtn);
     }
     
     // Load todos if logged in
