@@ -125,7 +125,6 @@ function createDiscoveryCard(tagData) {
     const tagIcon = tag.icon || '🏷️';
     const tagName = tag.name || tag.id;
     const firstSeenDate = tag.first_seen_date || '';
-    const occurrenceCount = tag.occurrence_count || 0;
 
     const newsListHtml = news.length > 0
         ? news.map((item, idx) => {
@@ -165,7 +164,6 @@ function createDiscoveryCard(tagData) {
                     ${tagIcon} ${tagName}
                     <span class="discovery-badge">NEW</span>
                     <span class="discovery-date">发现于 ${firstSeenDate}</span>
-                    <span class="discovery-count">(${occurrenceCount}条)</span>
                 </div>
                 <div class="platform-header-actions"></div>
             </div>

@@ -915,6 +915,7 @@ async def get_discovery_news(
     
     try:
         from datetime import datetime
+        import json as json_module
         
         qualifying_tags = []
         seen_ids = set()
@@ -923,7 +924,7 @@ async def get_discovery_news(
         cand_cur = online_conn.execute(
             """
             SELECT tag_id, name, name_en, type, NULL as icon, NULL as color, 
-                   first_seen_at, occurrence_count, avg_confidence
+                   first_seen_at, occurrence_count, avg_confidence, sample_titles
             FROM tag_candidates
             WHERE status = 'pending'
             ORDER BY occurrence_count DESC, first_seen_at DESC
@@ -936,6 +937,13 @@ async def get_discovery_news(
             first_seen_ts = row[6] or now
             occurrence_count = row[7] or 0
             avg_confidence = row[8] or 0
+            sample_titles_json = row[9] or "[]"
+            
+            # Parse sample_titles
+            try:
+                sample_titles = json_module.loads(sample_titles_json)
+            except:
+                sample_titles = []
             
             # Check if meets any promotion criteria:
             # 1. Fast-track 4h: discovered within last 4h, occurrence >= 8, confidence >= 0.9
@@ -970,6 +978,7 @@ async def get_discovery_news(
                 "confidence": round(avg_confidence, 2) if avg_confidence else None,
                 "badge": "new",
                 "is_candidate": True,
+                "sample_titles": sample_titles,  # Keep for news search
             })
             seen_ids.add(tag_id)
             
@@ -1021,14 +1030,40 @@ async def get_discovery_news(
             tag_id = tag_data["id"]
             tag_name = tag_data.get("name", "")
             is_candidate = tag_data.get("is_candidate", False)
+            sample_titles = tag_data.get("sample_titles", [])
             
             news_items = []
             
             if is_candidate:
-                # For candidates: search by tag name in title (not yet in rss_entry_tags)
-                # Build search keywords from name and tag_id
-                keywords = [k for k in [tag_name, tag_id] if k and len(k) >= 2]
+                # For candidates: search by sample_titles first (exact match), then by name
+                # sample_titles are the actual news titles that triggered this tag
+                found_ids = set()
                 
+                # Strategy 1: Search by sample titles (most accurate)
+                if sample_titles:
+                    for sample_title in sample_titles[:5]:  # Use up to 5 sample titles
+                        if not sample_title or len(sample_title) < 5:
+                            continue
+                        # Search for exact or partial match
+                        news_cur = online_conn.execute(
+                            """
+                            SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
+                            FROM rss_entries e
+                            WHERE e.title LIKE ?
+                              AND e.published_at > 0
+                              AND e.published_at >= ?
+                              AND e.published_at <= ?
+                            ORDER BY e.published_at DESC
+                            LIMIT 20
+                            """,
+                            (f"%{sample_title[:30]}%", MIN_TIMESTAMP, MAX_TIMESTAMP)
+                        )
+                        for row in news_cur.fetchall() or []:
+                            if row[0] not in found_ids:
+                                found_ids.add(row[0])
+                
+                # Strategy 2: Search by tag name and tag_id as keywords
+                keywords = [k for k in [tag_name, tag_id] if k and len(k) >= 2]
                 if keywords:
                     like_conditions = []
                     params = []
@@ -1085,11 +1120,15 @@ async def get_discovery_news(
                 
                 news_items = _deduplicate_news_by_title(valid_rows, news_limit)
             
-            result.append({
-                "tag": tag_data,
-                "news": news_items,
-                "count": len(news_items),
-            })
+            # Only add tags that have news
+            if news_items:
+                # Remove sample_titles from tag_data before sending to frontend
+                tag_data_clean = {k: v for k, v in tag_data.items() if k != "sample_titles"}
+                result.append({
+                    "tag": tag_data_clean,
+                    "news": news_items,
+                    "count": len(news_items),
+                })
         
     except Exception as e:
         print(f"[Discovery] Error fetching discovery news: {e}")

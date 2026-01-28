@@ -370,15 +370,15 @@ import{a as he,b as ds,c as us}from"./chunk-CDXSIPDR.js";import{b as mn}from"./c
                 \u91CD\u8BD5
             </button>
         </div>
-    `}function hi(e){let{tag:t,news:n,count:s}=e,r=t.icon||"\u{1F3F7}\uFE0F",o=t.name||t.id,a=t.first_seen_date||"",i=t.occurrence_count||0,l=n.length>0?n.map((u,d)=>{let f=ie(u.published_at),m=(u.title||"").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),g=m.replace(/'/g,"\\'"),w=(u.url||"").replace(/'/g,"\\'"),y=(o||"").replace(/'/g,"\\'"),b=`<span class="news-ai-indicator" data-news-id="${u.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${u.id}', '${g}', '${w}', '${t.id}', '${y}')"></span>`,L=f?`<span class="tr-news-date">${f}</span>`:"",h=`<button class="news-summary-btn" data-news-id="${u.id}" data-title="${m}" data-url="${u.url||""}" data-source-id="${t.id}" data-source-name="${o||""}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${u.id}', '${g}', '${w}', '${t.id}', '${y}')" ></button>`,E=`<div class="news-actions">${L}${h}</div>`;return`
-            <li class="news-item" data-news-id="${u.id}" data-news-title="${m}" data-news-url="${u.url||""}">
+    `}function hi(e){let{tag:t,news:n,count:s}=e,r=t.icon||"\u{1F3F7}\uFE0F",o=t.name||t.id,a=t.first_seen_date||"",i=n.length>0?n.map((l,u)=>{let d=ie(l.published_at),f=(l.title||"").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),m=f.replace(/'/g,"\\'"),g=(l.url||"").replace(/'/g,"\\'"),w=(o||"").replace(/'/g,"\\'"),y=`<span class="news-ai-indicator" data-news-id="${l.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${l.id}', '${m}', '${g}', '${t.id}', '${w}')"></span>`,b=d?`<span class="tr-news-date">${d}</span>`:"",L=`<button class="news-summary-btn" data-news-id="${l.id}" data-title="${f}" data-url="${l.url||""}" data-source-id="${t.id}" data-source-name="${o||""}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${l.id}', '${m}', '${g}', '${t.id}', '${w}')" ></button>`,h=`<div class="news-actions">${b}${L}</div>`;return`
+            <li class="news-item" data-news-id="${l.id}" data-news-title="${f}" data-news-url="${l.url||""}">
                 <div class="news-item-content">
-                    <span class="news-index">${d+1}</span>
-                    <a class="news-title" href="${u.url||"#"}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">
-                        ${u.title}
+                    <span class="news-index">${u+1}</span>
+                    <a class="news-title" href="${l.url||"#"}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">
+                        ${l.title}
                     </a>
-                    ${b}
-                    ${E}
+                    ${y}
+                    ${h}
                 </div>
             </li>
             `}).join(""):'<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">\u6682\u65E0\u76F8\u5173\u65B0\u95FB</li>';return`
@@ -388,12 +388,11 @@ import{a as he,b as ds,c as us}from"./chunk-CDXSIPDR.js";import{b as mn}from"./c
                     ${r} ${o}
                     <span class="discovery-badge">NEW</span>
                     <span class="discovery-date">\u53D1\u73B0\u4E8E ${a}</span>
-                    <span class="discovery-count">(${i}\u6761)</span>
                 </div>
                 <div class="platform-header-actions"></div>
             </div>
             <ul class="news-list">
-                ${l}
+                ${i}
             </ul>
         </div>
     `}function Ir(e,t){if(console.log("[Discovery] renderDiscoveryNews called, container:",e,"tagsData:",t),!e){console.error("[Discovery] renderDiscoveryNews: container is null!");return}if(!t||t.length===0){console.log("[Discovery] No tags data, showing empty state"),pi(e);return}console.log("[Discovery] Rendering",t.length,"tags");let n=t.map(s=>hi(s)).join("");console.log("[Discovery] Generated HTML length:",n.length),e.innerHTML=n,console.log("[Discovery] HTML inserted into container"),window.TR&&window.TR.readState&&window.TR.readState.restoreReadState()}async function st(e=!1){if(console.log("[Discovery] loadDiscovery called, force:",e,"loading:",Se,"loaded:",_t),Se){console.log("[Discovery] Already loading, skipping");return}if(_t&&!e){console.log("[Discovery] Already loaded, skipping");return}let t=document.getElementById("discoveryGrid");if(!t){console.error("[Discovery] Container #discoveryGrid not found!");return}console.log("[Discovery] Container found, starting load..."),Se=!0;try{if(!e){let r=mi();if(r&&r.length>0){console.log("[Discovery] Loading from frontend cache, tags:",r.length),Ir(t,r),_t=!0,Se=!1,yi().catch(o=>{console.error("[Discovery] Background update failed:",o)});return}else console.log("[Discovery] No valid cache found")}console.log("[Discovery] Showing loading state..."),t.innerHTML=`
