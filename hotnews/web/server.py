@@ -2755,8 +2755,14 @@ async def api_news_page(
     if not pid:
         raise HTTPException(status_code=400, detail="Missing platform_id")
 
-    if pid.startswith("rss-"):
-        sid = pid[len("rss-") :].strip()
+    # Handle RSS sources (rss-xxx) and Custom sources (custom_xxx)
+    # Both store entries in rss_entries table
+    if pid.startswith("rss-") or pid.startswith("custom_"):
+        if pid.startswith("rss-"):
+            sid = pid[len("rss-") :].strip()
+        else:
+            sid = pid  # custom sources use full ID as source_id
+            
         if not sid:
             raise HTTPException(status_code=400, detail="Invalid platform_id")
 
@@ -2784,10 +2790,42 @@ async def api_news_page(
         for r in rows:
             title = (r[0] or "").strip()
             link = (r[1] or "").strip()
+            published_at = r[2]  # Unix timestamp
+            published_raw = r[3]  # Raw date string
+            created_at = r[4]  # Unix timestamp
+            
             if not title:
                 title = link
             if not link:
                 continue
+            
+            # Build timestamp string
+            ts_str = ""
+            # 1. Try published_at (Unix timestamp)
+            if published_at and isinstance(published_at, int) and published_at > 946684800:
+                try:
+                    ts_str = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
+            # 2. Try to parse published_raw date string
+            if not ts_str and published_raw:
+                try:
+                    for fmt in ["%a, %d %b %Y %H:%M:%S %z", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S%z"]:
+                        try:
+                            dt = datetime.strptime(published_raw, fmt)
+                            ts_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                            break
+                        except:
+                            pass
+                except:
+                    pass
+            # 3. Fallback to created_at
+            if not ts_str and created_at:
+                try:
+                    ts_str = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M:%S")
+                except:
+                    pass
+            
             items.append(
                 {
                     "title": title,
@@ -2795,6 +2833,7 @@ async def api_news_page(
                     "url": link,
                     "meta": "",
                     "stable_id": generate_news_id(pid, title),
+                    "timestamp": ts_str,
                 }
             )
 
