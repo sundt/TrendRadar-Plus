@@ -176,7 +176,7 @@ def _init_default_categories(conn: sqlite3.Connection):
     
     # Defaults from design
     defaults = [
-        ("explore", "深入探索", "🔎", 0),
+        ("explore", "精选博客", "🔎", 0),
         ("knowledge", "每日AI早报", "📚", 10),
         ("finance", "财经投资", "💰", 20),
         ("tech_news", "科技资讯", "📱", 30),

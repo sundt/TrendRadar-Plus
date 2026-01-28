@@ -127,7 +127,7 @@ PLATFORM_CATEGORIES = {
         ],
     },
     "explore": {
-        "name": "深入探索",
+        "name": "精选博客",
         "icon": "🧐",
         "news_limit": 20,
         "platforms": []

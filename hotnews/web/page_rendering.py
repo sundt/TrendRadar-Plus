@@ -172,7 +172,7 @@ def _inject_explore_category(data: Dict[str, Any]) -> Dict[str, Any]:
 
         explore = {
             "id": "explore",
-            "name": "深入探索",
+            "name": "精选博客",
             "icon": "🔎",
             "platforms": {},
             "news_count": 0,

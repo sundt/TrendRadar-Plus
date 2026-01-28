@@ -777,7 +777,7 @@ function openEditCustomSourceModal(type) {
   document.getElementById('edit-custom-id').value = '';
   document.getElementById('edit-custom-id').disabled = false;
   document.getElementById('edit-custom-source-name').value = '';
-  document.getElementById('edit-custom-category').value = '深入探索';
+  document.getElementById('edit-custom-category').value = '精选博客';
   document.getElementById('edit-custom-country').value = '';
   document.getElementById('edit-custom-language').value = '';
   document.getElementById('edit-custom-magic-url').value = '';
@@ -835,7 +835,7 @@ function editCustomSource(id, type) {
   document.getElementById('edit-custom-id').value = item.id;
   document.getElementById('edit-custom-id').disabled = true;
   document.getElementById('edit-custom-source-name').value = item.name;
-  document.getElementById('edit-custom-category').value = item.category || '深入探索';
+  document.getElementById('edit-custom-category').value = item.category || '精选博客';
   document.getElementById('edit-custom-country').value = item.country || '';
   document.getElementById('edit-custom-language').value = item.language || '';
   document.getElementById('edit-custom-magic-url').value = '';

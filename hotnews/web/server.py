@@ -2605,7 +2605,7 @@ async def api_news(
         if isinstance(cats, dict) and "explore" not in cats:
             explore = {
                 "id": "explore",
-                "name": "深入探索",
+                "name": "精选博客",
                 "icon": "🔎",
                 "platforms": {},
                 "news_count": 0,

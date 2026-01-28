@@ -46,7 +46,7 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const title = escapeHtml(n?.display_title || n?.title || '');
         const url = escapeHtml(n?.url || '#');
         const sourceId = escapeHtml(n?.source_id || 'explore');
-        const sourceName = escapeHtml(n?.source_name || '深入探索');
+        const sourceName = escapeHtml(n?.source_name || '精选博客');
         const t = _fmtTime(n?.published_at || n?.created_at);
         const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${sourceId}', '${sourceName.replace(/'/g, "\\'")}')" ></button>`;
