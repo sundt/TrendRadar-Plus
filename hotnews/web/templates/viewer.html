@@ -365,6 +365,101 @@
     <!-- 备用加载机制：确保 my-tags 和 discovery 在微信浏览器中能正常加载 -->
     <script>
         (function() {
+            // 直接加载 my-tags 数据的备用函数
+            async function fallbackLoadMyTags() {
+                var container = document.getElementById('myTagsGrid');
+                if (!container) return;
+                
+                // 检查是否已经有内容
+                if (container.querySelector('.platform-card')) return;
+                
+                console.log('[Fallback] Loading my-tags directly...');
+                
+                try {
+                    // 先检查登录状态
+                    var authRes = await fetch('/api/auth/me');
+                    var authData = await authRes.json();
+                    
+                    if (!authData.ok || !authData.user) {
+                        // 未登录，显示登录提示
+                        container.innerHTML = '<div class="platform-card" style="min-height:500px;"><div style="text-align:center;padding:80px 20px 40px;"><div style="font-size:56px;margin-bottom:16px;">🔒</div><div style="font-size:17px;color:#374151;margin-bottom:10px;font-weight:600;">请先登录</div><div style="font-size:13px;color:#6b7280;margin-bottom:20px;line-height:1.5;">登录后即可查看您关注的标签新闻</div><button onclick="openLoginModal()" style="display:inline-block;padding:10px 22px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;font-size:14px;">立即登录</button></div></div>';
+                        return;
+                    }
+                    
+                    // 已登录，获取数据
+                    var res = await fetch('/api/user/preferences/followed-news?limit=50', { credentials: 'include' });
+                    var data = await res.json();
+                    
+                    if (!data.ok || !data.tags || data.tags.length === 0) {
+                        // 没有关注的标签
+                        container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;"><div style="font-size:64px;margin-bottom:20px;">🏷️</div><div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">您还未关注任何标签</div><div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">点击下方按钮添加感兴趣的标签、订阅源或公众号，<br>这里将为您聚合相关新闻</div><button onclick="typeof openSubscribeSidebar === \'function\' && openSubscribeSidebar()" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;font-size:15px;">➕ 添加关注</button></div>';
+                        return;
+                    }
+                    
+                    // 渲染数据
+                    var html = data.tags.map(function(tagData) {
+                        var tag = tagData.tag;
+                        var news = tagData.news || [];
+                        var count = tagData.count || news.length;
+                        var tagIcon = tag.icon || '🏷️';
+                        var tagName = tag.name || tag.id;
+                        
+                        var newsHtml = news.length > 0 ? news.map(function(item, idx) {
+                            return '<li class="news-item" data-news-id="' + (item.id || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer">' + (item.title || '') + '</a></div></li>';
+                        }).join('') : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
+                        
+                        return '<div class="platform-card" data-tag-id="' + tag.id + '" draggable="false"><div class="platform-header"><div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">' + tagIcon + ' ' + tagName + '<span style="font-size:12px;color:#9ca3af;margin-left:8px;">(' + count + '条)</span></div><div class="platform-header-actions"></div></div><ul class="news-list">' + newsHtml + '</ul></div>';
+                    }).join('');
+                    
+                    container.innerHTML = html;
+                    console.log('[Fallback] my-tags loaded successfully');
+                } catch (e) {
+                    console.error('[Fallback] my-tags load error:', e);
+                    container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;"><div style="font-size:48px;margin-bottom:16px;">😕</div><div style="font-size:16px;">加载失败，请刷新重试</div></div>';
+                }
+            }
+            
+            // 直接加载 discovery 数据的备用函数
+            async function fallbackLoadDiscovery() {
+                var container = document.getElementById('discoveryGrid');
+                if (!container) return;
+                
+                // 检查是否已经有内容
+                if (container.querySelector('.platform-card')) return;
+                
+                console.log('[Fallback] Loading discovery directly...');
+                
+                try {
+                    var res = await fetch('/api/user/preferences/discovery-news?news_limit=50&tag_limit=30', { credentials: 'include' });
+                    var data = await res.json();
+                    
+                    if (!data.ok || !data.tags || data.tags.length === 0) {
+                        container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;"><div style="font-size:64px;margin-bottom:20px;">✨</div><div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">暂无新发现</div><div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">AI 正在持续发现热门话题，<br>稍后再来看看吧</div></div>';
+                        return;
+                    }
+                    
+                    var html = data.tags.map(function(tagData) {
+                        var tag = tagData.tag;
+                        var news = tagData.news || [];
+                        var tagIcon = tag.icon || '🏷️';
+                        var tagName = tag.name || tag.id;
+                        var firstSeenDate = tag.first_seen_date || '';
+                        
+                        var newsHtml = news.length > 0 ? news.map(function(item, idx) {
+                            return '<li class="news-item" data-news-id="' + (item.id || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer">' + (item.title || '') + '</a></div></li>';
+                        }).join('') : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
+                        
+                        return '<div class="platform-card discovery-card" data-tag-id="' + tag.id + '" data-candidate="true" draggable="false"><div class="platform-header"><div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">' + tagIcon + ' ' + tagName + '<span class="discovery-badge">NEW</span><span class="discovery-date">发现于 ' + firstSeenDate + '</span></div><div class="platform-header-actions"></div></div><ul class="news-list">' + newsHtml + '</ul></div>';
+                    }).join('');
+                    
+                    container.innerHTML = html;
+                    console.log('[Fallback] discovery loaded successfully');
+                } catch (e) {
+                    console.error('[Fallback] discovery load error:', e);
+                    container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;"><div style="font-size:48px;margin-bottom:16px;">😕</div><div style="font-size:16px;">加载失败，请刷新重试</div></div>';
+                }
+            }
+            
             // 检查是否需要触发加载的函数
             function checkAndTriggerLoad() {
                 try {
@@ -372,14 +467,16 @@
                     var myTagsPane = document.getElementById('tab-my-tags');
                     var myTagsGrid = document.getElementById('myTagsGrid');
                     if (myTagsPane && myTagsPane.classList.contains('active') && myTagsGrid) {
-                        var hasContent = myTagsGrid.querySelector('.platform-card') || 
-                                        myTagsGrid.querySelector('[style*="text-align:center"]');
-                        var isLoading = myTagsGrid.querySelector('.my-tags-loading');
-                        // 如果还在显示初始加载状态，尝试触发加载
-                        if (isLoading && !hasContent) {
-                            console.log('[Fallback] Triggering my-tags load');
+                        var hasContent = myTagsGrid.querySelector('.platform-card');
+                        if (!hasContent) {
+                            // 先尝试用 JS 模块
                             if (window.HotNews && window.HotNews.myTags && typeof window.HotNews.myTags.load === 'function') {
+                                console.log('[Fallback] Triggering my-tags via HotNews.myTags.load');
                                 window.HotNews.myTags.load(true);
+                            } else {
+                                // JS 模块不可用，直接加载
+                                console.log('[Fallback] HotNews.myTags not available, loading directly');
+                                fallbackLoadMyTags();
                             }
                         }
                     }
@@ -388,13 +485,14 @@
                     var discoveryPane = document.getElementById('tab-discovery');
                     var discoveryGrid = document.getElementById('discoveryGrid');
                     if (discoveryPane && discoveryPane.classList.contains('active') && discoveryGrid) {
-                        var hasDiscoveryContent = discoveryGrid.querySelector('.platform-card') ||
-                                                  discoveryGrid.querySelector('[style*="text-align:center"]');
-                        var isDiscoveryLoading = discoveryGrid.querySelector('.discovery-loading');
-                        if (isDiscoveryLoading && !hasDiscoveryContent) {
-                            console.log('[Fallback] Triggering discovery load');
+                        var hasDiscoveryContent = discoveryGrid.querySelector('.platform-card');
+                        if (!hasDiscoveryContent) {
                             if (window.HotNews && window.HotNews.discovery && typeof window.HotNews.discovery.load === 'function') {
+                                console.log('[Fallback] Triggering discovery via HotNews.discovery.load');
                                 window.HotNews.discovery.load(true);
+                            } else {
+                                console.log('[Fallback] HotNews.discovery not available, loading directly');
+                                fallbackLoadDiscovery();
                             }
                         }
                     }
@@ -405,7 +503,8 @@
             
             // 延迟检查，给 JS 模块足够的初始化时间
             setTimeout(checkAndTriggerLoad, 2000);
-            setTimeout(checkAndTriggerLoad, 5000);
+            setTimeout(checkAndTriggerLoad, 4000);
+            setTimeout(checkAndTriggerLoad, 8000);
         })();
     </script>
 
