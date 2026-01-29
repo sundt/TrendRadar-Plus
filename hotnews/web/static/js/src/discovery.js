@@ -251,14 +251,25 @@ async function loadDiscovery(force = false) {
             if (cachedTags && cachedTags.length > 0) {
                 console.log('[Discovery] Loading from frontend cache, tags:', cachedTags.length);
                 renderDiscoveryNews(container, cachedTags);
-                discoveryLoaded = true;
-                discoveryLoading = false;
+                
+                // Verify rendering was successful
+                const hasContent = container.querySelector('.platform-card');
+                if (hasContent) {
+                    console.log('[Discovery] Cache render successful');
+                    discoveryLoaded = true;
+                    discoveryLoading = false;
+                    clearTimeout(safetyTimeout);
 
-                // Fetch fresh data in background to update cache
-                fetchAndUpdateCache().catch(e => {
-                    console.error('[Discovery] Background update failed:', e);
-                });
-                return;
+                    // Fetch fresh data in background to update cache
+                    fetchAndUpdateCache().catch(e => {
+                        console.error('[Discovery] Background update failed:', e);
+                    });
+                    return;
+                } else {
+                    console.warn('[Discovery] Cache render failed, falling back to API');
+                    // Clear invalid cache
+                    clearCache();
+                }
             } else {
                 console.log('[Discovery] No valid cache found');
             }

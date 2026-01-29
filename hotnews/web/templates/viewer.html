@@ -448,6 +448,12 @@
                 
                 console.log('[Fallback] Loading discovery directly...');
                 
+                // 清除可能有问题的缓存
+                try {
+                    localStorage.removeItem('hotnews_discovery_cache');
+                    console.log('[Fallback] Cleared discovery cache');
+                } catch (e) {}
+                
                 // 显示加载中
                 container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;"><div style="font-size:48px;margin-bottom:16px;">✨</div><div style="font-size:16px;">发现中...</div></div>';
                 
