@@ -227,6 +227,29 @@ class TagDiscoveryService:
             logger.error(f"Failed to save candidate {tag_id}: {e}")
             return False
     
+    def _normalize_title_for_dedup(self, title: str) -> str:
+        """Normalize title for deduplication comparison."""
+        if not title:
+            return ""
+        # Remove punctuation and spaces, convert to lowercase
+        return re.sub(r'[^\w\u4e00-\u9fff]', '', title.lower())
+    
+    def _is_similar_title(self, t1: str, t2: str, threshold: float = 0.85) -> bool:
+        """Check if two titles are similar using character overlap."""
+        n1, n2 = self._normalize_title_for_dedup(t1), self._normalize_title_for_dedup(t2)
+        if not n1 or not n2:
+            return False
+        # Quick exact match
+        if n1 == n2:
+            return True
+        # Length difference too big
+        if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.2:
+            return False
+        # Character-based similarity
+        shorter, longer = (n1, n2) if len(n1) <= len(n2) else (n2, n1)
+        matches = sum(1 for c in shorter if c in longer)
+        return matches / len(shorter) >= threshold
+    
     def _update_candidate_stats(
         self,
         tag_id: str,
@@ -234,7 +257,11 @@ class TagDiscoveryService:
         sample_title: Optional[str],
         now: int
     ):
-        """Update statistics for an existing candidate."""
+        """Update statistics for an existing candidate.
+        
+        Deduplicates by title similarity to avoid counting the same news
+        from different platforms multiple times.
+        """
         # Get current stats
         cur = self.conn.execute(
             """
@@ -248,16 +275,40 @@ class TagDiscoveryService:
         if not row:
             return
         
-        occurrence_count = row[0] + 1
-        total_confidence = row[1] + confidence
-        avg_confidence = total_confidence / occurrence_count
-        
-        # Update sample titles (keep last 10)
+        # Parse existing sample titles
         try:
             sample_titles = json.loads(row[2] or "[]")
         except:
             sample_titles = []
         
+        # Check if this title is similar to any existing sample title
+        # If similar, don't increment occurrence_count (avoid duplicate counting)
+        is_duplicate_title = False
+        if sample_title:
+            for existing_title in sample_titles:
+                if self._is_similar_title(sample_title, existing_title):
+                    is_duplicate_title = True
+                    break
+        
+        if is_duplicate_title:
+            # Only update last_seen_at, don't increment count
+            self.conn.execute(
+                """
+                UPDATE tag_candidates
+                SET last_seen_at = ?, updated_at = ?
+                WHERE tag_id = ?
+                """,
+                (now, now, tag_id)
+            )
+            self.conn.commit()
+            return
+        
+        # Not a duplicate - increment occurrence count
+        occurrence_count = row[0] + 1
+        total_confidence = row[1] + confidence
+        avg_confidence = total_confidence / occurrence_count
+        
+        # Add new sample title (keep last 10)
         if sample_title and sample_title not in sample_titles:
             sample_titles.append(sample_title)
             sample_titles = sample_titles[-10:]  # Keep last 10

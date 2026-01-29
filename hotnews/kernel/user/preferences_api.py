@@ -26,8 +26,12 @@ def _normalize_title(title: str) -> str:
     return re.sub(r'[^\w\u4e00-\u9fff]', '', title.lower())
 
 
-def _is_similar_title(t1: str, t2: str, threshold: float = 0.9) -> bool:
-    """Check if two titles are similar using character overlap."""
+def _is_similar_title(t1: str, t2: str, threshold: float = 0.85) -> bool:
+    """Check if two titles are similar using character overlap.
+    
+    Uses 0.85 threshold to catch more duplicates from different platforms
+    (e.g., same news with slightly different wording).
+    """
     n1, n2 = _normalize_title(t1), _normalize_title(t2)
     if not n1 or not n2:
         return False
@@ -35,7 +39,7 @@ def _is_similar_title(t1: str, t2: str, threshold: float = 0.9) -> bool:
     if n1 == n2:
         return True
     # Length difference too big
-    if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.15:
+    if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.2:
         return False
     # Character-based similarity (simple and fast)
     shorter, longer = (n1, n2) if len(n1) <= len(n2) else (n2, n1)

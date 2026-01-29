@@ -206,3 +206,106 @@ DEFAULT_MAX_ITEMS = 1000
 DEFAULT_MAX_ITEMS_PER_USER = 500
 DEFAULT_MAX_USERS = 100
 ```
+
+---
+
+# 标签去重优化
+
+## 问题描述
+
+1. **标签卡片重复标题**：同一条新闻被多个平台转载，在标签卡片中显示多次
+2. **标签计数重复**：AI 识别标签时，相同标题的新闻会被多次计算 `occurrence_count`
+
+## 修复方案
+
+### 1. 后端标签计数去重
+
+**文件**: `hotnews/hotnews/kernel/services/tag_discovery.py`
+
+在 `_update_candidate_stats()` 方法中添加标题相似度检查：
+
+```python
+def _is_similar_title(self, t1: str, t2: str, threshold: float = 0.85) -> bool:
+    """Check if two titles are similar using character overlap."""
+    # ... 相似度计算逻辑
+
+def _update_candidate_stats(self, tag_id, confidence, sample_title, now):
+    # 检查是否与已有 sample_titles 相似
+    is_duplicate_title = False
+    if sample_title:
+        for existing_title in sample_titles:
+            if self._is_similar_title(sample_title, existing_title):
+                is_duplicate_title = True
+                break
+    
+    if is_duplicate_title:
+        # 只更新 last_seen_at，不增加 occurrence_count
+        return
+    
+    # 不是重复 - 正常增加计数
+    occurrence_count = row[0] + 1
+    # ...
+```
+
+**效果**：
+- 同一条新闻被多个平台转载时，只计算一次
+- 避免热门新闻的标签被过度放大
+- 更准确反映标签的真实热度
+
+### 2. 前端显示去重阈值优化
+
+**文件**: `hotnews/hotnews/kernel/user/preferences_api.py`
+
+将 `_is_similar_title()` 的阈值从 0.9 降到 0.85：
+
+```python
+def _is_similar_title(t1: str, t2: str, threshold: float = 0.85) -> bool:
+    """Check if two titles are similar using character overlap.
+    
+    Uses 0.85 threshold to catch more duplicates from different platforms
+    (e.g., same news with slightly different wording).
+    """
+```
+
+**效果**：
+- 更积极地过滤相似标题
+- 减少用户看到的重复内容
+
+## 去重逻辑说明
+
+### 相似度计算
+```python
+def _is_similar_title(t1, t2, threshold=0.85):
+    # 1. 标准化：移除标点、空格，转小写
+    n1 = normalize(t1)
+    n2 = normalize(t2)
+    
+    # 2. 快速精确匹配
+    if n1 == n2:
+        return True
+    
+    # 3. 长度差异检查（差异 > 20% 则不相似）
+    if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.2:
+        return False
+    
+    # 4. 字符重叠率计算
+    shorter, longer = sorted([n1, n2], key=len)
+    matches = sum(1 for c in shorter if c in longer)
+    return matches / len(shorter) >= threshold
+```
+
+### 应用场景
+| 场景 | 阈值 | 说明 |
+|------|------|------|
+| 标签计数去重 | 0.85 | 避免重复计数 |
+| 前端显示去重 | 0.85 | 减少重复内容 |
+
+## 修改的文件
+
+1. `hotnews/hotnews/kernel/services/tag_discovery.py`
+   - 添加 `_normalize_title_for_dedup()` 方法
+   - 添加 `_is_similar_title()` 方法
+   - 修改 `_update_candidate_stats()` 添加去重逻辑
+
+2. `hotnews/hotnews/kernel/user/preferences_api.py`
+   - 将 `_is_similar_title()` 阈值从 0.9 改为 0.85
