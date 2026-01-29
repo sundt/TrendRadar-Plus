@@ -365,6 +365,37 @@
     <!-- 备用加载机制：确保 my-tags 和 discovery 在微信浏览器中能正常加载 -->
     <script>
         (function() {
+            // 格式化日期的辅助函数
+            function formatNewsDate(timestamp) {
+                if (!timestamp) return '';
+                var date = new Date(timestamp * 1000);
+                var now = new Date();
+                var diffMs = now - date;
+                var diffMins = Math.floor(diffMs / 60000);
+                var diffHours = Math.floor(diffMs / 3600000);
+                var diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 1) return '刚刚';
+                if (diffMins < 60) return diffMins + '分钟前';
+                if (diffHours < 24) return diffHours + '小时前';
+                if (diffDays < 7) return diffDays + '天前';
+                
+                var month = date.getMonth() + 1;
+                var day = date.getDate();
+                if (date.getFullYear() === now.getFullYear()) {
+                    return month + '-' + day;
+                }
+                return date.getFullYear() + '-' + month + '-' + day;
+            }
+            
+            // 转义 HTML 属性的辅助函数
+            function escapeHtml(str) {
+                return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            }
+            function escapeJs(str) {
+                return (str || '').replace(/'/g, "\\'");
+            }
+            
             // 直接加载 my-tags 数据的备用函数
             async function fallbackLoadMyTags() {
                 var container = document.getElementById('myTagsGrid');
@@ -405,7 +436,18 @@
                         var tagName = tag.name || tag.id;
                         
                         var newsHtml = news.length > 0 ? news.map(function(item, idx) {
-                            return '<li class="news-item" data-news-id="' + (item.id || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer">' + (item.title || '') + '</a></div></li>';
+                            var safeTitle = escapeHtml(item.title);
+                            var escapedTitle = escapeJs(item.title);
+                            var escapedUrl = escapeJs(item.url);
+                            var escapedTagName = escapeJs(tagName);
+                            var dateStr = formatNewsDate(item.published_at);
+                            
+                            var aiDotHtml = '<span class="news-ai-indicator" data-news-id="' + item.id + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></span>';
+                            var dateHtml = dateStr ? '<span class="tr-news-date">' + dateStr + '</span>' : '';
+                            var summaryBtnHtml = '<button class="news-summary-btn" data-news-id="' + item.id + '" data-title="' + safeTitle + '" data-url="' + (item.url || '') + '" data-source-id="' + tag.id + '" data-source-name="' + (tagName || '') + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></button>';
+                            var actionsHtml = '<div class="news-actions">' + dateHtml + summaryBtnHtml + '</div>';
+                            
+                            return '<li class="news-item" data-news-id="' + (item.id || '') + '" data-news-title="' + safeTitle + '" data-news-url="' + (item.url || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">' + (item.title || '') + '</a>' + aiDotHtml + actionsHtml + '</div></li>';
                         }).join('') : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
                         
                         return '<div class="platform-card" data-tag-id="' + tag.id + '" draggable="false"><div class="platform-header"><div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">' + tagIcon + ' ' + tagName + '<span style="font-size:12px;color:#9ca3af;margin-left:8px;">(' + count + '条)</span></div><div class="platform-header-actions"></div></div><ul class="news-list">' + newsHtml + '</ul></div>';
@@ -477,7 +519,18 @@
                         var firstSeenDate = tag.first_seen_date || '';
                         
                         var newsHtml = news.length > 0 ? news.map(function(item, idx) {
-                            return '<li class="news-item" data-news-id="' + (item.id || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer">' + (item.title || '') + '</a></div></li>';
+                            var safeTitle = escapeHtml(item.title);
+                            var escapedTitle = escapeJs(item.title);
+                            var escapedUrl = escapeJs(item.url);
+                            var escapedTagName = escapeJs(tagName);
+                            var dateStr = formatNewsDate(item.published_at);
+                            
+                            var aiDotHtml = '<span class="news-ai-indicator" data-news-id="' + item.id + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></span>';
+                            var dateHtml = dateStr ? '<span class="tr-news-date">' + dateStr + '</span>' : '';
+                            var summaryBtnHtml = '<button class="news-summary-btn" data-news-id="' + item.id + '" data-title="' + safeTitle + '" data-url="' + (item.url || '') + '" data-source-id="' + tag.id + '" data-source-name="' + (tagName || '') + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></button>';
+                            var actionsHtml = '<div class="news-actions">' + dateHtml + summaryBtnHtml + '</div>';
+                            
+                            return '<li class="news-item" data-news-id="' + (item.id || '') + '" data-news-title="' + safeTitle + '" data-news-url="' + (item.url || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">' + (item.title || '') + '</a>' + aiDotHtml + actionsHtml + '</div></li>';
                         }).join('') : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
                         
                         return '<div class="platform-card discovery-card" data-tag-id="' + tag.id + '" data-candidate="true" draggable="false"><div class="platform-header"><div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">' + tagIcon + ' ' + tagName + '<span class="discovery-badge">NEW</span><span class="discovery-date">发现于 ' + firstSeenDate + '</span></div><div class="platform-header-actions"></div></div><ul class="news-list">' + newsHtml + '</ul></div>';

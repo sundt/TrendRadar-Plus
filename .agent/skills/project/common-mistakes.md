@@ -230,3 +230,47 @@ function clearAllTimers() {
 - 环境变量变更后，需要使用 `docker compose up -d --force-recreate <service>` 重建容器
 - `restart` 只是重启进程，不会重新读取 `.env` 文件
 - 或者使用 `docker compose down && docker compose up -d` 完全重建
+
+### 10. docker-compose.yml 未映射新环境变量
+**日期**：2026-01-29
+**场景**：在 `.env` 文件中添加 `HOTNEWS_WECHAT_SCHEDULER_ENABLED=1`，但容器内读不到该变量
+
+**错误**：
+- 只在 `.env` 文件中添加了变量
+- 没有在 `docker-compose-build.yml` 的 `environment` 部分添加映射
+- 导致容器内 `os.environ.get('HOTNEWS_WECHAT_SCHEDULER_ENABLED')` 返回 None
+
+**根本原因**：
+- Docker Compose 的 `.env` 文件只用于变量替换（`${VAR_NAME}`）
+- 如果 `docker-compose.yml` 的 `environment` 部分没有引用该变量，容器内就不会有这个环境变量
+
+**正确做法**：
+1. 在 `.env` 中添加变量值：
+   ```
+   HOTNEWS_WECHAT_SCHEDULER_ENABLED=1
+   ```
+2. 在 `docker-compose-build.yml` 的 `environment` 部分添加映射：
+   ```yaml
+   environment:
+     - HOTNEWS_WECHAT_SCHEDULER_ENABLED=${HOTNEWS_WECHAT_SCHEDULER_ENABLED:-0}
+   ```
+3. 使用 `docker compose up -d --force-recreate <service>` 重建容器
+
+**验证方法**：
+```bash
+# 检查 docker-compose 是否正确读取变量
+docker compose -f docker-compose-build.yml config | grep WECHAT_SCHEDULER
+
+# 检查容器内环境变量
+docker exec <container> python3 -c "import os; print(os.environ.get('HOTNEWS_WECHAT_SCHEDULER_ENABLED'))"
+```
+
+**修改的文件**：
+- `hotnews/docker/docker-compose-build.yml` - 在 `hotnews-viewer` 服务的 `environment` 部分添加：
+  ```yaml
+  # 微信公众号自动抓取调度器配置
+  - HOTNEWS_WECHAT_SCHEDULER_ENABLED=${HOTNEWS_WECHAT_SCHEDULER_ENABLED:-0}
+  - HOTNEWS_MP_CHECK_INTERVAL=${HOTNEWS_MP_CHECK_INTERVAL:-60}
+  - HOTNEWS_MP_MAX_PER_CYCLE=${HOTNEWS_MP_MAX_PER_CYCLE:-20}
+  - HOTNEWS_UNIFIED_MP_SCHEDULER=${HOTNEWS_UNIFIED_MP_SCHEDULER:-1}
+  ```
