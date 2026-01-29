@@ -197,6 +197,35 @@ function init() {
 1. **不要实现 localStorage 缓存**
 2. 每次从 API 获取数据
 3. 参考 `discovery.js` 的实现模式
+4. **必须使用标准新闻项渲染**（见下方）
+
+### 新闻项渲染规范
+
+所有栏目的新闻项必须包含以下元素，以确保 AI 总结按钮正常工作：
+
+```javascript
+import { formatNewsDate, escapeHtml, renderNewsItemHtml } from './core.js';
+
+// 方式 1：使用通用函数（推荐）
+const newsHtml = renderNewsItemHtml(item, idx, { id: sourceId, name: sourceName });
+
+// 方式 2：手动构建（需要包含所有元素）
+const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" onclick="..."></span>`;
+const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="..." data-url="..." data-source-id="..." data-source-name="..." onclick="..."></button>`;
+const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+```
+
+**必须包含的元素：**
+- `news-ai-indicator` - AI 指示点（显示是否已总结）
+- `news-summary-btn` - 总结按钮（鼠标悬停时显示）
+- `news-actions` - 操作容器（包含日期和按钮）
+
+**data 属性要求：**
+- `data-news-id` - 新闻唯一 ID
+- `data-title` - 新闻标题（HTML 转义）
+- `data-url` - 新闻 URL
+- `data-source-id` - 来源 ID（如 tag_id, mp-fakeid）
+- `data-source-name` - 来源显示名称
 
 ### 缓存配置常量
 所有缓存配置集中在 `timeline_cache.py`：

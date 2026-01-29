@@ -136,6 +136,62 @@ export function formatNewsDate(ts) {
 
 TR.formatNewsDate = formatNewsDate;
 
+/**
+ * Generate HTML for a news item with all standard features.
+ * This is the canonical way to render news items across all modules.
+ * 
+ * Features included:
+ * - News index number
+ * - Clickable title with read state tracking
+ * - AI indicator dot (shows if summarized)
+ * - Summary button (hover to show)
+ * - Date display
+ * 
+ * @param {Object} item - News item data
+ * @param {string|number} item.id - Unique news ID
+ * @param {string} item.title - News title
+ * @param {string} item.url - News URL
+ * @param {number} item.published_at - Unix timestamp (seconds)
+ * @param {number} idx - Index number (1-based)
+ * @param {Object} source - Source/tag info for summary tracking
+ * @param {string} source.id - Source ID (e.g., tag_id, mp-fakeid)
+ * @param {string} source.name - Source display name
+ * @returns {string} HTML string for the news item
+ */
+export function renderNewsItemHtml(item, idx, source) {
+    const dateStr = formatNewsDate(item.published_at || item.publish_time);
+    const safeTitle = escapeHtml(item.title || '');
+    const escapedTitle = (item.title || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const escapedUrl = (item.url || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const escapedSourceName = (source.name || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const sourceId = source.id || '';
+    
+    // AI indicator dot - shows green when summarized
+    const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSourceName}')"></span>`;
+    
+    // Summary button - appears on hover
+    const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${sourceId}" data-source-name="${source.name || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSourceName}')"></button>`;
+    
+    // Actions container (date + summary button)
+    const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
+    const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+    
+    return `
+    <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
+        <div class="news-item-content">
+            <span class="news-index">${idx}</span>
+            <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">
+                ${item.title}
+            </a>
+            ${aiDotHtml}
+            ${actionsHtml}
+        </div>
+    </li>
+    `;
+}
+
+TR.renderNewsItemHtml = renderNewsItemHtml;
+
 const _toastState = {
     container: null,
     nextId: 1,

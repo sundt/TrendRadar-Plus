@@ -117,6 +117,17 @@ function createMPCard(mpData) {
         ? articles.map((item, idx) => {
             const dateStr = formatNewsDate(item.publish_time);
             const safeTitle = (item.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const escapedTitle = safeTitle.replace(/'/g, "\\'");
+            const escapedUrl = (item.url || '').replace(/'/g, "\\'");
+            const escapedNickname = (nickname || '').replace(/'/g, "\\'");
+            
+            // AI indicator dot
+            const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', 'mp-${fakeid}', '${escapedNickname}')"></span>`;
+            
+            // Actions container (date + summary button)
+            const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
+            const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="mp-${fakeid}" data-source-name="${nickname || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', 'mp-${fakeid}', '${escapedNickname}')"></button>`;
+            const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
             
             return `
             <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
@@ -125,9 +136,8 @@ function createMPCard(mpData) {
                     <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">
                         ${item.title}
                     </a>
-                    <div class="news-actions">
-                        ${dateStr ? `<span class="tr-news-date">${dateStr}</span>` : ''}
-                    </div>
+                    ${aiDotHtml}
+                    ${actionsHtml}
                 </div>
             </li>
             `;
