@@ -830,7 +830,7 @@ async def export_featured_mps(
 async def get_featured_mps_public(
     request: Request,
     category: Optional[str] = Query(None),
-    article_limit: int = Query(50, ge=1, le=100),
+    article_limit: int = Query(50, ge=1, le=100),  # 每个公众号 50 条，与其他卡片一致
 ) -> Dict[str, Any]:
     """
     Get featured MPs with their latest articles (public API).

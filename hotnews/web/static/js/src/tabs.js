@@ -5,6 +5,7 @@
 
 import { TR, ready } from './core.js';
 import { storage } from './storage.js';
+import { authState } from './auth-state.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const VIEWER_POS_STORAGE_KEY = 'hotnews_viewer_pos_v1';
@@ -12,6 +13,10 @@ const EXPLORE_TAB_ID = 'explore';
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const EXPLORE_MODAL_OPENED_EVENT = 'tr_explore_modal_opened';
 const EXPLORE_MODAL_CLOSED_EVENT = 'tr_explore_modal_closed';
+
+// Default tabs based on login status
+const DEFAULT_TAB_LOGGED_IN = 'my-tags';  // 已登录用户默认显示"我的关注"
+const DEFAULT_TAB_GUEST = 'explore';       // 未登录用户默认显示"探索"（有缓存预热）
 
 // Memory optimization: max number of tabs to keep DOM content
 const MAX_CACHED_TABS = 3;
@@ -408,7 +413,16 @@ export const tabs = {
             const tabEl = document.querySelector(`.category-tab[data-category="${savedTab}"]`);
             if (tabEl) {
                 this.switchTab(savedTab);
+                return;
             }
+        }
+        
+        // No saved tab - use default based on login status
+        const isLoggedIn = authState.isLoggedIn();
+        const defaultTab = isLoggedIn ? DEFAULT_TAB_LOGGED_IN : DEFAULT_TAB_GUEST;
+        const defaultTabEl = document.querySelector(`.category-tab[data-category="${defaultTab}"]`);
+        if (defaultTabEl) {
+            this.switchTab(defaultTab);
         }
     },
 

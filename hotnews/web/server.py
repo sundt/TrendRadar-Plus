@@ -3298,7 +3298,7 @@ async def _warmup_cache():
         print("🔥 预热缓存中...")
         start_time = time.time()
         
-        # 预加载新闻数据到缓存
+        # 1. 预加载新闻数据到缓存（普通栏目）
         viewer_service, _ = get_services()
         # Load settings
         sys_settings = get_system_settings(project_root)
@@ -3311,6 +3311,22 @@ async def _warmup_cache():
             filter_mode=None,
             per_platform_limit=items_per_card
         )
+        
+        # 2. 预热 Brief Timeline 缓存（知识库）
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Brief Timeline - 预热 500 条
+                resp = await client.get("http://127.0.0.1:8090/api/rss/brief/timeline?limit=500&offset=0")
+                if resp.status_code == 200:
+                    print("  ✅ Brief Timeline 缓存已预热")
+                
+                # Explore Timeline - 预热 150 条
+                resp = await client.get("http://127.0.0.1:8090/api/rss/explore/timeline?limit=150&offset=0")
+                if resp.status_code == 200:
+                    print("  ✅ Explore Timeline 缓存已预热")
+        except Exception as e:
+            print(f"  ⚠️ Timeline 缓存预热失败: {e}")
         
         elapsed = time.time() - start_time
         print(f"✅ 缓存预热完成 ({elapsed:.2f}s)")
