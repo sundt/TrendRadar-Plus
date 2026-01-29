@@ -172,7 +172,7 @@
             {% set special_cats = ['explore', 'my-tags', 'discovery', 'knowledge', 'source-subscription', 'featured-mps'] %}
             {% for cat_id, category in data.categories.items() %}
             {% set is_active_category = (cat_id == 'my-tags') %}
-            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="{% if cat_id not in special_cats %}1{% else %}0{% endif %}"">>
+            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="{% if cat_id not in special_cats %}1{% else %}0{% endif %}">
                 {% if cat_id == 'my-tags' %}
                 <div class="platform-grid" id="myTagsGrid">
                     <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
