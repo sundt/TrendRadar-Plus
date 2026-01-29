@@ -161,15 +161,15 @@ function renderEmptyState(container) {
             <div style="font-size:64px;margin-bottom:20px;">🏷️</div>
             <div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">您还未关注任何标签</div>
             <div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">
-                前往「我的设置」添加感兴趣的标签，<br>
+                点击下方按钮添加感兴趣的标签、订阅源或公众号，<br>
                 这里将为您聚合相关新闻
             </div>
-            <a href="/api/user/preferences/page" 
-               style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;text-decoration:none;border-radius:8px;font-weight:500;transition:transform 0.2s;"
+            <button onclick="typeof openSubscribeSidebar === 'function' && openSubscribeSidebar()" 
+               style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;font-size:15px;transition:transform 0.2s;"
                onmouseover="this.style.transform='scale(1.05)'"
                onmouseout="this.style.transform='scale(1)'">
-                去设置标签
-            </a>
+                ➕ 添加关注
+            </button>
         </div>
     `;
 }
@@ -598,14 +598,22 @@ function init() {
     // Attach observer after a short delay to ensure DOM is ready
     setTimeout(observeTabActivation, 100);
 
-    // Preload data if user is already logged in (page refresh scenario)
-    // Use a small delay to not block initial page render
-    setTimeout(async () => {
-        if (authState.initialized && authState.getUser()) {
-            console.log('[MyTags] User already logged in, preloading data...');
-            preloadData();
+    // Check if my-tags is the default active tab and load after authState is ready
+    const loadIfActiveTab = async () => {
+        const activePane = document.querySelector('#tab-my-tags.active');
+        if (activePane) {
+            console.log('[MyTags] Tab is active, waiting for authState...');
+            // Wait for authState to initialize
+            if (!authState.initialized) {
+                await authState.init();
+            }
+            console.log('[MyTags] authState ready, loading my-tags...');
+            loadMyTags();
         }
-    }, 500);
+    };
+
+    // Use a small delay to ensure DOM is ready and authState has time to initialize
+    setTimeout(loadIfActiveTab, 200);
 
     console.log('[MyTags] Module initialized');
 }
