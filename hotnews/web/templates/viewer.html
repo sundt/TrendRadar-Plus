@@ -538,52 +538,101 @@
                 }
             });
             
+            // 重写 switchTab 函数，添加 fallback 逻辑
+            var originalSwitchTab = window.switchTab;
+            window.switchTab = function(categoryId) {
+                console.log('[Fallback] switchTab called:', categoryId);
+                // 调用原始函数
+                if (typeof originalSwitchTab === 'function') {
+                    originalSwitchTab(categoryId);
+                }
+                // 添加 fallback 逻辑
+                if (categoryId === 'discovery') {
+                    setTimeout(function() {
+                        var container = document.getElementById('discoveryGrid');
+                        if (container && !container.querySelector('.platform-card')) {
+                            console.log('[Fallback] Triggering discovery load from switchTab override');
+                            fallbackLoadDiscovery();
+                        }
+                    }, 800);
+                } else if (categoryId === 'my-tags') {
+                    setTimeout(function() {
+                        var container = document.getElementById('myTagsGrid');
+                        if (container && !container.querySelector('.platform-card')) {
+                            console.log('[Fallback] Triggering my-tags load from switchTab override');
+                            fallbackLoadMyTags();
+                        }
+                    }, 800);
+                }
+            };
+            
             // 直接给 discovery tab 按钮添加点击监听（微信浏览器兼容）
+            // 使用事件委托，监听整个 category-tabs 容器
             function attachTabClickListeners() {
-                var discoveryTab = document.querySelector('.category-tab[data-category="discovery"]');
-                if (discoveryTab) {
-                    discoveryTab.addEventListener('click', function() {
-                        console.log('[Fallback] Discovery tab clicked directly');
-                        setTimeout(function() {
-                            var container = document.getElementById('discoveryGrid');
-                            if (container && !container.querySelector('.platform-card')) {
-                                fallbackLoadDiscovery();
-                            }
-                        }, 500);
-                    });
-                    // 触摸事件（移动端）
-                    discoveryTab.addEventListener('touchend', function() {
-                        console.log('[Fallback] Discovery tab touched');
-                        setTimeout(function() {
-                            var container = document.getElementById('discoveryGrid');
-                            if (container && !container.querySelector('.platform-card')) {
-                                fallbackLoadDiscovery();
-                            }
-                        }, 500);
-                    }, { passive: true });
+                var tabsContainer = document.querySelector('.category-tabs');
+                if (!tabsContainer) {
+                    console.log('[Fallback] category-tabs container not found, retrying...');
+                    setTimeout(attachTabClickListeners, 500);
+                    return;
                 }
                 
-                var myTagsTab = document.querySelector('.category-tab[data-category="my-tags"]');
-                if (myTagsTab) {
-                    myTagsTab.addEventListener('click', function() {
-                        console.log('[Fallback] My-tags tab clicked directly');
+                console.log('[Fallback] Attaching event delegation to category-tabs');
+                
+                // 使用事件委托
+                tabsContainer.addEventListener('click', function(e) {
+                    var tab = e.target.closest('.category-tab');
+                    if (!tab) return;
+                    
+                    var categoryId = tab.getAttribute('data-category');
+                    console.log('[Fallback] Tab clicked via delegation:', categoryId);
+                    
+                    if (categoryId === 'discovery') {
+                        setTimeout(function() {
+                            var container = document.getElementById('discoveryGrid');
+                            if (container && !container.querySelector('.platform-card')) {
+                                console.log('[Fallback] Triggering discovery load from delegation');
+                                fallbackLoadDiscovery();
+                            }
+                        }, 500);
+                    } else if (categoryId === 'my-tags') {
                         setTimeout(function() {
                             var container = document.getElementById('myTagsGrid');
                             if (container && !container.querySelector('.platform-card')) {
+                                console.log('[Fallback] Triggering my-tags load from delegation');
                                 fallbackLoadMyTags();
                             }
                         }, 500);
-                    });
-                    myTagsTab.addEventListener('touchend', function() {
-                        console.log('[Fallback] My-tags tab touched');
+                    }
+                });
+                
+                // 触摸事件（移动端）
+                tabsContainer.addEventListener('touchend', function(e) {
+                    var tab = e.target.closest('.category-tab');
+                    if (!tab) return;
+                    
+                    var categoryId = tab.getAttribute('data-category');
+                    console.log('[Fallback] Tab touched via delegation:', categoryId);
+                    
+                    if (categoryId === 'discovery') {
+                        setTimeout(function() {
+                            var container = document.getElementById('discoveryGrid');
+                            if (container && !container.querySelector('.platform-card')) {
+                                console.log('[Fallback] Triggering discovery load from touch delegation');
+                                fallbackLoadDiscovery();
+                            }
+                        }, 500);
+                    } else if (categoryId === 'my-tags') {
                         setTimeout(function() {
                             var container = document.getElementById('myTagsGrid');
                             if (container && !container.querySelector('.platform-card')) {
+                                console.log('[Fallback] Triggering my-tags load from touch delegation');
                                 fallbackLoadMyTags();
                             }
                         }, 500);
-                    }, { passive: true });
-                }
+                    }
+                }, { passive: true });
+                
+                console.log('[Fallback] Event delegation attached');
             }
             
             // DOM 加载完成后绑定事件
