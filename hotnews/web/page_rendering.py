@@ -150,13 +150,7 @@ def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     优化 SSR 数据：只保留第一个激活栏目的完整数据，其他栏目只保留元数据。
     这样可以大幅减少初始 HTML 大小，非激活栏目通过 AJAX 懒加载。
-    
-    NOTE: 暂时禁用此优化，直接返回原始数据
     """
-    # 暂时禁用懒加载优化，直接返回原始数据
-    return data
-    
-    # 以下是原始优化逻辑（暂时禁用）
     try:
         cats = data.get("categories") if isinstance(data, dict) else None
         if not isinstance(cats, dict):

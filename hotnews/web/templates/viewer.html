@@ -320,64 +320,12 @@
                 </div>
                 <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
                 {% else %}
-                {# 非激活的普通栏目也渲染完整内容（暂时禁用懒加载优化） #}
-                <div class="platform-grid">
-                    {% for platform_id, platform in (category.platforms.items()|list) %}
-                    {% set is_real_card = loop.index0 < 3 %}
-                    <div class="platform-card"
-                        data-platform="{{ platform_id }}" data-total-count="{{ platform.news|length }}"
-                        data-loaded-count="{% if is_real_card %}{{ [platform.news|length, items_per_card]|min }}{% else %}0{% endif %}"
-                        data-lazy="{% if is_real_card %}0{% else %}1{% endif %}" draggable="false">
-                        <div class="platform-header">
-                            <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
-                            <div class="platform-name"
-                                style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;"
-                                onclick="dismissNewPlatformBadge('{{ platform_id }}')">
-                                📱 {{ platform.name }}
-                                {% if platform.is_new %}<span class="new-badge new-badge-platform"
-                                    data-platform="{{ platform_id }}">NEW</span>{% endif %}
-                            </div>
-                            <div class="platform-header-actions"></div>
-                        </div>
-                        <ul class="news-list">
-                            {% if is_real_card %}
-                            {% for news in platform.news[:items_per_card] %}
-                            <li class="news-item" data-id="{{ news.stable_id }}" data-url="{{ news.url }}">
-                                <div class="news-item-content">
-                                    <input type="checkbox" class="news-checkbox" title="标记已读" />
-                                    <span class="news-index">{{ loop.index }}</span>
-                                    <a class="news-title {% if news.is_cross_platform %}cross-platform{% endif %}"
-                                        href="{{ news.url or '#' }}" target="_blank" rel="noopener noreferrer">
-                                        {{ news.display_title or news.title }}
-                                        {% if news.is_cross_platform %}
-                                        <span class="cross-platform-badge"
-                                            title="同时出现在: {{ news.cross_platforms|join(', ') }}">
-                                            🔥 {{ news.cross_platform_count }}
-                                        </span>
-                                        {% endif %}
-                                    </a>
-                                    <div class="news-actions">
-                                        {% if news.timestamp %}
-                                        <span class="tr-news-date">{{ news.timestamp[5:10] }}</span>
-                                        {% endif %}
-                                        <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
-                                    </div>
-                                </div>
-                                {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{
-                                    news.meta }}</div>{% endif %}
-                            </li>
-                            {% endfor %}
-                            {% else %}
-                            {% for _ in range(0, 8) %}
-                            <li class="tr-news-skeleton" aria-hidden="true">
-                                <div class="tr-news-skeleton-line"></div>
-                            </li>
-                            {% endfor %}
-                            {% endif %}
-                        </ul>
-                        <div class="news-load-sentinel" aria-hidden="true"></div>
+                {# 非激活的普通栏目只渲染骨架屏，数据通过 AJAX 懒加载 #}
+                <div class="platform-grid category-lazy-placeholder">
+                    <div class="category-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                        <div style="font-size:32px;margin-bottom:12px;">📰</div>
+                        <div style="font-size:14px;">点击加载...</div>
                     </div>
-                    {% endfor %}
                 </div>
                 <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
                 {% endif %}

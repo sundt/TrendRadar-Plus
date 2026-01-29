@@ -257,8 +257,8 @@ class UserTimelineCache:
 
 
 # Global cache instances
-brief_timeline_cache = TimelineCache(ttl_seconds=300, max_items=1000)
-explore_timeline_cache = TimelineCache(ttl_seconds=300, max_items=1000)
+brief_timeline_cache = TimelineCache(ttl_seconds=600, max_items=1000)  # 10 minutes TTL
+explore_timeline_cache = TimelineCache(ttl_seconds=600, max_items=1000)  # 10 minutes TTL
 my_tags_cache = UserTimelineCache(ttl_seconds=300, max_items_per_user=500, max_users=100)  # Per-user cache
 discovery_news_cache = TimelineCache(ttl_seconds=600, max_items=1500)  # 10 minutes TTL, global cache for discovery
 
