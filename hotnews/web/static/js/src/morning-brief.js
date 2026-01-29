@@ -1,4 +1,4 @@
-import { TR, ready, escapeHtml } from './core.js';
+import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
 
 const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
@@ -57,17 +57,9 @@ function _applyPagingToCard(card) {
     }
 }
 
+// Use formatNewsDate from core.js for relative time display
 function _fmtTime(tsSec) {
-    const ts = Number(tsSec || 0) || 0;
-    if (!ts) return '';
-    try {
-        const d = new Date(ts * 1000);
-        const MM = String(d.getMonth() + 1).padStart(2, '0');
-        const DD = String(d.getDate()).padStart(2, '0');
-        return `${MM}-${DD}`;
-    } catch (e) {
-        return '';
-    }
+    return formatNewsDate(tsSec);
 }
 
 function _buildNewsItemsHtml(items, opts = {}) {
