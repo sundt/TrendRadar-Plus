@@ -172,7 +172,8 @@
             {% set special_cats = ['explore', 'my-tags', 'discovery', 'knowledge', 'source-subscription', 'featured-mps'] %}
             {% for cat_id, category in data.categories.items() %}
             {% set is_active_category = (cat_id == 'my-tags') %}
-            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="{% if cat_id not in special_cats %}1{% else %}0{% endif %}">
+            {% set is_special = (cat_id in special_cats) %}
+            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="0">
                 {% if cat_id == 'my-tags' %}
                 <div class="platform-grid" id="myTagsGrid">
                     <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
@@ -253,8 +254,8 @@
                         </ul>
                     </div>
                 </div>
-                {% elif is_active_category %}
-                {# 激活的栏目渲染完整内容 #}
+                {% elif not is_special %}
+                {# 普通栏目（AI资讯、财经投资等）渲染完整内容 #}
                 <div class="platform-grid">
                     {% for platform_id, platform in (category.platforms.items()|list) %}
                     {% set is_real_card = loop.index0 < 3 %}
@@ -312,15 +313,6 @@
                         <div class="news-load-sentinel" aria-hidden="true"></div>
                     </div>
                     {% endfor %}
-                </div>
-                <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
-                {% else %}
-                {# 非激活的普通栏目只渲染骨架屏，数据通过 AJAX 懒加载 #}
-                <div class="platform-grid category-lazy-placeholder">
-                    <div class="category-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                        <div style="font-size:32px;margin-bottom:12px;">📰</div>
-                        <div style="font-size:14px;">点击加载...</div>
-                    </div>
                 </div>
                 <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
                 {% endif %}
