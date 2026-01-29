@@ -304,7 +304,7 @@
                                     </a>
                                     <div class="news-actions">
                                         {% if news.timestamp %}
-                                        <span class="tr-news-date">{{ news.timestamp[5:10] }}</span>
+                                        <span class="tr-news-date" data-timestamp="{{ news.timestamp }}">{{ news.timestamp[5:10] }}</span>
                                         {% endif %}
                                         <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
                                     </div>
@@ -715,6 +715,60 @@
                     setTimeout(checkAndTriggerLoad, 100);
                 });
             }
+        })();
+    </script>
+
+    <!-- 日期相对时间格式化 -->
+    <script>
+        (function() {
+            // 将时间戳字符串转换为相对时间显示
+            function formatRelativeDate(timestampStr) {
+                if (!timestampStr) return '';
+                
+                // 解析时间戳字符串 (格式: "2026-01-29 15:30:00" 或 "2026-01-29")
+                var date = new Date(timestampStr.replace(' ', 'T'));
+                if (isNaN(date.getTime())) return timestampStr.substring(5, 10); // 解析失败，返回原格式
+                
+                var now = new Date();
+                var diffMs = now - date;
+                var diffMins = Math.floor(diffMs / 60000);
+                var diffHours = Math.floor(diffMs / 3600000);
+                var diffDays = Math.floor(diffMs / 86400000);
+                
+                if (diffMins < 0) return '刚刚'; // 未来时间
+                if (diffMins < 1) return '刚刚';
+                if (diffMins < 60) return diffMins + '分钟前';
+                if (diffHours < 24) return diffHours + '小时前';
+                if (diffDays < 7) return diffDays + '天前';
+                
+                var month = date.getMonth() + 1;
+                var day = date.getDate();
+                if (date.getFullYear() === now.getFullYear()) {
+                    return month + '-' + day;
+                }
+                return date.getFullYear() + '-' + month + '-' + day;
+            }
+            
+            // 格式化所有带 data-timestamp 的日期元素
+            function formatAllDates() {
+                var dateElements = document.querySelectorAll('.tr-news-date[data-timestamp]');
+                dateElements.forEach(function(el) {
+                    var timestamp = el.getAttribute('data-timestamp');
+                    if (timestamp) {
+                        el.textContent = formatRelativeDate(timestamp);
+                    }
+                });
+            }
+            
+            // 页面加载后执行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', formatAllDates);
+            } else {
+                formatAllDates();
+            }
+            
+            // 暴露函数供动态内容使用
+            window.formatAllDates = formatAllDates;
         })();
     </script>
 

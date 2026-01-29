@@ -1,4 +1,4 @@
-import { TR, ready, escapeHtml } from './core.js';
+import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 
 const EXPLORE_TAB_ID = 'explore';
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
@@ -22,17 +22,9 @@ function _getActiveTabId() {
     }
 }
 
+// Use formatNewsDate from core.js for relative time display
 function _fmtTime(tsSec) {
-    const ts = Number(tsSec || 0) || 0;
-    if (!ts) return '';
-    try {
-        const d = new Date(ts * 1000);
-        const MM = String(d.getMonth() + 1).padStart(2, '0');
-        const DD = String(d.getDate()).padStart(2, '0');
-        return `${MM}-${DD}`;
-    } catch (e) {
-        return '';
-    }
+    return formatNewsDate(tsSec);
 }
 
 function _buildNewsItemsHtml(items, opts = {}) {
