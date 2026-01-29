@@ -338,3 +338,50 @@ def _is_similar_title(t1, t2, threshold=0.85):
 
 2. `hotnews/hotnews/kernel/user/preferences_api.py`
    - 将 `_is_similar_title()` 阈值从 0.9 改为 0.85
+   - 添加 `NO_CACHE_HEADERS` 防止 CDN 缓存用户数据
+
+---
+
+# CDN 缓存用户数据问题
+
+## 问题描述
+
+用户登录后，有时会看到其他用户的"我的关注"数据。刷新后恢复正常。
+
+## 根本原因
+
+阿里云 CDN 缓存了 `/api/user/preferences/*` 的 API 响应，导致不同用户收到相同的缓存数据。
+
+## 解决方案
+
+### 1. 后端添加 Cache-Control 头
+
+在 `preferences_api.py` 中为所有用户相关的 API 添加 no-cache 响应头：
+
+```python
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+@router.get("/followed-news")
+async def get_followed_news(request: Request, response: Response, ...):
+    for key, value in NO_CACHE_HEADERS.items():
+        response.headers[key] = value
+    ...
+```
+
+### 2. CDN 配置（推荐）
+
+在阿里云 CDN 控制台配置：
+- 对 `/api/user/*` 路径设置"不缓存"
+- 或设置"遵循源站 Cache-Control"
+
+### 受影响的 API
+
+以下 API 已添加 no-cache 头：
+- `GET /api/user/preferences/tags`
+- `GET /api/user/preferences/tag-settings`
+- `GET /api/user/preferences/recommended-tags`
+- `GET /api/user/preferences/followed-news`

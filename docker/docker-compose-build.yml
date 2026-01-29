@@ -170,6 +170,11 @@ services:
       - WECHAT_PAY_CERT_SERIAL_NO=${WECHAT_PAY_CERT_SERIAL_NO:-}
       - WECHAT_PAY_PRIVATE_KEY_PATH=${WECHAT_PAY_PRIVATE_KEY_PATH:-}
       - WECHAT_PAY_NOTIFY_URL=${WECHAT_PAY_NOTIFY_URL:-}
+      # 微信公众号自动抓取调度器配置
+      - HOTNEWS_WECHAT_SCHEDULER_ENABLED=${HOTNEWS_WECHAT_SCHEDULER_ENABLED:-0}
+      - HOTNEWS_MP_CHECK_INTERVAL=${HOTNEWS_MP_CHECK_INTERVAL:-60}
+      - HOTNEWS_MP_MAX_PER_CYCLE=${HOTNEWS_MP_MAX_PER_CYCLE:-20}
+      - HOTNEWS_UNIFIED_MP_SCHEDULER=${HOTNEWS_UNIFIED_MP_SCHEDULER:-1}
 
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % __import__('os').environ.get('VIEWER_PORT','8090'), timeout=5).read()" ]
