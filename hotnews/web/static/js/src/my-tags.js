@@ -300,6 +300,31 @@ function renderTagsNews(container, tagsData) {
 }
 
 /**
+ * Wait for authState with timeout
+ */
+async function waitForAuthWithTimeout(timeoutMs = 3000) {
+    if (authState.initialized) {
+        return authState.getUser();
+    }
+    
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            console.warn('[MyTags] authState init timeout, proceeding without auth');
+            resolve(null);
+        }, timeoutMs);
+        
+        authState.init().then(() => {
+            clearTimeout(timeout);
+            resolve(authState.getUser());
+        }).catch((e) => {
+            clearTimeout(timeout);
+            console.error('[MyTags] authState init failed:', e);
+            resolve(null);
+        });
+    });
+}
+
+/**
  * Main load function for My Tags
  */
 async function loadMyTags(force = false) {
@@ -324,15 +349,10 @@ async function loadMyTags(force = false) {
     myTagsLoading = true;
 
     try {
-        // Wait for authState to initialize if not yet done
-        if (!authState.initialized) {
-            console.log('[MyTags] Waiting for authState to initialize...');
-            await authState.init();
-        }
+        // Wait for authState to initialize with timeout (for WeChat browser compatibility)
+        console.log('[MyTags] Waiting for authState with timeout...');
+        const user = await waitForAuthWithTimeout(3000);
         
-        // Check auth first (sync check from authState)
-        console.log('[MyTags] Checking auth...');
-        const user = checkAuth();
         if (!user) {
             console.log('[MyTags] User not authenticated');
             renderLoginRequired(container);

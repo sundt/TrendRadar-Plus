@@ -222,6 +222,14 @@ async function loadDiscovery(force = false) {
     const container = document.getElementById('discoveryGrid');
     if (!container) {
         console.error('[Discovery] Container #discoveryGrid not found!');
+        // Retry after a short delay (for WeChat browser where DOM might not be ready)
+        setTimeout(() => {
+            const retryContainer = document.getElementById('discoveryGrid');
+            if (retryContainer && !discoveryLoaded && !discoveryLoading) {
+                console.log('[Discovery] Retrying after container found');
+                loadDiscovery(force);
+            }
+        }, 500);
         return;
     }
 

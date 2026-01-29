@@ -173,7 +173,8 @@
             {% for cat_id, category in data.categories.items() %}
             {% set is_active_category = (cat_id == 'my-tags') %}
             {% set is_special = (cat_id in special_cats) %}
-            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="0">
+            {% set needs_lazy_load = (not is_special and not is_active_category) %}
+            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="{% if needs_lazy_load %}1{% else %}0{% endif %}">
                 {% if cat_id == 'my-tags' %}
                 <div class="platform-grid" id="myTagsGrid">
                     <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
@@ -255,7 +256,17 @@
                     </div>
                 </div>
                 {% elif not is_special %}
-                {# 普通栏目（AI资讯、财经投资等）渲染完整内容 #}
+                {# 普通栏目（AI资讯、财经投资等） #}
+                {% if needs_lazy_load %}
+                {# 需要懒加载的栏目只渲染占位符 #}
+                <div class="platform-grid category-lazy-placeholder">
+                    <div class="category-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                        <div style="font-size:32px;margin-bottom:12px;">📰</div>
+                        <div style="font-size:14px;">切换到此栏目后加载...</div>
+                    </div>
+                </div>
+                {% else %}
+                {# 不需要懒加载的栏目渲染完整内容 #}
                 <div class="platform-grid">
                     {% for platform_id, platform in (category.platforms.items()|list) %}
                     {% set is_real_card = loop.index0 < 3 %}
@@ -316,6 +327,7 @@
                 </div>
                 <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
                 {% endif %}
+                {% endif %}
             </div>
             {% endfor %}
         </div>
@@ -347,6 +359,53 @@
             try {
                 localStorage.setItem('hotnews_mobile_top_collapsed_v1', '0');
             } catch (e) { }
+        })();
+    </script>
+
+    <!-- 备用加载机制：确保 my-tags 和 discovery 在微信浏览器中能正常加载 -->
+    <script>
+        (function() {
+            // 检查是否需要触发加载的函数
+            function checkAndTriggerLoad() {
+                try {
+                    // 检查 my-tags
+                    var myTagsPane = document.getElementById('tab-my-tags');
+                    var myTagsGrid = document.getElementById('myTagsGrid');
+                    if (myTagsPane && myTagsPane.classList.contains('active') && myTagsGrid) {
+                        var hasContent = myTagsGrid.querySelector('.platform-card') || 
+                                        myTagsGrid.querySelector('[style*="text-align:center"]');
+                        var isLoading = myTagsGrid.querySelector('.my-tags-loading');
+                        // 如果还在显示初始加载状态，尝试触发加载
+                        if (isLoading && !hasContent) {
+                            console.log('[Fallback] Triggering my-tags load');
+                            if (window.HotNews && window.HotNews.myTags && typeof window.HotNews.myTags.load === 'function') {
+                                window.HotNews.myTags.load(true);
+                            }
+                        }
+                    }
+                    
+                    // 检查 discovery
+                    var discoveryPane = document.getElementById('tab-discovery');
+                    var discoveryGrid = document.getElementById('discoveryGrid');
+                    if (discoveryPane && discoveryPane.classList.contains('active') && discoveryGrid) {
+                        var hasDiscoveryContent = discoveryGrid.querySelector('.platform-card') ||
+                                                  discoveryGrid.querySelector('[style*="text-align:center"]');
+                        var isDiscoveryLoading = discoveryGrid.querySelector('.discovery-loading');
+                        if (isDiscoveryLoading && !hasDiscoveryContent) {
+                            console.log('[Fallback] Triggering discovery load');
+                            if (window.HotNews && window.HotNews.discovery && typeof window.HotNews.discovery.load === 'function') {
+                                window.HotNews.discovery.load(true);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('[Fallback] Error:', e);
+                }
+            }
+            
+            // 延迟检查，给 JS 模块足够的初始化时间
+            setTimeout(checkAndTriggerLoad, 2000);
+            setTimeout(checkAndTriggerLoad, 5000);
         })();
     </script>
 
