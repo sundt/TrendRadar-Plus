@@ -14,9 +14,17 @@ import time
 import hashlib
 from typing import Optional, List
 
-from fastapi import APIRouter, Request, HTTPException, Body, Query
+from fastapi import APIRouter, Request, HTTPException, Body, Query, Response
 
 router = APIRouter(prefix="/api/user/preferences", tags=["preferences"])
+
+
+# Response headers to prevent CDN/browser caching of user-specific data
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 
 # ==================== Title Deduplication Helpers ====================
@@ -125,8 +133,12 @@ def _get_current_user(request: Request):
 # ==================== Tag Preferences (Learned) ====================
 
 @router.get("/tags")
-async def get_tag_preferences(request: Request, limit: int = Query(50, ge=1, le=100)):
+async def get_tag_preferences(request: Request, response: Response, limit: int = Query(50, ge=1, le=100)):
     """Get user's learned tag preferences sorted by preference score."""
+    # Set no-cache headers to prevent CDN/browser caching of user-specific data
+    for key, value in NO_CACHE_HEADERS.items():
+        response.headers[key] = value
+    
     user = _get_current_user(request)
     conn = _get_user_db_conn(request)
     online_conn = _get_online_db_conn(request)
@@ -176,8 +188,12 @@ async def get_tag_preferences(request: Request, limit: int = Query(50, ge=1, le=
 # ==================== Tag Settings (Explicit) ====================
 
 @router.get("/tag-settings")
-async def get_tag_settings(request: Request):
+async def get_tag_settings(request: Request, response: Response):
     """Get user's explicit tag settings (followed tags only)."""
+    # Set no-cache headers to prevent CDN/browser caching of user-specific data
+    for key, value in NO_CACHE_HEADERS.items():
+        response.headers[key] = value
+    
     user = _get_current_user(request)
     conn = _get_user_db_conn(request)
     online_conn = _get_online_db_conn(request)
@@ -342,7 +358,7 @@ async def save_tag_order(
 # ==================== Recommendation Helpers ====================
 
 @router.get("/recommended-tags")
-async def get_recommended_tags(request: Request, limit: int = Query(10, ge=1, le=30)):
+async def get_recommended_tags(request: Request, response: Response, limit: int = Query(10, ge=1, le=30)):
     """Get recommended tags based on trending data and user behavior.
     
     Returns:
@@ -350,6 +366,10 @@ async def get_recommended_tags(request: Request, limit: int = Query(10, ge=1, le
     - new_tags: Recently discovered dynamic tags
     - related_tags: Tags related to user's followed tags (if any)
     """
+    # Set no-cache headers to prevent CDN/browser caching of user-specific data
+    for key, value in NO_CACHE_HEADERS.items():
+        response.headers[key] = value
+    
     user = _get_current_user(request)
     conn = _get_user_db_conn(request)
     online_conn = _get_online_db_conn(request)
@@ -551,7 +571,8 @@ async def get_recommended_tags(request: Request, limit: int = Query(10, ge=1, le
 
 @router.get("/followed-news")
 async def get_followed_news(
-    request: Request, 
+    request: Request,
+    response: Response,
     limit: int = Query(50, ge=1, le=100),
     source_type: Optional[str] = Query(None, description="Filter by source type: tag, source, keyword, wechat, or all")
 ):
@@ -561,6 +582,10 @@ async def get_followed_news(
         limit: Maximum number of news items per group
         source_type: Filter by source type (tag, source, keyword, wechat, or all/None for all types)
     """
+    # Set no-cache headers to prevent CDN/browser caching of user-specific data
+    for key, value in NO_CACHE_HEADERS.items():
+        response.headers[key] = value
+    
     user = _get_current_user(request)
     conn = _get_user_db_conn(request)
     online_conn = _get_online_db_conn(request)
