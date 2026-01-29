@@ -7,6 +7,9 @@ Implements intelligent scheduling for WeChat official account article fetching:
 - Failure backoff with exponential retry
 - Multi-user auth rotation
 
+This module now wraps rss_smart_scheduler.py functions for unified scheduling,
+while preserving WeChat-specific logic (frequency analysis, publish time stats).
+
 Reference: https://blog.xlab.app/p/d73537b/
 """
 
@@ -17,12 +20,30 @@ from collections import Counter
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+# Import unified scheduler functions
+from hotnews.kernel.services.rss_smart_scheduler import (
+    get_source_stats,
+    update_source_stats,
+    get_due_sources,
+    get_scheduler_stats as get_unified_scheduler_stats,
+    classify_update_frequency as unified_classify_frequency,
+    calculate_publish_time_stats as unified_publish_time_stats,
+    calculate_next_check_time as unified_next_check_time,
+    calculate_backoff as unified_backoff,
+)
+
 logger = logging.getLogger("uvicorn.error")
+
+
+# ========== Constants ==========
+
+MP_SOURCE_TYPE = "mp"  # Source type for WeChat MP in unified tables
 
 
 # ========== Cadence Configuration ==========
 
-# WeChat-specific cadence levels (W0-W6)
+# WeChat-specific cadence levels (W0-W6) - kept for backward compatibility
+# Note: New code should use P0-P6 from rss_smart_scheduler
 WECHAT_CADENCE_INTERVALS = {
     "W0": 1 * 3600,      # 1 hour - realtime news accounts
     "W1": 2 * 3600,      # 2 hours - high frequency
@@ -31,6 +52,17 @@ WECHAT_CADENCE_INTERVALS = {
     "W4": 12 * 3600,     # 12 hours - weekly accounts
     "W5": 24 * 3600,     # 24 hours - low frequency
     "W6": 48 * 3600,     # 48 hours - very low frequency
+}
+
+# Mapping from W-cadence to P-cadence (for migration)
+W_TO_P_CADENCE = {
+    "W0": "P0",
+    "W1": "P1",
+    "W2": "P2",
+    "W3": "P3",
+    "W4": "P4",
+    "W5": "P5",
+    "W6": "P6",
 }
 
 # Frequency type to cadence mapping
@@ -47,6 +79,18 @@ FREQUENCY_CADENCE_MAP = {
 
 def _now_ts() -> int:
     return int(time.time())
+
+
+def _generate_mp_source_id(fakeid: str) -> str:
+    """Generate source_id for MP account."""
+    return f"mp-{fakeid}"
+
+
+def _extract_fakeid(source_id: str) -> str:
+    """Extract fakeid from source_id."""
+    if source_id.startswith("mp-"):
+        return source_id[3:]
+    return source_id
 
 
 # ========== Frequency Classification ==========
@@ -243,35 +287,80 @@ def calculate_backoff(fail_count: int, error_message: str = "") -> int:
         return min(24 * 3600, 15 * 60 * (2 ** step))
 
 
-# ========== Stats Management ==========
+# ========== Stats Management (Wrapper Functions) ==========
 
 def get_mp_stats(conn, fakeid: str) -> Optional[Dict[str, Any]]:
-    """Get stats for a specific MP account."""
-    cur = conn.execute(
-        "SELECT * FROM wechat_mp_stats WHERE fakeid = ?",
-        (fakeid,)
-    )
-    row = cur.fetchone()
-    if not row:
-        return None
+    """
+    Get stats for a specific MP account.
     
-    # Convert row to dict
-    columns = [desc[0] for desc in cur.description]
-    return dict(zip(columns, row))
+    Wraps get_source_stats() from rss_smart_scheduler.
+    """
+    source_id = _generate_mp_source_id(fakeid)
+    stats = get_source_stats(conn, source_id)
+    
+    if not stats:
+        # Fallback: try old table for backward compatibility
+        cur = conn.execute(
+            "SELECT * FROM wechat_mp_stats WHERE fakeid = ?",
+            (fakeid,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        columns = [desc[0] for desc in cur.description]
+        return dict(zip(columns, row))
+    
+    # Convert to MP-style dict for backward compatibility
+    return {
+        "fakeid": fakeid,
+        "nickname": "",  # Not stored in source_stats
+        "frequency_type": stats.get("frequency_type", "daily"),
+        "cadence": stats.get("cadence", "P2"),
+        "avg_publish_hour": stats.get("avg_publish_hour"),
+        "std_publish_hour": stats.get("std_publish_hour"),
+        "next_due_at": stats.get("next_due_at", 0),
+        "last_check_at": stats.get("last_check_at", 0),
+        "last_article_at": stats.get("last_article_at", 0),
+        "fail_count": stats.get("fail_count", 0),
+        "backoff_until": stats.get("backoff_until", 0),
+        "last_error": stats.get("last_error"),
+        "check_count": stats.get("check_count", 0),
+        "hit_count": stats.get("hit_count", 0),
+    }
 
 
 def get_recent_articles(conn, fakeid: str, limit: int = 30) -> List[Dict[str, Any]]:
     """Get recent articles for frequency analysis."""
-    cur = conn.execute(
-        """
-        SELECT id, fakeid, title, publish_time, publish_hour
-        FROM wechat_mp_articles
-        WHERE fakeid = ?
-        ORDER BY publish_time DESC
-        LIMIT ?
-        """,
-        (fakeid, limit)
-    )
+    # 使用统一读取模块
+    from hotnews.kernel.services.mp_article_reader import get_read_source, ReadSource
+    
+    read_source = get_read_source()
+    
+    if read_source == ReadSource.NEW_TABLE:
+        source_id = f"mp-{fakeid}"
+        cur = conn.execute(
+            """
+            SELECT id, title, published_at as publish_time, 
+                   (published_at / 3600) % 24 as publish_hour
+            FROM rss_entries
+            WHERE source_id = ?
+            ORDER BY published_at DESC
+            LIMIT ?
+            """,
+            (source_id, limit)
+        )
+    else:
+        cur = conn.execute(
+            """
+            SELECT id, title, publish_time, publish_hour
+            FROM wechat_mp_articles
+            WHERE fakeid = ?
+            ORDER BY publish_time DESC
+            LIMIT ?
+            """,
+            (fakeid, limit)
+        )
+    
     rows = cur.fetchall() or []
     columns = [desc[0] for desc in cur.description]
     return [dict(zip(columns, row)) for row in rows]
@@ -287,147 +376,45 @@ def update_mp_stats(
     """
     Update MP stats after a fetch attempt.
     
+    Wraps update_source_stats() from rss_smart_scheduler.
+    
     Args:
         conn: Database connection
         fakeid: MP account ID
-        nickname: MP account name
+        nickname: MP account name (not used in unified table)
         has_new_articles: Whether new articles were found
         error_message: Error message if fetch failed
         
     Returns:
         Updated stats dict
     """
-    now = _now_ts()
+    source_id = _generate_mp_source_id(fakeid)
     
-    # Get current stats
-    stats = get_mp_stats(conn, fakeid)
+    # Call unified update function
+    result = update_source_stats(
+        conn,
+        source_id=source_id,
+        source_type=MP_SOURCE_TYPE,
+        has_new_entries=has_new_articles,
+        error_message=error_message,
+    )
     
-    if stats:
-        # Update existing record
-        check_count = (stats.get('check_count') or 0) + 1
-        hit_count = (stats.get('hit_count') or 0) + (1 if has_new_articles else 0)
-        fail_count = 0 if not error_message else (stats.get('fail_count') or 0) + 1
-        
-        # Re-analyze frequency every 10 checks or on first hit
-        should_reanalyze = (check_count % 10 == 0) or (has_new_articles and check_count <= 3)
-        
-        if should_reanalyze and not error_message:
-            articles = get_recent_articles(conn, fakeid, limit=30)
-            freq_type, cadence = classify_update_frequency(articles)
-            avg_hour, std_hour = calculate_publish_time_stats(articles)
-            
-            # Get latest article time
-            last_article_at = articles[0].get('publish_time', 0) if articles else 0
-        else:
-            freq_type = stats.get('frequency_type', 'daily')
-            cadence = stats.get('cadence', 'W2')
-            avg_hour = stats.get('avg_publish_hour')
-            std_hour = stats.get('std_publish_hour')
-            last_article_at = stats.get('last_article_at', 0)
-        
-        # Calculate next check time
-        if error_message:
-            backoff = calculate_backoff(fail_count, error_message)
-            next_due = now + backoff if backoff > 0 else now + 3600  # 1 hour default
-            backoff_until = now + backoff
-        else:
-            next_due = calculate_next_check_time(
-                cadence, freq_type, avg_hour, std_hour, last_article_at
-            )
-            backoff_until = 0
-        
-        conn.execute(
-            """
-            UPDATE wechat_mp_stats SET
-                nickname = COALESCE(?, nickname),
-                frequency_type = ?,
-                cadence = ?,
-                avg_publish_hour = ?,
-                std_publish_hour = ?,
-                next_due_at = ?,
-                last_check_at = ?,
-                last_article_at = CASE WHEN ? > last_article_at THEN ? ELSE last_article_at END,
-                fail_count = ?,
-                backoff_until = ?,
-                last_error = ?,
-                check_count = ?,
-                hit_count = ?,
-                updated_at = ?
-            WHERE fakeid = ?
-            """,
-            (
-                nickname or None,
-                freq_type, cadence, avg_hour, std_hour,
-                next_due, now,
-                last_article_at, last_article_at,
-                fail_count, backoff_until,
-                error_message if error_message else None,
-                check_count, hit_count, now,
-                fakeid
-            )
-        )
-        
-        return {
-            "fakeid": fakeid,
-            "frequency_type": freq_type,
-            "cadence": cadence,
-            "next_due_at": next_due,
-            "check_count": check_count,
-            "hit_count": hit_count,
-        }
-    else:
-        # Create new record
-        # Analyze if we have articles
-        articles = get_recent_articles(conn, fakeid, limit=30)
-        if articles:
-            freq_type, cadence = classify_update_frequency(articles)
-            avg_hour, std_hour = calculate_publish_time_stats(articles)
-            last_article_at = articles[0].get('publish_time', 0)
-            total_articles = len(articles)
-        else:
-            freq_type, cadence = "daily", "W2"
-            avg_hour, std_hour = None, None
-            last_article_at = 0
-            total_articles = 0
-        
-        next_due = calculate_next_check_time(
-            cadence, freq_type, avg_hour, std_hour, last_article_at
-        )
-        
-        conn.execute(
-            """
-            INSERT INTO wechat_mp_stats (
-                fakeid, nickname, frequency_type, cadence,
-                avg_publish_hour, std_publish_hour,
-                next_due_at, last_check_at, last_article_at,
-                fail_count, backoff_until, last_error,
-                total_articles, check_count, hit_count,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                fakeid, nickname, freq_type, cadence,
-                avg_hour, std_hour,
-                next_due, now, last_article_at,
-                0, 0, None,
-                total_articles, 1, 1 if has_new_articles else 0,
-                now, now
-            )
-        )
-        
-        return {
-            "fakeid": fakeid,
-            "frequency_type": freq_type,
-            "cadence": cadence,
-            "next_due_at": next_due,
-            "check_count": 1,
-            "hit_count": 1 if has_new_articles else 0,
-        }
+    # Convert to MP-style response for backward compatibility
+    return {
+        "fakeid": fakeid,
+        "frequency_type": result.get("frequency_type", "daily"),
+        "cadence": result.get("cadence", "P2"),
+        "next_due_at": result.get("next_due_at", 0),
+        "check_count": result.get("check_count", 0),
+        "hit_count": result.get("hit_count", 0),
+    }
 
 
 def get_due_mps(conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, Any]]:
     """
     Get MP accounts that are due for checking.
+    
+    Wraps get_due_sources() from rss_smart_scheduler.
     
     Args:
         conn: Online database connection
@@ -447,51 +434,34 @@ def get_due_mps(conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, An
     if not subscriptions:
         return []
     
-    # Get stats for subscribed accounts
-    placeholders = ",".join(["?"] * len(subscriptions))
-    fakeids = list(subscriptions.keys())
+    # Get due sources from unified table
+    due_sources = get_due_sources(conn, now, source_type=MP_SOURCE_TYPE, limit=limit * 2)
     
-    cur = conn.execute(
-        f"""
-        SELECT fakeid, nickname, cadence, next_due_at, backoff_until, fail_count
-        FROM wechat_mp_stats
-        WHERE fakeid IN ({placeholders})
-        """,
-        fakeids
-    )
-    stats_map = {r[0]: {
-        "fakeid": r[0],
-        "nickname": r[1],
-        "cadence": r[2],
-        "next_due_at": r[3],
-        "backoff_until": r[4],
-        "fail_count": r[5],
-    } for r in cur.fetchall()}
-    
-    # Build result list
+    # Filter to only subscribed MPs and convert format
     due_mps = []
-    for fakeid, nickname in subscriptions.items():
-        stats = stats_map.get(fakeid)
+    seen_fakeids = set()
+    
+    for src in due_sources:
+        source_id = src.get("source_id", "")
+        fakeid = _extract_fakeid(source_id)
         
-        if stats:
-            # Check if due
-            next_due = stats.get('next_due_at', 0)
-            backoff_until = stats.get('backoff_until', 0)
-            
-            if next_due <= now and backoff_until <= now:
-                due_mps.append({
-                    "fakeid": fakeid,
-                    "nickname": stats.get('nickname') or nickname,
-                    "cadence": stats.get('cadence', 'W2'),
-                    "next_due_at": next_due,
-                    "fail_count": stats.get('fail_count', 0),
-                })
-        else:
-            # No stats yet, always due
+        if fakeid in subscriptions and fakeid not in seen_fakeids:
+            seen_fakeids.add(fakeid)
+            due_mps.append({
+                "fakeid": fakeid,
+                "nickname": subscriptions.get(fakeid, ""),
+                "cadence": src.get("cadence", "P2"),
+                "next_due_at": src.get("next_due_at", 0),
+                "fail_count": src.get("fail_count", 0),
+            })
+    
+    # Add subscribed MPs that don't have stats yet (always due)
+    for fakeid, nickname in subscriptions.items():
+        if fakeid not in seen_fakeids:
             due_mps.append({
                 "fakeid": fakeid,
                 "nickname": nickname,
-                "cadence": "W2",
+                "cadence": "P2",
                 "next_due_at": 0,
                 "fail_count": 0,
             })
@@ -502,48 +472,25 @@ def get_due_mps(conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, An
 
 
 def get_scheduler_stats(conn, user_conn) -> Dict[str, Any]:
-    """Get overall scheduler statistics."""
+    """
+    Get overall scheduler statistics for MP accounts.
+    
+    Wraps get_scheduler_stats() from rss_smart_scheduler.
+    """
     now = _now_ts()
     
     # Count subscriptions
     sub_cur = user_conn.execute("SELECT COUNT(DISTINCT fakeid) FROM wechat_mp_subscriptions")
     total_subscribed = sub_cur.fetchone()[0] or 0
     
-    # Count by cadence
-    cur = conn.execute(
-        """
-        SELECT cadence, COUNT(*) as cnt
-        FROM wechat_mp_stats
-        GROUP BY cadence
-        """
-    )
-    cadence_counts = {r[0]: r[1] for r in cur.fetchall()}
-    
-    # Count due now
-    cur = conn.execute(
-        "SELECT COUNT(*) FROM wechat_mp_stats WHERE next_due_at <= ? AND backoff_until <= ?",
-        (now, now)
-    )
-    due_now = cur.fetchone()[0] or 0
-    
-    # Count in backoff
-    cur = conn.execute(
-        "SELECT COUNT(*) FROM wechat_mp_stats WHERE backoff_until > ?",
-        (now,)
-    )
-    in_backoff = cur.fetchone()[0] or 0
-    
-    # Average hit rate
-    cur = conn.execute(
-        "SELECT AVG(CAST(hit_count AS FLOAT) / NULLIF(check_count, 0)) FROM wechat_mp_stats WHERE check_count > 0"
-    )
-    avg_hit_rate = cur.fetchone()[0] or 0
+    # Get unified stats for MP type
+    unified_stats = get_unified_scheduler_stats(conn, source_type=MP_SOURCE_TYPE)
     
     return {
         "total_subscribed": total_subscribed,
-        "total_with_stats": sum(cadence_counts.values()),
-        "cadence_distribution": cadence_counts,
-        "due_now": due_now,
-        "in_backoff": in_backoff,
-        "avg_hit_rate": round(avg_hit_rate * 100, 1),
+        "total_with_stats": unified_stats.get("total_with_stats", 0),
+        "cadence_distribution": unified_stats.get("cadence_distribution", {}),
+        "due_now": unified_stats.get("due_now", 0),
+        "in_backoff": unified_stats.get("in_backoff", 0),
+        "avg_hit_rate": unified_stats.get("avg_hit_rate", 0.0),
     }

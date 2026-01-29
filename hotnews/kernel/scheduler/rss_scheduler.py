@@ -314,18 +314,21 @@ def _mb_ai_select_unlabeled(conn, limit: int) -> List[Dict[str, Any]]:
 
     # Apply Whitelist Filter if enabled
     if whitelist_enabled and allowed_cats:
-        # We need to join rss_sources to check category
+        # Use LEFT JOIN to include MP articles (which don't have rss_sources entries)
+        # Include articles if:
+        # 1. source_type = 'mp' (WeChat MP articles), OR
+        # 2. source category is in whitelist
         sql = """
             SELECT e.source_id, e.dedup_key, e.url, e.title
             FROM rss_entries e
-            JOIN rss_sources s ON e.source_id = s.id
+            LEFT JOIN rss_sources s ON e.source_id = s.id
             LEFT JOIN rss_entry_ai_labels l
               ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
             WHERE l.id IS NULL
         """
-        # dynamic IN clause
+        # Include MP articles OR articles from whitelisted categories
         placeholders = ",".join(["?"] * len(allowed_cats))
-        sql += f" AND s.category IN ({placeholders})"
+        sql += f" AND (e.source_type = 'mp' OR s.category IN ({placeholders}))"
         params.extend(list(allowed_cats))
     
     sql += " ORDER BY e.published_at DESC, e.id DESC LIMIT ?"

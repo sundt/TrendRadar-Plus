@@ -517,6 +517,16 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("tags", "last_used_at", "INTEGER")
     _ensure_column("tags", "promoted_from", "TEXT")
 
+    # ========== RSS Entries 扩展字段（公众号文章统一存储） ==========
+    # 为 rss_entries 表添加公众号文章所需的字段
+    _ensure_column("rss_entries", "description", "TEXT DEFAULT ''")
+    _ensure_column("rss_entries", "cover_url", "TEXT DEFAULT ''")
+    _ensure_column("rss_entries", "source_type", "TEXT DEFAULT 'rss'")
+    
+    # 添加 source_type 索引以支持按类型筛选
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_type ON rss_entries(source_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_type_pub ON rss_entries(source_type, published_at DESC)")
+
     try:
         conn.execute("UPDATE rss_sources SET added_at = created_at WHERE (added_at IS NULL OR added_at = 0) AND created_at > 0")
     except Exception:

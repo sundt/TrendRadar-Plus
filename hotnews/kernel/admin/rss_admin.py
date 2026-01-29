@@ -751,6 +751,141 @@ async def api_admin_morning_brief_ai_stats(request: Request):
     )
 
 
+@router.get("/api/admin/entries/stats-by-type")
+async def api_admin_entries_stats_by_type(request: Request):
+    """
+    获取按 source_type 分类的文章统计
+    
+    Returns:
+        - by_type: 按类型统计 {rss: count, custom: count, mp: count}
+        - total: 总文章数
+        - labeled_by_type: 按类型的已标记数
+    """
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    
+    # 按 source_type 统计文章数
+    by_type = {"rss": 0, "custom": 0, "mp": 0}
+    try:
+        cur = conn.execute(
+            """
+            SELECT COALESCE(source_type, 'rss') as st, COUNT(*) as cnt
+            FROM rss_entries
+            GROUP BY st
+            """
+        )
+        for row in cur.fetchall() or []:
+            st = str(row[0] or "rss")
+            cnt = int(row[1] or 0)
+            if st in by_type:
+                by_type[st] = cnt
+            else:
+                by_type["rss"] += cnt  # 未知类型归入 rss
+    except Exception as e:
+        logger.error(f"Failed to get entries by type: {e}")
+    
+    total = sum(by_type.values())
+    
+    # 按 source_type 统计已标记数
+    labeled_by_type = {"rss": 0, "custom": 0, "mp": 0}
+    try:
+        cur = conn.execute(
+            """
+            SELECT COALESCE(e.source_type, 'rss') as st, COUNT(*) as cnt
+            FROM rss_entries e
+            JOIN rss_entry_ai_labels l
+              ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+            GROUP BY st
+            """
+        )
+        for row in cur.fetchall() or []:
+            st = str(row[0] or "rss")
+            cnt = int(row[1] or 0)
+            if st in labeled_by_type:
+                labeled_by_type[st] = cnt
+            else:
+                labeled_by_type["rss"] += cnt
+    except Exception as e:
+        logger.error(f"Failed to get labeled entries by type: {e}")
+    
+    return JSONResponse(
+        content={
+            "ok": True,
+            "by_type": by_type,
+            "total": total,
+            "labeled_by_type": labeled_by_type,
+        }
+    )
+
+
+@router.get("/api/admin/mp-migration/status")
+async def api_admin_mp_migration_status(request: Request):
+    """
+    获取公众号数据迁移状态
+    
+    Returns:
+        - articles: 文章迁移进度
+        - stats: 调度统计迁移进度
+    """
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    
+    from hotnews.kernel.services.mp_migration import get_migration_status
+    
+    try:
+        status = get_migration_status(conn)
+        return JSONResponse(content={"ok": True, **status})
+    except Exception as e:
+        logger.error(f"Failed to get migration status: {e}")
+        return JSONResponse(content={"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/admin/mp-migration/verify")
+async def api_admin_mp_migration_verify(request: Request):
+    """
+    验证公众号数据迁移完整性
+    """
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    
+    from hotnews.kernel.services.mp_migration import verify_all
+    
+    try:
+        result = verify_all(conn)
+        return JSONResponse(content={"ok": True, **result})
+    except Exception as e:
+        logger.error(f"Failed to verify migration: {e}")
+        return JSONResponse(content={"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.post("/api/admin/mp-migration/run")
+async def api_admin_mp_migration_run(request: Request, body: Dict[str, Any] = Body(None)):
+    """
+    执行公众号数据迁移
+    
+    Body:
+        - dry_run: 是否仅预览不执行
+        - batch_size: 每批处理数量（默认 1000）
+    """
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    
+    from hotnews.kernel.services.mp_migration import migrate_all
+    
+    if not isinstance(body, dict):
+        body = {}
+    
+    dry_run = bool(body.get("dry_run", False))
+    batch_size = int(body.get("batch_size", 1000))
+    
+    try:
+        result = migrate_all(conn, batch_size=batch_size, dry_run=dry_run)
+        return JSONResponse(content={"ok": True, **result})
+    except Exception as e:
+        logger.error(f"Failed to run migration: {e}")
+        return JSONResponse(content={"ok": False, "error": str(e)}, status_code=500)
+
+
 @router.post("/api/admin/morning-brief/ai-run")
 async def api_admin_morning_brief_ai_run(request: Request, body: Dict[str, Any] = Body(None)):
     _require_admin(request)

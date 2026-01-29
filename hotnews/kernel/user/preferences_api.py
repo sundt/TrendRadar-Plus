@@ -789,39 +789,31 @@ async def get_followed_news(
     
     # === Part 4: Get news for WeChat MP subscriptions ===
     # Use the pre-fetched wechat_subscriptions from above
+    # 使用统一读取模块
+    from hotnews.kernel.services.mp_article_reader import get_mp_articles
+    
     for fakeid, nickname in wechat_subscriptions:
         try:
-            # Query articles from wechat_mp_articles table
-            art_cur = online_conn.execute(
-                """
-                SELECT id, title, url, publish_time, digest
-                FROM wechat_mp_articles
-                WHERE fakeid = ?
-                  AND publish_time > 0
-                  AND publish_time >= ?
-                  AND publish_time <= ?
-                ORDER BY publish_time DESC
-                LIMIT ?
-                """,
-                (fakeid, MIN_TIMESTAMP, MAX_TIMESTAMP, limit)
-            )
+            # Query articles using unified reader
+            articles = get_mp_articles(online_conn, fakeid, limit=limit)
+            
             news_items = []
-            for row in art_cur.fetchall() or []:
-                publish_time = row[3]
+            for art in articles:
+                publish_time = art.get("publish_time", 0)
                 if publish_time < MIN_TIMESTAMP or publish_time > MAX_TIMESTAMP:
                     continue
                 news_items.append({
-                    "id": row[0],
-                    "title": row[1],
-                    "url": row[2],
+                    "id": art["id"],
+                    "title": art["title"],
+                    "url": art["url"],
                     "published_at": publish_time,
-                    "source_id": f"wechat-{fakeid}",
-                    "digest": row[4] or "",
+                    "source_id": f"mp-{fakeid}",  # 统一使用 mp- 前缀
+                    "digest": art.get("digest", ""),
                 })
             
             result.append({
                 "tag": {
-                    "id": f"wechat-{fakeid}",
+                    "id": f"mp-{fakeid}",  # 统一使用 mp- 前缀
                     "name": nickname or fakeid,
                     "name_en": "",
                     "type": "wechat",

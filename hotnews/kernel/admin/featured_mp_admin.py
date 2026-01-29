@@ -866,33 +866,15 @@ async def get_featured_mps_public(
     cur = conn.execute(query, params)
     mp_rows = cur.fetchall() or []
     
+    # 使用统一读取模块
+    from hotnews.kernel.services.mp_article_reader import get_mp_articles
+    
     mps = []
     for row in mp_rows:
         fakeid, nickname, avatar, signature, cat = row
         
-        # Get latest articles for this MP
-        art_cur = conn.execute(
-            """
-            SELECT id, title, url, digest, cover_url, publish_time
-            FROM wechat_mp_articles
-            WHERE fakeid = ?
-            ORDER BY publish_time DESC
-            LIMIT ?
-            """,
-            (fakeid, article_limit)
-        )
-        art_rows = art_cur.fetchall() or []
-        
-        articles = []
-        for art in art_rows:
-            articles.append({
-                "id": art[0],
-                "title": art[1],
-                "url": art[2],
-                "digest": art[3] or "",
-                "cover_url": art[4] or "",
-                "publish_time": art[5]
-            })
+        # Get latest articles for this MP using unified reader
+        articles = get_mp_articles(conn, fakeid, limit=article_limit)
         
         mps.append({
             "fakeid": fakeid,
@@ -953,6 +935,9 @@ async def manual_fetch_articles(
     if not mps:
         return {"ok": True, "message": "没有需要抓取的公众号", "fetched": 0}
     
+    # 使用统一写入模块
+    from hotnews.kernel.services.mp_article_writer import save_mp_articles
+    
     total_fetched = 0
     errors = []
     now = _now_ts()
@@ -969,34 +954,24 @@ async def manual_fetch_articles(
                 errors.append(f"{mp_nickname}: {result.error_message}")
                 continue
             
+            # 转换文章格式并使用统一写入
+            articles_to_save = []
             for art in result.articles:
                 if not art.url:
                     continue
-                
-                dedup_key = generate_dedup_key(art.url)
-                
-                try:
-                    conn.execute(
-                        """
-                        INSERT OR IGNORE INTO wechat_mp_articles
-                        (fakeid, dedup_key, title, url, digest, cover_url, publish_time, fetched_at, mp_nickname)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            mp_fakeid,
-                            dedup_key,
-                            art.title,
-                            art.url,
-                            art.digest or "",
-                            art.cover_url or "",
-                            art.publish_time,
-                            now,
-                            mp_nickname
-                        )
-                    )
-                    total_fetched += 1
-                except Exception as e:
-                    logger.debug(f"Article insert error (likely duplicate): {e}")
+                articles_to_save.append({
+                    "title": art.title,
+                    "url": art.url,
+                    "digest": art.digest or "",
+                    "cover_url": art.cover_url or "",
+                    "publish_time": art.publish_time,
+                })
+            
+            if articles_to_save:
+                save_result = save_mp_articles(conn, mp_fakeid, mp_nickname, articles_to_save)
+                total_fetched += save_result["inserted"]
+                if save_result["errors"]:
+                    errors.extend(save_result["errors"][:5])  # 限制错误数量
             
             # Update last_fetch_at
             conn.execute(

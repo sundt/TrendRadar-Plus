@@ -142,52 +142,27 @@ def _store_articles(
     
     Returns number of new articles stored.
     """
-    now = _now_ts()
-    new_count = 0
+    # 使用统一写入模块
+    from hotnews.kernel.services.mp_article_writer import save_mp_articles
     
+    # 转换文章格式
+    articles_to_save = []
     for art in articles:
-        url = art.url
-        if not url:
+        if not art.url:
             continue
-        
-        dedup_key = generate_dedup_key(url)
-        
-        # Extract publish_hour for time analysis
-        publish_time = art.publish_time or now
-        publish_hour = None
-        if publish_time:
-            try:
-                dt = datetime.fromtimestamp(publish_time)
-                publish_hour = dt.hour
-            except Exception:
-                pass
-        
-        try:
-            online_conn.execute(
-                """
-                INSERT OR IGNORE INTO wechat_mp_articles
-                (fakeid, dedup_key, title, url, digest, cover_url, publish_time, publish_hour, fetched_at, mp_nickname)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    fakeid,
-                    dedup_key,
-                    art.title,
-                    url,
-                    art.digest or "",
-                    art.cover_url or "",
-                    publish_time,
-                    publish_hour,
-                    now,
-                    mp_nickname,
-                )
-            )
-            if online_conn.total_changes > 0:
-                new_count += 1
-        except Exception as e:
-            logger.warning(f"Failed to store article: {e}")
+        articles_to_save.append({
+            "title": art.title,
+            "url": art.url,
+            "digest": art.digest or "",
+            "cover_url": art.cover_url or "",
+            "publish_time": art.publish_time or _now_ts(),
+        })
     
-    return new_count
+    if not articles_to_save:
+        return 0
+    
+    result = save_mp_articles(online_conn, fakeid, mp_nickname, articles_to_save)
+    return result["inserted"]
 
 
 def _tag_new_articles(online_conn, fakeid: str, articles: List[Any]) -> None:

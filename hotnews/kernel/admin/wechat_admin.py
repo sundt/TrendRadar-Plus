@@ -914,35 +914,24 @@ async def subscribe(request: Request, body: SubscribeRequest) -> Dict[str, Any]:
                     result = provider.get_articles(fakeid, 20)
                     
                     if result.ok:
+                        # 使用统一写入模块
+                        from hotnews.kernel.services.mp_article_writer import save_mp_articles
+                        
+                        articles_to_save = []
                         for art in result.articles:
                             if not art.url:
                                 continue
-                            
-                            dedup_key = generate_dedup_key(art.url)
-                            
-                            try:
-                                online_conn.execute(
-                                    """
-                                    INSERT OR IGNORE INTO wechat_mp_articles
-                                    (fakeid, dedup_key, title, url, digest, cover_url, publish_time, fetched_at, mp_nickname)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    (
-                                        fakeid,
-                                        dedup_key,
-                                        art.title,
-                                        art.url,
-                                        art.digest or "",
-                                        art.cover_url or "",
-                                        art.publish_time or now,
-                                        now,
-                                        nickname,
-                                    )
-                                )
-                                if online_conn.total_changes > 0:
-                                    articles_fetched += 1
-                            except Exception as e:
-                                logger.warning(f"Failed to store article: {e}")
+                            articles_to_save.append({
+                                "title": art.title,
+                                "url": art.url,
+                                "digest": art.digest or "",
+                                "cover_url": art.cover_url or "",
+                                "publish_time": art.publish_time or now,
+                            })
+                        
+                        if articles_to_save:
+                            save_result = save_mp_articles(online_conn, fakeid, nickname, articles_to_save)
+                            articles_fetched = save_result["inserted"]
                         
                         online_conn.commit()
                         logger.info(f"[WeChat] Fetched {articles_fetched} articles for {nickname} on subscribe")
@@ -1011,42 +1000,29 @@ async def get_articles(
     if not subscriptions:
         return {"ok": True, "articles": [], "total": 0}
     
-    # Query articles from cache
+    # 使用统一读取模块
+    from hotnews.kernel.services.mp_article_reader import get_mp_articles_paginated
+    
     fakeids = list(subscriptions.keys())
-    placeholders = ",".join(["?"] * len(fakeids))
-    
-    cur = online_conn.execute(
-        f"""
-        SELECT id, fakeid, title, url, digest, cover_url, publish_time, mp_nickname
-        FROM wechat_mp_articles
-        WHERE fakeid IN ({placeholders})
-        ORDER BY publish_time DESC
-        LIMIT ? OFFSET ?
-        """,
-        (*fakeids, limit, offset)
+    articles_raw, total = get_mp_articles_paginated(
+        online_conn, fakeids, limit=limit, offset=offset
     )
-    rows = cur.fetchall() or []
     
+    # 添加 mp_name 和 source_type
     articles = []
-    for r in rows:
+    for art in articles_raw:
+        fakeid = art.get("fakeid", "")
         articles.append({
-            "id": r[0],
-            "fakeid": r[1],
-            "mp_name": r[7] or subscriptions.get(r[1], ""),
-            "title": r[2],
-            "url": r[3],
-            "digest": r[4] or "",
-            "cover_url": r[5] or "",
-            "publish_time": r[6],
+            "id": art["id"],
+            "fakeid": fakeid,
+            "mp_name": art.get("mp_nickname") or subscriptions.get(fakeid, ""),
+            "title": art["title"],
+            "url": art["url"],
+            "digest": art.get("digest", ""),
+            "cover_url": art.get("cover_url", ""),
+            "publish_time": art.get("publish_time", 0),
             "source_type": "wechat",
         })
-    
-    # Get total count
-    count_cur = online_conn.execute(
-        f"SELECT COUNT(*) FROM wechat_mp_articles WHERE fakeid IN ({placeholders})",
-        fakeids
-    )
-    total = count_cur.fetchone()[0] or 0
     
     return {"ok": True, "articles": articles, "total": total}
 
@@ -1114,37 +1090,25 @@ async def refresh_articles(request: Request) -> Dict[str, Any]:
                 errors.append(f"{nickname}: {result.error_message}")
                 continue
             
-            # Store articles
-            new_count = 0
+            # Store articles - 使用统一写入模块
+            from hotnews.kernel.services.mp_article_writer import save_mp_articles
+            
+            articles_to_save = []
             for art in result.articles:
                 if not art.url:
                     continue
-                
-                dedup_key = generate_dedup_key(art.url)
-                
-                try:
-                    online_conn.execute(
-                        """
-                        INSERT OR IGNORE INTO wechat_mp_articles
-                        (fakeid, dedup_key, title, url, digest, cover_url, publish_time, fetched_at, mp_nickname)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            fakeid,
-                            dedup_key,
-                            art.title,
-                            art.url,
-                            art.digest or "",
-                            art.cover_url or "",
-                            art.publish_time or now,
-                            now,
-                            nickname,
-                        )
-                    )
-                    if online_conn.total_changes > 0:
-                        new_count += 1
-                except Exception as e:
-                    logger.warning(f"Failed to store article: {e}")
+                articles_to_save.append({
+                    "title": art.title,
+                    "url": art.url,
+                    "digest": art.digest or "",
+                    "cover_url": art.cover_url or "",
+                    "publish_time": art.publish_time or now,
+                })
+            
+            new_count = 0
+            if articles_to_save:
+                save_result = save_mp_articles(online_conn, fakeid, nickname, articles_to_save)
+                new_count = save_result["inserted"]
             
             total_new += new_count
             logger.info(f"[WeChat] Fetched {len(result.articles)} articles for {nickname}, {new_count} new")
