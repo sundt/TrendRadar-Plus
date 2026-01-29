@@ -16,42 +16,20 @@ let discoveryLoading = false;
 
 /**
  * Get cached data from localStorage
+ * DISABLED: Cache causes issues in WeChat browser
  */
 function getCachedData() {
-    try {
-        const cached = localStorage.getItem(DISCOVERY_CACHE_KEY);
-        if (!cached) return null;
-
-        const data = JSON.parse(cached);
-        const now = Date.now();
-
-        // Check if cache is expired
-        if (!data.timestamp || (now - data.timestamp) > DISCOVERY_CACHE_TTL) {
-            localStorage.removeItem(DISCOVERY_CACHE_KEY);
-            return null;
-        }
-
-        return data.tags;
-    } catch (e) {
-        console.error('[Discovery] Cache read error:', e);
-        localStorage.removeItem(DISCOVERY_CACHE_KEY);
-        return null;
-    }
+    // Disable frontend cache to fix WeChat browser issues
+    return null;
 }
 
 /**
  * Save data to localStorage cache
+ * DISABLED: Cache causes issues in WeChat browser
  */
 function setCachedData(tags) {
-    try {
-        const data = {
-            tags: tags,
-            timestamp: Date.now(),
-        };
-        localStorage.setItem(DISCOVERY_CACHE_KEY, JSON.stringify(data));
-    } catch (e) {
-        console.error('[Discovery] Cache write error:', e);
-    }
+    // Disable frontend cache to fix WeChat browser issues
+    return;
 }
 
 /**
@@ -245,36 +223,6 @@ async function loadDiscovery(force = false) {
     }, 10000);
 
     try {
-        // Try to load from frontend cache first (if not forcing refresh)
-        if (!force) {
-            const cachedTags = getCachedData();
-            if (cachedTags && cachedTags.length > 0) {
-                console.log('[Discovery] Loading from frontend cache, tags:', cachedTags.length);
-                renderDiscoveryNews(container, cachedTags);
-                
-                // Verify rendering was successful
-                const hasContent = container.querySelector('.platform-card');
-                if (hasContent) {
-                    console.log('[Discovery] Cache render successful');
-                    discoveryLoaded = true;
-                    discoveryLoading = false;
-                    clearTimeout(safetyTimeout);
-
-                    // Fetch fresh data in background to update cache
-                    fetchAndUpdateCache().catch(e => {
-                        console.error('[Discovery] Background update failed:', e);
-                    });
-                    return;
-                } else {
-                    console.warn('[Discovery] Cache render failed, falling back to API');
-                    // Clear invalid cache
-                    clearCache();
-                }
-            } else {
-                console.log('[Discovery] No valid cache found');
-            }
-        }
-
         // Show loading state
         console.log('[Discovery] Showing loading state...');
         container.innerHTML = `
