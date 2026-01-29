@@ -54,8 +54,9 @@ TR.escapeHtml = escapeHtml;
 TR.formatUpdatedAt = formatUpdatedAt;
 
 /**
- * Format a news timestamp to YYYY-MM-DD for display.
- * Validates date range and handles edge cases.
+ * Format a news timestamp to relative time or date for display.
+ * Shows "刚刚", "X分钟前", "X小时前", "X天前" for recent items,
+ * and "M-D" or "YYYY-M-D" for older items.
  * @param {string|number} ts - Timestamp string (YYYY-MM-DD HH:MM:SS) or unix seconds
  * @returns {string} Formatted date or empty string
  */
@@ -69,64 +70,70 @@ export function formatNewsDate(ts) {
         const MAX_TIMESTAMP = Math.floor(now / 1000) + (7 * 24 * 60 * 60); // Current + 7 days (seconds)
         const MAX_MS = now + (7 * 24 * 60 * 60 * 1000); // Current + 7 days (milliseconds)
         
+        let ms = null;
+        
         // Try unix timestamp (seconds or milliseconds)
         const num = Number(ts);
         if (Number.isFinite(num) && num > 0) {
-            let ms;
-            
             // Heuristic: if > 1e12, it's milliseconds; otherwise seconds
             if (num > 1e12) {
                 // Milliseconds
                 if (num < 946684800000 || num > MAX_MS) {
-                    // Out of valid range
                     return '';
                 }
                 ms = num;
             } else {
                 // Seconds
                 if (num < MIN_TIMESTAMP || num > MAX_TIMESTAMP) {
-                    // Out of valid range
                     return '';
                 }
                 ms = num * 1000;
             }
-            
-            const d = new Date(ms);
-            if (!isNaN(d.getTime())) {
-                const MM = String(d.getMonth() + 1).padStart(2, '0');
-                const DD = String(d.getDate()).padStart(2, '0');
-                
-                // Double-check the year is reasonable
-                const year = d.getFullYear();
-                if (year < 2000 || year > new Date().getFullYear() + 1) {
-                    return '';
-                }
-                
-                return `${MM}-${DD}`;
-            }
         }
         
         // Try parsing string like "2026-01-12 19:30:00"
-        const s = String(ts || '').trim();
-        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (m) {
-            const year = parseInt(m[1], 10);
-            const month = parseInt(m[2], 10);
-            const day = parseInt(m[3], 10);
-            
-            // Validate year range
-            const currentYear = new Date().getFullYear();
-            if (year < 2000 || year > currentYear + 1) {
-                return '';
+        if (ms === null) {
+            const s = String(ts || '').trim();
+            const parsed = new Date(s.replace(' ', 'T'));
+            if (!isNaN(parsed.getTime())) {
+                ms = parsed.getTime();
             }
-            
-            // Validate month and day
-            if (month < 1 || month > 12 || day < 1 || day > 31) {
-                return '';
-            }
-            
-            return `${m[2]}-${m[3]}`;
         }
+        
+        if (ms === null) return '';
+        
+        const d = new Date(ms);
+        if (isNaN(d.getTime())) return '';
+        
+        // Double-check the year is reasonable
+        const year = d.getFullYear();
+        if (year < 2000 || year > new Date().getFullYear() + 1) {
+            return '';
+        }
+        
+        // Calculate relative time
+        const diffMs = now - ms;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        // Future time or just now
+        if (diffMins < 0) return '刚刚';
+        if (diffMins < 1) return '刚刚';
+        if (diffMins < 60) return diffMins + '分钟前';
+        if (diffHours < 24) return diffHours + '小时前';
+        if (diffDays < 7) return diffDays + '天前';
+        
+        // Older than 7 days: show date
+        const month = d.getMonth() + 1;
+        const day = d.getDate();
+        const nowDate = new Date();
+        
+        if (year === nowDate.getFullYear()) {
+            return month + '-' + day;
+        }
+        return year + '-' + month + '-' + day;
+        
     } catch (e) {
         // ignore
     }
