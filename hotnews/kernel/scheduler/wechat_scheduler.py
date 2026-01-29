@@ -341,6 +341,14 @@ async def _run_fetch_cycle() -> Dict[str, Any]:
                 has_new_articles=(new_count > 0),
                 error_message=error_message,
             )
+            
+            # Update last_fetch_at in featured_wechat_mps table (for admin display)
+            if not error_message:
+                online_conn.execute(
+                    "UPDATE featured_wechat_mps SET last_fetch_at = ?, updated_at = ? WHERE fakeid = ?",
+                    (now, now, fakeid)
+                )
+            
             online_conn.commit()
             
             stats["mps_fetched"] += 1
@@ -703,6 +711,14 @@ async def _run_unified_fetch_cycle() -> Dict[str, Any]:
                 has_new_articles=(new_count > 0),
                 error_message=error_message,
             )
+            
+            # Update last_fetch_at in featured_wechat_mps table (for admin display)
+            if not error_message:
+                online_conn.execute(
+                    "UPDATE featured_wechat_mps SET last_fetch_at = ?, updated_at = ? WHERE fakeid = ?",
+                    (now, now, fakeid)
+                )
+            
             online_conn.commit()
             
             stats["mps_fetched"] += 1
