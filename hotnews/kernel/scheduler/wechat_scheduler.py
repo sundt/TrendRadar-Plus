@@ -7,6 +7,7 @@ Handles scheduled fetching of articles from subscribed official accounts:
 - Publish time prediction using statistical analysis
 - Multi-user auth rotation with rate limiting
 - Failure backoff with exponential retry
+- Unified scheduling for featured MPs and user subscriptions
 
 Reference: https://blog.xlab.app/p/d73537b/
 """
@@ -32,10 +33,10 @@ _user_rate_limit: Dict[int, float] = {}  # user_id -> last_request_time
 _user_cooldown: Dict[int, float] = {}  # user_id -> cooldown_until (for rate limited users)
 
 # Configuration
-CHECK_INTERVAL_SECONDS = 60  # How often the scheduler loop runs
+CHECK_INTERVAL_SECONDS = int(os.environ.get("HOTNEWS_MP_CHECK_INTERVAL", "60"))
 USER_COOLDOWN_SECONDS = 300  # 5 minutes cooldown after rate limit error
 MIN_REQUEST_INTERVAL = 2.0  # Minimum seconds between requests
-MAX_MPS_PER_CYCLE = 20  # Maximum MPs to fetch per cycle
+MAX_MPS_PER_CYCLE = int(os.environ.get("HOTNEWS_MP_MAX_PER_CYCLE", "20"))
 
 
 def _now_ts() -> int:
@@ -67,6 +68,12 @@ def generate_source_id(fakeid: str) -> str:
 def _is_scheduler_enabled() -> bool:
     """Check if WeChat scheduler is enabled via environment variable."""
     enabled = os.environ.get("HOTNEWS_WECHAT_SCHEDULER_ENABLED", "0").strip().lower()
+    return enabled in {"1", "true", "yes"}
+
+
+def _is_unified_scheduler_enabled() -> bool:
+    """Check if unified MP scheduler is enabled (default: enabled)."""
+    enabled = os.environ.get("HOTNEWS_UNIFIED_MP_SCHEDULER", "1").strip().lower()
     return enabled in {"1", "true", "yes"}
 
 
@@ -378,11 +385,15 @@ async def _scheduler_loop() -> None:
                 await asyncio.sleep(CHECK_INTERVAL_SECONDS)
                 continue
             
-            stats = await _run_fetch_cycle()
+            # Use unified scheduler if enabled, otherwise use legacy scheduler
+            if _is_unified_scheduler_enabled():
+                stats = await _run_unified_fetch_cycle()
+            else:
+                stats = await _run_fetch_cycle()
             
             if stats["mps_fetched"] > 0 or stats["errors"] > 0:
                 logger.info(
-                    f"WeChat fetch cycle: users={stats['users_processed']}, "
+                    f"WeChat fetch cycle: "
                     f"mps={stats['mps_fetched']}, new={stats['articles_new']}, "
                     f"errors={stats['errors']}"
                 )
@@ -449,6 +460,7 @@ def get_scheduler_status() -> Dict[str, Any]:
         return {
             "running": False,
             "enabled": _is_scheduler_enabled(),
+            "unified_enabled": _is_unified_scheduler_enabled(),
             "error": "Scheduler not initialized",
         }
     
@@ -465,6 +477,7 @@ def get_scheduler_status() -> Dict[str, Any]:
         return {
             "running": _wechat_scheduler_running,
             "enabled": _is_scheduler_enabled(),
+            "unified_enabled": _is_unified_scheduler_enabled(),
             "valid_auth_users": len(valid_users),
             "check_interval_seconds": CHECK_INTERVAL_SECONDS,
             "max_mps_per_cycle": MAX_MPS_PER_CYCLE,
@@ -474,5 +487,254 @@ def get_scheduler_status() -> Dict[str, Any]:
         return {
             "running": _wechat_scheduler_running,
             "enabled": _is_scheduler_enabled(),
+            "unified_enabled": _is_unified_scheduler_enabled(),
             "error": str(e),
         }
+
+
+# ========== Unified Scheduler Functions ==========
+
+def _get_due_mps_unified(online_conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Get MPs that are due for checking (unified version).
+    
+    Combines featured MPs and user subscriptions, deduplicated by fakeid.
+    Uses smart scheduler to determine which MPs are due.
+    
+    Args:
+        online_conn: Online database connection
+        user_conn: User database connection
+        now: Current timestamp
+        limit: Maximum number of MPs to return
+        
+    Returns:
+        List of MP accounts to check
+    """
+    from hotnews.kernel.services.mp_unified_list import get_all_mp_fakeids
+    from hotnews.kernel.services.wechat_smart_scheduler import get_due_mps
+    
+    # Get all MPs that need to be fetched (deduplicated)
+    all_mps = get_all_mp_fakeids(online_conn, user_conn)
+    all_fakeids = {mp["fakeid"]: mp for mp in all_mps}
+    
+    if not all_fakeids:
+        return []
+    
+    # Get MPs that are due from smart scheduler
+    due_sources = get_due_mps(online_conn, user_conn, now, limit=limit * 2)
+    
+    # Filter: only keep MPs in unified list
+    due_mps = []
+    seen = set()
+    
+    for src in due_sources:
+        fakeid = src.get("fakeid")
+        if fakeid and fakeid in all_fakeids and fakeid not in seen:
+            seen.add(fakeid)
+            mp_info = all_fakeids[fakeid]
+            due_mps.append({
+                "fakeid": fakeid,
+                "nickname": mp_info["nickname"],
+                "source": mp_info["source"],
+                "cadence": src.get("cadence", "P2"),
+                "next_due_at": src.get("next_due_at", 0),
+                "fail_count": src.get("fail_count", 0),
+            })
+    
+    # Add MPs without scheduler records (new MPs, fetch immediately)
+    for fakeid, mp_info in all_fakeids.items():
+        if fakeid not in seen:
+            due_mps.append({
+                "fakeid": fakeid,
+                "nickname": mp_info["nickname"],
+                "source": mp_info["source"],
+                "cadence": "P2",
+                "next_due_at": 0,
+                "fail_count": 0,
+            })
+    
+    # Sort by next_due_at (oldest first) and limit
+    due_mps.sort(key=lambda x: x.get("next_due_at", 0))
+    return due_mps[:limit]
+
+
+async def _fetch_mp_with_pool(
+    fakeid: str,
+    nickname: str,
+    credential_pool,
+    online_conn,
+    user_conn,
+) -> Dict[str, Any]:
+    """
+    Fetch MP articles using credential pool.
+    
+    Args:
+        fakeid: MP account fakeid
+        nickname: MP account nickname
+        credential_pool: CredentialPool instance
+        online_conn: Online database connection
+        user_conn: User database connection
+        
+    Returns:
+        {"new_count": int, "error_message": str, "credential_id": str}
+    """
+    from hotnews.kernel.providers.wechat_provider import WeChatMPProvider, WeChatErrorCode
+    from hotnews.kernel.services.mp_article_writer import save_mp_articles
+    
+    # Get credential from pool
+    cred = credential_pool.get_credential()
+    if not cred:
+        return {"new_count": 0, "error_message": "no_credential", "credential_id": ""}
+    
+    # Request interval control
+    await asyncio.sleep(MIN_REQUEST_INTERVAL)
+    
+    # Create provider and fetch
+    provider = WeChatMPProvider(cred.cookie, cred.token)
+    
+    try:
+        result = await asyncio.to_thread(provider.get_articles, fakeid, 20)
+    except Exception as e:
+        logger.error(f"Failed to fetch articles for {fakeid}: {e}")
+        return {"new_count": 0, "error_message": str(e), "credential_id": cred.id}
+    
+    if not result.ok:
+        error_msg = result.error_message or "Unknown error"
+        
+        # Handle specific errors
+        if result.error_code == WeChatErrorCode.SESSION_EXPIRED:
+            credential_pool.mark_expired(cred.id, user_conn)
+            return {"new_count": 0, "error_message": "expired", "credential_id": cred.id}
+        elif result.error_code == WeChatErrorCode.RATE_LIMITED:
+            credential_pool.mark_rate_limited(cred.id)
+            return {"new_count": 0, "error_message": "rate_limited", "credential_id": cred.id}
+        else:
+            return {"new_count": 0, "error_message": error_msg, "credential_id": cred.id}
+    
+    # Convert and save articles
+    articles_to_save = []
+    for art in result.articles:
+        if not art.url:
+            continue
+        articles_to_save.append({
+            "title": art.title,
+            "url": art.url,
+            "digest": art.digest or "",
+            "cover_url": art.cover_url or "",
+            "publish_time": art.publish_time or _now_ts(),
+        })
+    
+    if not articles_to_save:
+        return {"new_count": 0, "error_message": "", "credential_id": cred.id}
+    
+    save_result = save_mp_articles(online_conn, fakeid, nickname, articles_to_save)
+    new_count = save_result["inserted"]
+    
+    if new_count > 0:
+        online_conn.commit()
+        logger.info(f"Stored {new_count} new articles for {nickname} ({fakeid})")
+    
+    return {"new_count": new_count, "error_message": "", "credential_id": cred.id}
+
+
+async def _run_unified_fetch_cycle() -> Dict[str, Any]:
+    """
+    Run unified fetch cycle.
+    
+    Uses unified MP list (featured + subscriptions deduplicated) and
+    credential pool for fetching.
+    
+    Returns:
+        Stats about the fetch cycle
+    """
+    from hotnews.kernel.services.mp_credential_pool import get_credential_pool
+    from hotnews.kernel.services.wechat_smart_scheduler import update_mp_stats
+    
+    user_conn = _get_user_db_conn()
+    online_conn = _get_online_db_conn()
+    
+    stats = {
+        "mps_fetched": 0,
+        "articles_new": 0,
+        "errors": 0,
+        "skipped_no_credential": 0,
+        "featured_fetched": 0,
+        "subscription_fetched": 0,
+    }
+    
+    now = _now_ts()
+    
+    # Initialize credential pool
+    credential_pool = get_credential_pool()
+    credential_pool.load_credentials(online_conn, user_conn)
+    
+    pool_stats = credential_pool.get_stats()
+    if pool_stats["available"] == 0:
+        logger.debug("No available credentials for unified scheduler")
+        return stats
+    
+    # Get MPs due for checking
+    due_mps = _get_due_mps_unified(online_conn, user_conn, now, limit=MAX_MPS_PER_CYCLE)
+    if not due_mps:
+        logger.debug("No WeChat MPs due for checking (unified)")
+        return stats
+    
+    logger.info(f"Unified scheduler: {len(due_mps)} MPs due for checking")
+    
+    for mp in due_mps:
+        fakeid = mp["fakeid"]
+        nickname = mp["nickname"]
+        source = mp["source"]
+        
+        # Fetch using credential pool
+        try:
+            result = await _fetch_mp_with_pool(
+                fakeid, nickname, credential_pool, online_conn, user_conn
+            )
+            
+            new_count = result["new_count"]
+            error_message = result["error_message"]
+            
+            # Update scheduler stats
+            update_mp_stats(
+                online_conn,
+                fakeid,
+                nickname=nickname,
+                has_new_articles=(new_count > 0),
+                error_message=error_message,
+            )
+            online_conn.commit()
+            
+            stats["mps_fetched"] += 1
+            stats["articles_new"] += new_count
+            
+            if source == "featured":
+                stats["featured_fetched"] += 1
+            else:
+                stats["subscription_fetched"] += 1
+            
+            if error_message:
+                stats["errors"] += 1
+                if error_message == "no_credential":
+                    stats["skipped_no_credential"] += 1
+                    break  # No more credentials, stop fetching
+                    
+        except Exception as e:
+            logger.error(f"Error fetching {nickname}: {e}")
+            stats["errors"] += 1
+            
+            try:
+                update_mp_stats(
+                    online_conn,
+                    fakeid,
+                    nickname=nickname,
+                    has_new_articles=False,
+                    error_message=str(e),
+                )
+                online_conn.commit()
+            except Exception:
+                pass
+        
+        await asyncio.sleep(0.5)
+    
+    return stats

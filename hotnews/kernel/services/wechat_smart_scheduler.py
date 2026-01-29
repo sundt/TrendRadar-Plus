@@ -299,16 +299,7 @@ def get_mp_stats(conn, fakeid: str) -> Optional[Dict[str, Any]]:
     stats = get_source_stats(conn, source_id)
     
     if not stats:
-        # Fallback: try old table for backward compatibility
-        cur = conn.execute(
-            "SELECT * FROM wechat_mp_stats WHERE fakeid = ?",
-            (fakeid,)
-        )
-        row = cur.fetchone()
-        if not row:
-            return None
-        columns = [desc[0] for desc in cur.description]
-        return dict(zip(columns, row))
+        return None
     
     # Convert to MP-style dict for backward compatibility
     return {
@@ -331,35 +322,18 @@ def get_mp_stats(conn, fakeid: str) -> Optional[Dict[str, Any]]:
 
 def get_recent_articles(conn, fakeid: str, limit: int = 30) -> List[Dict[str, Any]]:
     """Get recent articles for frequency analysis."""
-    # 使用统一读取模块
-    from hotnews.kernel.services.mp_article_reader import get_read_source, ReadSource
-    
-    read_source = get_read_source()
-    
-    if read_source == ReadSource.NEW_TABLE:
-        source_id = f"mp-{fakeid}"
-        cur = conn.execute(
-            """
-            SELECT id, title, published_at as publish_time, 
-                   (published_at / 3600) % 24 as publish_hour
-            FROM rss_entries
-            WHERE source_id = ?
-            ORDER BY published_at DESC
-            LIMIT ?
-            """,
-            (source_id, limit)
-        )
-    else:
-        cur = conn.execute(
-            """
-            SELECT id, title, publish_time, publish_hour
-            FROM wechat_mp_articles
-            WHERE fakeid = ?
-            ORDER BY publish_time DESC
-            LIMIT ?
-            """,
-            (fakeid, limit)
-        )
+    source_id = f"mp-{fakeid}"
+    cur = conn.execute(
+        """
+        SELECT id, title, published_at as publish_time, 
+               (published_at / 3600) % 24 as publish_hour
+        FROM rss_entries
+        WHERE source_id = ?
+        ORDER BY published_at DESC
+        LIMIT ?
+        """,
+        (source_id, limit)
+    )
     
     rows = cur.fetchall() or []
     columns = [desc[0] for desc in cur.description]

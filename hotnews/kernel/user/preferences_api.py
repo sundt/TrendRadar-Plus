@@ -826,7 +826,7 @@ async def get_followed_news(
                 "fakeid": fakeid,
             })
         except Exception:
-            # wechat_mp_articles table may not exist in public mode
+            # MP articles may not be available in public mode
             pass
     
     # Get stored order to sort results (tags first, then sources)

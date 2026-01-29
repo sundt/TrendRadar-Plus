@@ -916,6 +916,7 @@ async def subscribe(request: Request, body: SubscribeRequest) -> Dict[str, Any]:
                     if result.ok:
                         # 使用统一写入模块
                         from hotnews.kernel.services.mp_article_writer import save_mp_articles
+                        from hotnews.kernel.services.wechat_smart_scheduler import update_mp_stats
                         
                         articles_to_save = []
                         for art in result.articles:
@@ -932,6 +933,10 @@ async def subscribe(request: Request, body: SubscribeRequest) -> Dict[str, Any]:
                         if articles_to_save:
                             save_result = save_mp_articles(online_conn, fakeid, nickname, articles_to_save)
                             articles_fetched = save_result["inserted"]
+                        
+                        # Update scheduler stats (creates record if not exists)
+                        update_mp_stats(online_conn, fakeid, nickname=nickname,
+                                       has_new_articles=(articles_fetched > 0), error_message="")
                         
                         online_conn.commit()
                         logger.info(f"[WeChat] Fetched {articles_fetched} articles for {nickname} on subscribe")
@@ -1069,6 +1074,9 @@ async def refresh_articles(request: Request) -> Dict[str, Any]:
         return {"ok": False, "error": "没有订阅任何公众号"}
     
     # Fetch articles for each subscription
+    from hotnews.kernel.services.mp_article_writer import save_mp_articles
+    from hotnews.kernel.services.wechat_smart_scheduler import update_mp_stats
+    
     provider = WeChatMPProvider(cookie, token)
     total_new = 0
     errors = []
@@ -1088,11 +1096,12 @@ async def refresh_articles(request: Request) -> Dict[str, Any]:
                     user_conn.commit()
                     return {"ok": False, "error": "认证已过期，请重新配置"}
                 errors.append(f"{nickname}: {result.error_message}")
+                # Update scheduler stats with error
+                update_mp_stats(online_conn, fakeid, nickname=nickname, 
+                               has_new_articles=False, error_message=result.error_message or "")
                 continue
             
             # Store articles - 使用统一写入模块
-            from hotnews.kernel.services.mp_article_writer import save_mp_articles
-            
             articles_to_save = []
             for art in result.articles:
                 if not art.url:
@@ -1113,6 +1122,10 @@ async def refresh_articles(request: Request) -> Dict[str, Any]:
             total_new += new_count
             logger.info(f"[WeChat] Fetched {len(result.articles)} articles for {nickname}, {new_count} new")
             
+            # Update scheduler stats (resets next_due_at to avoid duplicate fetch)
+            update_mp_stats(online_conn, fakeid, nickname=nickname,
+                           has_new_articles=(new_count > 0), error_message="")
+            
             # Small delay between requests to avoid rate limiting
             import time as time_module
             time_module.sleep(0.5)
@@ -1120,6 +1133,12 @@ async def refresh_articles(request: Request) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"[WeChat] Error fetching {nickname}: {e}")
             errors.append(f"{nickname}: {str(e)}")
+            # Update scheduler stats with error
+            try:
+                update_mp_stats(online_conn, fakeid, nickname=nickname,
+                               has_new_articles=False, error_message=str(e))
+            except Exception:
+                pass
     
     online_conn.commit()
     

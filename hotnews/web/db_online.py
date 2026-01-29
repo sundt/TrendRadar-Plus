@@ -328,7 +328,8 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tag_evolution_time ON tag_evolution_log(created_at DESC)")
 
     # ========== WeChat MP (公众号) Articles Cache ==========
-    # 公众号文章缓存（多用户共享）
+    # [DEPRECATED] 旧的公众号文章缓存表，数据已迁移到 rss_entries (source_type='mp')
+    # 保留表结构以兼容旧数据库，新数据不再写入此表
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS wechat_mp_articles (
@@ -346,6 +347,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         )
         """
     )
+    # 旧索引保留以兼容
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_fakeid_time ON wechat_mp_articles(fakeid, publish_time DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_dedup ON wechat_mp_articles(dedup_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_articles_publish ON wechat_mp_articles(publish_time DESC)")
@@ -374,7 +376,8 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_featured_mps_category ON featured_wechat_mps(category, enabled)")
 
     # ========== WeChat MP Stats (智能调度统计) ==========
-    # 公众号抓取统计，用于智能调度
+    # [DEPRECATED] 旧的公众号调度统计表，数据已迁移到 source_stats (source_type='mp')
+    # 保留表结构以兼容旧数据库，新数据不再写入此表
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS wechat_mp_stats (
@@ -410,6 +413,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         )
         """
     )
+    # 旧索引保留以兼容
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_stats_next_due ON wechat_mp_stats(next_due_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_wechat_stats_cadence ON wechat_mp_stats(cadence)")
 
@@ -462,7 +466,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         except Exception:
             return
 
-    # Add publish_hour column to wechat_mp_articles for time analysis
+    # [DEPRECATED] 旧表字段，保留以兼容
     _ensure_column("wechat_mp_articles", "publish_hour", "INTEGER")
 
     _ensure_column("rss_sources", "category", "TEXT DEFAULT ''")

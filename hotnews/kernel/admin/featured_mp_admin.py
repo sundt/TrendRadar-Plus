@@ -241,6 +241,11 @@ async def add_featured_mp(request: Request, body: FeaturedMPAddRequest) -> Dict[
             (fakeid, nickname, body.round_head_img or "", body.signature or "",
              body.category or "general", body.sort_order or 0, now, now)
         )
+        
+        # Create scheduler record for the new MP (so it gets fetched immediately)
+        from hotnews.kernel.services.wechat_smart_scheduler import update_mp_stats
+        update_mp_stats(conn, fakeid, nickname=nickname, has_new_articles=False, error_message="")
+        
         conn.commit()
         _invalidate_cache()
         
@@ -899,34 +904,90 @@ async def get_featured_mps_public(
 
 # ========== Manual Fetch API ==========
 
+@router.get("/admin/mp-scheduler/status")
+async def get_mp_scheduler_status(request: Request) -> Dict[str, Any]:
+    """
+    Get unified MP scheduler status.
+    
+    Returns:
+        - Total MP count (featured + subscription, deduplicated)
+        - Credential pool status
+        - Scheduler statistics
+    """
+    _require_admin(request)
+    online_conn = _get_online_db_conn(request)
+    user_conn = _get_user_db_conn(request)
+    
+    from hotnews.kernel.services.mp_unified_list import get_unified_mp_count
+    from hotnews.kernel.services.mp_credential_pool import get_credential_pool
+    from hotnews.kernel.services.wechat_smart_scheduler import get_scheduler_stats
+    from hotnews.kernel.scheduler.wechat_scheduler import (
+        _is_scheduler_enabled,
+        _is_unified_scheduler_enabled,
+        _wechat_scheduler_running,
+    )
+    
+    # Get MP count statistics
+    mp_counts = get_unified_mp_count(online_conn, user_conn)
+    
+    # Get credential pool status
+    credential_pool = get_credential_pool()
+    credential_pool.load_credentials(online_conn, user_conn)
+    pool_stats = credential_pool.get_stats()
+    
+    # Get scheduler statistics
+    scheduler_stats = get_scheduler_stats(online_conn, user_conn)
+    
+    return {
+        "ok": True,
+        "scheduler": {
+            "running": _wechat_scheduler_running,
+            "enabled": _is_scheduler_enabled(),
+            "unified_enabled": _is_unified_scheduler_enabled(),
+        },
+        "mps": mp_counts,
+        "credentials": pool_stats,
+        "stats": scheduler_stats,
+    }
+
+
 @router.post("/admin/featured-mps/fetch")
 async def manual_fetch_articles(
     request: Request,
     fakeid: Optional[str] = None,
     count: int = Query(50, ge=1, le=100),
 ) -> Dict[str, Any]:
-    """Manually trigger article fetch for featured MPs."""
+    """
+    Manually trigger article fetch for featured MPs.
+    
+    Uses unified credential pool and updates scheduler stats.
+    """
     _require_admin(request)
-    conn = _get_online_db_conn(request)
+    online_conn = _get_online_db_conn(request)
+    user_conn = _get_user_db_conn(request)
     
-    # Get shared credentials
-    from hotnews.kernel.services.wechat_shared_credentials import get_available_credential
-    from hotnews.kernel.providers.wechat_provider import WeChatMPProvider, generate_dedup_key
+    # Use credential pool
+    from hotnews.kernel.services.mp_credential_pool import get_credential_pool
+    from hotnews.kernel.services.mp_article_writer import save_mp_articles
+    from hotnews.kernel.services.wechat_smart_scheduler import update_mp_stats
+    from hotnews.kernel.providers.wechat_provider import WeChatMPProvider, WeChatErrorCode
     
-    cred = get_available_credential()
-    if not cred:
+    # Initialize credential pool
+    credential_pool = get_credential_pool()
+    credential_pool.load_credentials(online_conn, user_conn)
+    
+    pool_stats = credential_pool.get_stats()
+    if pool_stats["available"] == 0:
         raise HTTPException(status_code=503, detail="无可用的微信凭证")
-    
-    provider = WeChatMPProvider(cred.cookie, cred.token)
     
     # Get MPs to fetch
     if fakeid:
-        cur = conn.execute(
+        cur = online_conn.execute(
             "SELECT fakeid, nickname FROM featured_wechat_mps WHERE fakeid = ? AND enabled = 1",
             (fakeid,)
         )
     else:
-        cur = conn.execute(
+        cur = online_conn.execute(
             "SELECT fakeid, nickname FROM featured_wechat_mps WHERE enabled = 1 ORDER BY sort_order ASC"
         )
     
@@ -935,26 +996,44 @@ async def manual_fetch_articles(
     if not mps:
         return {"ok": True, "message": "没有需要抓取的公众号", "fetched": 0}
     
-    # 使用统一写入模块
-    from hotnews.kernel.services.mp_article_writer import save_mp_articles
-    
     total_fetched = 0
     errors = []
     now = _now_ts()
     
     for mp_fakeid, mp_nickname in mps:
+        # Get credential from pool
+        cred = credential_pool.get_credential()
+        if not cred:
+            errors.append("无可用凭证")
+            break
+        
         try:
             # Add delay between requests
             if total_fetched > 0:
                 time.sleep(2)
             
+            provider = WeChatMPProvider(cred.cookie, cred.token)
             result = provider.get_articles(mp_fakeid, count)
             
             if not result.ok:
+                # Handle specific errors
+                if result.error_code == WeChatErrorCode.SESSION_EXPIRED:
+                    credential_pool.mark_expired(cred.id, user_conn)
+                elif result.error_code == WeChatErrorCode.RATE_LIMITED:
+                    credential_pool.mark_rate_limited(cred.id)
                 errors.append(f"{mp_nickname}: {result.error_message}")
+                
+                # Update stats with error
+                update_mp_stats(
+                    online_conn,
+                    mp_fakeid,
+                    nickname=mp_nickname,
+                    has_new_articles=False,
+                    error_message=result.error_message or "fetch_failed",
+                )
                 continue
             
-            # 转换文章格式并使用统一写入
+            # Convert and save articles
             articles_to_save = []
             for art in result.articles:
                 if not art.url:
@@ -967,14 +1046,25 @@ async def manual_fetch_articles(
                     "publish_time": art.publish_time,
                 })
             
+            new_count = 0
             if articles_to_save:
-                save_result = save_mp_articles(conn, mp_fakeid, mp_nickname, articles_to_save)
-                total_fetched += save_result["inserted"]
+                save_result = save_mp_articles(online_conn, mp_fakeid, mp_nickname, articles_to_save)
+                new_count = save_result["inserted"]
+                total_fetched += new_count
                 if save_result["errors"]:
-                    errors.extend(save_result["errors"][:5])  # 限制错误数量
+                    errors.extend(save_result["errors"][:5])
+            
+            # Update scheduler stats (resets next_due_at)
+            update_mp_stats(
+                online_conn,
+                mp_fakeid,
+                nickname=mp_nickname,
+                has_new_articles=(new_count > 0),
+                error_message="",
+            )
             
             # Update last_fetch_at
-            conn.execute(
+            online_conn.execute(
                 "UPDATE featured_wechat_mps SET last_fetch_at = ?, updated_at = ? WHERE fakeid = ?",
                 (now, now, mp_fakeid)
             )
@@ -982,8 +1072,20 @@ async def manual_fetch_articles(
         except Exception as e:
             logger.error(f"Failed to fetch articles for {mp_nickname}: {e}")
             errors.append(f"{mp_nickname}: {str(e)}")
+            
+            # Update stats with error
+            try:
+                update_mp_stats(
+                    online_conn,
+                    mp_fakeid,
+                    nickname=mp_nickname,
+                    has_new_articles=False,
+                    error_message=str(e),
+                )
+            except Exception:
+                pass
     
-    conn.commit()
+    online_conn.commit()
     
     if total_fetched > 0:
         _invalidate_cache()
@@ -994,8 +1096,6 @@ async def manual_fetch_articles(
         "fetched": total_fetched,
         "errors": errors if errors else None
     }
-
-
 # ========== Admin Page Route ==========
 
 # Separate router for page routes (no /api prefix)
