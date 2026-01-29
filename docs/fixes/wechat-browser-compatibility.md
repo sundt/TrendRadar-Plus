@@ -2,258 +2,207 @@
 
 ## 问题描述
 
-在微信内置浏览器中打开网站，点击"我的标签"没有任何反应，但在普通移动浏览器中正常。
+在微信内置浏览器中，"我的关注"和"新发现"栏目显示空白，而其他栏目正常。
 
-## 微信浏览器的特殊性
+### 症状
+- 服务重启后首次加载正常
+- 刷新页面后变成空白
+- 切换到其他栏目再切回来也是空白
+- 普通浏览器（Chrome、Safari）无此问题
 
-微信内置浏览器（WeChat WebView）基于 X5 内核（腾讯基于 Chromium 定制），有以下特点：
+## 问题根源
 
-### 1. 事件处理差异
-- **click 事件延迟**: 为了区分点击和滑动，有 300ms 延迟
-- **事件冒泡限制**: 某些情况下事件不会正常冒泡
-- **CustomEvent 支持**: 可能不完全支持自定义事件
+### 1. localStorage 缓存兼容性问题
+`discovery.js` 使用 localStorage 缓存数据，但在微信浏览器中：
+- 数据写入缓存成功
+- 从缓存读取数据成功
+- 但 `renderDiscoveryNews()` 渲染时失败，且没有抛出异常
+- 导致 `discoveryLoaded = true` 被设置，后续加载被跳过
 
-### 2. DOM 操作限制
-- **异步渲染**: DOM 更新可能比标准浏览器慢
-- **classList 操作**: 某些版本对 classList 的支持不完整
+### 2. ES6 模块加载时序问题
+- `tabs.js` 在 `discovery.js` 之前导入
+- `tabs.restoreActiveTab()` 可能在 `discovery.js` 的事件监听器注册之前执行
+- 导致 `tr_tab_switched` 事件被错过
 
-### 3. JavaScript 兼容性
-- **ES6+ 特性**: 部分新特性支持不完整
-- **Promise**: 早期版本支持有限
-- **async/await**: 需要 polyfill
+### 3. authState 初始化阻塞
+- `my-tags.js` 依赖 `authState.init()` 完成
+- 在微信浏览器中，`/api/auth/me` 请求可能延迟或失败
+- 导致加载流程卡住
 
-## 解决方案
+## 修复方案
 
-### 1. 多层事件监听机制
+### 1. 禁用所有特殊栏目的前端缓存
 
-实现了**四层保障**，确保在任何情况下都能触发加载：
+前端 localStorage 缓存收益有限（后端已有缓存），但会带来兼容性风险：
+- 代码更新后缓存格式不兼容导致空白
+- 微信等特殊浏览器的 localStorage 行为不一致
+- 调试困难
 
-#### 第一层：tr_tab_switched 事件（标准方式）
+**已禁用前端缓存的模块：**
+- `discovery.js` - 新发现
+- `my-tags.js` - 我的关注
+- `featured-mps.js` - 精选公众号
+
 ```javascript
-window.addEventListener('tr_tab_switched', (event) => {
-    const categoryId = event?.detail?.categoryId;
-    if (categoryId === 'my-tags') {
-        loadMyTags();
-    }
-});
-```
+// 禁用前端缓存，每次都从 API 获取
+function getCachedData() {
+    return null;
+}
 
-#### 第二层：页面加载检查
-```javascript
-const activePane = document.querySelector('#tab-my-tags.active');
-if (activePane) {
-    loadMyTags();
+function setCachedData(data) {
+    return;
 }
 ```
 
-#### 第三层：click + touchstart 事件
+后端 API 有 5-10 分钟缓存，不会影响性能。
+
+### 2. 添加 authState 超时机制
+
+**文件**: `hotnews/hotnews/web/static/js/src/my-tags.js`
+
 ```javascript
-// click 事件（桌面端和部分移动端）
-tabButton.addEventListener('click', () => {
-    setTimeout(() => loadMyTags(), 100);
-});
-
-// touchstart 事件（移动端和微信浏览器）
-tabButton.addEventListener('touchstart', () => {
-    setTimeout(() => loadMyTags(), 100);
-}, { passive: true });
-```
-
-**为什么需要 touchstart？**
-- 微信浏览器中 click 事件可能不触发或延迟
-- touchstart 是触摸屏的原生事件，响应更快
-- `passive: true` 优化滚动性能
-
-#### 第四层：MutationObserver（终极后备）
-```javascript
-const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-            const target = mutation.target;
-            if (target.classList.contains('active')) {
-                if (!myTagsLoaded && !myTagsLoading) {
-                    loadMyTags();
-                }
-            }
-        }
+async function waitForAuthWithTimeout(timeoutMs = 3000) {
+    if (authState.initialized) {
+        return authState.getUser();
     }
-});
-
-observer.observe(tabPane, {
-    attributes: true,
-    attributeFilter: ['class']
-});
-```
-
-**MutationObserver 的优势：**
-- 直接监听 DOM 变化，不依赖事件系统
-- 即使所有事件都失败，只要 tab 变为 active 就会触发
-- 兼容性好，所有现代浏览器都支持
-
-### 2. 防重复加载机制
-
-使用状态标志防止多次触发导致重复加载：
-
-```javascript
-let myTagsLoaded = false;
-let myTagsLoading = false;
-
-async function loadMyTags(force = false) {
-    if (myTagsLoading) return;  // 正在加载，跳过
-    if (myTagsLoaded && !force) return;  // 已加载，跳过
     
-    myTagsLoading = true;
-    try {
-        // ... 加载逻辑
-        myTagsLoaded = true;
-    } finally {
-        myTagsLoading = false;
-    }
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            console.warn('[MyTags] authState init timeout');
+            resolve(null);
+        }, timeoutMs);
+        
+        authState.init().then(() => {
+            clearTimeout(timeout);
+            resolve(authState.getUser());
+        }).catch((e) => {
+            clearTimeout(timeout);
+            resolve(null);
+        });
+    });
 }
 ```
 
-### 3. 延迟执行
+### 3. 添加备用加载脚本
 
-使用 `setTimeout` 确保 DOM 更新完成：
+**文件**: `hotnews/hotnews/web/templates/viewer.html`
+
+在页面底部添加内联脚本，作为 ES6 模块加载失败时的兜底：
 
 ```javascript
-setTimeout(() => {
-    const pane = document.querySelector('#tab-my-tags.active');
-    if (pane) {
-        loadMyTags();
-    }
-}, 100);
+// 备用加载函数
+async function fallbackLoadMyTags() { ... }
+async function fallbackLoadDiscovery() { ... }
+
+// 多时间点检查
+setTimeout(checkAndTriggerLoad, 500);
+setTimeout(checkAndTriggerLoad, 1000);
+setTimeout(checkAndTriggerLoad, 2000);
+setTimeout(checkAndTriggerLoad, 4000);
+
+// 监听 tab 切换
+window.addEventListener('tr_tab_switched', ...);
+
+// 重写 switchTab 添加 fallback
+var originalSwitchTab = window.switchTab;
+window.switchTab = function(categoryId) { ... };
+
+// 事件委托监听点击
+tabsContainer.addEventListener('click', ...);
+tabsContainer.addEventListener('touchend', ...);
 ```
 
-**为什么需要延迟？**
-- 微信浏览器的 DOM 更新可能比事件触发慢
-- 100ms 的延迟足够让 class 变化生效
-- 不会影响用户体验（用户感知不到）
+### 4. discovery.js 初始化增强
 
-## 测试方法
+添加多次检查确保加载：
 
-### 1. 微信浏览器测试
-
-1. **分享链接到微信**
-   - 将 http://120.77.222.205 发送到微信
-   - 在微信中点击链接打开
-
-2. **测试步骤**
-   - 确保未登录状态
-   - 点击"我的标签"
-   - 应该看到登录提示
-
-3. **查看日志**（需要微信开发者工具）
-   - 在电脑上打开微信开发者工具
-   - 连接手机微信
-   - 查看 Console 日志
-
-### 2. 其他移动浏览器测试
-
-- **Safari (iOS)**: 应该正常工作
-- **Chrome (Android)**: 应该正常工作
-- **UC 浏览器**: 应该正常工作
-- **QQ 浏览器**: 应该正常工作
-
-### 3. 桌面浏览器测试
-
-- **Chrome**: 应该正常工作
-- **Firefox**: 应该正常工作
-- **Safari**: 应该正常工作
-- **Edge**: 应该正常工作
-
-## 调试技巧
-
-### 1. 微信开发者工具
-
-**安装**:
-- 下载：https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html
-- 选择"公众号网页调试"
-
-**使用**:
-1. 打开微信开发者工具
-2. 选择"移动调试"
-3. 扫码连接手机微信
-4. 在手机微信中打开网页
-5. 在开发者工具中查看 Console
-
-### 2. vConsole（移动端调试工具）
-
-如果需要在手机上直接查看日志，可以临时添加 vConsole：
-
-```html
-<!-- 在 viewer.html 的 <head> 中添加 -->
-<script src="https://cdn.jsdelivr.net/npm/vconsole@latest/dist/vconsole.min.js"></script>
-<script>
-  var vConsole = new window.VConsole();
-</script>
+```javascript
+function init() {
+    // 立即检查
+    checkAndLoadIfActive();
+    
+    // 延迟检查（处理时序问题）
+    setTimeout(checkAndLoadIfActive, 100);
+    setTimeout(checkAndLoadIfActive, 500);
+    setTimeout(checkAndLoadIfActive, 1000);
+}
 ```
 
-这会在页面右下角显示一个调试按钮，点击可以查看 Console 日志。
+## 栏目分类
 
-### 3. 日志输出
+### 特殊栏目（JS 动态加载）
+| 栏目 | 模块 | 前端缓存 | 后端缓存 |
+|------|------|----------|----------|
+| my-tags | my-tags.js | ❌ 已禁用 | ✅ 10分钟 |
+| discovery | discovery.js | ❌ 已禁用 | ✅ 10分钟 |
+| explore | explore-timeline.js | ❌ 无 | ✅ 10分钟 |
+| knowledge | morning-brief.js | ❌ 无 | ✅ 10分钟 |
+| featured-mps | featured-mps.js | ❌ 已禁用 | ✅ 10分钟 |
 
-当前代码已经添加了详细的日志：
+### 普通栏目（服务端渲染）
+- ai、finance、tech_news、developer、social、general
+- 内容在 HTML 中直接渲染或通过 `/api/category/{id}` 懒加载
+- 无前端 localStorage 缓存，后端有 10 分钟缓存
 
+## 修改的文件
+
+1. `hotnews/hotnews/web/static/js/src/discovery.js`
+   - 禁用 localStorage 缓存
+   - 增强初始化逻辑
+   - 添加安全超时
+
+2. `hotnews/hotnews/web/static/js/src/my-tags.js`
+   - 禁用 localStorage 缓存
+   - 添加 authState 超时机制
+
+3. `hotnews/hotnews/web/static/js/src/featured-mps.js`
+   - 禁用 localStorage 缓存
+
+4. `hotnews/hotnews/web/templates/viewer.html`
+   - 添加备用加载脚本
+   - 事件委托监听
+   - 多时间点检查
+
+## 测试验证
+
+1. 在微信浏览器中打开网站
+2. 点击"新发现"栏目，应正常显示
+3. 切换到其他栏目
+4. 再切回"新发现"，应仍然正常
+5. 刷新页面，应仍然正常
+6. 测试"我的关注"栏目，同样应正常
+
+## 后续建议
+
+所有特殊栏目的前端 localStorage 缓存已统一禁用，架构更简洁：
+- 前端：每次从 API 获取数据
+- 后端：统一使用内存缓存（10分钟 TTL）
+- 避免了缓存格式不兼容、浏览器兼容性等问题
+
+## 新增栏目指南
+
+当新增特殊栏目时，请遵循以下规范：
+
+### 后端缓存
+1. 在 `timeline_cache.py` 中创建缓存实例，使用默认配置：
+   ```python
+   from hotnews.web.timeline_cache import TimelineCache, DEFAULT_CACHE_TTL
+   
+   # 使用默认 TTL，不要硬编码
+   new_category_cache = TimelineCache(max_items=1000)
+   ```
+2. 将新缓存添加到 `clear_all_timeline_caches()` 和 `get_cache_status()`
+
+### 前端 JS 模块
+1. **不要实现 localStorage 缓存**
+2. 每次从 API 获取数据
+3. 参考 `discovery.js` 的实现模式
+
+### 缓存配置常量
+所有缓存配置集中在 `timeline_cache.py`：
+```python
+DEFAULT_CACHE_TTL = 600  # 10 分钟
+DEFAULT_MAX_ITEMS = 1000
+DEFAULT_MAX_ITEMS_PER_USER = 500
+DEFAULT_MAX_USERS = 100
 ```
-[MyTags] Initializing module...
-[MyTags] Attaching click listener to tab button
-[MyTags] MutationObserver attached to tab pane
-[MyTags] Module initialized
-[MyTags] Tab button touched (touchstart)
-[MyTags] Tab pane is now active after touch, loading...
-[MyTags] loadMyTags called, force: false
-```
-
-## 常见问题
-
-### Q1: 为什么不直接使用 touchstart 替代 click？
-
-**A**: 因为：
-1. 桌面浏览器不支持 touchstart
-2. 某些触摸设备同时支持鼠标和触摸
-3. 同时监听两个事件，兼容性最好
-
-### Q2: MutationObserver 会影响性能吗？
-
-**A**: 不会，因为：
-1. 只监听一个元素的 class 属性
-2. 使用 `attributeFilter` 限制监听范围
-3. 只在 class 变化时触发，频率很低
-
-### Q3: 为什么需要四层保障？
-
-**A**: 因为不同环境的行为不同：
-- **桌面浏览器**: 第一层（事件）就够了
-- **移动浏览器**: 第三层（click/touchstart）更可靠
-- **微信浏览器**: 可能需要第四层（MutationObserver）
-- **极端情况**: 四层都失败的概率接近零
-
-### Q4: 如何确认是哪一层触发的？
-
-**A**: 查看 Console 日志：
-- `tr_tab_switched event received` → 第一层
-- `Tab is already active on page load` → 第二层
-- `Tab button clicked` → 第三层（click）
-- `Tab button touched` → 第三层（touchstart）
-- `Tab pane became active (MutationObserver)` → 第四层
-
-## 相关文件
-
-- `hotnews/web/static/js/src/my-tags.js` - 主要实现
-- `hotnews/web/static/js/src/tabs.js` - Tab 切换逻辑
-- `docs/fixes/my-tags-white-screen-debug.md` - 白屏问题调试
-- `docs/fixes/QUICK_REFERENCE.md` - 快速参考
-
-## 更新日志
-
-- 2026-01-19: 添加 MutationObserver 和 touchstart 支持
-- 2026-01-19: 添加点击监听器作为后备方案
-- 2026-01-19: 添加详细调试日志
-
-## 参考资料
-
-- [微信 JS-SDK 文档](https://developers.weixin.qq.com/doc/offiaccount/OA_Web_Apps/JS-SDK.html)
-- [X5 内核调试](https://x5.tencent.com/docs/questions.html)
-- [MutationObserver MDN](https://developer.mozilla.org/zh-CN/docs/Web/API/MutationObserver)
-- [Touch Events MDN](https://developer.mozilla.org/zh-CN/docs/Web/API/Touch_events)

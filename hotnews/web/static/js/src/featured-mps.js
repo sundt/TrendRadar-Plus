@@ -21,42 +21,21 @@ let featuredMpsLoading = false;
 
 /**
  * Get cached data from localStorage
+ * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
+ * Backend has cache, so no performance impact.
  */
 function getCachedData() {
-    try {
-        const cached = localStorage.getItem(FEATURED_MPS_CACHE_KEY);
-        if (!cached) return null;
-
-        const data = JSON.parse(cached);
-        const now = Date.now();
-
-        // Check if cache is expired
-        if (!data.timestamp || (now - data.timestamp) > FEATURED_MPS_CACHE_TTL) {
-            localStorage.removeItem(FEATURED_MPS_CACHE_KEY);
-            return null;
-        }
-
-        return data.mps;
-    } catch (e) {
-        console.error('[FeaturedMPs] Cache read error:', e);
-        localStorage.removeItem(FEATURED_MPS_CACHE_KEY);
-        return null;
-    }
+    // Disable frontend cache to fix compatibility issues
+    return null;
 }
 
 /**
  * Save data to localStorage cache
+ * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
  */
 function setCachedData(mps) {
-    try {
-        const data = {
-            mps: mps,
-            timestamp: Date.now(),
-        };
-        localStorage.setItem(FEATURED_MPS_CACHE_KEY, JSON.stringify(data));
-    } catch (e) {
-        console.error('[FeaturedMPs] Cache write error:', e);
-    }
+    // Disable frontend cache to fix compatibility issues
+    return;
 }
 
 /**

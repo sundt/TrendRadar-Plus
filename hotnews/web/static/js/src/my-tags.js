@@ -25,42 +25,21 @@ function checkAuth() {
 
 /**
  * Get cached data from localStorage
+ * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
+ * Backend has 5-minute cache, so no performance impact.
  */
 function getCachedData() {
-    try {
-        const cached = localStorage.getItem(MY_TAGS_CACHE_KEY);
-        if (!cached) return null;
-
-        const data = JSON.parse(cached);
-        const now = Date.now();
-
-        // Check if cache is expired
-        if (!data.timestamp || (now - data.timestamp) > MY_TAGS_CACHE_TTL) {
-            localStorage.removeItem(MY_TAGS_CACHE_KEY);
-            return null;
-        }
-
-        return data.tags;
-    } catch (e) {
-        console.error('[MyTags] Cache read error:', e);
-        localStorage.removeItem(MY_TAGS_CACHE_KEY);
-        return null;
-    }
+    // Disable frontend cache to fix compatibility issues
+    return null;
 }
 
 /**
  * Save data to localStorage cache
+ * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
  */
 function setCachedData(tags) {
-    try {
-        const data = {
-            tags: tags,
-            timestamp: Date.now(),
-        };
-        localStorage.setItem(MY_TAGS_CACHE_KEY, JSON.stringify(data));
-    } catch (e) {
-        console.error('[MyTags] Cache write error:', e);
-    }
+    // Disable frontend cache to fix compatibility issues
+    return;
 }
 
 /**

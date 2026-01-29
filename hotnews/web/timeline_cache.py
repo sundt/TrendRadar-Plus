@@ -1,9 +1,18 @@
 """
 Timeline Cache Service
 
-Provides caching for Morning Brief and Explore timeline APIs.
-Cache TTL: 5 minutes (300 seconds)
-Max items: 1000 per cache (20 cards × 50 items)
+Provides unified caching for all category APIs.
+
+=== CACHE CONFIGURATION ===
+All caches use the same TTL for consistency and simplicity.
+Frontend localStorage caching is DISABLED to avoid compatibility issues.
+
+When adding a new category:
+1. Use DEFAULT_CACHE_TTL for TTL (do not hardcode values)
+2. Do NOT implement frontend localStorage caching
+3. Add cache instance to clear_all_timeline_caches() and get_cache_status()
+
+See: docs/fixes/wechat-browser-compatibility.md for rationale.
 """
 
 import time
@@ -11,16 +20,28 @@ import hashlib
 from typing import Any, Dict, List, Optional
 
 
+# =============================================================================
+# UNIFIED CACHE CONFIGURATION
+# =============================================================================
+# All caches should use these constants for consistency.
+# Do NOT hardcode TTL values when creating new cache instances.
+
+DEFAULT_CACHE_TTL = 600  # 10 minutes - unified TTL for all caches
+DEFAULT_MAX_ITEMS = 1000  # Default max items per cache
+DEFAULT_MAX_ITEMS_PER_USER = 500  # For per-user caches
+DEFAULT_MAX_USERS = 100  # Max users for per-user caches
+
+
 class TimelineCache:
     """Simple in-memory cache for timeline data."""
     
-    def __init__(self, ttl_seconds: int = 300, max_items: int = 1000):
+    def __init__(self, ttl_seconds: int = DEFAULT_CACHE_TTL, max_items: int = DEFAULT_MAX_ITEMS):
         """
         Initialize cache.
         
         Args:
-            ttl_seconds: Cache time-to-live in seconds (default 5 minutes)
-            max_items: Maximum items to cache (default 1000)
+            ttl_seconds: Cache time-to-live in seconds (default: DEFAULT_CACHE_TTL)
+            max_items: Maximum items to cache (default: DEFAULT_MAX_ITEMS)
         """
         self._ttl = ttl_seconds
         self._max_items = max_items
@@ -126,14 +147,19 @@ class TimelineCache:
 class UserTimelineCache:
     """Per-user in-memory cache for timeline data (e.g., my-tags)."""
     
-    def __init__(self, ttl_seconds: int = 300, max_items_per_user: int = 500, max_users: int = 100):
+    def __init__(
+        self,
+        ttl_seconds: int = DEFAULT_CACHE_TTL,
+        max_items_per_user: int = DEFAULT_MAX_ITEMS_PER_USER,
+        max_users: int = DEFAULT_MAX_USERS
+    ):
         """
         Initialize per-user cache.
         
         Args:
-            ttl_seconds: Cache time-to-live in seconds (default 5 minutes)
-            max_items_per_user: Maximum items per user (default 500)
-            max_users: Maximum number of users to cache (default 100, LRU eviction)
+            ttl_seconds: Cache time-to-live in seconds (default: DEFAULT_CACHE_TTL)
+            max_items_per_user: Maximum items per user (default: DEFAULT_MAX_ITEMS_PER_USER)
+            max_users: Maximum number of users to cache (default: DEFAULT_MAX_USERS, LRU eviction)
         """
         self._ttl = ttl_seconds
         self._max_items = max_items_per_user
@@ -256,11 +282,17 @@ class UserTimelineCache:
         return time.time() - oldest
 
 
-# Global cache instances
-brief_timeline_cache = TimelineCache(ttl_seconds=600, max_items=1000)  # 10 minutes TTL
-explore_timeline_cache = TimelineCache(ttl_seconds=600, max_items=1000)  # 10 minutes TTL
-my_tags_cache = UserTimelineCache(ttl_seconds=300, max_items_per_user=500, max_users=100)  # Per-user cache
-discovery_news_cache = TimelineCache(ttl_seconds=600, max_items=1500)  # 10 minutes TTL, global cache for discovery
+# =============================================================================
+# GLOBAL CACHE INSTANCES
+# =============================================================================
+# All caches use DEFAULT_CACHE_TTL (10 minutes) for consistency.
+# When adding a new category, create a cache instance here using the defaults.
+
+brief_timeline_cache = TimelineCache(max_items=1000)  # 知识库 (knowledge)
+explore_timeline_cache = TimelineCache(max_items=1000)  # 探索 (explore)
+my_tags_cache = UserTimelineCache()  # 我的关注 (my-tags) - per-user
+discovery_news_cache = TimelineCache(max_items=1500)  # 新发现 (discovery)
+# featured_mps uses API-level caching, not timeline cache
 
 
 def clear_all_timeline_caches() -> Dict[str, bool]:

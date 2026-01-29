@@ -15,9 +15,12 @@ from typing import Dict, List, Optional, Tuple
 from .content_filter import ContentFilter
 
 # 简单的内存缓存
+# 使用统一的缓存 TTL，与 timeline_cache.py 保持一致
+from hotnews.web.timeline_cache import DEFAULT_CACHE_TTL
+
 _categorized_news_cache = {}
 _categorized_news_cache_time = 0
-_CACHE_TTL_SECONDS = 60  # 缓存 60 秒
+_CACHE_TTL_SECONDS = DEFAULT_CACHE_TTL  # 统一缓存时间（10分钟）
 
 
 def clear_categorized_news_cache():
