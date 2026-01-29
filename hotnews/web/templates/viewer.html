@@ -649,9 +649,19 @@
             }
             
             // 延迟检查，给 JS 模块足够的初始化时间
+            // 增加更早的检查时间
+            setTimeout(checkAndTriggerLoad, 500);
+            setTimeout(checkAndTriggerLoad, 1000);
             setTimeout(checkAndTriggerLoad, 2000);
             setTimeout(checkAndTriggerLoad, 4000);
             setTimeout(checkAndTriggerLoad, 8000);
+            
+            // DOMContentLoaded 时也检查一次
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(checkAndTriggerLoad, 100);
+                });
+            }
         })();
     </script>
 

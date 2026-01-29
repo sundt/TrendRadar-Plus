@@ -372,12 +372,28 @@ function init() {
         }
     });
 
-    // Also check if discovery is already the active tab (on page load)
-    const activePane = document.querySelector('#tab-discovery.active');
-    if (activePane) {
-        console.log('[Discovery] Tab is already active on page load');
-        loadDiscovery();
-    }
+    // Check if discovery is already the active tab - with multiple retries
+    const checkAndLoadIfActive = () => {
+        const activePane = document.querySelector('#tab-discovery.active');
+        const container = document.getElementById('discoveryGrid');
+        console.log('[Discovery] Checking if active:', !!activePane, 'container:', !!container, 'loaded:', discoveryLoaded, 'loading:', discoveryLoading);
+        
+        if (activePane && container) {
+            const hasContent = container.querySelector('.platform-card');
+            if (!hasContent && !discoveryLoaded && !discoveryLoading) {
+                console.log('[Discovery] Tab is active and no content, loading...');
+                loadDiscovery();
+            }
+        }
+    };
+    
+    // Check immediately
+    checkAndLoadIfActive();
+    
+    // Also check after short delays (for timing issues)
+    setTimeout(checkAndLoadIfActive, 100);
+    setTimeout(checkAndLoadIfActive, 500);
+    setTimeout(checkAndLoadIfActive, 1000);
 
     // Add click listener to the discovery tab button as a fallback
     const tryAttachClickListener = () => {
