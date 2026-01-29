@@ -420,6 +420,7 @@
             }
             
             // 直接加载 discovery 数据的备用函数
+            var discoveryLoading = false;
             async function fallbackLoadDiscovery() {
                 var container = document.getElementById('discoveryGrid');
                 if (!container) return;
@@ -427,7 +428,14 @@
                 // 检查是否已经有内容
                 if (container.querySelector('.platform-card')) return;
                 
+                // 防止重复加载
+                if (discoveryLoading) return;
+                discoveryLoading = true;
+                
                 console.log('[Fallback] Loading discovery directly...');
+                
+                // 显示加载中
+                container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;"><div style="font-size:48px;margin-bottom:16px;">✨</div><div style="font-size:16px;">发现中...</div></div>';
                 
                 try {
                     var res = await fetch('/api/user/preferences/discovery-news?news_limit=50&tag_limit=30', { credentials: 'include' });
@@ -435,6 +443,7 @@
                     
                     if (!data.ok || !data.tags || data.tags.length === 0) {
                         container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;"><div style="font-size:64px;margin-bottom:20px;">✨</div><div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">暂无新发现</div><div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">AI 正在持续发现热门话题，<br>稍后再来看看吧</div></div>';
+                        discoveryLoading = false;
                         return;
                     }
                     
@@ -458,6 +467,7 @@
                     console.error('[Fallback] discovery load error:', e);
                     container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;"><div style="font-size:48px;margin-bottom:16px;">😕</div><div style="font-size:16px;">加载失败，请刷新重试</div></div>';
                 }
+                discoveryLoading = false;
             }
             
             // 检查是否需要触发加载的函数
@@ -500,6 +510,35 @@
                     console.error('[Fallback] Error:', e);
                 }
             }
+            
+            // 监听 tab 切换事件
+            window.addEventListener('tr_tab_switched', function(event) {
+                var categoryId = event && event.detail && event.detail.categoryId;
+                console.log('[Fallback] Tab switched to:', categoryId);
+                if (categoryId === 'discovery') {
+                    setTimeout(function() {
+                        var container = document.getElementById('discoveryGrid');
+                        if (container && !container.querySelector('.platform-card')) {
+                            if (window.HotNews && window.HotNews.discovery && typeof window.HotNews.discovery.load === 'function') {
+                                window.HotNews.discovery.load(true);
+                            } else {
+                                fallbackLoadDiscovery();
+                            }
+                        }
+                    }, 300);
+                } else if (categoryId === 'my-tags') {
+                    setTimeout(function() {
+                        var container = document.getElementById('myTagsGrid');
+                        if (container && !container.querySelector('.platform-card')) {
+                            if (window.HotNews && window.HotNews.myTags && typeof window.HotNews.myTags.load === 'function') {
+                                window.HotNews.myTags.load(true);
+                            } else {
+                                fallbackLoadMyTags();
+                            }
+                        }
+                    }, 300);
+                }
+            });
             
             // 延迟检查，给 JS 模块足够的初始化时间
             setTimeout(checkAndTriggerLoad, 2000);
