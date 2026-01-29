@@ -235,6 +235,14 @@ async function loadDiscovery(force = false) {
 
     console.log('[Discovery] Container found, starting load...');
     discoveryLoading = true;
+    
+    // Safety timeout to reset loading state after 10 seconds
+    const safetyTimeout = setTimeout(() => {
+        if (discoveryLoading) {
+            console.warn('[Discovery] Safety timeout triggered, resetting loading state');
+            discoveryLoading = false;
+        }
+    }, 10000);
 
     try {
         // Try to load from frontend cache first (if not forcing refresh)
@@ -307,6 +315,7 @@ async function loadDiscovery(force = false) {
         console.error('[Discovery] Load error:', e);
         renderError(container, e.message);
     } finally {
+        clearTimeout(safetyTimeout);
         discoveryLoading = false;
     }
 }

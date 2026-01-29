@@ -423,14 +423,28 @@
             var discoveryLoading = false;
             async function fallbackLoadDiscovery() {
                 var container = document.getElementById('discoveryGrid');
-                if (!container) return;
+                if (!container) {
+                    console.log('[Fallback] discoveryGrid not found');
+                    return;
+                }
                 
-                // 检查是否已经有内容
-                if (container.querySelector('.platform-card')) return;
+                // 检查是否已经有内容（platform-card 或者非 loading 的内容）
+                var hasContent = container.querySelector('.platform-card');
+                var hasEmptyState = container.querySelector('[style*="暂无新发现"]');
+                if (hasContent || hasEmptyState) {
+                    console.log('[Fallback] Discovery already has content');
+                    return;
+                }
                 
-                // 防止重复加载
-                if (discoveryLoading) return;
+                // 防止重复加载，但设置超时自动重置
+                if (discoveryLoading) {
+                    console.log('[Fallback] Discovery already loading, skipping');
+                    return;
+                }
                 discoveryLoading = true;
+                
+                // 5秒后自动重置 loading 状态，防止卡死
+                setTimeout(function() { discoveryLoading = false; }, 5000);
                 
                 console.log('[Fallback] Loading discovery directly...');
                 
@@ -440,6 +454,8 @@
                 try {
                     var res = await fetch('/api/user/preferences/discovery-news?news_limit=50&tag_limit=30', { credentials: 'include' });
                     var data = await res.json();
+                    
+                    console.log('[Fallback] Discovery API response:', data.ok, 'tags:', data.tags ? data.tags.length : 0);
                     
                     if (!data.ok || !data.tags || data.tags.length === 0) {
                         container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;"><div style="font-size:64px;margin-bottom:20px;">✨</div><div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">暂无新发现</div><div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">AI 正在持续发现热门话题，<br>稍后再来看看吧</div></div>';
@@ -462,10 +478,10 @@
                     }).join('');
                     
                     container.innerHTML = html;
-                    console.log('[Fallback] discovery loaded successfully');
+                    console.log('[Fallback] discovery loaded successfully, cards:', data.tags.length);
                 } catch (e) {
                     console.error('[Fallback] discovery load error:', e);
-                    container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;"><div style="font-size:48px;margin-bottom:16px;">😕</div><div style="font-size:16px;">加载失败，请刷新重试</div></div>';
+                    container.innerHTML = '<div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;"><div style="font-size:48px;margin-bottom:16px;">😕</div><div style="font-size:16px;">加载失败: ' + (e.message || '未知错误') + '</div><button onclick="window._fallbackLoadDiscovery && window._fallbackLoadDiscovery()" style="margin-top:16px;padding:8px 16px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>';
                 }
                 discoveryLoading = false;
             }
