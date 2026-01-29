@@ -470,6 +470,10 @@
                 discoveryLoading = false;
             }
             
+            // 暴露到全局，供 tab 点击时调用
+            window._fallbackLoadMyTags = fallbackLoadMyTags;
+            window._fallbackLoadDiscovery = fallbackLoadDiscovery;
+            
             // 检查是否需要触发加载的函数
             function checkAndTriggerLoad() {
                 try {
@@ -479,15 +483,7 @@
                     if (myTagsPane && myTagsPane.classList.contains('active') && myTagsGrid) {
                         var hasContent = myTagsGrid.querySelector('.platform-card');
                         if (!hasContent) {
-                            // 先尝试用 JS 模块
-                            if (window.HotNews && window.HotNews.myTags && typeof window.HotNews.myTags.load === 'function') {
-                                console.log('[Fallback] Triggering my-tags via HotNews.myTags.load');
-                                window.HotNews.myTags.load(true);
-                            } else {
-                                // JS 模块不可用，直接加载
-                                console.log('[Fallback] HotNews.myTags not available, loading directly');
-                                fallbackLoadMyTags();
-                            }
+                            fallbackLoadMyTags();
                         }
                     }
                     
@@ -497,13 +493,7 @@
                     if (discoveryPane && discoveryPane.classList.contains('active') && discoveryGrid) {
                         var hasDiscoveryContent = discoveryGrid.querySelector('.platform-card');
                         if (!hasDiscoveryContent) {
-                            if (window.HotNews && window.HotNews.discovery && typeof window.HotNews.discovery.load === 'function') {
-                                console.log('[Fallback] Triggering discovery via HotNews.discovery.load');
-                                window.HotNews.discovery.load(true);
-                            } else {
-                                console.log('[Fallback] HotNews.discovery not available, loading directly');
-                                fallbackLoadDiscovery();
-                            }
+                            fallbackLoadDiscovery();
                         }
                     }
                 } catch (e) {
@@ -519,26 +509,73 @@
                     setTimeout(function() {
                         var container = document.getElementById('discoveryGrid');
                         if (container && !container.querySelector('.platform-card')) {
-                            if (window.HotNews && window.HotNews.discovery && typeof window.HotNews.discovery.load === 'function') {
-                                window.HotNews.discovery.load(true);
-                            } else {
-                                fallbackLoadDiscovery();
-                            }
+                            fallbackLoadDiscovery();
                         }
                     }, 300);
                 } else if (categoryId === 'my-tags') {
                     setTimeout(function() {
                         var container = document.getElementById('myTagsGrid');
                         if (container && !container.querySelector('.platform-card')) {
-                            if (window.HotNews && window.HotNews.myTags && typeof window.HotNews.myTags.load === 'function') {
-                                window.HotNews.myTags.load(true);
-                            } else {
-                                fallbackLoadMyTags();
-                            }
+                            fallbackLoadMyTags();
                         }
                     }, 300);
                 }
             });
+            
+            // 直接给 discovery tab 按钮添加点击监听（微信浏览器兼容）
+            function attachTabClickListeners() {
+                var discoveryTab = document.querySelector('.category-tab[data-category="discovery"]');
+                if (discoveryTab) {
+                    discoveryTab.addEventListener('click', function() {
+                        console.log('[Fallback] Discovery tab clicked directly');
+                        setTimeout(function() {
+                            var container = document.getElementById('discoveryGrid');
+                            if (container && !container.querySelector('.platform-card')) {
+                                fallbackLoadDiscovery();
+                            }
+                        }, 500);
+                    });
+                    // 触摸事件（移动端）
+                    discoveryTab.addEventListener('touchend', function() {
+                        console.log('[Fallback] Discovery tab touched');
+                        setTimeout(function() {
+                            var container = document.getElementById('discoveryGrid');
+                            if (container && !container.querySelector('.platform-card')) {
+                                fallbackLoadDiscovery();
+                            }
+                        }, 500);
+                    }, { passive: true });
+                }
+                
+                var myTagsTab = document.querySelector('.category-tab[data-category="my-tags"]');
+                if (myTagsTab) {
+                    myTagsTab.addEventListener('click', function() {
+                        console.log('[Fallback] My-tags tab clicked directly');
+                        setTimeout(function() {
+                            var container = document.getElementById('myTagsGrid');
+                            if (container && !container.querySelector('.platform-card')) {
+                                fallbackLoadMyTags();
+                            }
+                        }, 500);
+                    });
+                    myTagsTab.addEventListener('touchend', function() {
+                        console.log('[Fallback] My-tags tab touched');
+                        setTimeout(function() {
+                            var container = document.getElementById('myTagsGrid');
+                            if (container && !container.querySelector('.platform-card')) {
+                                fallbackLoadMyTags();
+                            }
+                        }, 500);
+                    }, { passive: true });
+                }
+            }
+            
+            // DOM 加载完成后绑定事件
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', attachTabClickListeners);
+            } else {
+                attachTabClickListeners();
+            }
             
             // 延迟检查，给 JS 模块足够的初始化时间
             setTimeout(checkAndTriggerLoad, 2000);
