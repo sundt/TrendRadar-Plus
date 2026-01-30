@@ -1057,54 +1057,56 @@ async def get_discovery_news(
             qualifying_tags.append(new_tag)
             seen_ids.add(tag_id)
             
-            if len(qualifying_tags) >= tag_limit:
+            if len(qualifying_tags) >= tag_limit * 2:  # Allow more candidates initially
                 break
         
         # Part 2: Also include recently promoted dynamic tags (last 7 days)
+        # Always include these to match "快速订阅" hot_tags behavior
         days_7_ago = now - 7 * 86400
-        if len(qualifying_tags) < tag_limit:
-            dyn_cur = online_conn.execute(
-                """
-                SELECT id, name, name_en, type, icon, color, created_at
-                FROM tags
-                WHERE is_dynamic = 1 AND lifecycle = 'active' AND created_at >= ?
-                ORDER BY created_at DESC
-                LIMIT ?
-                """,
-                (days_7_ago, tag_limit - len(qualifying_tags))
-            )
-            for row in dyn_cur.fetchall() or []:
-                tag_id = row[0]
-                if tag_id in seen_ids:
-                    continue
-                created_ts = row[6] or now
-                created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
-                new_tag = {
-                    "id": tag_id,
-                    "name": row[1],
-                    "name_en": row[2],
-                    "type": row[3],
-                    "icon": row[4] or "🏷️",
-                    "color": row[5],
-                    "first_seen_at": created_ts,
-                    "first_seen_date": created_date,
-                    "occurrence_count": 0,
-                    "confidence": None,
-                    "badge": "new",
-                    "is_candidate": False,
-                }
-                
-                # Skip if similar to existing tag
-                if _is_similar_tag(new_tag, qualifying_tags):
-                    continue
-                
-                qualifying_tags.append(new_tag)
-                seen_ids.add(tag_id)
-                if len(qualifying_tags) >= tag_limit:
-                    break
+        dyn_cur = online_conn.execute(
+            """
+            SELECT id, name, name_en, type, icon, color, created_at
+            FROM tags
+            WHERE is_dynamic = 1 AND lifecycle = 'active' AND created_at >= ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (days_7_ago, tag_limit)
+        )
+        for row in dyn_cur.fetchall() or []:
+            tag_id = row[0]
+            if tag_id in seen_ids:
+                continue
+            created_ts = row[6] or now
+            created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
+            new_tag = {
+                "id": tag_id,
+                "name": row[1],
+                "name_en": row[2],
+                "type": row[3],
+                "icon": row[4] or "🏷️",
+                "color": row[5],
+                "first_seen_at": created_ts,
+                "first_seen_date": created_date,
+                "occurrence_count": 0,
+                "confidence": None,
+                "badge": "new",
+                "is_candidate": False,
+            }
+            
+            # Skip if similar to existing tag
+            if _is_similar_tag(new_tag, qualifying_tags):
+                continue
+            
+            qualifying_tags.append(new_tag)
+            seen_ids.add(tag_id)
         
-        # Sort by occurrence_count descending
-        qualifying_tags.sort(key=lambda x: x["occurrence_count"], reverse=True)
+        # Sort: candidates by occurrence_count, promoted tags by created_at
+        # Mix them by first_seen_at (newest first) to show recent discoveries
+        qualifying_tags.sort(key=lambda x: x.get("first_seen_at", 0), reverse=True)
+        
+        # Limit to tag_limit
+        qualifying_tags = qualifying_tags[:tag_limit]
         
         # Fetch news for each qualifying tag
         for tag_data in qualifying_tags:
