@@ -1,21 +1,23 @@
 name: E2E Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'hotnews/web/**'
-      - 'tests/e2e/**'
-      - 'playwright.config.ts'
-      - 'package.json'
-  pull_request:
-    branches: [main]
-    paths:
-      - 'hotnews/web/**'
-      - 'tests/e2e/**'
-      - 'playwright.config.ts'
-      - 'package.json'
+  # Disabled by default - only run manually
   workflow_dispatch:
+  # Uncomment below to enable automatic runs
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'hotnews/web/**'
+  #     - 'tests/e2e/**'
+  #     - 'playwright.config.ts'
+  #     - 'package.json'
+  # pull_request:
+  #   branches: [main]
+  #   paths:
+  #     - 'hotnews/web/**'
+  #     - 'tests/e2e/**'
+  #     - 'playwright.config.ts'
+  #     - 'package.json'
 
 jobs:
   e2e-tests:
