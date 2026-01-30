@@ -368,7 +368,7 @@ async def generate_favorite_summary(request: Request, news_id: str):
     if not api_key:
         raise HTTPException(status_code=500, detail="AI 服务未配置")
     
-    model = os.environ.get("DASHSCOPE_MODEL", "qwen-turbo")
+    model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
     
     # Fetch article content
     content, error, _method = await fetch_article_content(url)

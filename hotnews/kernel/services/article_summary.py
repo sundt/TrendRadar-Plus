@@ -387,7 +387,7 @@ SUMMARY_USER_TEMPLATE = """请总结以下文章的核心内容：
 {content}"""
 
 
-async def generate_summary(content: str, api_key: str, model: str = "qwen-turbo") -> Tuple[Optional[str], Optional[str]]:
+async def generate_summary(content: str, api_key: str, model: str = "qwen-plus") -> Tuple[Optional[str], Optional[str]]:
     """
     Generate summary using DashScope API (legacy, uses default template).
     Returns (summary, error_message)
@@ -479,7 +479,7 @@ async def classify_article(
     else:
         url = DASHSCOPE_API_URL
         actual_key = api_key
-        actual_model = model or "qwen-turbo"
+        actual_model = model or "qwen-plus"
     
     # Use first 2000 chars for classification (save tokens)
     content_preview = content[:2000] if len(content) > 2000 else content
@@ -557,7 +557,7 @@ async def classify_article(
 async def classify_article_simple(
     content: str, 
     api_key: str, 
-    model: str = "qwen-turbo",
+    model: str = "qwen-plus",
     source_name: str = None
 ) -> str:
     """
@@ -622,7 +622,7 @@ async def generate_smart_summary(
     else:
         url = DASHSCOPE_API_URL
         actual_key = api_key
-        actual_model = model or "qwen-turbo"
+        actual_model = model or "qwen-plus"
     
     # Step 5: Generate summary with specialized template
     # V5: Insert length instruction before content
@@ -732,7 +732,7 @@ async def generate_smart_summary_stream(
     else:
         url = DASHSCOPE_API_URL
         actual_key = api_key
-        actual_model = model or "qwen-turbo"
+        actual_model = model or "qwen-plus"
     
     logger.info(f"Using AI provider: {'Qianfan' if use_qianfan else 'DashScope'}, model: {actual_model}")
     
@@ -813,7 +813,7 @@ async def generate_smart_summary_stream(
         yield None, True, article_type, "AI 总结生成失败", None, confidence
 
 
-async def summarize_article(url: str, api_key: str, model: str = "qwen-turbo") -> Tuple[Optional[str], Optional[str]]:
+async def summarize_article(url: str, api_key: str, model: str = "qwen-plus") -> Tuple[Optional[str], Optional[str]]:
     """
     Full pipeline: fetch article and generate summary.
     Returns (summary, error_message)

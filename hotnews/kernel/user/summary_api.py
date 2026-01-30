@@ -277,7 +277,7 @@ async def generate_summary(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI 服务未配置")
     
-    model = os.environ.get("DASHSCOPE_MODEL", "qwen-turbo")
+    model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
     
     # Step 1: Fetch article content
     content, error, _fetch_method = await fetch_article_content(url)
@@ -459,7 +459,7 @@ async def generate_summary_stream(
     if not api_key:
         raise HTTPException(status_code=500, detail="AI 服务未配置")
     
-    model = os.environ.get("DASHSCOPE_MODEL", "qwen-turbo")
+    model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
     
     # Minimum content length for AI summary (characters)
     MIN_CONTENT_FOR_SUMMARY = 500
@@ -527,6 +527,11 @@ async def generate_summary_stream(
             "请先登录",
             "需要登录",
             "登录后查看",
+        ]
+        
+        # Patterns that only apply to server-fetched content (not plugin-provided)
+        # These may appear in normal page content (e.g., share buttons)
+        SERVER_ONLY_ANTI_CRAWLER_PATTERNS = [
             "请使用微信扫码",
         ]
         
@@ -540,11 +545,21 @@ async def generate_summary_stream(
                 detected_pattern = pattern
                 break
         
+        # Only check server-only patterns if content was fetched by server (not plugin)
+        if not is_anti_crawler and fetch_method != "plugin":
+            for pattern in SERVER_ONLY_ANTI_CRAWLER_PATTERNS:
+                if pattern.lower() in content_lower:
+                    is_anti_crawler = True
+                    detected_pattern = pattern
+                    break
+        
         # Also check if content is suspiciously short AND contains warning keywords
+        # But only for server-fetched content (plugin content is trusted)
         content_length = len(content) if content else 0
-        if content_length < 800 and any(kw in content_lower for kw in ["warning", "error", "异常", "失败", "无法"]):
-            is_anti_crawler = True
-            detected_pattern = "suspicious_short_content"
+        if not is_anti_crawler and fetch_method != "plugin":
+            if content_length < 800 and any(kw in content_lower for kw in ["warning", "error", "异常", "失败", "无法"]):
+                is_anti_crawler = True
+                detected_pattern = "suspicious_short_content"
         
         if is_anti_crawler:
             # Record as fetch_blocked failure

@@ -127,7 +127,7 @@ services:
       # Morning Brief AI filtering (DashScope / Qwen)
       - HOTNEWS_MB_AI_ENABLED=${HOTNEWS_MB_AI_ENABLED:-true}
       - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
-      - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen-turbo}
+      - DASHSCOPE_MODEL=${DASHSCOPE_MODEL:-qwen-plus}
       # 百度千帆 AI 配置（优先使用）
       - QIANFAN_API_KEY=${QIANFAN_API_KEY:-}
       - QIANFAN_MODEL=${QIANFAN_MODEL:-ernie-5.0-thinking-preview}
