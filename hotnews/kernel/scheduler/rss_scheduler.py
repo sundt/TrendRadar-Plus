@@ -131,14 +131,16 @@ def _mb_ai_prompt_text() -> str:
         "如果发现新的重要话题或概念（预设标签未覆盖），可以在 suggested_tags 中提取：\n"
         "• 适用场景：新兴AI产品（如deepseek）、热点事件（如ces_2026）、新技术（如quantum_computing）\n"
         "• 命名规则：英文小写+下划线，2-30字符\n"
-        "• 置信度>=0.8时才添加\n\n"
+        "• 置信度>=0.8时才添加\n"
+        "• keywords字段：提供中英文搜索关键词，用于匹配相关新闻\n\n"
         "保留规则：当内容与科技/AI相关且有价值时action=include，否则exclude。\n\n"
         "输出格式（严格JSON数组）：\n"
-        '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
+        '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9,"keywords":["DeepSeek","深度求索"]}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
         "⚠️ 关键：输出数组长度必须与输入完全一致，不得跳过任何条目。\n\n"
         "示例：\n"
         '{"title":"免费使用Claude API教程"} → {"category":"tech","topics":["ai_ml"],"attributes":["free_deal","tutorial"],"action":"include","score":90,"confidence":0.95,"reason":"免费AI教程"}\n'
-        '{"title":"DeepSeek发布新模型"} → {"category":"tech","topics":["ai_ml","llm"],"attributes":["official"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.95}],"action":"include","score":92,"confidence":0.95,"reason":"AI新模型"}\n'
+        '{"title":"DeepSeek发布新模型"} → {"category":"tech","topics":["ai_ml","llm"],"attributes":["official"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.95,"keywords":["DeepSeek","深度求索","深求"]}],"action":"include","score":92,"confidence":0.95,"reason":"AI新模型"}\n'
+        '{"title":"具身智能机器人发布"} → {"category":"tech","topics":["robotics","ai_ml"],"attributes":["official"],"suggested_tags":[{"id":"embodied_intelligence","name":"Embodied Intelligence","type":"topic","parent_id":"tech","confidence":0.92,"keywords":["具身智能","Embodied Intelligence","Embodied AI"]}],"action":"include","score":88,"confidence":0.92,"reason":"具身智能"}\n'
         '{"title":"A股三大指数收涨"} → {"category":"finance","topics":["stock"],"attributes":["breaking"],"action":"exclude","score":20,"confidence":0.95,"reason":"股票行情"}\n'
     )
 
@@ -260,12 +262,21 @@ def _mb_ai_normalize_row(out: Any) -> Dict[str, Any]:
     if isinstance(suggested_tags_raw, list):
         for st in suggested_tags_raw[:5]:  # Max 5 suggested tags
             if isinstance(st, dict) and st.get("id"):
+                # Parse keywords (list of strings for news matching)
+                keywords_raw = st.get("keywords") or []
+                keywords = []
+                if isinstance(keywords_raw, list):
+                    for kw in keywords_raw[:10]:  # Max 10 keywords
+                        if isinstance(kw, str) and kw.strip():
+                            keywords.append(kw.strip())
+                
                 suggested_tags.append({
                     "id": str(st.get("id", "")).strip().lower(),
                     "name": str(st.get("name", st.get("id", ""))).strip(),
                     "type": str(st.get("type", "topic")).strip().lower(),
                     "parent_id": str(st.get("parent_id", "")).strip().lower() or None,
                     "confidence": float(st.get("confidence", 0.8)),
+                    "keywords": keywords,
                 })
     
     return {
@@ -462,6 +473,7 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
                         parent_id=st.get("parent_id"),
                         confidence=st.get("confidence", 0.8),
                         sample_title=title,
+                        keywords=st.get("keywords"),  # Pass AI-generated keywords
                     )
     except Exception as e:
         logger.warning(f"Failed to process suggested_tags: {e}")

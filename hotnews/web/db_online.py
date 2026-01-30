@@ -520,6 +520,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("tags", "usage_count", "INTEGER DEFAULT 0")
     _ensure_column("tags", "last_used_at", "INTEGER")
     _ensure_column("tags", "promoted_from", "TEXT")
+    
+    # Tag candidates keywords column (AI-generated search keywords)
+    _ensure_column("tag_candidates", "keywords", "TEXT DEFAULT '[]'")
 
     # ========== RSS Entries 扩展字段（公众号文章统一存储） ==========
     # 为 rss_entries 表添加公众号文章所需的字段
