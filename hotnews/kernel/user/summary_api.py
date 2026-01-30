@@ -482,7 +482,9 @@ async def generate_summary_stream(
             content = plugin_content
             fetch_method = "plugin"
             yield f"data: {json.dumps({'type': 'status', 'message': '正在分析页面内容...'}, ensure_ascii=False)}\n\n"
-            logging.info(f"[Summary] Using plugin-provided content for {url[:50]}, length={len(content)}")
+            # Log first 500 chars for debugging
+            content_preview = content[:500].replace('\n', ' ')
+            logging.info(f"[Summary] Using plugin-provided content for {url[:50]}, length={len(content)}, preview: {content_preview}")
         else:
             # 插件没有提供有效内容，回退到服务器抓取
             yield f"data: {json.dumps({'type': 'status', 'message': '正在获取文章内容...'}, ensure_ascii=False)}\n\n"
@@ -527,6 +529,11 @@ async def generate_summary_stream(
             "请先登录",
             "需要登录",
             "登录后查看",
+            "未知错误",
+            "你暂无权限查看",
+            "该内容已被发布者删除",
+            "内容已被删除",
+            "文章不存在",
         ]
         
         # Patterns that only apply to server-fetched content (not plugin-provided)
