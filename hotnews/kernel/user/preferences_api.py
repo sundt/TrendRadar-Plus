@@ -1062,6 +1062,7 @@ async def get_discovery_news(
         
         # Part 2: Also include recently promoted dynamic tags (last 7 days)
         # Always include these to match "快速订阅" hot_tags behavior
+        # Use larger limit to ensure we don't miss any recent tags
         days_7_ago = now - 7 * 86400
         dyn_cur = online_conn.execute(
             """
@@ -1069,9 +1070,9 @@ async def get_discovery_news(
             FROM tags
             WHERE is_dynamic = 1 AND lifecycle = 'active' AND created_at >= ?
             ORDER BY created_at DESC
-            LIMIT ?
+            LIMIT 100
             """,
-            (days_7_ago, tag_limit)
+            (days_7_ago,)
         )
         for row in dyn_cur.fetchall() or []:
             tag_id = row[0]
