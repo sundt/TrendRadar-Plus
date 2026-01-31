@@ -15,7 +15,7 @@ import os
 import time
 from typing import Optional
 
-from fastapi import APIRouter, Request, HTTPException, Body, Response
+from fastapi import APIRouter, Request, HTTPException, Body, Response, Query
 from fastapi.responses import RedirectResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
