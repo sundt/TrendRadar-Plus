@@ -504,7 +504,15 @@
 
                 if (resp.ok) {
                     showMessage('登录成功，正在跳转...', 'success');
-                    setTimeout(() => window.location.href = '/', 1000);
+                    // 检查是否有外部回调
+                    setTimeout(() => {
+                        // 如果有外部回调 cookie，跳转到回调处理接口
+                        if (document.cookie.includes('external_callback')) {
+                            window.location.href = '/api/auth/external/callback';
+                        } else {
+                            window.location.href = '/';
+                        }
+                    }, 1000);
                 } else {
                     const errMsg = typeof data.detail === 'string' ? data.detail : 
                                    (data.detail?.[0]?.msg || data.message || '验证失败');
