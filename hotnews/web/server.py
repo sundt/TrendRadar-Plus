@@ -530,6 +530,10 @@ app.include_router(_share_page_router)
 from hotnews.web.source_discovery_api import router as _source_discovery_router
 app.include_router(_source_discovery_router)
 
+# News search API (for topic-explorer integration, requires auth)
+from hotnews.web.news_search_api import router as _news_search_router
+app.include_router(_news_search_router)
+
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
 if kernel_static.exists():
