@@ -983,3 +983,112 @@ async def qr_login_cancel(request: Request, temp_user_id: int):
     
     cancel_login(temp_user_id)
     return {"ok": True, "message": "已取消"}
+
+
+# ==================== External App Login (外部应用登录) ====================
+# 支持外部应用（如 topic-explorer）通过 hotnews 进行用户认证
+
+# 允许的外部回调域名（生产环境应该从配置读取）
+ALLOWED_CALLBACK_DOMAINS = [
+    "localhost",
+    "127.0.0.1",
+    "topic.uihash.com",  # topic-explorer 的域名
+]
+
+
+def _is_valid_callback_url(url: str) -> bool:
+    """验证回调 URL 是否在允许列表中"""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        return any(domain in host for domain in ALLOWED_CALLBACK_DOMAINS)
+    except Exception:
+        return False
+
+
+@router.get("/external/login")
+async def external_login(
+    request: Request,
+    callback: str = Query(..., description="登录成功后的回调 URL"),
+    app_name: str = Query("external", description="应用名称"),
+):
+    """
+    外部应用登录入口
+    
+    外部应用跳转到此接口，用户登录成功后会带着 session token 回调到指定 URL。
+    
+    流程：
+    1. 外部应用跳转到 /api/auth/external/login?callback=xxx
+    2. 如果用户已登录，直接回调
+    3. 如果用户未登录，跳转到首页触发登录，登录成功后再回调
+    """
+    # 验证回调 URL
+    if not _is_valid_callback_url(callback):
+        raise HTTPException(status_code=400, detail="Invalid callback URL")
+    
+    # 检查用户是否已登录
+    session_token = _get_session_token(request)
+    if session_token:
+        from hotnews.kernel.auth.auth_service import validate_session
+        conn = _get_user_db_conn(request)
+        is_valid, user_info = validate_session(conn, session_token)
+        
+        if is_valid:
+            # 已登录，直接回调
+            separator = "&" if "?" in callback else "?"
+            redirect_url = f"{callback}{separator}session={session_token}"
+            return RedirectResponse(url=redirect_url)
+    
+    # 未登录，保存回调信息到 session，跳转到首页登录
+    # 使用 cookie 保存回调信息
+    response = RedirectResponse(url=f"/?login=1&from={app_name}")
+    response.set_cookie(
+        key="external_callback",
+        value=callback,
+        max_age=600,  # 10 分钟有效
+        httponly=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
+
+
+@router.get("/external/callback")
+async def external_callback(request: Request):
+    """
+    外部应用登录回调处理
+    
+    用户在 hotnews 登录成功后，前端调用此接口完成回调。
+    """
+    # 获取保存的回调 URL
+    callback = request.cookies.get("external_callback")
+    if not callback:
+        return {"ok": False, "error": "No callback URL found"}
+    
+    # 验证回调 URL
+    if not _is_valid_callback_url(callback):
+        return {"ok": False, "error": "Invalid callback URL"}
+    
+    # 获取当前 session
+    session_token = _get_session_token(request)
+    if not session_token:
+        return {"ok": False, "error": "Not authenticated"}
+    
+    # 验证 session
+    from hotnews.kernel.auth.auth_service import validate_session
+    conn = _get_user_db_conn(request)
+    is_valid, user_info = validate_session(conn, session_token)
+    
+    if not is_valid:
+        return {"ok": False, "error": "Session expired"}
+    
+    # 构建回调 URL
+    separator = "&" if "?" in callback else "?"
+    redirect_url = f"{callback}{separator}session={session_token}"
+    
+    # 清除回调 cookie
+    response = RedirectResponse(url=redirect_url)
+    response.delete_cookie(key="external_callback", path="/")
+    
+    return response
