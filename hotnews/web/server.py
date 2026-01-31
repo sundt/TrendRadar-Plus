@@ -526,6 +526,10 @@ if _share_router: app.include_router(_share_router)
 from hotnews.web.share_routes import router as _share_page_router
 app.include_router(_share_page_router)
 
+# Source discovery API (for topic-explorer integration)
+from hotnews.web.source_discovery_api import router as _source_discovery_router
+app.include_router(_source_discovery_router)
+
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
 if kernel_static.exists():
