@@ -472,16 +472,71 @@ def get_due_sources(conn, now: int, source_type: str = None, limit: int = 20) ->
     """
     Get sources that are due for checking.
     
+    Only returns sources that:
+    1. Are due (next_due_at <= now)
+    2. Are not in backoff (backoff_until <= now)
+    3. Still exist in their source table (rss_sources/custom_sources)
+    4. Are enabled in their source table
+    
     Args:
         conn: Database connection
         now: Current timestamp
-        source_type: Source type filter ('rss', 'custom', or None for all)
+        source_type: Source type filter ('rss', 'custom', 'mp', or None for all)
         limit: Maximum number of sources to return
         
     Returns:
         List of due sources
     """
-    if source_type:
+    if source_type == "rss":
+        # JOIN with rss_sources to filter out disabled/deleted sources
+        cur = conn.execute(
+            """
+            SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
+            FROM source_stats ss
+            INNER JOIN rss_sources s ON ss.source_id = s.id
+            WHERE ss.source_type = 'rss' 
+              AND ss.next_due_at <= ? 
+              AND ss.backoff_until <= ?
+              AND s.enabled = 1
+            ORDER BY ss.next_due_at ASC
+            LIMIT ?
+            """,
+            (now, now, limit)
+        )
+    elif source_type == "custom":
+        # JOIN with custom_sources to filter out disabled/deleted sources
+        cur = conn.execute(
+            """
+            SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
+            FROM source_stats ss
+            INNER JOIN custom_sources s ON ss.source_id = s.id
+            WHERE ss.source_type = 'custom' 
+              AND ss.next_due_at <= ? 
+              AND ss.backoff_until <= ?
+              AND s.enabled = 1
+            ORDER BY ss.next_due_at ASC
+            LIMIT ?
+            """,
+            (now, now, limit)
+        )
+    elif source_type == "mp":
+        # MP sources use wechat_mps table
+        cur = conn.execute(
+            """
+            SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
+            FROM source_stats ss
+            INNER JOIN wechat_mps m ON ss.source_id = m.fakeid
+            WHERE ss.source_type = 'mp' 
+              AND ss.next_due_at <= ? 
+              AND ss.backoff_until <= ?
+              AND m.subscribed = 1
+            ORDER BY ss.next_due_at ASC
+            LIMIT ?
+            """,
+            (now, now, limit)
+        )
+    elif source_type:
+        # Unknown source type, fallback to original query
         cur = conn.execute(
             """
             SELECT source_id, source_type, cadence, next_due_at, backoff_until, fail_count
@@ -493,15 +548,28 @@ def get_due_sources(conn, now: int, source_type: str = None, limit: int = 20) ->
             (source_type, now, now, limit)
         )
     else:
+        # No source_type filter - use UNION to check all source tables
+        # This ensures we only return sources that exist and are enabled
         cur = conn.execute(
             """
-            SELECT source_id, source_type, cadence, next_due_at, backoff_until, fail_count
-            FROM source_stats
-            WHERE next_due_at <= ? AND backoff_until <= ?
+            SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
+            FROM source_stats ss
+            INNER JOIN rss_sources s ON ss.source_id = s.id AND s.enabled = 1
+            WHERE ss.source_type = 'rss' AND ss.next_due_at <= ? AND ss.backoff_until <= ?
+            UNION ALL
+            SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
+            FROM source_stats ss
+            INNER JOIN custom_sources s ON ss.source_id = s.id AND s.enabled = 1
+            WHERE ss.source_type = 'custom' AND ss.next_due_at <= ? AND ss.backoff_until <= ?
+            UNION ALL
+            SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
+            FROM source_stats ss
+            INNER JOIN wechat_mps m ON ss.source_id = m.fakeid AND m.subscribed = 1
+            WHERE ss.source_type = 'mp' AND ss.next_due_at <= ? AND ss.backoff_until <= ?
             ORDER BY next_due_at ASC
             LIMIT ?
             """,
-            (now, now, limit)
+            (now, now, now, now, now, now, limit)
         )
     
     rows = cur.fetchall() or []
@@ -609,3 +677,113 @@ def get_scheduler_stats(conn, source_type: str = None) -> Dict[str, Any]:
         "in_backoff": in_backoff,
         "avg_hit_rate": round(avg_hit_rate * 100, 1) if avg_hit_rate else 0.0,
     }
+
+
+def cleanup_orphan_stats(conn) -> Dict[str, int]:
+    """
+    Clean up orphan records in source_stats table.
+    
+    Removes records where:
+    1. The source no longer exists in its source table (deleted)
+    2. The source is disabled in its source table
+    
+    This prevents the scheduler from repeatedly trying to process
+    sources that can't be fetched.
+    
+    Args:
+        conn: Database connection
+        
+    Returns:
+        Dict with counts of deleted records by source_type
+    """
+    now = _now_ts()
+    one_year_later = now + 365 * 24 * 3600
+    results = {}
+    
+    # 1. Delete orphan RSS stats (source deleted)
+    cur = conn.execute(
+        """
+        DELETE FROM source_stats 
+        WHERE source_type = 'rss' 
+        AND source_id NOT IN (SELECT id FROM rss_sources)
+        """
+    )
+    results["rss_orphans_deleted"] = cur.rowcount
+    
+    # 2. Delete orphan custom stats (source deleted)
+    cur = conn.execute(
+        """
+        DELETE FROM source_stats 
+        WHERE source_type = 'custom' 
+        AND source_id NOT IN (SELECT id FROM custom_sources)
+        """
+    )
+    results["custom_orphans_deleted"] = cur.rowcount
+    
+    # 3. Delete orphan MP stats (source deleted)
+    try:
+        cur = conn.execute(
+            """
+            DELETE FROM source_stats 
+            WHERE source_type = 'mp' 
+            AND source_id NOT IN (SELECT fakeid FROM wechat_mps)
+            """
+        )
+        results["mp_orphans_deleted"] = cur.rowcount
+    except Exception:
+        results["mp_orphans_deleted"] = 0
+    
+    # 4. Push disabled RSS sources far into the future
+    cur = conn.execute(
+        """
+        UPDATE source_stats 
+        SET next_due_at = ?
+        WHERE source_type = 'rss' 
+        AND source_id IN (SELECT id FROM rss_sources WHERE enabled = 0)
+        AND next_due_at < ?
+        """,
+        (one_year_later, one_year_later)
+    )
+    results["rss_disabled_deferred"] = cur.rowcount
+    
+    # 5. Push disabled custom sources far into the future
+    cur = conn.execute(
+        """
+        UPDATE source_stats 
+        SET next_due_at = ?
+        WHERE source_type = 'custom' 
+        AND source_id IN (SELECT id FROM custom_sources WHERE enabled = 0)
+        AND next_due_at < ?
+        """,
+        (one_year_later, one_year_later)
+    )
+    results["custom_disabled_deferred"] = cur.rowcount
+    
+    # 6. Push unsubscribed MPs far into the future
+    try:
+        cur = conn.execute(
+            """
+            UPDATE source_stats 
+            SET next_due_at = ?
+            WHERE source_type = 'mp' 
+            AND source_id IN (SELECT fakeid FROM wechat_mps WHERE subscribed = 0)
+            AND next_due_at < ?
+            """,
+            (one_year_later, one_year_later)
+        )
+        results["mp_disabled_deferred"] = cur.rowcount
+    except Exception:
+        results["mp_disabled_deferred"] = 0
+    
+    try:
+        conn.commit()
+    except Exception:
+        pass
+    
+    total_deleted = results.get("rss_orphans_deleted", 0) + results.get("custom_orphans_deleted", 0) + results.get("mp_orphans_deleted", 0)
+    total_deferred = results.get("rss_disabled_deferred", 0) + results.get("custom_disabled_deferred", 0) + results.get("mp_disabled_deferred", 0)
+    
+    if total_deleted > 0 or total_deferred > 0:
+        logger.info("cleanup_orphan_stats: deleted=%d deferred=%d details=%s", total_deleted, total_deferred, results)
+    
+    return results

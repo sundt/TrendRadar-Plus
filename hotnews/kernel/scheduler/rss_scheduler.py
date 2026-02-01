@@ -1819,10 +1819,24 @@ async def _rss_warmup_producer_loop() -> None:
     if _rss_warmup_queue is None:
         return
     logger.info("rss_warmup.producer_loop start")
+    
+    # Track last cleanup time
+    last_cleanup_ts = 0
+    cleanup_interval = 3600  # Run cleanup every hour
+    
     while _rss_warmup_running:
         try:
             now = _now_ts()
             conn = _get_online_db_conn()
+            
+            # Periodic cleanup of orphan stats (every hour)
+            if now - last_cleanup_ts > cleanup_interval:
+                try:
+                    from hotnews.kernel.services.rss_smart_scheduler import cleanup_orphan_stats
+                    cleanup_orphan_stats(conn)
+                    last_cleanup_ts = now
+                except Exception as e:
+                    logger.debug("rss_warmup.producer cleanup_error=%s", str(e))
             
             # Try smart scheduler first
             smart_due_count = 0
