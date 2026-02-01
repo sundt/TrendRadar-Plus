@@ -248,10 +248,10 @@ class SearchTools:
         include_url: bool
     ) -> List[Dict]:
         """
-        关键词搜索模式（精确匹配）
+        关键词搜索模式（分词匹配）
 
         Args:
-            query: 搜索关键词
+            query: 搜索关键词（支持空格分隔多个词）
             all_titles: 所有标题字典
             id_to_name: 平台ID到名称映射
             current_date: 当前日期
@@ -260,14 +260,20 @@ class SearchTools:
             匹配的新闻列表
         """
         matches = []
-        query_lower = query.lower()
+        
+        # 分词：按空格分割查询词
+        keywords = [kw.strip().lower() for kw in query.split() if kw.strip()]
+        if not keywords:
+            keywords = [query.lower()]
 
         for platform_id, titles in all_titles.items():
             platform_name = id_to_name.get(platform_id, platform_id)
 
             for title, info in titles.items():
-                # 精确包含判断
-                if query_lower in title.lower():
+                title_lower = title.lower()
+                
+                # 检查所有关键词是否都在标题中（AND 逻辑）
+                if all(kw in title_lower for kw in keywords):
                     news_item = {
                         "title": title,
                         "platform": platform_id,
