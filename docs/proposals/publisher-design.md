@@ -798,3 +798,837 @@ async def upload_image(file: UploadFile, user_id: str):
     # 保存文件
     ...
 ```
+
+
+---
+
+## 七、遗漏细节补充
+
+### 7.1 边界情况处理
+
+#### 标题/摘要限制
+```python
+# 字符限制常量
+TITLE_MAX_LENGTH = 64
+DIGEST_MAX_LENGTH = 200
+CONTENT_MAX_LENGTH = 100000  # 约 10 万字
+
+# 验证
+def validate_draft(data: DraftCreate):
+    if len(data.title) > TITLE_MAX_LENGTH:
+        raise HTTPException(400, f"标题不能超过 {TITLE_MAX_LENGTH} 字")
+    if data.digest and len(data.digest) > DIGEST_MAX_LENGTH:
+        raise HTTPException(400, f"摘要不能超过 {DIGEST_MAX_LENGTH} 字")
+    if len(data.html_content) > CONTENT_MAX_LENGTH:
+        raise HTTPException(400, "内容过长")
+```
+
+#### 并发编辑冲突
+```python
+# 使用乐观锁
+class Draft:
+    version: int  # 版本号
+
+async def update_draft(draft_id: str, data: DraftUpdate, expected_version: int):
+    result = await db.execute(
+        "UPDATE drafts SET ... WHERE id = ? AND version = ?",
+        [draft_id, expected_version]
+    )
+    if result.rowcount == 0:
+        raise HTTPException(409, "草稿已被修改，请刷新后重试")
+```
+
+#### 图片 URL 失效处理
+```javascript
+// 编辑器中图片加载失败处理
+editor.on('imageLoadError', (src) => {
+    // 显示占位图
+    return '/static/images/image-broken.png';
+});
+```
+
+### 7.2 平台特殊限制
+
+| 平台 | 标题限制 | 内容限制 | 图片限制 | 特殊要求 |
+|------|----------|----------|----------|----------|
+| 微信公众号 | 64 字 | 2 万字 | 10MB/张 | 封面必填 |
+| 知乎 | 100 字 | 无限制 | 5MB/张 | - |
+| 掘金 | 80 字 | 无限制 | 5MB/张 | 需选分类 |
+| CSDN | 100 字 | 无限制 | 5MB/张 | - |
+
+```javascript
+// 发布前校验
+function validateForPlatform(platform, article) {
+    const limits = PLATFORM_LIMITS[platform];
+    const errors = [];
+    
+    if (article.title.length > limits.titleMax) {
+        errors.push(`${platform} 标题不能超过 ${limits.titleMax} 字`);
+    }
+    if (limits.coverRequired && !article.cover) {
+        errors.push(`${platform} 需要设置封面`);
+    }
+    
+    return errors;
+}
+```
+
+### 7.3 网络异常处理
+
+```javascript
+// API 请求封装
+async function apiRequest(url, options, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: AbortSignal.timeout(30000)  // 30秒超时
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            await sleep(1000 * (i + 1));  // 递增延迟
+        }
+    }
+}
+
+// 离线检测
+window.addEventListener('offline', () => {
+    showToast('网络已断开，草稿将保存到本地');
+});
+
+window.addEventListener('online', () => {
+    showToast('网络已恢复，正在同步草稿...');
+    syncLocalDrafts();
+});
+```
+
+### 7.4 XSS 防护
+
+```python
+import bleach
+
+# 允许的 HTML 标签
+ALLOWED_TAGS = [
+    'p', 'br', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'strong', 'em', 'u', 's', 'blockquote', 'code', 'pre',
+    'ul', 'ol', 'li', 'a', 'img', 'table', 'tr', 'td', 'th'
+]
+
+ALLOWED_ATTRIBUTES = {
+    'a': ['href', 'title'],
+    'img': ['src', 'alt', 'width', 'height'],
+    '*': ['class']
+}
+
+def sanitize_html(html_content: str) -> str:
+    return bleach.clean(
+        html_content,
+        tags=ALLOWED_TAGS,
+        attributes=ALLOWED_ATTRIBUTES,
+        strip=True
+    )
+```
+
+### 7.5 日志记录
+
+```python
+import logging
+
+logger = logging.getLogger('publisher')
+
+# 关键操作日志
+async def create_draft(user_id: str, data: DraftCreate):
+    draft = await db.create_draft(user_id, data)
+    logger.info(f"Draft created: user={user_id}, draft_id={draft.id}")
+    return draft
+
+async def publish_to_platform(user_id: str, draft_id: str, platform: str):
+    logger.info(f"Publish started: user={user_id}, draft={draft_id}, platform={platform}")
+    try:
+        result = await do_publish(...)
+        logger.info(f"Publish success: draft={draft_id}, platform={platform}")
+    except Exception as e:
+        logger.error(f"Publish failed: draft={draft_id}, platform={platform}, error={e}")
+        raise
+```
+
+
+---
+
+## 八、自动化测试方案
+
+### 8.1 测试分层
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      测试金字塔                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│                    ┌─────────┐                              │
+│                    │  E2E    │  ← 少量，关键流程            │
+│                    │ (10%)   │                              │
+│                 ┌──┴─────────┴──┐                           │
+│                 │   集成测试    │  ← API 接口测试           │
+│                 │    (30%)     │                            │
+│              ┌──┴───────────────┴──┐                        │
+│              │      单元测试       │  ← 核心逻辑            │
+│              │       (60%)        │                         │
+│              └─────────────────────┘                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 8.2 后端测试（pytest）
+
+#### 目录结构
+```
+tests/
+├── unit/                    # 单元测试
+│   └── publisher/
+│       ├── test_draft_service.py
+│       ├── test_import_service.py
+│       ├── test_upload_service.py
+│       └── test_sanitize.py
+├── integration/             # 集成测试
+│   └── publisher/
+│       ├── test_draft_api.py
+│       ├── test_import_api.py
+│       └── test_upload_api.py
+└── conftest.py              # 测试配置和 fixtures
+```
+
+#### conftest.py
+```python
+import pytest
+from fastapi.testclient import TestClient
+from hotnews.web.app import app
+from hotnews.web.models.publisher import init_publisher_tables
+
+@pytest.fixture
+def client():
+    """测试客户端"""
+    return TestClient(app)
+
+@pytest.fixture
+def test_db(tmp_path):
+    """临时测试数据库"""
+    db_path = tmp_path / "test.db"
+    init_publisher_tables(str(db_path))
+    yield db_path
+
+@pytest.fixture
+def mock_member_user(mocker):
+    """模拟会员用户"""
+    mocker.patch('hotnews.web.api.publisher.get_current_user', return_value={
+        'id': 'test_user_123',
+        'is_member': True
+    })
+
+@pytest.fixture
+def mock_non_member_user(mocker):
+    """模拟非会员用户"""
+    mocker.patch('hotnews.web.api.publisher.get_current_user', return_value={
+        'id': 'test_user_456',
+        'is_member': False
+    })
+```
+
+#### 单元测试示例
+```python
+# tests/unit/publisher/test_draft_service.py
+
+import pytest
+from hotnews.web.services.publisher import DraftService
+
+class TestDraftService:
+    
+    def test_create_draft_success(self, test_db):
+        service = DraftService(test_db)
+        draft = service.create_draft(
+            user_id='user_123',
+            title='测试标题',
+            html_content='<p>测试内容</p>'
+        )
+        assert draft.id is not None
+        assert draft.title == '测试标题'
+        assert draft.status == 'draft'
+    
+    def test_create_draft_title_too_long(self, test_db):
+        service = DraftService(test_db)
+        with pytest.raises(ValueError, match="标题不能超过"):
+            service.create_draft(
+                user_id='user_123',
+                title='x' * 100,  # 超过 64 字
+                html_content='<p>内容</p>'
+            )
+    
+    def test_create_draft_empty_title(self, test_db):
+        service = DraftService(test_db)
+        with pytest.raises(ValueError, match="标题不能为空"):
+            service.create_draft(
+                user_id='user_123',
+                title='',
+                html_content='<p>内容</p>'
+            )
+    
+    def test_update_draft_not_found(self, test_db):
+        service = DraftService(test_db)
+        with pytest.raises(ValueError, match="草稿不存在"):
+            service.update_draft('non_existent_id', user_id='user_123', title='新标题')
+    
+    def test_update_draft_permission_denied(self, test_db):
+        service = DraftService(test_db)
+        draft = service.create_draft(user_id='user_123', title='标题', html_content='<p>内容</p>')
+        with pytest.raises(PermissionError, match="无权访问"):
+            service.update_draft(draft.id, user_id='other_user', title='新标题')
+    
+    def test_delete_draft_cascade_history(self, test_db):
+        """删除草稿时级联删除发布历史"""
+        service = DraftService(test_db)
+        draft = service.create_draft(user_id='user_123', title='标题', html_content='<p>内容</p>')
+        service.add_publish_history(draft.id, 'user_123', 'zhihu', 'success')
+        
+        service.delete_draft(draft.id, user_id='user_123')
+        
+        history = service.get_publish_history(draft.id)
+        assert len(history) == 0
+
+
+class TestSanitizeHtml:
+    
+    def test_remove_script_tag(self):
+        from hotnews.web.services.publisher import sanitize_html
+        html = '<p>Hello</p><script>alert("xss")</script>'
+        result = sanitize_html(html)
+        assert '<script>' not in result
+        assert 'alert' not in result
+    
+    def test_remove_onclick(self):
+        from hotnews.web.services.publisher import sanitize_html
+        html = '<p onclick="alert(1)">Click me</p>'
+        result = sanitize_html(html)
+        assert 'onclick' not in result
+    
+    def test_allow_safe_tags(self):
+        from hotnews.web.services.publisher import sanitize_html
+        html = '<p><strong>Bold</strong> and <em>italic</em></p>'
+        result = sanitize_html(html)
+        assert '<strong>' in result
+        assert '<em>' in result
+```
+
+#### 集成测试示例
+```python
+# tests/integration/publisher/test_draft_api.py
+
+import pytest
+
+class TestDraftAPI:
+    
+    def test_create_draft_success(self, client, mock_member_user):
+        response = client.post('/api/publisher/drafts', json={
+            'title': '测试文章',
+            'html_content': '<p>这是内容</p>'
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data['ok'] is True
+        assert 'id' in data['data']
+    
+    def test_create_draft_unauthorized(self, client):
+        """未登录不能创建草稿"""
+        response = client.post('/api/publisher/drafts', json={
+            'title': '测试',
+            'html_content': '<p>内容</p>'
+        })
+        assert response.status_code == 401
+    
+    def test_create_draft_non_member(self, client, mock_non_member_user):
+        """非会员不能创建草稿"""
+        response = client.post('/api/publisher/drafts', json={
+            'title': '测试',
+            'html_content': '<p>内容</p>'
+        })
+        assert response.status_code == 403
+    
+    def test_get_drafts_list(self, client, mock_member_user):
+        # 先创建几个草稿
+        for i in range(3):
+            client.post('/api/publisher/drafts', json={
+                'title': f'草稿 {i}',
+                'html_content': f'<p>内容 {i}</p>'
+            })
+        
+        response = client.get('/api/publisher/drafts')
+        assert response.status_code == 200
+        data = response.json()
+        assert data['ok'] is True
+        assert len(data['data']['items']) == 3
+    
+    def test_get_drafts_pagination(self, client, mock_member_user):
+        # 创建 25 个草稿
+        for i in range(25):
+            client.post('/api/publisher/drafts', json={
+                'title': f'草稿 {i}',
+                'html_content': f'<p>内容 {i}</p>'
+            })
+        
+        # 第一页
+        response = client.get('/api/publisher/drafts?page=1&page_size=10')
+        data = response.json()
+        assert len(data['data']['items']) == 10
+        assert data['data']['total'] == 25
+        
+        # 第三页
+        response = client.get('/api/publisher/drafts?page=3&page_size=10')
+        data = response.json()
+        assert len(data['data']['items']) == 5
+    
+    def test_update_draft(self, client, mock_member_user):
+        # 创建
+        create_resp = client.post('/api/publisher/drafts', json={
+            'title': '原标题',
+            'html_content': '<p>原内容</p>'
+        })
+        draft_id = create_resp.json()['data']['id']
+        
+        # 更新
+        update_resp = client.put(f'/api/publisher/drafts/{draft_id}', json={
+            'title': '新标题'
+        })
+        assert update_resp.status_code == 200
+        
+        # 验证
+        get_resp = client.get(f'/api/publisher/drafts/{draft_id}')
+        assert get_resp.json()['data']['title'] == '新标题'
+    
+    def test_delete_draft(self, client, mock_member_user):
+        # 创建
+        create_resp = client.post('/api/publisher/drafts', json={
+            'title': '待删除',
+            'html_content': '<p>内容</p>'
+        })
+        draft_id = create_resp.json()['data']['id']
+        
+        # 删除
+        delete_resp = client.delete(f'/api/publisher/drafts/{draft_id}')
+        assert delete_resp.status_code == 200
+        
+        # 验证已删除
+        get_resp = client.get(f'/api/publisher/drafts/{draft_id}')
+        assert get_resp.status_code == 404
+
+
+class TestUploadAPI:
+    
+    def test_upload_image_success(self, client, mock_member_user, tmp_path):
+        # 创建测试图片
+        image_path = tmp_path / "test.png"
+        image_path.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 100)
+        
+        with open(image_path, 'rb') as f:
+            response = client.post(
+                '/api/publisher/upload/image',
+                files={'file': ('test.png', f, 'image/png')}
+            )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert 'temp_id' in data['data']
+        assert 'url' in data['data']
+    
+    def test_upload_invalid_type(self, client, mock_member_user, tmp_path):
+        # 创建非图片文件
+        file_path = tmp_path / "test.exe"
+        file_path.write_bytes(b'MZ' + b'\x00' * 100)
+        
+        with open(file_path, 'rb') as f:
+            response = client.post(
+                '/api/publisher/upload/image',
+                files={'file': ('test.exe', f, 'application/octet-stream')}
+            )
+        
+        assert response.status_code == 400
+        assert '不支持的图片格式' in response.json()['detail']
+    
+    def test_upload_too_large(self, client, mock_member_user, tmp_path):
+        # 创建超大文件
+        image_path = tmp_path / "large.png"
+        image_path.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * (6 * 1024 * 1024))  # 6MB
+        
+        with open(image_path, 'rb') as f:
+            response = client.post(
+                '/api/publisher/upload/image',
+                files={'file': ('large.png', f, 'image/png')}
+            )
+        
+        assert response.status_code == 400
+        assert '大小不能超过' in response.json()['detail']
+```
+
+
+### 8.3 前端测试（Playwright E2E）
+
+#### 测试文件
+```
+tests/e2e/
+├── pages/
+│   ├── editor.page.ts       # 编辑器页面对象
+│   └── drafts.page.ts       # 草稿列表页面对象
+├── publisher/
+│   ├── editor.spec.ts       # 编辑器测试
+│   ├── drafts.spec.ts       # 草稿列表测试
+│   └── publish.spec.ts      # 发布流程测试
+└── fixtures/
+    └── test-data.ts         # 测试数据
+```
+
+#### Page Object
+```typescript
+// tests/e2e/pages/editor.page.ts
+
+import { Page, Locator } from '@playwright/test';
+
+export class EditorPage {
+    readonly page: Page;
+    readonly titleInput: Locator;
+    readonly digestInput: Locator;
+    readonly editor: Locator;
+    readonly saveStatus: Locator;
+    readonly publishButton: Locator;
+    readonly platformModal: Locator;
+    
+    constructor(page: Page) {
+        this.page = page;
+        this.titleInput = page.locator('#title');
+        this.digestInput = page.locator('#digest');
+        this.editor = page.locator('#editor .ProseMirror');
+        this.saveStatus = page.locator('.save-status');
+        this.publishButton = page.locator('#btn-publish');
+        this.platformModal = page.locator('#publish-modal');
+    }
+    
+    async goto(draftId?: string) {
+        const url = draftId ? `/write/${draftId}` : '/write';
+        await this.page.goto(url);
+        await this.page.waitForSelector('#editor');
+    }
+    
+    async setTitle(title: string) {
+        await this.titleInput.fill(title);
+    }
+    
+    async setDigest(digest: string) {
+        await this.digestInput.fill(digest);
+    }
+    
+    async setContent(content: string) {
+        await this.editor.click();
+        await this.page.keyboard.type(content);
+    }
+    
+    async waitForAutoSave() {
+        await this.page.waitForFunction(
+            () => document.querySelector('.save-status')?.textContent === '已保存',
+            { timeout: 35000 }
+        );
+    }
+    
+    async clickPublish() {
+        await this.publishButton.click();
+        await this.platformModal.waitFor({ state: 'visible' });
+    }
+    
+    async selectPlatforms(platforms: string[]) {
+        for (const platform of platforms) {
+            await this.page.locator(`input[value="${platform}"]`).check();
+        }
+    }
+    
+    async confirmPublish() {
+        await this.page.locator('#btn-confirm-publish').click();
+    }
+}
+```
+
+#### E2E 测试示例
+```typescript
+// tests/e2e/publisher/editor.spec.ts
+
+import { test, expect } from '@playwright/test';
+import { EditorPage } from '../pages/editor.page';
+
+test.describe('编辑器', () => {
+    let editorPage: EditorPage;
+    
+    test.beforeEach(async ({ page }) => {
+        // 模拟会员登录
+        await page.goto('/login');
+        await page.fill('#username', 'test_member');
+        await page.fill('#password', 'password');
+        await page.click('#btn-login');
+        await page.waitForURL('/');
+        
+        editorPage = new EditorPage(page);
+    });
+    
+    test('创建新草稿', async ({ page }) => {
+        await editorPage.goto();
+        
+        await editorPage.setTitle('测试文章标题');
+        await editorPage.setDigest('这是摘要');
+        await editorPage.setContent('这是正文内容，用于测试编辑器功能。');
+        
+        // 等待自动保存
+        await editorPage.waitForAutoSave();
+        
+        // 验证 URL 已更新为草稿 ID
+        expect(page.url()).toMatch(/\/write\/[a-f0-9-]+/);
+    });
+    
+    test('标题超长提示', async ({ page }) => {
+        await editorPage.goto();
+        
+        const longTitle = 'x'.repeat(100);
+        await editorPage.setTitle(longTitle);
+        
+        // 验证输入被截断或显示错误
+        const titleValue = await editorPage.titleInput.inputValue();
+        expect(titleValue.length).toBeLessThanOrEqual(64);
+    });
+    
+    test('离线恢复提示', async ({ page, context }) => {
+        await editorPage.goto();
+        await editorPage.setTitle('离线测试');
+        await editorPage.setContent('内容');
+        
+        // 模拟离线
+        await context.setOffline(true);
+        
+        // 继续编辑
+        await editorPage.setContent('更多内容');
+        
+        // 验证离线提示
+        await expect(page.locator('.offline-notice')).toBeVisible();
+        
+        // 恢复在线
+        await context.setOffline(false);
+        
+        // 验证同步提示
+        await expect(page.locator('.sync-notice')).toBeVisible();
+    });
+    
+    test('非会员访问重定向', async ({ page, context }) => {
+        // 清除登录状态，模拟非会员
+        await context.clearCookies();
+        
+        await page.goto('/write');
+        
+        // 应该重定向到登录或会员页
+        await expect(page).toHaveURL(/\/(login|membership)/);
+    });
+});
+
+test.describe('草稿列表', () => {
+    test('显示草稿列表', async ({ page }) => {
+        // 先创建几个草稿
+        const editorPage = new EditorPage(page);
+        for (let i = 0; i < 3; i++) {
+            await editorPage.goto();
+            await editorPage.setTitle(`草稿 ${i}`);
+            await editorPage.setContent(`内容 ${i}`);
+            await editorPage.waitForAutoSave();
+        }
+        
+        // 访问草稿列表
+        await page.goto('/drafts');
+        
+        // 验证显示 3 个草稿
+        const items = page.locator('.draft-item');
+        await expect(items).toHaveCount(3);
+    });
+    
+    test('删除草稿', async ({ page }) => {
+        // 创建草稿
+        const editorPage = new EditorPage(page);
+        await editorPage.goto();
+        await editorPage.setTitle('待删除草稿');
+        await editorPage.setContent('内容');
+        await editorPage.waitForAutoSave();
+        
+        // 去列表页删除
+        await page.goto('/drafts');
+        await page.locator('.draft-item').first().locator('.btn-delete').click();
+        await page.locator('.confirm-delete').click();
+        
+        // 验证已删除
+        await expect(page.locator('.draft-item')).toHaveCount(0);
+    });
+});
+```
+
+### 8.4 插件测试
+
+```javascript
+// 插件测试使用 Jest + Puppeteer
+
+// tests/publish/adapters.test.js
+
+describe('平台适配器', () => {
+    describe('知乎适配器', () => {
+        test('检测登录状态 - 已登录', async () => {
+            // Mock chrome.cookies.get
+            chrome.cookies.get.mockResolvedValue({ value: 'xxx' });
+            
+            const adapter = new ZhihuAdapter();
+            const status = await adapter.checkLogin();
+            
+            expect(status.isLoggedIn).toBe(true);
+        });
+        
+        test('检测登录状态 - 未登录', async () => {
+            chrome.cookies.get.mockResolvedValue(null);
+            
+            const adapter = new ZhihuAdapter();
+            const status = await adapter.checkLogin();
+            
+            expect(status.isLoggedIn).toBe(false);
+        });
+    });
+    
+    describe('发布管理器', () => {
+        test('发布到多个平台', async () => {
+            const manager = new PublishManager();
+            
+            const results = await manager.publish(
+                ['zhihu', 'juejin'],
+                { title: '测试', htmlContent: '<p>内容</p>' }
+            );
+            
+            expect(results.data.results).toHaveLength(2);
+        });
+        
+        test('部分平台失败', async () => {
+            const manager = new PublishManager();
+            
+            // Mock 知乎成功，掘金失败
+            jest.spyOn(manager.adapters.zhihu, 'inject').mockResolvedValue({ success: true });
+            jest.spyOn(manager.adapters.juejin, 'inject').mockRejectedValue(new Error('timeout'));
+            
+            const results = await manager.publish(
+                ['zhihu', 'juejin'],
+                { title: '测试', htmlContent: '<p>内容</p>' }
+            );
+            
+            expect(results.data.results[0].status).toBe('success');
+            expect(results.data.results[1].status).toBe('failed');
+        });
+    });
+});
+```
+
+### 8.5 CI/CD 集成
+
+```yaml
+# .github/workflows/publisher-tests.yml
+
+name: Publisher Tests
+
+on:
+  push:
+    branches: [feature/publisher]
+    paths:
+      - 'hotnews/web/api/publisher/**'
+      - 'hotnews/web/services/publisher/**'
+      - 'hotnews/web/static/write/**'
+      - 'tests/**'
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-mock
+      
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/publisher -v --cov=hotnews/web --cov-report=xml
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.xml
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Run integration tests
+        run: pytest tests/integration/publisher -v
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+      
+      - name: Start server
+        run: |
+          docker compose -f docker/docker-compose-build.yml up -d
+          sleep 10
+      
+      - name: Run E2E tests
+        run: npm run test:e2e -- --project=chromium
+      
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+```
+
+### 8.6 测试覆盖率目标
+
+| 模块 | 目标覆盖率 | 说明 |
+|------|------------|------|
+| 草稿服务 | > 90% | 核心业务逻辑 |
+| API 接口 | > 85% | 所有端点 |
+| 权限验证 | 100% | 安全相关 |
+| HTML 清理 | 100% | 安全相关 |
+| 编辑器 UI | > 70% | E2E 覆盖关键流程 |
+| 发布流程 | > 80% | E2E 覆盖主要平台 |
