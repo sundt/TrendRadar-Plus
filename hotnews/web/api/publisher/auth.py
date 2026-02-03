@@ -84,15 +84,17 @@ async def require_auth(request: Request) -> Dict[str, Any]:
 
 async def require_member(request: Request) -> Dict[str, Any]:
     """
-    Require membership (or return anonymous user).
+    Require authenticated user.
     
     Returns:
-        User info dict (authenticated member or anonymous)
+        User info dict
+    
+    Raises:
+        HTTPException: 401 if not authenticated
     """
     user = await get_current_user(request)
     if not user:
-        # 返回匿名用户，允许未登录使用
-        return get_anonymous_user()
+        raise HTTPException(status_code=401, detail="请先登录")
     return user
 
 
