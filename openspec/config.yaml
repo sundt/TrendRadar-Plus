@@ -1,0 +1,52 @@
+schema: spec-driven
+
+context: |
+  # Hotnews - 多平台热点新闻聚合与 AI 分析工具
+  
+  ## Purpose
+  - 监控 35+ 平台的热点新闻（抖音、知乎、B站、微博、华尔街见闻、财联社等）
+  - 智能关键词筛选和热度权重计算
+  - 自动推送到企业微信、飞书、钉钉、Telegram 等渠道
+  - 通过 MCP (Model Context Protocol) 提供 AI 对话分析能力
+  
+  ## Tech Stack
+  - 语言: Python 3.10+
+  - 包管理: UV (astral-sh/uv)
+  - MCP框架: FastMCP
+  - 数据存储: SQLite（本地）/ S3兼容存储（远程）
+  - 部署方式: Docker / GitHub Actions / 本地运行
+  - 前端测试: Playwright E2E
+  
+  ## Code Style
+  - 遵循 PEP 8 Python 代码风格
+  - 使用类型注解 (Type Hints)
+  - 函数和类使用 docstring 文档
+  - 中文注释和文档
+  
+  ## Architecture Patterns
+  - 爬虫模块化设计：每个平台一个爬虫类
+  - MCP 工具分离：每个功能独立的 MCP 工具
+  - 配置驱动：通过 config/config.yaml 管理配置
+  - 前端 JS 模块化：使用 esbuild 打包
+  
+  ## Testing
+  - E2E 测试 (Playwright)：`npm test`，测试目录 `tests/e2e/`
+  - 每个前端功能变更必须通过所有 E2E 测试
+  - Bug 修复必须添加回归测试
+  
+  ## Git Workflow
+  - main 分支为稳定版本
+  - Conventional Commits 提交规范
+  
+  ## Constraints
+  - 爬虫频率需遵守各平台限制
+  - 数据存储需考虑隐私合规
+  - MCP 工具需保持低延迟响应
+
+rules:
+  proposal:
+    - 保持提案简洁，500 字以内
+    - 必须包含 "Non-goals" 部分说明不做什么
+  tasks:
+    - 任务拆分为 2 小时以内的工作量
+    - 前端变更必须包含 E2E 测试任务

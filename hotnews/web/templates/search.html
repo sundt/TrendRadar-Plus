@@ -540,6 +540,8 @@
             function triggerSearch(opts) {
                 opts = opts || {};
                 var q = (opts.q != null ? String(opts.q) : (document.getElementById('searchQuery')?.value || '')).trim();
+                // 处理中文输入法输入英文时产生的多余空格
+                q = q.replace(/\s+/g, ' ').trim();
                 var mode = (opts.mode != null ? String(opts.mode) : (document.getElementById('searchMode')?.value || 'hybrid')).trim() || 'hybrid';
                 if (!q) return;
 
@@ -604,11 +606,24 @@
             }
 
             var input = document.getElementById('searchQuery');
+            var isComposing = false;
             if (input) {
+                // 处理中文输入法组合事件
+                input.addEventListener('compositionstart', function() {
+                    isComposing = true;
+                });
+                input.addEventListener('compositionend', function() {
+                    isComposing = false;
+                });
                 input.addEventListener('keydown', function(ev) {
                     if (ev && ev.key === 'Enter') {
                         ev.preventDefault();
-                        triggerSearch();
+                        // 如果正在输入法组合中，等待 compositionend 后再搜索
+                        if (isComposing) {
+                            setTimeout(function() { triggerSearch(); }, 10);
+                        } else {
+                            triggerSearch();
+                        }
                     }
                 });
                 try { input.focus(); } catch (e) {}

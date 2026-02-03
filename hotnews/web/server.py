@@ -77,6 +77,14 @@ _payment_router = None
 _subscription_router = None
 _wechat_mp_callback_router = None
 _wechat_qr_login_router = None
+_publisher_drafts_router = None
+_publisher_article_router = None
+_publisher_upload_router = None
+_publisher_import_router = None
+_publisher_user_router = None
+_publisher_ai_router = None
+_publisher_admin_router = None
+_publisher_admin_page_router = None
 auto_fetch_scheduler = None
 rss_scheduler = None
 
@@ -158,6 +166,19 @@ try:
     
     from hotnews.kernel.auth import wechat_qr_login_api
     _wechat_qr_login_router = wechat_qr_login_api.router
+    
+    # Publisher API (multi-platform publishing)
+    from hotnews.web.api.publisher.drafts import router as _publisher_drafts_router
+    from hotnews.web.api.publisher.article import router as _publisher_article_router
+    from hotnews.web.api.publisher.upload import router as _publisher_upload_router
+    from hotnews.web.api.publisher.import_content import router as _publisher_import_router
+    from hotnews.web.api.publisher.user import router as _publisher_user_router
+    from hotnews.web.api.publisher.ai_polish import router as _publisher_ai_router
+    from hotnews.web.api.publisher.admin import router as _publisher_admin_router
+    from hotnews.web.api.publisher.admin import page_router as _publisher_admin_page_router
+    
+    # Publisher tables are now in online.db, initialized by db_online.py
+    print("✅ Publisher API loaded.")
     
     from hotnews.kernel.scheduler import rss_scheduler
     from hotnews.kernel.scheduler import auto_fetch_scheduler
@@ -521,6 +542,16 @@ if _user_stats_admin_router: app.include_router(_user_stats_admin_router)
 if _wechat_mp_callback_router: app.include_router(_wechat_mp_callback_router)
 if _wechat_qr_login_router: app.include_router(_wechat_qr_login_router)
 if _share_router: app.include_router(_share_router)
+
+# Publisher API routes (multi-platform publishing)
+if _publisher_drafts_router: app.include_router(_publisher_drafts_router)
+if _publisher_article_router: app.include_router(_publisher_article_router)
+if _publisher_upload_router: app.include_router(_publisher_upload_router)
+if _publisher_import_router: app.include_router(_publisher_import_router)
+if _publisher_user_router: app.include_router(_publisher_user_router)
+if _publisher_ai_router: app.include_router(_publisher_ai_router)
+if _publisher_admin_router: app.include_router(_publisher_admin_router)
+if _publisher_admin_page_router: app.include_router(_publisher_admin_page_router)
 
 # Share page routes (public HTML pages)
 from hotnews.web.share_routes import router as _share_page_router
@@ -2360,6 +2391,121 @@ async def privacy_policy():
 @app.get("/index.html", response_class=HTMLResponse)
 async def index_html(request: Request):
     return _redirect_to_root(request)
+
+
+@app.get("/write", response_class=HTMLResponse)
+@app.get("/write/{draft_id}", response_class=HTMLResponse)
+async def write_page(request: Request, draft_id: str = None):
+    """
+    文章编辑器页面
+    
+    Args:
+        draft_id: 草稿 ID（可选）
+    """
+    write_html = Path(__file__).parent / "static" / "write" / "index.html"
+    if write_html.exists():
+        return HTMLResponse(content=write_html.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>编辑器未构建</h1><p>请运行 npm run build:write</p>", status_code=404)
+
+
+@app.get("/drafts", response_class=HTMLResponse)
+async def drafts_page(request: Request):
+    """草稿列表页面"""
+    drafts_html = Path(__file__).parent / "static" / "write" / "drafts.html"
+    if drafts_html.exists():
+        return HTMLResponse(content=drafts_html.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>草稿列表未构建</h1><p>请运行 npm run build:write</p>", status_code=404)
+
+
+@app.get("/article/{article_id}", response_class=HTMLResponse)
+async def article_page(request: Request, article_id: str):
+    """
+    文章详情页面
+    
+    Args:
+        article_id: 文章 ID（即已发布的草稿 ID）
+    """
+    from .api.publisher.db import get_published_article, increment_view_count
+    from .db_online import get_online_db_conn
+    from datetime import datetime
+    
+    conn = get_online_db_conn(request.app.state.project_root)
+    article = get_published_article(conn, article_id)
+    
+    if not article:
+        return HTMLResponse(content="<h1>文章不存在或未发布</h1>", status_code=404)
+    
+    # Increment view count
+    increment_view_count(conn, article_id)
+    
+    # Get author info
+    author_name = article.get("author_name", "未知用户")
+    if author_name and author_name.endswith("的博客"):
+        author_name = author_name[:-3]  # Remove "的博客" suffix
+    
+    # Format publish time
+    published_at = article.get("published_at")
+    publish_date = datetime.fromtimestamp(published_at).strftime("%Y-%m-%d") if published_at else ""
+    
+    # 渲染文章页面
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{article['title']} - HotNews</title>
+    <meta name="description" content="{article.get('digest', '')[:150]}">
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; background: #f9fafb; }}
+        .article-header {{ background: #fff; border-bottom: 1px solid #e5e7eb; padding: 16px 24px; }}
+        .article-header a {{ color: #2563eb; text-decoration: none; }}
+        .article-container {{ max-width: 800px; margin: 0 auto; padding: 40px 24px; }}
+        .article-title {{ font-size: 2em; font-weight: 700; margin-bottom: 16px; line-height: 1.3; }}
+        .article-meta {{ color: #6b7280; font-size: 14px; margin-bottom: 24px; display: flex; gap: 16px; align-items: center; }}
+        .article-meta .author {{ color: #2563eb; }}
+        .article-meta .views {{ }}
+        .article-cover {{ width: 100%; max-height: 400px; object-fit: cover; border-radius: 8px; margin-bottom: 24px; }}
+        .article-digest {{ padding: 16px; background: #f3f4f6; border-radius: 8px; margin-bottom: 24px; color: #4b5563; }}
+        .article-content {{ font-size: 16px; line-height: 1.8; }}
+        .article-content h1, .article-content h2, .article-content h3 {{ margin: 1.5em 0 0.5em; font-weight: 600; }}
+        .article-content h1 {{ font-size: 1.5em; }}
+        .article-content h2 {{ font-size: 1.3em; }}
+        .article-content h3 {{ font-size: 1.1em; }}
+        .article-content p {{ margin: 1em 0; }}
+        .article-content img {{ max-width: 100%; border-radius: 8px; margin: 1em 0; }}
+        .article-content blockquote {{ margin: 1em 0; padding: 12px 16px; border-left: 3px solid #2563eb; background: #f3f4f6; }}
+        .article-content pre {{ margin: 1em 0; padding: 16px; background: #1e1e1e; color: #d4d4d4; border-radius: 8px; overflow-x: auto; }}
+        .article-content code {{ padding: 2px 6px; background: #f1f5f9; border-radius: 4px; font-family: monospace; }}
+        .article-content pre code {{ background: none; padding: 0; }}
+        .article-content ul, .article-content ol {{ margin: 1em 0; padding-left: 1.5em; }}
+        .article-content a {{ color: #2563eb; }}
+        .article-content table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+        .article-content td, .article-content th {{ border: 1px solid #e5e7eb; padding: 8px 12px; }}
+        .article-content th {{ background: #f9fafb; font-weight: 600; }}
+        .original-badge {{ display: inline-block; background: #10b981; color: white; font-size: 12px; padding: 2px 8px; border-radius: 4px; margin-right: 8px; }}
+    </style>
+</head>
+<body>
+    <header class="article-header">
+        <a href="/">← 返回首页</a>
+    </header>
+    <main class="article-container">
+        <h1 class="article-title">{article['title']}</h1>
+        <div class="article-meta">
+            <span class="original-badge">原创</span>
+            <span class="author">{author_name}</span>
+            <span class="date">{publish_date}</span>
+            <span class="views">{article.get('view_count', 0) + 1} 阅读</span>
+        </div>
+        {'<img class="article-cover" src="' + article['cover_url'] + '" alt="封面">' if article.get('cover_url') else ''}
+        {'<div class="article-digest">' + article['digest'] + '</div>' if article.get('digest') else ''}
+        <div class="article-content">{article['html_content']}</div>
+    </main>
+</body>
+</html>"""
+    
+    return HTMLResponse(content=html)
 
 
 @app.get("/viewer", response_class=HTMLResponse)

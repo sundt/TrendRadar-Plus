@@ -1,0 +1,3 @@
+# Publisher cleanup tasks
+# Run daily at 3:00 AM to clean up expired temporary images
+0 3 * * * cd /app && /usr/local/bin/python scripts/cleanup_temp_images.py >> /var/log/cleanup.log 2>&1

@@ -133,6 +133,11 @@
                         🌙
                     </button>
 
+                    <!-- 搜索按钮 -->
+                    <button class="icon-btn search-btn" onclick="window.location.href='/search'" title="搜索新闻">
+                        🔍
+                    </button>
+
                     <!-- 设置按钮 - 需要登录才能进入设置页面 -->
                     <button class="icon-btn category-settings-btn has-tooltip" onclick="goToSettings()" data-tooltip="订阅更多内容">
                         ➕ <span class="new-badge-text" id="categorySettingsNewBadge" style="display:block">NEW</span>
@@ -365,6 +370,7 @@
     <!-- 备用加载机制：确保 my-tags 和 discovery 在微信浏览器中能正常加载 -->
     <script>
         (function() {
+
             // 格式化日期的辅助函数
             function formatNewsDate(timestamp) {
                 if (!timestamp) return '';

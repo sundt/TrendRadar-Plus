@@ -7,6 +7,22 @@ inclusion: always
 ## 项目简介
 HotNews 是一个新闻聚合和 AI 总结平台，支持 RSS 订阅、微信公众号、关键词追踪等多种新闻来源。
 
+## 文档结构
+
+| 目录 | 用途 |
+|------|------|
+| `openspec/specs/` | 已实现功能的规格（真相来源） |
+| `openspec/changes/` | 进行中的变更提案 |
+| `openspec/changes/archive/` | 已完成或废弃的提案归档 |
+| `openspec/config.yaml` | 项目配置和上下文 |
+| `docs/guides/` | 用户指南和操作手册 |
+| `docs/ai/` | AI 上下文文档 |
+| `docs/dev/` | 开发文档 |
+
+**查找功能规格**：`openspec/specs/[capability]/spec.md`
+**创建新功能**：在 `openspec/changes/` 下创建提案
+**查看归档**：`openspec/changes/archive/legacy-proposals/`
+
 ## 核心功能模块
 
 | 功能 | 后端 | 前端 | 说明 |

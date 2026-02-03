@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="admin-token" content="{{ token }}" />
+  <title>用户文章管理</title>
+  <link rel="stylesheet" href="/static_kernel/css/admin_rss_sources.css" />
+  <style>
+    .article-cover {
+      width: 60px;
+      height: 40px;
+      border-radius: 4px;
+      object-fit: cover;
+      background: #f3f4f6;
+    }
+    .article-title {
+      font-weight: 600;
+      color: #1f2937;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .article-digest {
+      font-size: 12px;
+      color: #6b7280;
+      max-width: 300px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .status-published {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .status-draft {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .stats-card {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      background: #f9fafb;
+      padding: 16px 24px;
+      border-radius: 8px;
+      text-align: center;
+      min-width: 120px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #6b7280;
+      text-decoration: none;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .back-link:hover {
+      color: #4f46e5;
+    }
+    .pagination {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .pagination button {
+      padding: 8px 16px;
+      border: 1px solid #d1d5db;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .pagination button:hover:not(:disabled) {
+      background: #f3f4f6;
+    }
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .pagination .current {
+      background: #4f46e5;
+      color: white;
+      border-color: #4f46e5;
+    }
+    .article-preview {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      margin-top: 16px;
+    }
+    .article-preview img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <div class="wrap">
+    <a href="/admin/rss-sources?token={{ token }}" class="back-link">← 返回 RSS 管理</a>
+    
+    <div class="admin-header">
+      <h1>📝 用户文章管理</h1>
+      <button class="btn-logout" onclick="handleLogout()" title="退出登录">🚪 退出</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="stats-card" id="stats-container">
+        <div class="stat-item">
+          <div class="stat-value" id="stat-total">-</div>
+          <div class="stat-label">总文章数</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-published">-</div>
+          <div class="stat-label">已发布</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-drafts">-</div>
+          <div class="stat-label">草稿</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-views">-</div>
+          <div class="stat-label">总阅读</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-authors">-</div>
+          <div class="stat-label">作者数</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stat-recent">-</div>
+          <div class="stat-label">近7天新增</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="row" style="gap: 10px; flex-wrap: wrap; align-items: center;">
+        <input type="text" id="filter-search" placeholder="搜索标题..." style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; width: 200px;">
+        <select id="filter-status" style="padding: 8px; border: 1px solid #d1d5db; border-radius: 6px;">
+          <option value="">所有状态</option>
+          <option value="published">已发布</option>
+          <option value="draft">草稿</option>
+        </select>
+        <button class="btn btn-primary" onclick="loadList()">🔍 搜索</button>
+        <div style="flex: 1;"></div>
+        <span id="total-count" style="color: #6b7280; font-size: 14px;">共 0 篇文章</span>
+      </div>
+    </div>
+
+    <!-- Article List -->
+    <div class="card">
+      <div class="table-scroll">
+        <table id="article-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">封面</th>
+              <th style="width: 300px;">标题</th>
+              <th style="width: 120px;">作者</th>
+              <th style="width: 80px;">状态</th>
+              <th style="width: 80px;">阅读</th>
+              <th style="width: 120px;">发布时间</th>
+              <th style="width: 150px;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="article-tbody">
+            <tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">加载中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="preview-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="width: 700px; max-width: 90%;">
+      <span class="close" onclick="closePreviewModal()">&times;</span>
+      <h2 id="preview-title">文章预览</h2>
+      <div class="article-preview" id="preview-content"></div>
+    </div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div id="confirm-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="width: 400px;">
+      <span class="close" onclick="closeConfirmModal()">&times;</span>
+      <h2 id="confirm-title">确认操作</h2>
+      <p id="confirm-message"></p>
+      <div class="row" style="gap: 10px; justify-content: flex-end; margin-top: 20px;">
+        <button class="btn" onclick="closeConfirmModal()">取消</button>
+        <button class="btn btn-danger" id="confirm-btn" onclick="executeConfirm()">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/admin/user-articles';
+    let currentPage = 1;
+    let totalPages = 1;
+    let pendingAction = null;
+
+    // Get admin token from meta tag or query string
+    function getToken() {
+      const meta = document.querySelector('meta[name="admin-token"]');
+      if (meta && meta.content) return meta.content;
+      const params = new URLSearchParams(window.location.search);
+      return params.get('token') || '';
+    }
+
+    // API request helper
+    async function apiRequest(url, options = {}) {
+      const token = getToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+      };
+      if (token) {
+        headers['X-Admin-Token'] = token;
+      }
+      
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.detail || `HTTP ${response.status}`);
+      }
+      
+      return response.json();
+    }
+
+    // Show toast notification
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Format timestamp
+    function formatTime(ts) {
+      if (!ts) return '-';
+      const d = new Date(ts * 1000);
+      return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const data = await apiRequest(`${API_BASE}/stats/summary`);
+        if (data.ok && data.data) {
+          document.getElementById('stat-total').textContent = data.data.total;
+          document.getElementById('stat-published').textContent = data.data.published;
+          document.getElementById('stat-drafts').textContent = data.data.drafts;
+          document.getElementById('stat-views').textContent = data.data.total_views;
+          document.getElementById('stat-authors').textContent = data.data.unique_authors;
+          document.getElementById('stat-recent').textContent = data.data.recent_7d;
+        }
+      } catch (err) {
+        console.error('Load stats failed:', err);
+      }
+    }
+
+    // Load article list
+    async function loadList(page = 1) {
+      currentPage = page;
+      const tbody = document.getElementById('article-tbody');
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">加载中...</td></tr>';
+
+      try {
+        const search = document.getElementById('filter-search').value;
+        const status = document.getElementById('filter-status').value;
+        
+        let url = `${API_BASE}?page=${page}&page_size=20`;
+        if (search) url += `&search=${encodeURIComponent(search)}`;
+        if (status) url += `&status=${status}`;
+        
+        const data = await apiRequest(url);
+        
+        if (data.ok && data.data) {
+          const { items, total, total_pages } = data.data;
+          totalPages = total_pages;
+          
+          document.getElementById('total-count').textContent = `共 ${total} 篇文章`;
+          
+          if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #6b7280;">暂无文章</td></tr>';
+          } else {
+            tbody.innerHTML = items.map(article => `
+              <tr>
+                <td>
+                  ${article.cover_url 
+                    ? `<img src="${article.cover_url}" class="article-cover" alt="封面">`
+                    : '<div class="article-cover" style="display:flex;align-items:center;justify-content:center;color:#9ca3af;">📄</div>'
+                  }
+                </td>
+                <td>
+                  <div class="article-title" title="${article.title || ''}">${article.title || '无标题'}</div>
+                  <div class="article-digest" title="${article.digest || ''}">${article.digest || ''}</div>
+                </td>
+                <td>${article.author_name || `用户${article.user_id}`}</td>
+                <td>
+                  <span class="status-badge status-${article.status}">
+                    ${article.status === 'published' ? '已发布' : '草稿'}
+                  </span>
+                </td>
+                <td>${article.view_count || 0}</td>
+                <td>${formatTime(article.published_at || article.updated_at)}</td>
+                <td>
+                  <button class="btn btn-sm" onclick="previewArticle('${article.id}')">👁️ 预览</button>
+                  ${article.status === 'published' 
+                    ? `<button class="btn btn-sm" onclick="confirmUnpublish('${article.id}')">📤 下架</button>`
+                    : ''
+                  }
+                  <button class="btn btn-sm btn-danger" onclick="confirmDelete('${article.id}')">🗑️</button>
+                </td>
+              </tr>
+            `).join('');
+          }
+          
+          renderPagination();
+        }
+      } catch (err) {
+        console.error('Load list failed:', err);
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 40px; color: #dc2626;">加载失败: ${err.message}</td></tr>`;
+      }
+    }
+
+    // Render pagination
+    function renderPagination() {
+      const container = document.getElementById('pagination');
+      if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+      
+      let html = '';
+      html += `<button onclick="loadList(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>上一页</button>`;
+      
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+          html += `<button onclick="loadList(${i})" class="${i === currentPage ? 'current' : ''}">${i}</button>`;
+        } else if (i === currentPage - 3 || i === currentPage + 3) {
+          html += '<span style="padding: 8px;">...</span>';
+        }
+      }
+      
+      html += `<button onclick="loadList(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>下一页</button>`;
+      
+      container.innerHTML = html;
+    }
+
+    // Preview article
+    async function previewArticle(id) {
+      try {
+        const data = await apiRequest(`${API_BASE}/${id}`);
+        if (data.ok && data.data) {
+          const article = data.data;
+          document.getElementById('preview-title').textContent = article.title || '无标题';
+          document.getElementById('preview-content').innerHTML = article.html_content || '<p>无内容</p>';
+          document.getElementById('preview-modal').style.display = 'flex';
+        }
+      } catch (err) {
+        showToast('加载失败: ' + err.message, 'error');
+      }
+    }
+
+    function closePreviewModal() {
+      document.getElementById('preview-modal').style.display = 'none';
+    }
+
+    // Confirm unpublish
+    function confirmUnpublish(id) {
+      pendingAction = { type: 'unpublish', id };
+      document.getElementById('confirm-title').textContent = '确认下架';
+      document.getElementById('confirm-message').textContent = '下架后文章将从精选博客列表中移除，但不会删除。确定要下架吗？';
+      document.getElementById('confirm-btn').textContent = '确认下架';
+      document.getElementById('confirm-modal').style.display = 'flex';
+    }
+
+    // Confirm delete
+    function confirmDelete(id) {
+      pendingAction = { type: 'delete', id };
+      document.getElementById('confirm-title').textContent = '确认删除';
+      document.getElementById('confirm-message').textContent = '删除后文章将无法恢复。确定要删除吗？';
+      document.getElementById('confirm-btn').textContent = '确认删除';
+      document.getElementById('confirm-modal').style.display = 'flex';
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirm-modal').style.display = 'none';
+      pendingAction = null;
+    }
+
+    // Execute confirmed action
+    async function executeConfirm() {
+      if (!pendingAction) return;
+      
+      const btn = document.getElementById('confirm-btn');
+      btn.disabled = true;
+      btn.textContent = '处理中...';
+      
+      try {
+        if (pendingAction.type === 'unpublish') {
+          await apiRequest(`${API_BASE}/${pendingAction.id}/unpublish`, { method: 'POST' });
+          showToast('文章已下架', 'success');
+        } else if (pendingAction.type === 'delete') {
+          await apiRequest(`${API_BASE}/${pendingAction.id}`, { method: 'DELETE' });
+          showToast('文章已删除', 'success');
+        }
+        
+        closeConfirmModal();
+        loadList(currentPage);
+        loadStats();
+      } catch (err) {
+        showToast('操作失败: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = pendingAction?.type === 'unpublish' ? '确认下架' : '确认删除';
+      }
+    }
+
+    // Logout
+    function handleLogout() {
+      document.cookie = 'hotnews_admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/admin/login';
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStats();
+      loadList();
+      
+      // Enter key to search
+      document.getElementById('filter-search').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') loadList();
+      });
+    });
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.style.display = 'none';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

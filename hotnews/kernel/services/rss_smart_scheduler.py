@@ -520,16 +520,16 @@ def get_due_sources(conn, now: int, source_type: str = None, limit: int = 20) ->
             (now, now, limit)
         )
     elif source_type == "mp":
-        # MP sources use wechat_mps table
+        # MP sources use featured_wechat_mps table
         cur = conn.execute(
             """
             SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
             FROM source_stats ss
-            INNER JOIN wechat_mps m ON ss.source_id = m.fakeid
+            INNER JOIN featured_wechat_mps m ON ss.source_id = m.fakeid
             WHERE ss.source_type = 'mp' 
               AND ss.next_due_at <= ? 
               AND ss.backoff_until <= ?
-              AND m.subscribed = 1
+              AND m.enabled = 1
             ORDER BY ss.next_due_at ASC
             LIMIT ?
             """,
@@ -564,7 +564,7 @@ def get_due_sources(conn, now: int, source_type: str = None, limit: int = 20) ->
             UNION ALL
             SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
             FROM source_stats ss
-            INNER JOIN wechat_mps m ON ss.source_id = m.fakeid AND m.subscribed = 1
+            INNER JOIN featured_wechat_mps m ON ss.source_id = m.fakeid AND m.enabled = 1
             WHERE ss.source_type = 'mp' AND ss.next_due_at <= ? AND ss.backoff_until <= ?
             ORDER BY next_due_at ASC
             LIMIT ?
@@ -726,7 +726,7 @@ def cleanup_orphan_stats(conn) -> Dict[str, int]:
             """
             DELETE FROM source_stats 
             WHERE source_type = 'mp' 
-            AND source_id NOT IN (SELECT fakeid FROM wechat_mps)
+            AND source_id NOT IN (SELECT fakeid FROM featured_wechat_mps)
             """
         )
         results["mp_orphans_deleted"] = cur.rowcount
@@ -759,14 +759,14 @@ def cleanup_orphan_stats(conn) -> Dict[str, int]:
     )
     results["custom_disabled_deferred"] = cur.rowcount
     
-    # 6. Push unsubscribed MPs far into the future
+    # 6. Push disabled MPs far into the future
     try:
         cur = conn.execute(
             """
             UPDATE source_stats 
             SET next_due_at = ?
             WHERE source_type = 'mp' 
-            AND source_id IN (SELECT fakeid FROM wechat_mps WHERE subscribed = 0)
+            AND source_id IN (SELECT fakeid FROM featured_wechat_mps WHERE enabled = 0)
             AND next_due_at < ?
             """,
             (one_year_later, one_year_later)
