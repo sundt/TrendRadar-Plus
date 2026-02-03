@@ -179,16 +179,24 @@ class ArticleEditor {
     }
     
     async checkAuth() {
-        // 登录检查已禁用，允许匿名使用编辑器
+        // 检查登录状态，未登录则跳转
         try {
             const res = await apiRequest('/api/auth/me')
             if (res.ok && res.user) {
                 this.isAuthenticated = true
                 this.isMember = res.user.is_member || false
+            } else {
+                // 未登录，跳转到登录页
+                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
+                throw new Error('请先登录')
             }
         } catch (error) {
-            // 忽略认证错误，允许匿名使用
-            console.warn('Auth check skipped:', error.message)
+            if (error.message === '请先登录') {
+                throw error
+            }
+            // API 错误也视为未登录
+            window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
+            throw new Error('请先登录')
         }
     }
     
