@@ -72,7 +72,7 @@ def _load_yaml_defaults(project_root: Path) -> Dict[str, Any]:
             "push_window_end": "22:00",
         },
         "display": {
-            "items_per_card": 20,
+            "items_per_card": 50,
             "morning_brief_items": 50,
         },
         "ai": {

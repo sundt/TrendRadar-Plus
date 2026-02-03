@@ -457,6 +457,60 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_source_stats_type ON source_stats(source_type)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_source_stats_type_due ON source_stats(source_type, next_due_at)")
 
+    # ========== User Articles (用户文章/草稿) ==========
+    # 统一存储用户创作的文章（草稿和已发布）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_articles (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            source_id TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            digest TEXT DEFAULT '',
+            cover_url TEXT DEFAULT '',
+            html_content TEXT NOT NULL DEFAULT '',
+            markdown_content TEXT DEFAULT '',
+            
+            import_type TEXT DEFAULT 'manual',
+            import_source_id TEXT DEFAULT '',
+            import_source_url TEXT DEFAULT '',
+            
+            status TEXT DEFAULT 'draft',
+            version INTEGER DEFAULT 1,
+            
+            view_count INTEGER DEFAULT 0,
+            
+            published_at INTEGER,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_articles_user_id ON user_articles(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_articles_source_id ON user_articles(source_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_articles_status ON user_articles(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_articles_updated_at ON user_articles(updated_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_articles_published_at ON user_articles(published_at DESC)")
+
+    # ========== Temp Images (临时图片) ==========
+    # 用于存储用户上传的临时图片
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS temp_images (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            original_name TEXT DEFAULT '',
+            file_size INTEGER DEFAULT 0,
+            mime_type TEXT DEFAULT '',
+            created_at INTEGER NOT NULL,
+            expires_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_temp_images_user_id ON temp_images(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_temp_images_expires_at ON temp_images(expires_at)")
+
     def _ensure_column(table: str, column: str, col_def: str) -> None:
         try:
             cur = conn.execute(f"PRAGMA table_info({table})")
@@ -485,6 +539,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("rss_sources", "seed_last_updated", "TEXT NOT NULL DEFAULT ''")
     _ensure_column("rss_sources", "added_at", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column("rss_sources", "scrape_rules", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column("rss_sources", "source_type", "TEXT DEFAULT 'rss'")  # rss/user/mp
     _ensure_column("rss_source_requests", "title", "TEXT NOT NULL DEFAULT ''")
     
     # Custom Sources columns

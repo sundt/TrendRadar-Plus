@@ -403,7 +403,7 @@ async def render_viewer_page(
                 limit=10000,
                 apply_filter=True,
                 filter_mode=filter,
-                per_platform_limit=sys_settings.get("display", {}).get("items_per_card", 20)
+                per_platform_limit=sys_settings.get("display", {}).get("items_per_card", 50)
             )
 
         data = _inject_explore_category(data)
