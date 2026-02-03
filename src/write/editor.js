@@ -179,15 +179,15 @@ class ArticleEditor {
     }
     
     async checkAuth() {
-        // 检查登录状态，未登录则跳转
+        // 检查登录状态，未登录则跳转到首页登录
         try {
             const res = await apiRequest('/api/auth/me')
             if (res.ok && res.user) {
                 this.isAuthenticated = true
                 this.isMember = res.user.is_member || false
             } else {
-                // 未登录，跳转到登录页
-                window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
+                // 未登录，跳转到首页并带上 redirect 参数
+                window.location.href = '/?need_login=1&redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
                 throw new Error('请先登录')
             }
         } catch (error) {
@@ -195,7 +195,7 @@ class ArticleEditor {
                 throw error
             }
             // API 错误也视为未登录
-            window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
+            window.location.href = '/?need_login=1&redirect=' + encodeURIComponent(window.location.pathname + window.location.search)
             throw new Error('请先登录')
         }
     }

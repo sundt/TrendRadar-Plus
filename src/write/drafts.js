@@ -81,8 +81,27 @@ class DraftsManager {
     }
     
     async init() {
+        // Check auth first
+        const isLoggedIn = await this.checkAuth()
+        if (!isLoggedIn) return
+        
         this.bindEvents()
         await this.loadDrafts()
+    }
+    
+    async checkAuth() {
+        try {
+            const res = await apiRequest('/api/auth/me')
+            if (res.ok && res.user) {
+                return true
+            }
+        } catch (error) {
+            // Not logged in
+        }
+        
+        // Redirect to home with login prompt
+        window.location.href = '/?need_login=1&redirect=' + encodeURIComponent(window.location.pathname)
+        return false
     }
     
     async loadDrafts() {

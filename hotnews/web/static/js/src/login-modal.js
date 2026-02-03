@@ -533,6 +533,22 @@ function initLoginModal() {
             this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
         });
     }
+    
+    // Check if need_login parameter is present, auto-open login modal
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('need_login') === '1') {
+        // Remove the parameter from URL without reload
+        urlParams.delete('need_login');
+        const newUrl = urlParams.toString() 
+            ? window.location.pathname + '?' + urlParams.toString()
+            : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        
+        // Open login modal after a short delay
+        setTimeout(() => {
+            openLoginModal();
+        }, 100);
+    }
 }
 
 // Initialize on DOM ready
