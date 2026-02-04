@@ -33,6 +33,7 @@ node_modules/
 playwright-report/
 test-results/
 .playwright/
+tests/e2e/.auth/
 
 # Local workspace
 workspace/metagpt/

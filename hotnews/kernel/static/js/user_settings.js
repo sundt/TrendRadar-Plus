@@ -1664,6 +1664,26 @@ function getMergedCategoryConfig() {
         categoryFilters: userConfig.categoryFilters || {}
     };
 
+    // 迁移：为老用户添加默认隐藏的栏目
+    const defaultHiddenCategories = ['other', 'general', 'social', 'tech_news', 'developer'];
+    const migrationKey = '_hiddenCategoriesMigrated_v1';
+    
+    if (!userConfig[migrationKey]) {
+        let migrationChanged = false;
+        for (const catId of defaultHiddenCategories) {
+            if (!merged.hiddenDefaultCategories.includes(catId)) {
+                merged.hiddenDefaultCategories.push(catId);
+                migrationChanged = true;
+            }
+        }
+        if (migrationChanged) {
+            console.log('[Settings] Migrated hidden categories for existing user');
+        }
+        userConfig[migrationKey] = true;
+        userConfig.hiddenDefaultCategories = merged.hiddenDefaultCategories;
+        saveCategoryConfig(userConfig);
+    }
+
     // Add missing categories
     Object.keys(categorySettingsState.defaultCategories || {}).forEach(catId => {
         if (!merged.categoryOrder.includes(catId)) {

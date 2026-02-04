@@ -172,9 +172,16 @@
             if (data.ok) {
                 topics = data.topics || [];
                 renderTopicTabs();
+            } else {
+                // 未登录或其他错误，清空主题
+                console.log('[TopicTracker] Load topics failed:', data.detail || data.error);
+                topics = [];
+                renderTopicTabs();
             }
         } catch (e) {
             console.error('Failed to load topics:', e);
+            topics = [];
+            renderTopicTabs();
         }
     }
 
@@ -184,7 +191,12 @@
     function renderTopicTabs() {
         const categoryTabs = document.querySelector('.category-tabs');
         const tabContentArea = document.querySelector('.tab-content-area');
-        if (!categoryTabs || !tabContentArea) return;
+        if (!categoryTabs || !tabContentArea) {
+            // DOM not ready, retry later
+            console.log('[TopicTracker] DOM not ready for rendering topics, retrying...');
+            setTimeout(renderTopicTabs, 500);
+            return;
+        }
         
         // Remove existing topic tabs and panes
         document.querySelectorAll('.category-tab.topic-tab').forEach(el => el.remove());
@@ -387,9 +399,38 @@
     }
 
     /**
+     * Check if user is logged in
+     */
+    function isUserLoggedIn() {
+        // Check if authState is available (from auth-state.js module)
+        if (window.authState && typeof window.authState.getUser === 'function') {
+            return !!window.authState.getUser();
+        }
+        // Fallback: check for session cookie
+        return document.cookie.includes('hotnews_session=');
+    }
+    
+    /**
+     * Open login modal
+     */
+    function showLoginModal() {
+        if (typeof window.openLoginModal === 'function') {
+            window.openLoginModal();
+        } else {
+            alert('请先登录');
+        }
+    }
+
+    /**
      * Open modal for new topic
      */
     function openModal() {
+        // Check if user is logged in
+        if (!isUserLoggedIn()) {
+            showLoginModal();
+            return;
+        }
+        
         currentEditTopic = null;
         generatedData = null;
         
@@ -932,6 +973,12 @@
      * Edit a topic
      */
     async function editTopic(topicId) {
+        // Check if user is logged in
+        if (!isUserLoggedIn()) {
+            showLoginModal();
+            return;
+        }
+        
         const topic = topics.find(t => t.id === topicId);
         if (!topic) return;
         
