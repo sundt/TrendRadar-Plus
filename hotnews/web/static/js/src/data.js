@@ -753,26 +753,34 @@ export const data = {
                 </div>`;
             }
 
-            // Special handling for topic categories (dynamically loaded)
+            // Special handling for topic categories
+            // If is_dynamic is false, data is pre-loaded, render like normal category
+            // If is_dynamic is true, show loading placeholder
             if (String(catId).startsWith('topic-')) {
                 const topicId = String(catId).replace('topic-', '');
-                const keywords = Array.isArray(cat?.keywords) ? cat.keywords : [];
-                const keywordsHtml = keywords.map(kw => `
-                    <div class="platform-card" data-keyword="${escapeHtml(kw)}">
-                        <div class="platform-header">
-                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🔍 ${escapeHtml(kw)}</div>
+                const isDynamic = cat?.is_dynamic !== false;
+                
+                if (isDynamic) {
+                    // Dynamic loading mode (legacy)
+                    const keywords = Array.isArray(cat?.keywords) ? cat.keywords : [];
+                    const keywordsHtml = keywords.map(kw => `
+                        <div class="platform-card" data-keyword="${escapeHtml(kw)}">
+                            <div class="platform-header">
+                                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🔍 ${escapeHtml(kw)}</div>
+                            </div>
+                            <ul class="news-list">
+                                <li class="news-placeholder">加载中...</li>
+                            </ul>
                         </div>
-                        <ul class="news-list">
-                            <li class="news-placeholder">加载中...</li>
-                        </ul>
-                    </div>
-                `).join('');
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" id="topicCards-${escapeHtml(topicId)}" data-topic-id="${escapeHtml(topicId)}">
-                        ${keywordsHtml || '<div style="text-align:center;padding:60px 20px;color:#6b7280;">加载中...</div>'}
-                    </div>
-                </div>`;
+                    `).join('');
+                    return `
+                    <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
+                        <div class="platform-grid" id="topicCards-${escapeHtml(topicId)}" data-topic-id="${escapeHtml(topicId)}">
+                            ${keywordsHtml || '<div style="text-align:center;padding:60px 20px;color:#6b7280;">加载中...</div>'}
+                        </div>
+                    </div>`;
+                }
+                // else: fall through to normal rendering with pre-loaded data
             }
 
             // Special handling for featured-mps (dynamically loaded)

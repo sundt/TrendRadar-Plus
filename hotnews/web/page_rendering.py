@@ -12,10 +12,11 @@ from fastapi.responses import HTMLResponse
 
 def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) -> Dict[str, Any]:
     """
-    Inject user's tracked topics as categories.
+    Inject user's tracked topics as categories with pre-loaded news.
     Topics are inserted after 'my-tags' category.
     """
     import logging
+    import re
     logger = logging.getLogger(__name__)
     
     try:
@@ -30,6 +31,7 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         
         # Get database connection
         from hotnews.web.user_db import get_user_db_conn
+        from hotnews.web.db_online import get_online_db_conn
         project_root = getattr(request.app.state, "project_root", None)
         if not project_root:
             from pathlib import Path
@@ -59,6 +61,9 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         if not topics:
             return data
         
+        # Get online db for news search
+        online_conn = get_online_db_conn(project_root)
+        
         cats = data.get("categories") if isinstance(data, dict) else None
         if not isinstance(cats, dict):
             return data
@@ -72,37 +77,54 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
                 for topic in topics:
                     topic_cat_id = f"topic-{topic['id']}"
                     if topic_cat_id not in new_cats:
+                        # Pre-load news for this topic
+                        platforms = _build_topic_platforms(
+                            online_conn, 
+                            topic.get("keywords", []),
+                            topic.get("rss_sources", []),
+                            limit_per_keyword=30
+                        )
+                        news_count = sum(len(p.get("news", [])) for p in platforms.values())
+                        
                         new_cats[topic_cat_id] = {
                             "id": topic_cat_id,
                             "name": topic.get("name", "主题"),
                             "icon": topic.get("icon", "🏷️"),
-                            "platforms": {},
-                            "news_count": 0,
+                            "platforms": platforms,
+                            "news_count": news_count,
                             "filtered_count": 0,
                             "is_new": False,
                             "requires_auth": True,
-                            "is_dynamic": True,
+                            "is_dynamic": False,  # Changed: data is pre-loaded
                             "is_topic": True,
                             "topic_id": topic["id"],
                             "keywords": topic.get("keywords", []),
                         }
-                        logger.info(f"Injected topic category: {topic_cat_id} ({topic.get('name')})")
+                        logger.info(f"Injected topic category: {topic_cat_id} ({topic.get('name')}) with {news_count} news")
         
         # If my-tags not found, append topics at the beginning
         if not any(k.startswith("topic-") for k in new_cats):
             topic_cats = {}
             for topic in topics:
                 topic_cat_id = f"topic-{topic['id']}"
+                platforms = _build_topic_platforms(
+                    online_conn,
+                    topic.get("keywords", []),
+                    topic.get("rss_sources", []),
+                    limit_per_keyword=30
+                )
+                news_count = sum(len(p.get("news", [])) for p in platforms.values())
+                
                 topic_cats[topic_cat_id] = {
                     "id": topic_cat_id,
                     "name": topic.get("name", "主题"),
                     "icon": topic.get("icon", "🏷️"),
-                    "platforms": {},
-                    "news_count": 0,
+                    "platforms": platforms,
+                    "news_count": news_count,
                     "filtered_count": 0,
                     "is_new": False,
                     "requires_auth": True,
-                    "is_dynamic": True,
+                    "is_dynamic": False,
                     "is_topic": True,
                     "topic_id": topic["id"],
                     "keywords": topic.get("keywords", []),
@@ -116,6 +138,110 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         import logging
         logging.getLogger(__name__).warning(f"Failed to inject user topics: {e}", exc_info=True)
         return data
+
+
+def _build_topic_platforms(
+    conn,
+    keywords: List[str],
+    priority_source_ids: List[str],
+    limit_per_keyword: int = 30
+) -> Dict[str, Any]:
+    """
+    Build platforms dict for a topic, with each keyword as a platform.
+    
+    Args:
+        conn: Database connection
+        keywords: List of keywords to search
+        priority_source_ids: RSS source IDs to prioritize
+        limit_per_keyword: Max news per keyword
+        
+    Returns:
+        Dict of platforms, keyed by keyword
+    """
+    import re
+    import hashlib
+    
+    platforms = {}
+    
+    def normalize_title(title: str) -> str:
+        return re.sub(r'[^\w\u4e00-\u9fff]', '', title.lower())
+    
+    def generate_news_id(platform_id: str, title: str) -> str:
+        """Generate stable news ID."""
+        key = f"{platform_id}:{title}"
+        return hashlib.md5(key.encode()).hexdigest()[:12]
+    
+    for kw in keywords:
+        platform_id = f"topic-kw-{hashlib.md5(kw.encode()).hexdigest()[:8]}"
+        news_items = []
+        seen_titles = set()
+        
+        # Search in priority sources first
+        if priority_source_ids:
+            placeholders = ",".join("?" * len(priority_source_ids))
+            try:
+                cur = conn.execute(
+                    f"""
+                    SELECT id, source_id, title, url, published_at
+                    FROM rss_entries
+                    WHERE source_id IN ({placeholders}) AND title LIKE ?
+                    ORDER BY published_at DESC
+                    LIMIT ?
+                    """,
+                    (*priority_source_ids, f"%{kw}%", limit_per_keyword)
+                )
+                for row in cur.fetchall():
+                    norm = normalize_title(row[2])
+                    if norm not in seen_titles:
+                        seen_titles.add(norm)
+                        news_items.append({
+                            "stable_id": generate_news_id(platform_id, row[2]),
+                            "title": row[2],
+                            "display_title": row[2],
+                            "url": row[3],
+                            "meta": "",
+                        })
+            except Exception:
+                pass
+        
+        # Search in all entries
+        remaining = limit_per_keyword - len(news_items)
+        if remaining > 0:
+            try:
+                cur = conn.execute(
+                    """
+                    SELECT id, source_id, title, url, published_at
+                    FROM rss_entries
+                    WHERE title LIKE ?
+                    ORDER BY published_at DESC
+                    LIMIT ?
+                    """,
+                    (f"%{kw}%", remaining + 50)
+                )
+                for row in cur.fetchall():
+                    if len(news_items) >= limit_per_keyword:
+                        break
+                    norm = normalize_title(row[2])
+                    if norm not in seen_titles:
+                        seen_titles.add(norm)
+                        news_items.append({
+                            "stable_id": generate_news_id(platform_id, row[2]),
+                            "title": row[2],
+                            "display_title": row[2],
+                            "url": row[3],
+                            "meta": "",
+                        })
+            except Exception:
+                pass
+        
+        platforms[platform_id] = {
+            "id": platform_id,
+            "name": f"🔍 {kw}",
+            "news": news_items,
+            "is_new": False,
+        }
+    
+    return platforms
 
 
 def _inject_my_tags_category(data: Dict[str, Any]) -> Dict[str, Any]:
