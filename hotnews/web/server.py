@@ -565,6 +565,10 @@ app.include_router(_source_discovery_router)
 from hotnews.web.news_search_api import router as _news_search_router
 app.include_router(_news_search_router)
 
+# Topic tracker API (user topic tracking)
+from hotnews.web.api.topic_api import router as _topic_router
+app.include_router(_topic_router)
+
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
 if kernel_static.exists():

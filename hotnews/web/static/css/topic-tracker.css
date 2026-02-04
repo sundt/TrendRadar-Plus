@@ -1,0 +1,456 @@
+/**
+ * Topic Tracker Styles
+ * Styles for topic tracking feature in viewer.html
+ */
+
+/* Topic Section Container */
+.topic-section {
+    margin-bottom: 20px;
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.topic-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.topic-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.topic-section-icon {
+    font-size: 20px;
+}
+
+.topic-section-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.topic-section-btn {
+    padding: 4px 8px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.topic-section-btn:hover {
+    background: #e5e7eb;
+}
+
+/* Topic Cards Grid */
+.topic-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+/* New Topic Button */
+.new-topic-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.new-topic-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+/* Topic Modal */
+.topic-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+
+.topic-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.topic-modal {
+    background: white;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    transform: translateY(20px);
+    transition: transform 0.2s;
+}
+
+.topic-modal-overlay.active .topic-modal {
+    transform: translateY(0);
+}
+
+.topic-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.topic-modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.topic-modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.topic-modal-close:hover {
+    background: #e5e7eb;
+}
+
+.topic-modal-body {
+    padding: 24px;
+}
+
+.topic-form-group {
+    margin-bottom: 20px;
+}
+
+.topic-form-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.topic-form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.topic-form-input:focus {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* AI Generate Button */
+.topic-ai-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 8px;
+}
+
+.topic-ai-btn:hover {
+    background: #dcfce7;
+}
+
+.topic-ai-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.topic-ai-btn.loading {
+    color: #6b7280;
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+/* Generated Icon Display */
+.topic-icon-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    margin-top: 8px;
+}
+
+.topic-icon-preview {
+    font-size: 32px;
+}
+
+.topic-icon-label {
+    font-size: 13px;
+    color: #6b7280;
+}
+
+/* Keywords Tags */
+.topic-keywords-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+    min-height: 60px;
+}
+
+.topic-keyword-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    font-size: 13px;
+    color: #374151;
+}
+
+.topic-keyword-remove {
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+}
+
+.topic-keyword-remove:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.topic-keyword-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px dashed #d1d5db;
+    border-radius: 20px;
+    font-size: 13px;
+    color: #6b7280;
+    cursor: pointer;
+}
+
+.topic-keyword-add:hover {
+    border-color: #4f46e5;
+    color: #4f46e5;
+}
+
+/* Recommended Sources */
+.topic-sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.topic-source-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+
+.topic-source-checkbox {
+    margin-top: 2px;
+}
+
+.topic-source-info {
+    flex: 1;
+}
+
+.topic-source-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.topic-source-url {
+    font-size: 12px;
+    color: #6b7280;
+    word-break: break-all;
+}
+
+.topic-source-desc {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.topic-source-type {
+    padding: 2px 8px;
+    background: #e0e7ff;
+    color: #4338ca;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.topic-source-type.wechat {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+/* Source Actions */
+.topic-sources-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.topic-sources-action-btn {
+    font-size: 12px;
+    color: #4f46e5;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.topic-sources-action-btn:hover {
+    text-decoration: underline;
+}
+
+/* Modal Footer */
+.topic-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.topic-modal-btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.topic-modal-btn.cancel {
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    color: #374151;
+}
+
+.topic-modal-btn.cancel:hover {
+    background: #e5e7eb;
+}
+
+.topic-modal-btn.primary {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    border: none;
+    color: white;
+}
+
+.topic-modal-btn.primary:hover {
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.topic-modal-btn.primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Loading Spinner */
+.topic-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #4f46e5;
+    border-radius: 50%;
+    animation: topic-spin 0.8s linear infinite;
+}
+
+@keyframes topic-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.topic-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6b7280;
+}
+
+.topic-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.topic-empty-text {
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .topic-modal {
+        width: 95%;
+        max-height: 85vh;
+    }
+    
+    .topic-cards-grid {
+        grid-template-columns: 1fr;
+    }
+}
