@@ -30,9 +30,20 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         
         user_id = user["id"]
         
+        # Get database connection
+        from hotnews.web.user_db import get_user_db_conn
+        project_root = getattr(request.app.state, "project_root", None)
+        if not project_root:
+            from pathlib import Path
+            project_root = Path(__file__).parent.parent.parent
+        
+        user_db_conn = get_user_db_conn(project_root)
+        if not user_db_conn:
+            return data
+        
         # Get user's topics from database
         from hotnews.storage.topic_storage import TopicStorage
-        storage = TopicStorage()
+        storage = TopicStorage(user_db_conn)
         topics = storage.get_user_topics(user_id)
         
         if not topics:
