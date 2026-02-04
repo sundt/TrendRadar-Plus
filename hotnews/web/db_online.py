@@ -579,6 +579,12 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # Tag candidates keywords column (AI-generated search keywords)
     _ensure_column("tag_candidates", "keywords", "TEXT DEFAULT '[]'")
 
+    # ========== Featured WeChat MPs 扩展字段（公众号存储架构重构） ==========
+    # source: 来源类型 - admin(管理员添加), ai_recommend(AI推荐), user(用户添加)
+    _ensure_column("featured_wechat_mps", "source", "TEXT DEFAULT 'admin'")
+    # added_by_user_id: 用户添加时记录添加者 user_id
+    _ensure_column("featured_wechat_mps", "added_by_user_id", "INTEGER")
+
     # ========== RSS Entries 扩展字段（公众号文章统一存储） ==========
     # 为 rss_entries 表添加公众号文章所需的字段
     _ensure_column("rss_entries", "description", "TEXT DEFAULT ''")

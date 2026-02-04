@@ -754,3 +754,115 @@ async def _run_unified_fetch_cycle() -> Dict[str, Any]:
         await asyncio.sleep(0.5)
     
     return stats
+
+
+async def fetch_mps_immediately(
+    fakeids: List[str],
+    project_root: Path = None
+) -> Dict[str, Any]:
+    """
+    Immediately fetch articles for specified MPs.
+    
+    This function is called when user creates/updates a topic to fetch
+    articles right away instead of waiting for the scheduled cycle.
+    
+    Args:
+        fakeids: List of MP fakeids to fetch
+        project_root: Project root path (optional, uses module-level if not provided)
+        
+    Returns:
+        Dict with fetch results:
+            - total: number of MPs attempted
+            - success: number of successful fetches
+            - new_articles: total new articles fetched
+            - errors: list of error messages
+    """
+    global _project_root
+    
+    if project_root:
+        _project_root = project_root
+    
+    if not _project_root:
+        logger.error("Project root not set for immediate MP fetch")
+        return {"total": 0, "success": 0, "new_articles": 0, "errors": ["Project root not configured"]}
+    
+    if not fakeids:
+        return {"total": 0, "success": 0, "new_articles": 0, "errors": []}
+    
+    from hotnews.kernel.services.mp_credential_pool import CredentialPool
+    from hotnews.kernel.services.wechat_smart_scheduler import update_mp_stats
+    
+    online_conn = _get_online_db_conn()
+    user_conn = _get_user_db_conn()
+    
+    # Initialize credential pool
+    credential_pool = CredentialPool()
+    credential_pool.load_credentials(online_conn, user_conn)
+    
+    if not credential_pool.has_credentials():
+        logger.warning("No valid credentials for immediate MP fetch")
+        return {"total": len(fakeids), "success": 0, "new_articles": 0, "errors": ["没有可用的微信凭证"]}
+    
+    results = {
+        "total": len(fakeids),
+        "success": 0,
+        "new_articles": 0,
+        "errors": []
+    }
+    
+    now = _now_ts()
+    
+    for fakeid in fakeids:
+        # Get MP info
+        cur = online_conn.execute(
+            "SELECT nickname FROM featured_wechat_mps WHERE fakeid = ?",
+            (fakeid,)
+        )
+        row = cur.fetchone()
+        if not row:
+            logger.warning(f"MP not found: {fakeid}")
+            results["errors"].append(f"公众号不存在: {fakeid}")
+            continue
+        
+        nickname = row[0]
+        
+        try:
+            # Fetch using credential pool
+            result = await _fetch_mp_with_pool(
+                fakeid, nickname, credential_pool, online_conn, user_conn
+            )
+            
+            new_count = result["new_count"]
+            error_message = result["error_message"]
+            
+            # Update scheduler stats
+            update_mp_stats(
+                online_conn,
+                fakeid,
+                nickname=nickname,
+                has_new_articles=(new_count > 0),
+                error_message=error_message,
+            )
+            
+            # Update last_fetch_at
+            if not error_message:
+                online_conn.execute(
+                    "UPDATE featured_wechat_mps SET last_fetch_at = ?, updated_at = ? WHERE fakeid = ?",
+                    (now, now, fakeid)
+                )
+                results["success"] += 1
+                results["new_articles"] += new_count
+                logger.info(f"Immediate fetch: {nickname} - {new_count} new articles")
+            else:
+                results["errors"].append(f"{nickname}: {error_message}")
+                
+            online_conn.commit()
+            
+        except Exception as e:
+            logger.error(f"Error fetching {nickname}: {e}")
+            results["errors"].append(f"{nickname}: {str(e)}")
+        
+        # Small delay between fetches
+        await asyncio.sleep(0.5)
+    
+    return results

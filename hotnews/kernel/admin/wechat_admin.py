@@ -881,6 +881,19 @@ async def subscribe(request: Request, body: SubscribeRequest) -> Dict[str, Any]:
     now = _now_ts()
     
     try:
+        # Ensure MP exists in featured_wechat_mps (unified storage)
+        from hotnews.kernel.services.mp_service import MPService
+        mp_service = MPService(online_conn)
+        mp_service.get_or_create_mp(
+            fakeid=fakeid,
+            nickname=nickname,
+            source='user',
+            added_by_user_id=user_id,
+            round_head_img=body.round_head_img or "",
+            signature=body.signature or "",
+            enabled=1,
+        )
+        
         # Save subscription
         user_conn.execute(
             """

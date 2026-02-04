@@ -704,3 +704,94 @@
         padding-bottom: calc(8px + env(safe-area-inset-bottom));
     }
 }
+
+
+/* ==========================================================================
+   Add RSS Form
+   ========================================================================== */
+
+.subscribe-add-rss-btn {
+    padding: 10px 14px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.subscribe-add-rss-btn:hover {
+    background: #16a34a;
+}
+
+.subscribe-add-rss-form {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.subscribe-add-rss-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 10px;
+}
+
+.subscribe-form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 8px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.subscribe-form-input:focus {
+    border-color: #3b82f6;
+}
+
+.subscribe-add-rss-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.subscribe-add-rss-cancel {
+    padding: 8px 14px;
+    background: #f1f5f9;
+    color: #64748b;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.subscribe-add-rss-cancel:hover {
+    background: #e2e8f0;
+}
+
+.subscribe-add-rss-submit {
+    padding: 8px 14px;
+    background: #22c55e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.subscribe-add-rss-submit:hover {
+    background: #16a34a;
+}
+
+.subscribe-add-rss-submit:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+}

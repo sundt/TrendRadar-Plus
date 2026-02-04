@@ -149,6 +149,16 @@
             topicsContainer.id = 'topicSectionsContainer';
             myTagsGrid.parentNode.insertBefore(topicsContainer, myTagsGrid);
         }
+        
+        // 监听 DOM 变化，如果按钮被移除则重新添加
+        const observer = new MutationObserver((mutations) => {
+            if (!document.getElementById('newTopicBtn')) {
+                console.log('[TopicTracker] Button removed, re-adding...');
+                observer.disconnect();
+                setTimeout(addNewTopicButton, 100);
+            }
+        });
+        observer.observe(categoryTabs, { childList: true, subtree: false });
     }
 
     /**
@@ -391,8 +401,27 @@
         }
         
         aiGenerateBtn.disabled = true;
-        aiGenerateBtn.innerHTML = '<span class="topic-spinner"></span> 生成中...';
         aiGenerateBtn.classList.add('loading');
+        
+        // 显示进度提示
+        const progressSteps = [
+            '🤖 正在分析主题...',
+            '🔍 正在生成关键词...',
+            '📡 正在搜索数据源...',
+            '✅ 正在验证数据源...'
+        ];
+        let stepIndex = 0;
+        
+        const updateProgress = () => {
+            aiGenerateBtn.innerHTML = `<span class="topic-spinner"></span> ${progressSteps[stepIndex]}`;
+        };
+        updateProgress();
+        
+        // 每2秒切换进度提示
+        const progressInterval = setInterval(() => {
+            stepIndex = Math.min(stepIndex + 1, progressSteps.length - 1);
+            updateProgress();
+        }, 2000);
         
         try {
             const response = await fetch('/api/topics/generate-keywords', {
@@ -420,6 +449,7 @@
             console.error('Generate keywords failed:', e);
             alert('AI 生成失败，请手动输入关键词');
         } finally {
+            clearInterval(progressInterval);
             aiGenerateBtn.disabled = false;
             aiGenerateBtn.innerHTML = '🤖 生成关键词和推荐源';
             aiGenerateBtn.classList.remove('loading');
@@ -501,29 +531,195 @@
 
     /**
      * Render recommended sources
+     * 区分显示已验证（数据库）和待验证（AI推荐）的源
      */
     function renderSources() {
         if (!generatedData || !generatedData.recommended_sources) return;
         
-        const html = generatedData.recommended_sources.map((source, idx) => {
-            const isRss = source.type === 'rss';
-            const typeLabel = isRss ? 'RSS' : '公众号';
-            const typeClass = isRss ? '' : 'wechat';
-            const urlOrId = isRss ? source.url : `微信号: ${source.wechat_id}`;
-            
-            return `
-                <div class="topic-source-item">
-                    <input type="checkbox" class="topic-source-checkbox" 
-                           id="source-${idx}" data-source-idx="${idx}" checked>
-                    <div class="topic-source-info">
-                        <div class="topic-source-name">${escapeHtml(source.name)}</div>
-                        <div class="topic-source-url">${escapeHtml(urlOrId)}</div>
-                        ${source.description ? `<div class="topic-source-desc">${escapeHtml(source.description)}</div>` : ''}
-                    </div>
-                    <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+        const sources = generatedData.recommended_sources;
+        
+        // 如果没有推荐源，显示友好提示
+        if (sources.length === 0) {
+            sourcesContainer.innerHTML = `
+                <div class="topic-sources-empty-hint">
+                    <div class="topic-sources-empty-icon">📭</div>
+                    <div class="topic-sources-empty-text">暂未找到匹配的数据源</div>
+                    <div class="topic-sources-empty-tip">请使用下方按钮手动搜索添加相关的订阅源或公众号</div>
+                </div>
+                <div class="topic-sources-add">
+                    <button class="topic-ai-btn small" onclick="TopicTracker.regenerateSources()">
+                        🔄 重新搜索
+                    </button>
+                    <button class="topic-ai-btn small secondary" onclick="TopicTracker.showManualAddForm()">
+                        ➕ 手动添加数据源
+                    </button>
                 </div>
             `;
-        }).join('');
+            return;
+        }
+        
+        // 分组：已验证 vs 待验证
+        const verifiedSources = sources.filter(s => s.verified);
+        const unverifiedSources = sources.filter(s => !s.verified);
+        
+        let html = '';
+        
+        // 已验证的源（来自数据库）
+        if (verifiedSources.length > 0) {
+            html += '<div class="topic-sources-section-title">✅ 已验证数据源</div>';
+            html += verifiedSources.map((source, idx) => {
+                const isRss = source.type === 'rss';
+                const typeLabel = isRss ? 'RSS' : '公众号';
+                const typeClass = isRss ? '' : 'wechat';
+                const urlOrId = isRss ? source.url : (source.wechat_id ? `微信号: ${source.wechat_id}` : '');
+                const realIdx = sources.indexOf(source);
+                
+                return `
+                    <div class="topic-source-item verified">
+                        <input type="checkbox" class="topic-source-checkbox" 
+                               id="source-${realIdx}" data-source-idx="${realIdx}" 
+                               data-source-id="${source.id || ''}" checked>
+                        <div class="topic-source-info">
+                            <div class="topic-source-name">${escapeHtml(source.name)}</div>
+                            ${urlOrId ? `<div class="topic-source-url">${escapeHtml(urlOrId)}</div>` : ''}
+                            ${source.description ? `<div class="topic-source-desc">${escapeHtml(source.description)}</div>` : ''}
+                        </div>
+                        <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 待验证的源（AI推荐）
+        if (unverifiedSources.length > 0) {
+            html += '<div class="topic-sources-section-title">⚠️ AI 推荐（需验证）</div>';
+            html += unverifiedSources.map((source, idx) => {
+                const isRss = source.type === 'rss';
+                const typeLabel = isRss ? 'RSS' : '公众号';
+                const typeClass = isRss ? '' : 'wechat';
+                const urlOrId = isRss ? source.url : `微信号: ${source.wechat_id}`;
+                const realIdx = sources.indexOf(source);
+                
+                return `
+                    <div class="topic-source-item unverified">
+                        <input type="checkbox" class="topic-source-checkbox" 
+                               id="source-${realIdx}" data-source-idx="${realIdx}" checked>
+                        <div class="topic-source-info">
+                            <div class="topic-source-name">${escapeHtml(source.name)}</div>
+                            <div class="topic-source-url">${escapeHtml(urlOrId)}</div>
+                            ${source.description ? `<div class="topic-source-desc">${escapeHtml(source.description)}</div>` : ''}
+                        </div>
+                        <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 如果数据源少于3个，显示提示
+        if (sources.length < 3) {
+            html += `
+                <div class="topic-sources-few-hint">
+                    💡 数据源较少，建议手动搜索添加更多相关的订阅源或公众号
+                </div>
+            `;
+        }
+        
+        // Add manual add buttons
+        const buttonsHtml = `
+            <div class="topic-sources-add">
+                <button class="topic-ai-btn small" onclick="TopicTracker.regenerateSources()">
+                    🔄 AI 新增数据源
+                </button>
+                <button class="topic-ai-btn small secondary" onclick="TopicTracker.showManualAddForm()">
+                    ➕ 手动添加数据源
+                </button>
+            </div>
+        `;
+        
+        sourcesContainer.innerHTML = html + buttonsHtml;
+    }
+
+    /**
+     * Render sources for edit mode (existing + new recommended)
+     */
+    async function renderSourcesForEdit(existingSourceIds) {
+        let html = '';
+        
+        // 1. Render existing sources (from database)
+        if (existingSourceIds && existingSourceIds.length > 0) {
+            try {
+                const response = await fetch('/api/topics/sources/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ source_ids: existingSourceIds })
+                });
+                const data = await response.json();
+                
+                if (data.ok && data.sources) {
+                    const sourcesMap = {};
+                    data.sources.forEach(s => sourcesMap[s.id] = s);
+                    
+                    html += '<div class="topic-sources-section-title">已关联的数据源</div>';
+                    html += existingSourceIds.map((sourceId, idx) => {
+                        const source = sourcesMap[sourceId] || { id: sourceId, name: sourceId, type: 'rss' };
+                        const isRss = source.type !== 'wechat_mp';
+                        const typeLabel = isRss ? 'RSS' : '公众号';
+                        const typeClass = isRss ? '' : 'wechat';
+                        const subtitle = isRss ? (source.url || '') : (source.wechat_id ? `微信号: ${source.wechat_id}` : '');
+                        
+                        return `
+                            <div class="topic-source-item">
+                                <input type="checkbox" class="topic-source-checkbox existing-source" 
+                                       id="existing-source-${idx}" data-source-id="${sourceId}" checked>
+                                <div class="topic-source-info">
+                                    <div class="topic-source-name">${escapeHtml(source.name)}</div>
+                                    ${subtitle ? `<div class="topic-source-url">${escapeHtml(subtitle)}</div>` : ''}
+                                </div>
+                                <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (e) {
+                console.error('Failed to fetch source details:', e);
+            }
+        }
+        
+        // 2. Render new recommended sources (if any)
+        if (generatedData && generatedData.recommended_sources && generatedData.recommended_sources.length > 0) {
+            html += '<div class="topic-sources-section-title">新添加的数据源</div>';
+            html += generatedData.recommended_sources.map((source, idx) => {
+                const isRss = source.type === 'rss';
+                const typeLabel = isRss ? 'RSS' : '公众号';
+                const typeClass = isRss ? '' : 'wechat';
+                const urlOrId = isRss ? source.url : `微信号: ${source.wechat_id}`;
+                
+                return `
+                    <div class="topic-source-item">
+                        <input type="checkbox" class="topic-source-checkbox" 
+                               id="source-${idx}" data-source-idx="${idx}" checked>
+                        <div class="topic-source-info">
+                            <div class="topic-source-name">${escapeHtml(source.name)}</div>
+                            <div class="topic-source-url">${escapeHtml(urlOrId)}</div>
+                        </div>
+                        <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 3. Add buttons
+        html += `
+            <div class="topic-sources-add">
+                <button class="topic-ai-btn small" onclick="TopicTracker.regenerateSources()">
+                    🔄 AI 新增数据源
+                </button>
+                <button class="topic-ai-btn small secondary" onclick="TopicTracker.showManualAddForm()">
+                    ➕ 手动添加数据源
+                </button>
+            </div>
+        `;
         
         sourcesContainer.innerHTML = html;
     }
@@ -557,12 +753,21 @@
             return;
         }
         
-        // Get selected sources
+        // Get selected new sources (from AI recommendations)
         const selectedSources = [];
-        document.querySelectorAll('.topic-source-checkbox:checked').forEach(cb => {
+        document.querySelectorAll('.topic-source-checkbox:checked:not(.existing-source)').forEach(cb => {
             const idx = parseInt(cb.dataset.sourceIdx);
-            if (generatedData.recommended_sources[idx]) {
+            if (generatedData.recommended_sources && generatedData.recommended_sources[idx]) {
                 selectedSources.push(generatedData.recommended_sources[idx]);
+            }
+        });
+        
+        // Get existing sources that are still checked
+        const existingSourceIds = [];
+        document.querySelectorAll('.topic-source-checkbox.existing-source:checked').forEach(cb => {
+            const sourceId = cb.dataset.sourceId;
+            if (sourceId) {
+                existingSourceIds.push(sourceId);
             }
         });
         
@@ -570,12 +775,75 @@
         submitBtn.innerHTML = '<span class="topic-spinner"></span> 创建中...';
         
         try {
+            // 分离已验证源和待验证源
+            const verifiedSourceIds = [];  // 已验证的源，直接使用 ID
+            const unverifiedSources = [];  // 待验证的源，需要验证
+            
+            document.querySelectorAll('.topic-source-checkbox:checked:not(.existing-source)').forEach(cb => {
+                const idx = parseInt(cb.dataset.sourceIdx);
+                const sourceId = cb.dataset.sourceId;
+                
+                if (generatedData.recommended_sources && generatedData.recommended_sources[idx]) {
+                    const source = generatedData.recommended_sources[idx];
+                    if (source.verified && source.id) {
+                        // 已验证的源，直接使用 ID
+                        verifiedSourceIds.push(source.id);
+                    } else {
+                        // 待验证的源，需要验证
+                        unverifiedSources.push(source);
+                    }
+                }
+            });
+            
+            // Step 1: 验证待验证的源
+            let newSourceIds = [];
+            if (unverifiedSources.length > 0) {
+                submitBtn.innerHTML = '<span class="topic-spinner"></span> 验证数据源...';
+                
+                const validateResponse = await fetch('/api/topics/validate-sources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ sources: unverifiedSources })
+                });
+                
+                const validateData = await validateResponse.json();
+                
+                if (validateData.ok && validateData.validated_sources) {
+                    newSourceIds = validateData.validated_sources.map(s => s.id);
+                    
+                    // Show validation results
+                    const created = validateData.validated_sources.filter(s => s.status === 'created').length;
+                    const exists = validateData.validated_sources.filter(s => s.status === 'exists').length;
+                    const failedSources = validateData.failed_sources || [];
+                    
+                    if (failedSources.length > 0) {
+                        // Show failed sources to user
+                        const failedMsg = failedSources.map(s => `• ${s.name}: ${s.reason}`).join('\n');
+                        const successCount = created + exists;
+                        
+                        if (successCount > 0) {
+                            alert(`成功添加 ${successCount} 个数据源\n\n以下 ${failedSources.length} 个源验证失败：\n${failedMsg}`);
+                        } else if (verifiedSourceIds.length === 0 && existingSourceIds.length === 0) {
+                            alert(`所有数据源验证失败：\n${failedMsg}\n\n主题仍会创建，但不会关联这些数据源。`);
+                        }
+                    }
+                }
+            }
+            
+            // Combine all source IDs: existing + verified + newly validated
+            const allSourceIds = [...new Set([...existingSourceIds, ...verifiedSourceIds, ...newSourceIds])];
+            
+            console.log(`[TopicTracker] Source IDs: existing=${existingSourceIds.length}, verified=${verifiedSourceIds.length}, new=${newSourceIds.length}, total=${allSourceIds.length}`);
+            
+            // Step 2: Create/update the topic
+            submitBtn.innerHTML = '<span class="topic-spinner"></span> 保存主题...';
+            
             const body = {
                 name: name,
                 icon: generatedData.icon,
                 keywords: generatedData.keywords,
-                // TODO: Handle RSS source creation
-                rss_source_ids: []
+                rss_source_ids: allSourceIds
             };
             
             const url = currentEditTopic ? `/api/topics/${currentEditTopic.id}` : '/api/topics';
@@ -591,8 +859,14 @@
             const data = await response.json();
             
             if (data.ok) {
+                const topicId = data.topic?.id || (currentEditTopic ? currentEditTopic.id : null);
                 closeModal();
-                loadTopics();
+                await loadTopics();
+                
+                // Switch to the created/edited topic tab
+                if (topicId) {
+                    switchToTopicTab(topicId);
+                }
             } else {
                 alert(data.error || '操作失败');
             }
@@ -615,7 +889,7 @@
     /**
      * Edit a topic
      */
-    function editTopic(topicId) {
+    async function editTopic(topicId) {
         const topic = topics.find(t => t.id === topicId);
         if (!topic) return;
         
@@ -623,7 +897,7 @@
         generatedData = {
             icon: topic.icon || '🏷️',
             keywords: [...topic.keywords],
-            recommended_sources: []
+            recommended_sources: []  // New sources to add
         };
         
         modalTitle.textContent = '编辑主题';
@@ -632,9 +906,473 @@
         submitBtn.disabled = false;
         
         renderGeneratedData();
-        document.getElementById('topicSourcesGroup').style.display = 'none';
+        
+        // Always show sources group in edit mode
+        document.getElementById('topicSourcesGroup').style.display = 'block';
+        await renderSourcesForEdit(topic.rss_sources || []);
         
         modalOverlay.classList.add('active');
+    }
+    
+    /**
+     * Render existing RSS sources for editing (legacy - now uses renderSourcesForEdit)
+     */
+    async function renderExistingSources(sourceIds) {
+        await renderSourcesForEdit(sourceIds);
+    }
+    
+    /**
+     * Legacy function kept for compatibility
+     */
+    async function _renderExistingSourcesLegacy(sourceIds) {
+        if (!sourceIds || sourceIds.length === 0) {
+            sourcesContainer.innerHTML = `
+                <div class="topic-sources-empty">暂无关联数据源</div>
+                <div class="topic-sources-add">
+                    <button class="topic-ai-btn small" onclick="TopicTracker.regenerateSources()">
+                        🔄 AI 新增数据源
+                    </button>
+                    <button class="topic-ai-btn small secondary" onclick="TopicTracker.showManualAddForm()">
+                        ➕ 手动添加数据源
+                    </button>
+                </div>
+            `;
+            return;
+        }
+        
+        // Fetch source details from API
+        try {
+            const response = await fetch('/api/topics/sources/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ source_ids: sourceIds })
+            });
+            const data = await response.json();
+            
+            if (data.ok && data.sources) {
+                const sourcesMap = {};
+                data.sources.forEach(s => sourcesMap[s.id] = s);
+                
+                const html = sourceIds.map((sourceId, idx) => {
+                    const source = sourcesMap[sourceId] || { id: sourceId, name: sourceId, type: 'rss' };
+                    const isRss = source.type !== 'wechat_mp';
+                    const typeLabel = isRss ? 'RSS' : '公众号';
+                    const typeClass = isRss ? '' : 'wechat';
+                    const subtitle = isRss ? (source.url || '') : (source.wechat_id ? `微信号: ${source.wechat_id}` : '');
+                    
+                    return `
+                        <div class="topic-source-item">
+                            <input type="checkbox" class="topic-source-checkbox existing-source" 
+                                   id="existing-source-${idx}" data-source-id="${sourceId}" checked>
+                            <div class="topic-source-info">
+                                <div class="topic-source-name">${escapeHtml(source.name)}</div>
+                                ${subtitle ? `<div class="topic-source-url">${escapeHtml(subtitle)}</div>` : ''}
+                            </div>
+                            <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                sourcesContainer.innerHTML = html + `
+                    <div class="topic-sources-add">
+                        <button class="topic-ai-btn small" onclick="TopicTracker.regenerateSources()">
+                            🔄 AI 新增数据源
+                        </button>
+                        <button class="topic-ai-btn small secondary" onclick="TopicTracker.showManualAddForm()">
+                            ➕ 手动添加数据源
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+        } catch (e) {
+            console.error('Failed to fetch source details:', e);
+        }
+        
+        // Fallback: show IDs if API fails
+        const html = sourceIds.map((sourceId, idx) => {
+            const isRss = !sourceId.startsWith('mp-');
+            const typeLabel = isRss ? 'RSS' : '公众号';
+            const typeClass = isRss ? '' : 'wechat';
+            
+            return `
+                <div class="topic-source-item">
+                    <input type="checkbox" class="topic-source-checkbox existing-source" 
+                           id="existing-source-${idx}" data-source-id="${sourceId}" checked>
+                    <div class="topic-source-info">
+                        <div class="topic-source-name">${escapeHtml(sourceId)}</div>
+                    </div>
+                    <span class="topic-source-type ${typeClass}">${typeLabel}</span>
+                </div>
+            `;
+        }).join('');
+        
+        sourcesContainer.innerHTML = html + `
+            <div class="topic-sources-add">
+                <button class="topic-ai-btn small" onclick="TopicTracker.regenerateSources()">
+                    🔄 AI 新增数据源
+                </button>
+                <button class="topic-ai-btn small secondary" onclick="TopicTracker.showManualAddForm()">
+                    ➕ 手动添加数据源
+                </button>
+            </div>
+        `;
+    }
+    
+    /**
+     * Show manual add source form
+     */
+    function showManualAddForm() {
+        // Reset selected MPs
+        selectedMps = [];
+        
+        // Create a simple modal/form for manual input
+        const formHtml = `
+            <div class="topic-manual-add-form" id="manualAddForm">
+                <div class="topic-manual-tabs">
+                    <button class="topic-manual-tab active" data-tab="rss" onclick="TopicTracker.switchManualTab('rss')">RSS 源</button>
+                    <button class="topic-manual-tab" data-tab="wechat" onclick="TopicTracker.switchManualTab('wechat')">微信公众号</button>
+                </div>
+                <div class="topic-manual-content" id="manualTabRss">
+                    <div class="topic-form-group compact">
+                        <label>RSS 名称</label>
+                        <input type="text" id="manualRssName" placeholder="例如：36氪科技" class="topic-form-input">
+                    </div>
+                    <div class="topic-form-group compact">
+                        <label>RSS URL</label>
+                        <input type="text" id="manualRssUrl" placeholder="https://example.com/feed.xml" class="topic-form-input">
+                    </div>
+                </div>
+                <div class="topic-manual-content" id="manualTabWechat" style="display:none;">
+                    <div class="topic-form-group compact">
+                        <label>搜索公众号</label>
+                        <div class="topic-mp-search-box">
+                            <input type="text" id="mpSearchInput" placeholder="搜索公众号（至少2个字符）..." 
+                                   class="topic-form-input" onkeydown="if(event.key==='Enter')TopicTracker.doMpSearch()">
+                            <button class="topic-mp-search-btn" onclick="TopicTracker.doMpSearch()">搜索</button>
+                        </div>
+                        <div class="topic-mp-search-results" id="mpSearchResults">
+                            <div class="topic-mp-empty">输入关键词搜索公众号</div>
+                        </div>
+                    </div>
+                    <div class="topic-mp-selected" id="mpSelectedList"></div>
+                </div>
+                <div class="topic-manual-actions">
+                    <button class="topic-modal-btn cancel small" onclick="TopicTracker.hideManualAddForm()">取消</button>
+                    <button class="topic-modal-btn primary small" onclick="TopicTracker.addManualSource()">添加</button>
+                </div>
+            </div>
+        `;
+        
+        // Insert before the add buttons
+        const addSection = sourcesContainer.querySelector('.topic-sources-add');
+        if (addSection) {
+            addSection.insertAdjacentHTML('beforebegin', formHtml);
+            addSection.style.display = 'none';
+        } else {
+            sourcesContainer.insertAdjacentHTML('beforeend', formHtml);
+        }
+    }
+    
+    /**
+     * Do MP search (triggered by button or Enter key)
+     */
+    function doMpSearch() {
+        const input = document.getElementById('mpSearchInput');
+        if (input) {
+            searchWechatMps(input.value);
+        }
+    }
+    
+    // Store selected MPs temporarily
+    let selectedMps = [];
+    
+    /**
+     * Search WeChat MPs using the same API as quick subscribe
+     */
+    async function searchWechatMps(query) {
+        const resultsContainer = document.getElementById('mpSearchResults');
+        if (!resultsContainer) return;
+        
+        const trimmedQuery = query.trim();
+        if (trimmedQuery.length < 2) {
+            resultsContainer.innerHTML = '<div class="topic-mp-empty">请输入至少2个字符</div>';
+            return;
+        }
+        
+        resultsContainer.innerHTML = '<div class="topic-mp-empty">搜索中...</div>';
+        
+        try {
+            const response = await fetch(`/api/wechat/search?keyword=${encodeURIComponent(trimmedQuery)}&limit=20`, {
+                credentials: 'include'
+            });
+            
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.detail || '搜索失败');
+            }
+            
+            const data = await response.json();
+            const mps = data.list || data.results || [];
+            
+            if (mps.length === 0) {
+                resultsContainer.innerHTML = '<div class="topic-mp-empty">未找到匹配的公众号</div>';
+                return;
+            }
+            
+            resultsContainer.innerHTML = mps.map(mp => {
+                const isSelected = selectedMps.some(s => s.fakeid === mp.fakeid);
+                return `
+                    <div class="topic-mp-item ${isSelected ? 'selected' : ''}" 
+                         data-fakeid="${mp.fakeid}" 
+                         data-nickname="${escapeHtml(mp.nickname)}"
+                         onclick="TopicTracker.toggleMpSelection(this)">
+                        ${mp.round_head_img ? `<img class="topic-mp-avatar" src="${mp.round_head_img}" alt="">` : '<div class="topic-mp-avatar-placeholder">📱</div>'}
+                        <div class="topic-mp-info">
+                            <div class="topic-mp-name">${escapeHtml(mp.nickname)}</div>
+                            ${mp.signature ? `<div class="topic-mp-sig">${escapeHtml(mp.signature.substring(0, 50))}</div>` : ''}
+                        </div>
+                        <span class="topic-mp-check">${isSelected ? '✓' : ''}</span>
+                    </div>
+                `;
+            }).join('');
+        } catch (e) {
+            console.error('Search MPs failed:', e);
+            resultsContainer.innerHTML = `<div class="topic-mp-empty">搜索失败: ${escapeHtml(e.message)}</div>`;
+        }
+    }
+    
+    /**
+     * Toggle MP selection
+     */
+    function toggleMpSelection(el) {
+        const fakeid = el.dataset.fakeid;
+        const nickname = el.dataset.nickname;
+        
+        const idx = selectedMps.findIndex(s => s.fakeid === fakeid);
+        if (idx >= 0) {
+            selectedMps.splice(idx, 1);
+            el.classList.remove('selected');
+            el.querySelector('.topic-mp-check').textContent = '';
+        } else {
+            selectedMps.push({ fakeid, nickname });
+            el.classList.add('selected');
+            el.querySelector('.topic-mp-check').textContent = '✓';
+        }
+        
+        renderSelectedMps();
+    }
+    
+    /**
+     * Render selected MPs
+     */
+    function renderSelectedMps() {
+        const container = document.getElementById('mpSelectedList');
+        if (!container) return;
+        
+        if (selectedMps.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="topic-mp-selected-label">已选择 ${selectedMps.length} 个公众号：</div>
+            <div class="topic-mp-selected-tags">
+                ${selectedMps.map(mp => `
+                    <span class="topic-mp-tag">
+                        ${escapeHtml(mp.nickname)}
+                        <button onclick="TopicTracker.removeMpSelection('${mp.fakeid}')">&times;</button>
+                    </span>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    /**
+     * Remove MP from selection
+     */
+    function removeMpSelection(fakeid) {
+        selectedMps = selectedMps.filter(s => s.fakeid !== fakeid);
+        renderSelectedMps();
+        
+        // Update search results UI
+        const item = document.querySelector(`.topic-mp-item[data-fakeid="${fakeid}"]`);
+        if (item) {
+            item.classList.remove('selected');
+            item.querySelector('.topic-mp-check').textContent = '';
+        }
+    }
+    
+    /**
+     * Hide manual add form
+     */
+    function hideManualAddForm() {
+        const form = document.getElementById('manualAddForm');
+        if (form) form.remove();
+        
+        const addSection = sourcesContainer.querySelector('.topic-sources-add');
+        if (addSection) addSection.style.display = '';
+    }
+    
+    /**
+     * Switch manual add tab
+     */
+    function switchManualTab(tab) {
+        document.querySelectorAll('.topic-manual-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.topic-manual-tab[data-tab="${tab}"]`).classList.add('active');
+        
+        document.getElementById('manualTabRss').style.display = tab === 'rss' ? '' : 'none';
+        document.getElementById('manualTabWechat').style.display = tab === 'wechat' ? '' : 'none';
+    }
+    
+    /**
+     * Add manual source
+     */
+    async function addManualSource() {
+        const activeTab = document.querySelector('.topic-manual-tab.active').dataset.tab;
+        
+        if (activeTab === 'rss') {
+            const name = document.getElementById('manualRssName').value.trim();
+            const url = document.getElementById('manualRssUrl').value.trim();
+            if (!url) {
+                alert('请输入 RSS URL');
+                return;
+            }
+            
+            if (!generatedData.recommended_sources) {
+                generatedData.recommended_sources = [];
+            }
+            generatedData.recommended_sources.push({ type: 'rss', name: name || url, url: url });
+        } else {
+            // Add selected MPs
+            if (selectedMps.length === 0) {
+                alert('请选择至少一个公众号');
+                return;
+            }
+            
+            if (!generatedData.recommended_sources) {
+                generatedData.recommended_sources = [];
+            }
+            
+            for (const mp of selectedMps) {
+                generatedData.recommended_sources.push({
+                    type: 'wechat_mp',
+                    name: mp.nickname,
+                    wechat_id: mp.fakeid  // Use fakeid as identifier
+                });
+            }
+            
+            // Clear selection
+            selectedMps = [];
+        }
+        
+        // Hide the form
+        hideManualAddForm();
+        
+        // Re-render sources list (preserve existing sources in edit mode)
+        if (currentEditTopic && currentEditTopic.rss_sources) {
+            await renderSourcesForEdit(currentEditTopic.rss_sources);
+        } else {
+            renderSources();
+        }
+        
+        // Show sources group if hidden
+        document.getElementById('topicSourcesGroup').style.display = 'block';
+    }
+    
+    /**
+     * Regenerate recommended sources for current topic
+     */
+    async function regenerateSources() {
+        const topicName = topicNameInput.value.trim();
+        if (!topicName) {
+            alert('请先输入主题名称');
+            return;
+        }
+        
+        const btn = document.querySelector('.topic-sources-add .topic-ai-btn');
+        
+        // 显示进度提示
+        const progressSteps = [
+            '🔍 正在搜索数据源...',
+            '📡 正在验证 RSS 源...',
+            '✅ 正在验证公众号...'
+        ];
+        let stepIndex = 0;
+        
+        const updateProgress = () => {
+            if (btn) {
+                btn.innerHTML = `<span class="topic-spinner"></span> ${progressSteps[stepIndex]}`;
+            }
+        };
+        
+        if (btn) {
+            btn.disabled = true;
+            updateProgress();
+        }
+        
+        // 每2秒切换进度提示
+        const progressInterval = setInterval(() => {
+            stepIndex = Math.min(stepIndex + 1, progressSteps.length - 1);
+            updateProgress();
+        }, 2000);
+        
+        try {
+            const response = await fetch('/api/topics/generate-keywords', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ topic_name: topicName })
+            });
+            
+            const data = await response.json();
+            
+            if (data.ok && data.recommended_sources && data.recommended_sources.length > 0) {
+                // 增量添加：合并新推荐的源，去重
+                const existingSources = generatedData.recommended_sources || [];
+                const existingKeys = new Set(existingSources.map(s => 
+                    s.type === 'rss' ? s.url : s.wechat_id
+                ));
+                
+                let addedCount = 0;
+                for (const newSource of data.recommended_sources) {
+                    const key = newSource.type === 'rss' ? newSource.url : newSource.wechat_id;
+                    if (!existingKeys.has(key)) {
+                        existingSources.push(newSource);
+                        existingKeys.add(key);
+                        addedCount++;
+                    }
+                }
+                
+                generatedData.recommended_sources = existingSources;
+                document.getElementById('topicSourcesGroup').style.display = 'block';
+                
+                // 编辑模式下使用 renderSourcesForEdit，新建模式用 renderSources
+                if (currentEditTopic) {
+                    await renderSourcesForEdit(currentEditTopic.rss_sources || []);
+                } else {
+                    renderSources();
+                }
+                
+                if (addedCount > 0) {
+                    console.log(`[TopicTracker] 新增 ${addedCount} 个推荐数据源`);
+                } else {
+                    alert('AI 推荐的数据源已全部添加过');
+                }
+            } else {
+                alert('未找到新的推荐数据源');
+            }
+        } catch (e) {
+            console.error('Regenerate sources failed:', e);
+            alert('搜索数据源失败，请重试');
+        } finally {
+            clearInterval(progressInterval);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '🔄 AI 新增数据源';
+            }
+        }
     }
 
     /**
@@ -711,7 +1449,16 @@
         refreshTopic,
         editTopic,
         deleteTopic,
-        loadTopics
+        loadTopics,
+        regenerateSources,
+        showManualAddForm,
+        hideManualAddForm,
+        switchManualTab,
+        addManualSource,
+        searchWechatMps,
+        doMpSearch,
+        toggleMpSelection,
+        removeMpSelection
     };
 
     // Initialize when DOM is ready

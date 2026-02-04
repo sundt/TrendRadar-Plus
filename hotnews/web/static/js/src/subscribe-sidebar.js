@@ -537,6 +537,7 @@ function renderSourcesTab() {
     // Count sources by type
     const rssCount = state.allSources.filter(s => s.type === 'rss').length;
     const customCount = state.allSources.filter(s => s.type === 'custom').length;
+    const userCount = state.allSources.filter(s => s.category === 'user').length;
     
     // Check if we need to create the structure or just update the list
     const searchInput = document.getElementById('sourceSearchInput');
@@ -546,12 +547,22 @@ function renderSourcesTab() {
         let html = `
             <div class="subscribe-search-box">
                 <input type="text" class="subscribe-search-input" id="sourceSearchInput" 
-                       placeholder="搜索订阅源/添加新的请联系管理员..." value="${escapeHtml(state.searchQuery)}">
+                       placeholder="搜索订阅源..." value="${escapeHtml(state.searchQuery)}">
+                <button class="subscribe-add-rss-btn" id="addRssBtn" title="添加 RSS 源">+ 添加</button>
             </div>
             <div class="subscribe-filters" id="sourceFilters">
                 <button class="subscribe-filter-btn ${state.typeFilter === 'all' ? 'active' : ''}" data-filter="all">全部 (${state.allSources.length})</button>
                 <button class="subscribe-filter-btn ${state.typeFilter === 'rss' ? 'active' : ''}" data-filter="rss">📰 RSS (${rssCount})</button>
                 <button class="subscribe-filter-btn ${state.typeFilter === 'custom' ? 'active' : ''}" data-filter="custom">🔗 自定义 (${customCount})</button>
+            </div>
+            <div class="subscribe-add-rss-form" id="addRssForm" style="display:none;">
+                <div class="subscribe-add-rss-title">添加新的 RSS 源</div>
+                <input type="text" class="subscribe-form-input" id="addRssName" placeholder="名称（可选）">
+                <input type="text" class="subscribe-form-input" id="addRssUrl" placeholder="RSS URL（必填）">
+                <div class="subscribe-add-rss-actions">
+                    <button class="subscribe-add-rss-cancel" id="addRssCancel">取消</button>
+                    <button class="subscribe-add-rss-submit" id="addRssSubmit">验证并添加</button>
+                </div>
             </div>
             <div class="subscribe-list-container" id="sourceListContainer"></div>
         `;
@@ -564,6 +575,63 @@ function renderSourcesTab() {
             state.displayCount = 100; // Reset display count on search
             renderSourcesTab();
         }, 300));
+        
+        // Bind add RSS button
+        const addRssBtn = document.getElementById('addRssBtn');
+        const addRssForm = document.getElementById('addRssForm');
+        const addRssCancel = document.getElementById('addRssCancel');
+        const addRssSubmit = document.getElementById('addRssSubmit');
+        
+        addRssBtn?.addEventListener('click', () => {
+            addRssForm.style.display = addRssForm.style.display === 'none' ? 'block' : 'none';
+        });
+        
+        addRssCancel?.addEventListener('click', () => {
+            addRssForm.style.display = 'none';
+            document.getElementById('addRssName').value = '';
+            document.getElementById('addRssUrl').value = '';
+        });
+        
+        addRssSubmit?.addEventListener('click', async () => {
+            const name = document.getElementById('addRssName').value.trim();
+            const url = document.getElementById('addRssUrl').value.trim();
+            
+            if (!url) {
+                showToast('请输入 RSS URL');
+                return;
+            }
+            
+            addRssSubmit.disabled = true;
+            addRssSubmit.textContent = '验证中...';
+            
+            try {
+                const resp = await fetch('/api/sources/add-rss', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, url })
+                });
+                
+                const data = await resp.json();
+                
+                if (resp.ok && data.ok) {
+                    showToast(data.message || 'RSS 源添加成功');
+                    addRssForm.style.display = 'none';
+                    document.getElementById('addRssName').value = '';
+                    document.getElementById('addRssUrl').value = '';
+                    
+                    // Reload sources
+                    state.loaded = false;
+                    await loadSourcesTab();
+                } else {
+                    showToast(data.detail || data.error || '添加失败');
+                }
+            } catch (e) {
+                showToast('添加失败: ' + e.message);
+            } finally {
+                addRssSubmit.disabled = false;
+                addRssSubmit.textContent = '验证并添加';
+            }
+        });
         
         // Bind type filters
         const filters = document.getElementById('sourceFilters');
