@@ -3,11 +3,96 @@ import hashlib
 import os
 import secrets
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import unquote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
+
+
+def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Inject user's tracked topics as categories.
+    Topics are inserted after 'my-tags' category.
+    """
+    try:
+        # Get user ID from session
+        from hotnews.kernel.auth.auth_api import _get_session_token
+        from hotnews.kernel.auth.auth_service import validate_session
+        
+        token = _get_session_token(request)
+        if not token:
+            return data
+        
+        user = validate_session(token)
+        if not user or not user.get("id"):
+            return data
+        
+        user_id = user["id"]
+        
+        # Get user's topics from database
+        from hotnews.storage.topic_storage import TopicStorage
+        storage = TopicStorage()
+        topics = storage.get_user_topics(user_id)
+        
+        if not topics:
+            return data
+        
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(cats, dict):
+            return data
+        
+        # Build new categories dict with topics inserted after my-tags
+        new_cats = {}
+        for k, v in cats.items():
+            new_cats[k] = v
+            if k == "my-tags":
+                # Insert topics after my-tags
+                for topic in topics:
+                    topic_cat_id = f"topic-{topic['id']}"
+                    if topic_cat_id not in new_cats:
+                        new_cats[topic_cat_id] = {
+                            "id": topic_cat_id,
+                            "name": topic.get("name", "主题"),
+                            "icon": topic.get("icon", "🏷️"),
+                            "platforms": {},
+                            "news_count": 0,
+                            "filtered_count": 0,
+                            "is_new": False,
+                            "requires_auth": True,
+                            "is_dynamic": True,
+                            "is_topic": True,
+                            "topic_id": topic["id"],
+                            "keywords": topic.get("keywords", []),
+                        }
+        
+        # If my-tags not found, append topics at the beginning
+        if not any(k.startswith("topic-") for k in new_cats):
+            topic_cats = {}
+            for topic in topics:
+                topic_cat_id = f"topic-{topic['id']}"
+                topic_cats[topic_cat_id] = {
+                    "id": topic_cat_id,
+                    "name": topic.get("name", "主题"),
+                    "icon": topic.get("icon", "🏷️"),
+                    "platforms": {},
+                    "news_count": 0,
+                    "filtered_count": 0,
+                    "is_new": False,
+                    "requires_auth": True,
+                    "is_dynamic": True,
+                    "is_topic": True,
+                    "topic_id": topic["id"],
+                    "keywords": topic.get("keywords", []),
+                }
+            new_cats = {**topic_cats, **new_cats}
+        
+        data["categories"] = new_cats
+        return data
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug(f"Failed to inject user topics: {e}")
+        return data
 
 
 def _inject_my_tags_category(data: Dict[str, Any]) -> Dict[str, Any]:

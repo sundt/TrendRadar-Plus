@@ -2789,6 +2789,13 @@ async def api_news(
     except Exception:
         pass
 
+    # Inject user's tracked topics as categories
+    try:
+        from .page_rendering import _inject_user_topics_as_categories
+        data = _inject_user_topics_as_categories(data, request)
+    except Exception:
+        pass
+
     try:
         data = _inject_rss_subscription_news_into_data(request=request, data=data)
     except Exception:

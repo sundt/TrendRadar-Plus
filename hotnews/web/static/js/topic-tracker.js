@@ -142,20 +142,16 @@
         
         console.log('[TopicTracker] New topic button added to tabs');
         
-        // Create topics container in my-tags tab
-        const myTagsGrid = document.getElementById('myTagsGrid');
-        if (myTagsGrid && !document.getElementById('topicSectionsContainer')) {
-            const topicsContainer = document.createElement('div');
-            topicsContainer.id = 'topicSectionsContainer';
-            myTagsGrid.parentNode.insertBefore(topicsContainer, myTagsGrid);
-        }
-        
         // 监听 DOM 变化，如果按钮被移除则重新添加
         const observer = new MutationObserver((mutations) => {
             if (!document.getElementById('newTopicBtn')) {
                 console.log('[TopicTracker] Button removed, re-adding...');
                 observer.disconnect();
-                setTimeout(addNewTopicButton, 100);
+                setTimeout(() => {
+                    addNewTopicButton();
+                    // 重新设置主题 tab 的事件监听
+                    setupTopicTabListeners();
+                }, 100);
             }
         });
         observer.observe(categoryTabs, { childList: true, subtree: false });
@@ -171,126 +167,57 @@
             
             if (data.ok) {
                 topics = data.topics || [];
-                renderTopicTabs();
+                // 主题 tabs 现在由服务端注入，不需要前端渲染
+                // 但需要设置事件监听来加载新闻
+                setupTopicTabListeners();
             } else {
                 // 未登录或其他错误，清空主题
                 console.log('[TopicTracker] Load topics failed:', data.detail || data.error);
                 topics = [];
-                renderTopicTabs();
             }
         } catch (e) {
             console.error('Failed to load topics:', e);
             topics = [];
-            renderTopicTabs();
         }
+    }
+
+    /**
+     * Setup click listeners for topic tabs to load news
+     */
+    function setupTopicTabListeners() {
+        // 监听 tab 切换，当切换到主题 tab 时加载新闻
+        document.querySelectorAll('.category-tab[data-category^="topic-"]').forEach(tab => {
+            const catId = tab.dataset.category;
+            const topicId = catId.replace('topic-', '');
+            
+            // 添加点击事件来加载新闻
+            tab.addEventListener('click', () => {
+                setTimeout(() => loadTopicNewsIfNeeded(topicId), 100);
+            });
+        });
+    }
+
+    /**
+     * Load topic news if not already loaded
+     */
+    function loadTopicNewsIfNeeded(topicId) {
+        const grid = document.getElementById(`topicCards-${topicId}`);
+        if (!grid) return;
+        
+        // 检查是否已加载（没有 placeholder）
+        if (!grid.querySelector('.news-placeholder')) return;
+        
+        loadTopicNews(topicId);
     }
 
     /**
      * Render topic tabs in the category tabs bar
+     * @deprecated 主题 tabs 现在由服务端注入，此函数保留用于兼容
      */
     function renderTopicTabs() {
-        const categoryTabs = document.querySelector('.category-tabs');
-        const tabContentArea = document.querySelector('.tab-content-area');
-        if (!categoryTabs || !tabContentArea) {
-            // DOM not ready, retry later
-            console.log('[TopicTracker] DOM not ready for rendering topics, retrying...');
-            setTimeout(renderTopicTabs, 500);
-            return;
-        }
-        
-        // Remove existing topic tabs and panes
-        document.querySelectorAll('.category-tab.topic-tab').forEach(el => el.remove());
-        document.querySelectorAll('.tab-pane.topic-pane').forEach(el => el.remove());
-        
-        // Find the "新建主题" button to insert after it
-        const newTopicBtn = document.getElementById('newTopicBtn');
-        const insertAfter = newTopicBtn || categoryTabs.firstChild;
-        
-        // Add a tab and pane for each topic
-        topics.forEach((topic, index) => {
-            // Create tab
-            const tab = document.createElement('div');
-            tab.className = 'category-tab topic-tab';
-            tab.dataset.category = `topic-${topic.id}`;
-            tab.dataset.topicId = topic.id;
-            tab.innerHTML = `
-                <div class="category-tab-icon">${topic.icon || '🏷️'}</div>
-                <div class="category-tab-name">${escapeHtml(topic.name)}</div>
-            `;
-            tab.onclick = function() {
-                switchToTopicTab(topic.id);
-            };
-            // Add right-click context menu - handled by extending existing category menu
-            tab.dataset.topicId = topic.id;
-            tab.dataset.topicName = topic.name;
-            
-            // Insert after newTopicBtn
-            if (insertAfter && insertAfter.nextSibling) {
-                categoryTabs.insertBefore(tab, insertAfter.nextSibling);
-            } else {
-                categoryTabs.appendChild(tab);
-            }
-            
-            // Create tab pane (without header buttons - use right-click menu instead)
-            const pane = document.createElement('div');
-            pane.className = 'tab-pane topic-pane';
-            pane.id = `tab-topic-${topic.id}`;
-            pane.innerHTML = `
-                <div class="platform-grid" id="topicCards-${topic.id}">
-                    ${topic.keywords.map(kw => renderKeywordCardSkeleton(kw)).join('')}
-                </div>
-            `;
-            tabContentArea.appendChild(pane);
-        });
-        
-        console.log('[TopicTracker] Rendered', topics.length, 'topic tabs');
-    }
-
-    /**
-     * Switch to a topic tab
-     */
-    function switchToTopicTab(topicId) {
-        // Deactivate all tabs
-        document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        
-        // Activate topic tab
-        const tab = document.querySelector(`.category-tab[data-category="topic-${topicId}"]`);
-        const pane = document.getElementById(`tab-topic-${topicId}`);
-        
-        if (tab) tab.classList.add('active');
-        if (pane) {
-            pane.classList.add('active');
-            // Load news if not loaded yet
-            const grid = pane.querySelector('.platform-grid');
-            if (grid && grid.querySelector('.news-placeholder')) {
-                loadTopicNews(topicId);
-            }
-        }
-    }
-
-    /**
-     * Render a single topic section (legacy - kept for compatibility)
-     */
-    function renderTopicSection(topic) {
-        return `
-            <div class="topic-section" data-topic-id="${topic.id}">
-                <div class="topic-section-header">
-                    <div class="topic-section-title">
-                        <span class="topic-section-icon">${topic.icon || '🏷️'}</span>
-                        <span>${escapeHtml(topic.name)}</span>
-                    </div>
-                    <div class="topic-section-actions">
-                        <button class="topic-section-btn" onclick="TopicTracker.refreshTopic('${topic.id}')" title="刷新">🔄</button>
-                        <button class="topic-section-btn" onclick="TopicTracker.editTopic('${topic.id}')" title="配置">⚙️</button>
-                        <button class="topic-section-btn" onclick="TopicTracker.deleteTopic('${topic.id}')" title="删除">🗑️</button>
-                    </div>
-                </div>
-                <div class="topic-cards-grid" id="topicCards-${topic.id}">
-                    ${topic.keywords.map(kw => renderKeywordCardSkeleton(kw)).join('')}
-                </div>
-            </div>
-        `;
+        // 主题 tabs 现在由服务端通过 /api/news 注入
+        // 前端只需要设置事件监听
+        setupTopicTabListeners();
     }
 
     /**
