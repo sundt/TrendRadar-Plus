@@ -3,6 +3,53 @@
  * Styles for topic tracking feature in viewer.html
  */
 
+/* Topic Tab in Category Bar */
+.topic-tab {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
+    border: 1px solid #86efac !important;
+}
+
+.topic-tab:hover {
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important;
+}
+
+.topic-tab.active {
+    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+    color: white !important;
+    border-color: #16a34a !important;
+}
+
+.topic-tab.active .category-tab-icon,
+.topic-tab.active .category-tab-name {
+    color: white !important;
+}
+
+/* Topic Pane Header */
+.topic-pane-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.topic-pane-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.topic-pane-actions {
+    display: flex;
+    gap: 8px;
+}
+
 /* Topic Section Container */
 .topic-section {
     margin-bottom: 20px;
@@ -60,7 +107,25 @@
     gap: 12px;
 }
 
-/* New Topic Button */
+/* New Topic Button in Tab Bar */
+.new-topic-tab {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    color: white !important;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.new-topic-tab:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.new-topic-tab .category-tab-icon,
+.new-topic-tab .category-tab-name {
+    color: white !important;
+}
+
+/* Original New Topic Button (kept for compatibility) */
 .new-topic-btn {
     display: inline-flex;
     align-items: center;

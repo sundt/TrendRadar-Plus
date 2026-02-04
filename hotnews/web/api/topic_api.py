@@ -25,18 +25,34 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/topics", tags=["topics"])
 
+SESSION_COOKIE_NAME = "hotnews_session"
+
+
+def _get_session_token(request: Request) -> str:
+    """Get session token from cookie."""
+    return request.cookies.get(SESSION_COOKIE_NAME, "")
+
 
 def _get_current_user(request: Request) -> dict:
-    """Get current user from request state."""
-    user = getattr(request.state, "user", None)
-    if not user:
+    """Get current user from session cookie."""
+    from hotnews.kernel.auth.auth_service import validate_session
+    
+    session_token = _get_session_token(request)
+    if not session_token:
         raise HTTPException(status_code=401, detail="请先登录")
-    return user
+    
+    conn = get_user_db_conn(request.app.state.project_root)
+    is_valid, user_info = validate_session(conn, session_token)
+    
+    if not is_valid or not user_info:
+        raise HTTPException(status_code=401, detail="请先登录")
+    
+    return user_info
 
 
 def _get_storage(request: Request) -> TopicStorage:
     """Get topic storage instance."""
-    conn = get_user_db_conn()
+    conn = get_user_db_conn(request.app.state.project_root)
     # Ensure tables exist
     init_topic_tables(conn)
     return TopicStorage(conn)
@@ -391,33 +407,8 @@ def _search_news_by_keyword(
                     "published_at": row[4]
                 })
     
-    # Search in news_items (hot news)
-    remaining = limit - len(results)
-    if remaining > 0:
-        cur = conn.execute(
-            """
-            SELECT stable_id, platform, title, url, timestamp
-            FROM news_items
-            WHERE title LIKE ?
-            ORDER BY timestamp DESC
-            LIMIT ?
-            """,
-            (f"%{keyword}%", remaining + 50)
-        )
-        for row in cur.fetchall():
-            if len(results) >= limit:
-                break
-            norm = normalize_title(row[2])
-            if norm not in seen_titles:
-                seen_titles.add(norm)
-                results.append({
-                    "id": f"news-{row[0]}",
-                    "title": row[2],
-                    "url": row[3],
-                    "source": row[1],
-                    "source_type": "news",
-                    "published_at": row[4]
-                })
+    # Search in wechat_mp_articles is not needed - all data is in rss_entries
+    # (including mp- prefixed entries for WeChat MP articles)
     
     # Sort by published_at desc
     results.sort(key=lambda x: x.get("published_at") or 0, reverse=True)

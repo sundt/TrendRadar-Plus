@@ -23,6 +23,15 @@
      * Initialize topic tracker
      */
     function init() {
+        console.log('[TopicTracker] Initializing...');
+        
+        // Ensure body exists
+        if (!document.body) {
+            console.warn('[TopicTracker] document.body not ready, retrying...');
+            setTimeout(init, 100);
+            return;
+        }
+        
         createModal();
         loadTopics();
         addNewTopicButton();
@@ -89,21 +98,26 @@
         modalOverlay = document.getElementById('topicModalOverlay');
         modalTitle = document.getElementById('topicModalTitle');
         topicNameInput = document.getElementById('topicNameInput');
-        iconDisplay = document.getElementById('topicIconDisplay');
         keywordsContainer = document.getElementById('topicKeywordsContainer');
         sourcesContainer = document.getElementById('topicSourcesContainer');
         aiGenerateBtn = document.getElementById('topicAiBtn');
         submitBtn = document.getElementById('topicSubmitBtn');
+        
+        console.log('[TopicTracker] Modal created, elements cached:', {
+            modalOverlay: !!modalOverlay,
+            modalTitle: !!modalTitle,
+            topicNameInput: !!topicNameInput
+        });
     }
 
     /**
-     * Add "New Topic" button to my-tags tab
+     * Add "New Topic" button to category tabs (left of 我的关注)
      */
     function addNewTopicButton() {
-        // Find my-tags grid
-        const myTagsGrid = document.getElementById('myTagsGrid');
-        if (!myTagsGrid) {
-            console.warn('myTagsGrid not found, will retry later');
+        // Find category tabs container
+        const categoryTabs = document.querySelector('.category-tabs');
+        if (!categoryTabs) {
+            console.warn('[TopicTracker] category-tabs not found, will retry later');
             setTimeout(addNewTopicButton, 1000);
             return;
         }
@@ -111,24 +125,30 @@
         // Check if button already exists
         if (document.getElementById('newTopicBtn')) return;
         
-        // Create button container
-        const btnContainer = document.createElement('div');
-        btnContainer.id = 'topicTrackerHeader';
-        btnContainer.style.cssText = 'margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;';
-        btnContainer.innerHTML = `
-            <span style="font-size: 14px; color: #6b7280;">我的主题追踪</span>
-            <button class="new-topic-btn" id="newTopicBtn" onclick="TopicTracker.openModal()">
-                + 新建主题
-            </button>
+        // Create the button element
+        const btn = document.createElement('div');
+        btn.className = 'category-tab new-topic-tab';
+        btn.id = 'newTopicBtn';
+        btn.innerHTML = `
+            <div class="category-tab-icon">➕</div>
+            <div class="category-tab-name">新建主题</div>
         `;
+        btn.onclick = function() {
+            TopicTracker.openModal();
+        };
         
-        // Insert before grid
-        myTagsGrid.parentNode.insertBefore(btnContainer, myTagsGrid);
+        // Insert at the beginning (before 我的关注)
+        categoryTabs.insertBefore(btn, categoryTabs.firstChild);
         
-        // Create topics container
-        const topicsContainer = document.createElement('div');
-        topicsContainer.id = 'topicSectionsContainer';
-        myTagsGrid.parentNode.insertBefore(topicsContainer, myTagsGrid);
+        console.log('[TopicTracker] New topic button added to tabs');
+        
+        // Create topics container in my-tags tab
+        const myTagsGrid = document.getElementById('myTagsGrid');
+        if (myTagsGrid && !document.getElementById('topicSectionsContainer')) {
+            const topicsContainer = document.createElement('div');
+            topicsContainer.id = 'topicSectionsContainer';
+            myTagsGrid.parentNode.insertBefore(topicsContainer, myTagsGrid);
+        }
     }
 
     /**
@@ -141,7 +161,7 @@
             
             if (data.ok) {
                 topics = data.topics || [];
-                renderTopics();
+                renderTopicTabs();
             }
         } catch (e) {
             console.error('Failed to load topics:', e);
@@ -149,27 +169,93 @@
     }
 
     /**
-     * Render all topics
+     * Render topic tabs in the category tabs bar
      */
-    function renderTopics() {
-        const container = document.getElementById('topicSectionsContainer');
-        if (!container) return;
+    function renderTopicTabs() {
+        const categoryTabs = document.querySelector('.category-tabs');
+        const tabContentArea = document.querySelector('.tab-content-area');
+        if (!categoryTabs || !tabContentArea) return;
         
-        if (topics.length === 0) {
-            container.innerHTML = '';
-            return;
-        }
+        // Remove existing topic tabs and panes
+        document.querySelectorAll('.category-tab.topic-tab').forEach(el => el.remove());
+        document.querySelectorAll('.tab-pane.topic-pane').forEach(el => el.remove());
         
-        container.innerHTML = topics.map(topic => renderTopicSection(topic)).join('');
+        // Find the "新建主题" button to insert after it
+        const newTopicBtn = document.getElementById('newTopicBtn');
+        const insertAfter = newTopicBtn || categoryTabs.firstChild;
         
-        // Load news for each topic
-        topics.forEach(topic => {
-            loadTopicNews(topic.id);
+        // Add a tab and pane for each topic
+        topics.forEach((topic, index) => {
+            // Create tab
+            const tab = document.createElement('div');
+            tab.className = 'category-tab topic-tab';
+            tab.dataset.category = `topic-${topic.id}`;
+            tab.innerHTML = `
+                <div class="category-tab-icon">${topic.icon || '🏷️'}</div>
+                <div class="category-tab-name">${escapeHtml(topic.name)}</div>
+            `;
+            tab.onclick = function() {
+                switchToTopicTab(topic.id);
+            };
+            
+            // Insert after newTopicBtn
+            if (insertAfter && insertAfter.nextSibling) {
+                categoryTabs.insertBefore(tab, insertAfter.nextSibling);
+            } else {
+                categoryTabs.appendChild(tab);
+            }
+            
+            // Create tab pane
+            const pane = document.createElement('div');
+            pane.className = 'tab-pane topic-pane';
+            pane.id = `tab-topic-${topic.id}`;
+            pane.innerHTML = `
+                <div class="topic-pane-header">
+                    <div class="topic-pane-title">
+                        <span>${topic.icon || '🏷️'}</span>
+                        <span>${escapeHtml(topic.name)}</span>
+                    </div>
+                    <div class="topic-pane-actions">
+                        <button class="topic-section-btn" onclick="TopicTracker.refreshTopic('${topic.id}')" title="刷新">🔄</button>
+                        <button class="topic-section-btn" onclick="TopicTracker.editTopic('${topic.id}')" title="编辑">⚙️</button>
+                        <button class="topic-section-btn" onclick="TopicTracker.deleteTopic('${topic.id}')" title="删除">🗑️</button>
+                    </div>
+                </div>
+                <div class="platform-grid" id="topicCards-${topic.id}">
+                    ${topic.keywords.map(kw => renderKeywordCardSkeleton(kw)).join('')}
+                </div>
+            `;
+            tabContentArea.appendChild(pane);
         });
+        
+        console.log('[TopicTracker] Rendered', topics.length, 'topic tabs');
     }
 
     /**
-     * Render a single topic section
+     * Switch to a topic tab
+     */
+    function switchToTopicTab(topicId) {
+        // Deactivate all tabs
+        document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        
+        // Activate topic tab
+        const tab = document.querySelector(`.category-tab[data-category="topic-${topicId}"]`);
+        const pane = document.getElementById(`tab-topic-${topicId}`);
+        
+        if (tab) tab.classList.add('active');
+        if (pane) {
+            pane.classList.add('active');
+            // Load news if not loaded yet
+            const grid = pane.querySelector('.platform-grid');
+            if (grid && grid.querySelector('.news-placeholder')) {
+                loadTopicNews(topicId);
+            }
+        }
+    }
+
+    /**
+     * Render a single topic section (legacy - kept for compatibility)
      */
     function renderTopicSection(topic) {
         return `
