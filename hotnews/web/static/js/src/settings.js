@@ -193,6 +193,11 @@ export const settings = {
         }
 
         // Get server's category order (already sorted by sort_order from backend)
+        // Note: _defaultCategories may be null if not initialized yet, skip cleanup in that case
+        if (!_defaultCategories) {
+            return merged;
+        }
+        
         const serverOrder = Object.keys(_defaultCategories);
         const serverCategorySet = new Set(serverOrder);
         const customCategoryIds = new Set((merged.customCategories || []).map(c => c.id));
@@ -1019,38 +1024,36 @@ export const settings = {
     },
 
     applyCategoryConfigToData(serverCategories) {
-        const merged = this.getMergedCategoryConfig();
-
+        // Initialize _defaultCategories from serverCategories FIRST
+        // This ensures getMergedCategoryConfig has correct data
         if (!_defaultCategories) {
             _defaultCategories = {};
             _allPlatforms = {};
-            Object.entries(serverCategories).forEach(([catId, cat]) => {
+        }
+        
+        // Always update from serverCategories
+        Object.entries(serverCategories).forEach(([catId, cat]) => {
+            if (!_defaultCategories[catId]) {
                 _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
-                Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
-                    _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
-                });
-            });
-        } else {
-            Object.entries(serverCategories).forEach(([catId, cat]) => {
-                if (!_defaultCategories[catId]) {
-                    _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
-                } else {
-                    if (!_defaultCategories[catId].platforms) _defaultCategories[catId].platforms = [];
-                    const existingPlatforms = new Set(_defaultCategories[catId].platforms || []);
-                    Object.keys(cat.platforms || {}).forEach((pid) => {
-                        if (!existingPlatforms.has(pid)) {
-                            _defaultCategories[catId].platforms.push(pid);
-                        }
-                    });
-                }
-
-                Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
-                    if (!_allPlatforms[pid]) {
-                        _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
+            } else {
+                if (!_defaultCategories[catId].platforms) _defaultCategories[catId].platforms = [];
+                const existingPlatforms = new Set(_defaultCategories[catId].platforms || []);
+                Object.keys(cat.platforms || {}).forEach((pid) => {
+                    if (!existingPlatforms.has(pid)) {
+                        _defaultCategories[catId].platforms.push(pid);
                     }
                 });
+            }
+
+            Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
+                if (!_allPlatforms[pid]) {
+                    _allPlatforms[pid] = { id: pid, name: p.name, defaultCategory: catId, data: p };
+                }
             });
-        }
+        });
+
+        // Now get merged config (with _defaultCategories properly initialized)
+        const merged = this.getMergedCategoryConfig();
 
         const allPlatformData = {};
         Object.values(serverCategories).forEach(cat => {
