@@ -24,31 +24,7 @@
     color: white !important;
 }
 
-/* Topic Pane Header */
-.topic-pane-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: white;
-    border-radius: 12px;
-    margin-bottom: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.topic-pane-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 18px;
-    font-weight: 600;
-    color: #1f2937;
-}
-
-.topic-pane-actions {
-    display: flex;
-    gap: 8px;
-}
+/* Topic Pane - no header needed, use right-click menu */
 
 /* Topic Section Container */
 .topic-section {
@@ -518,4 +494,80 @@
     .topic-cards-grid {
         grid-template-columns: 1fr;
     }
+}
+
+
+/* ==================== Topic Context Menu ==================== */
+
+.topic-context-menu-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s;
+}
+
+.topic-context-menu-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.topic-context-menu {
+    position: fixed;
+    z-index: 1000;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    padding: 6px 0;
+    min-width: 160px;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.95);
+    transform-origin: top left;
+    transition: opacity 0.15s, transform 0.15s, visibility 0.15s;
+}
+
+.topic-context-menu.show {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+}
+
+.topic-context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    transition: background 0.15s;
+}
+
+.topic-context-menu-item:hover {
+    background: #f3f4f6;
+}
+
+.topic-context-menu-item.danger {
+    color: #dc2626;
+}
+
+.topic-context-menu-item.danger:hover {
+    background: #fef2f2;
+}
+
+.topic-context-menu-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+}
+
+.topic-context-menu-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 6px 0;
 }

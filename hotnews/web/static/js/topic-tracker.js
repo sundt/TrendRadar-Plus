@@ -190,12 +190,18 @@
             const tab = document.createElement('div');
             tab.className = 'category-tab topic-tab';
             tab.dataset.category = `topic-${topic.id}`;
+            tab.dataset.topicId = topic.id;
             tab.innerHTML = `
                 <div class="category-tab-icon">${topic.icon || '🏷️'}</div>
                 <div class="category-tab-name">${escapeHtml(topic.name)}</div>
             `;
             tab.onclick = function() {
                 switchToTopicTab(topic.id);
+            };
+            // Add right-click context menu
+            tab.oncontextmenu = function(e) {
+                e.preventDefault();
+                showTopicContextMenu(e.clientX, e.clientY, topic);
             };
             
             // Insert after newTopicBtn
@@ -205,22 +211,11 @@
                 categoryTabs.appendChild(tab);
             }
             
-            // Create tab pane
+            // Create tab pane (without header buttons - use right-click menu instead)
             const pane = document.createElement('div');
             pane.className = 'tab-pane topic-pane';
             pane.id = `tab-topic-${topic.id}`;
             pane.innerHTML = `
-                <div class="topic-pane-header">
-                    <div class="topic-pane-title">
-                        <span>${topic.icon || '🏷️'}</span>
-                        <span>${escapeHtml(topic.name)}</span>
-                    </div>
-                    <div class="topic-pane-actions">
-                        <button class="topic-section-btn" onclick="TopicTracker.refreshTopic('${topic.id}')" title="刷新">🔄</button>
-                        <button class="topic-section-btn" onclick="TopicTracker.editTopic('${topic.id}')" title="编辑">⚙️</button>
-                        <button class="topic-section-btn" onclick="TopicTracker.deleteTopic('${topic.id}')" title="删除">🗑️</button>
-                    </div>
-                </div>
                 <div class="platform-grid" id="topicCards-${topic.id}">
                     ${topic.keywords.map(kw => renderKeywordCardSkeleton(kw)).join('')}
                 </div>
@@ -662,6 +657,10 @@
             const data = await response.json();
             
             if (data.ok) {
+                // Switch to my-tags tab before removing
+                if (typeof window.switchTab === 'function') {
+                    window.switchTab('my-tags');
+                }
                 loadTopics();
             } else {
                 alert(data.error || '删除失败');
@@ -669,6 +668,109 @@
         } catch (e) {
             console.error('Delete topic failed:', e);
             alert('删除失败，请重试');
+        }
+    }
+
+    // ==================== Topic Context Menu ====================
+    
+    let topicMenuEl = null;
+    let topicMenuBackdrop = null;
+    let currentMenuTopic = null;
+    
+    /**
+     * Create topic context menu elements
+     */
+    function ensureTopicMenuExists() {
+        if (topicMenuEl) return;
+        
+        // Backdrop
+        topicMenuBackdrop = document.createElement('div');
+        topicMenuBackdrop.className = 'topic-context-menu-backdrop';
+        topicMenuBackdrop.addEventListener('click', hideTopicContextMenu);
+        document.body.appendChild(topicMenuBackdrop);
+        
+        // Menu
+        topicMenuEl = document.createElement('div');
+        topicMenuEl.className = 'topic-context-menu';
+        topicMenuEl.innerHTML = `
+            <div class="topic-context-menu-item" data-action="refresh">
+                <span class="topic-context-menu-icon">🔄</span>
+                <span>刷新</span>
+            </div>
+            <div class="topic-context-menu-item" data-action="edit">
+                <span class="topic-context-menu-icon">⚙️</span>
+                <span>编辑主题</span>
+            </div>
+            <div class="topic-context-menu-divider"></div>
+            <div class="topic-context-menu-item danger" data-action="delete">
+                <span class="topic-context-menu-icon">🗑️</span>
+                <span>删除主题</span>
+            </div>
+        `;
+        topicMenuEl.addEventListener('click', handleTopicMenuClick);
+        document.body.appendChild(topicMenuEl);
+    }
+    
+    /**
+     * Show topic context menu
+     */
+    function showTopicContextMenu(x, y, topic) {
+        ensureTopicMenuExists();
+        currentMenuTopic = topic;
+        
+        // Position menu
+        const menuWidth = 160;
+        const menuHeight = 140;
+        const padding = 10;
+        
+        let finalX = x;
+        let finalY = y;
+        
+        if (x + menuWidth > window.innerWidth - padding) {
+            finalX = window.innerWidth - menuWidth - padding;
+        }
+        if (finalY + menuHeight > window.innerHeight - padding) {
+            finalY = y - menuHeight;
+        }
+        
+        topicMenuEl.style.left = `${finalX}px`;
+        topicMenuEl.style.top = `${finalY}px`;
+        
+        topicMenuBackdrop.classList.add('show');
+        topicMenuEl.classList.add('show');
+    }
+    
+    /**
+     * Hide topic context menu
+     */
+    function hideTopicContextMenu() {
+        if (topicMenuEl) topicMenuEl.classList.remove('show');
+        if (topicMenuBackdrop) topicMenuBackdrop.classList.remove('show');
+        currentMenuTopic = null;
+    }
+    
+    /**
+     * Handle topic menu item click
+     */
+    function handleTopicMenuClick(e) {
+        const item = e.target.closest('.topic-context-menu-item');
+        if (!item || !currentMenuTopic) return;
+        
+        const action = item.dataset.action;
+        const topic = currentMenuTopic;
+        
+        hideTopicContextMenu();
+        
+        switch (action) {
+            case 'refresh':
+                refreshTopic(topic.id);
+                break;
+            case 'edit':
+                editTopic(topic.id);
+                break;
+            case 'delete':
+                deleteTopic(topic.id);
+                break;
         }
     }
 
