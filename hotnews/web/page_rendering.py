@@ -15,6 +15,9 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
     Inject user's tracked topics as categories.
     Topics are inserted after 'my-tags' category.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         # Get user ID from session
         from hotnews.kernel.auth.auth_api import _get_session_token
@@ -22,13 +25,16 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         
         token = _get_session_token(request)
         if not token:
+            logger.debug("No session token found for topic injection")
             return data
         
         user = validate_session(token)
         if not user or not user.get("id"):
+            logger.debug("No valid user found for topic injection")
             return data
         
         user_id = user["id"]
+        logger.info(f"Injecting topics for user {user_id}")
         
         # Get database connection
         from hotnews.web.user_db import get_user_db_conn
@@ -39,12 +45,15 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         
         user_db_conn = get_user_db_conn(project_root)
         if not user_db_conn:
+            logger.warning("No database connection for topic injection")
             return data
         
         # Get user's topics from database
         from hotnews.storage.topic_storage import TopicStorage
         storage = TopicStorage(user_db_conn)
         topics = storage.get_user_topics(user_id)
+        
+        logger.info(f"Found {len(topics) if topics else 0} topics for user {user_id}")
         
         if not topics:
             return data
@@ -76,6 +85,7 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
                             "topic_id": topic["id"],
                             "keywords": topic.get("keywords", []),
                         }
+                        logger.info(f"Injected topic category: {topic_cat_id} ({topic.get('name')})")
         
         # If my-tags not found, append topics at the beginning
         if not any(k.startswith("topic-") for k in new_cats):
@@ -97,12 +107,13 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
                     "keywords": topic.get("keywords", []),
                 }
             new_cats = {**topic_cats, **new_cats}
+            logger.info(f"Injected {len(topic_cats)} topics at beginning (my-tags not found)")
         
         data["categories"] = new_cats
         return data
     except Exception as e:
         import logging
-        logging.getLogger(__name__).debug(f"Failed to inject user topics: {e}")
+        logging.getLogger(__name__).warning(f"Failed to inject user topics: {e}", exc_info=True)
         return data
 
 
