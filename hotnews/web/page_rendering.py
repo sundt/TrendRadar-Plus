@@ -200,13 +200,18 @@ def _get_asset_rev(project_root) -> str:
         return forced
 
     # Use the new esbuild output files
-    css_path = project_root / "hotnews" / "web" / "static" / "css" / "viewer.css"
-    js_path = project_root / "hotnews" / "web" / "static" / "js" / "index.js"
+    static_dir = project_root / "hotnews" / "web" / "static"
+    files_to_hash = [
+        static_dir / "css" / "viewer.css",
+        static_dir / "js" / "index.js",
+        static_dir / "css" / "topic-tracker.css",
+        static_dir / "js" / "topic-tracker.js",
+    ]
 
     h = hashlib.md5()
     found = False
 
-    for p in (css_path, js_path):
+    for p in files_to_hash:
         try:
             if p.exists():
                 h.update(p.read_bytes())
