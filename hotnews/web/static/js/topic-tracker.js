@@ -35,6 +35,13 @@
         createModal();
         loadTopics();
         addNewTopicButton();
+        
+        // Listen for viewer data rendered event to setup topic tab listeners
+        document.addEventListener('viewerDataRendered', () => {
+            console.log('[TopicTracker] viewerDataRendered event received, setting up listeners...');
+            addNewTopicButton();
+            setupTopicTabListeners();
+        });
     }
 
     /**

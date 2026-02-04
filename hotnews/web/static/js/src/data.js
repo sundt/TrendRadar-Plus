@@ -1006,6 +1006,17 @@ export const data = {
         } catch (e) {
             // ignore
         }
+
+        // Dispatch event for topic-tracker to setup listeners
+        try {
+            // Reset settings cache so topic categories are included
+            if (TR.settings && typeof TR.settings.resetDefaultCategoriesCache === 'function') {
+                TR.settings.resetDefaultCategoriesCache();
+            }
+            document.dispatchEvent(new CustomEvent('viewerDataRendered'));
+        } catch (e) {
+            // ignore
+        }
     },
 
     async refreshViewerData(opts = {}) {

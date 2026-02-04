@@ -70,6 +70,15 @@ export const settings = {
     ensureCategoryFilters,
     normalizeCategoryConfig,
 
+    /**
+     * Reset the default categories cache.
+     * Call this after DOM is updated (e.g., after viewerDataRendered event).
+     */
+    resetDefaultCategoriesCache() {
+        _defaultCategories = null;
+        _allPlatforms = null;
+    },
+
     getCategoryConfig() {
         try {
             const config = preferences.getCategoryConfig();
