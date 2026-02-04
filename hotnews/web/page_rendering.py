@@ -28,14 +28,6 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
             logger.debug("No session token found for topic injection")
             return data
         
-        user = validate_session(token)
-        if not user or not user.get("id"):
-            logger.debug("No valid user found for topic injection")
-            return data
-        
-        user_id = user["id"]
-        logger.info(f"Injecting topics for user {user_id}")
-        
         # Get database connection
         from hotnews.web.user_db import get_user_db_conn
         project_root = getattr(request.app.state, "project_root", None)
@@ -47,6 +39,15 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         if not user_db_conn:
             logger.warning("No database connection for topic injection")
             return data
+        
+        # Validate session with conn and token
+        is_valid, user_info = validate_session(user_db_conn, token)
+        if not is_valid or not user_info or not user_info.get("id"):
+            logger.debug("No valid user found for topic injection")
+            return data
+        
+        user_id = user_info["id"]
+        logger.info(f"Injecting topics for user {user_id}")
         
         # Get user's topics from database
         from hotnews.storage.topic_storage import TopicStorage
