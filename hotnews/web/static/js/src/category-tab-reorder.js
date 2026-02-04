@@ -201,12 +201,27 @@ function _showCategoryContextMenu(e, tab) {
     
     const categoryName = tab.querySelector('.category-tab-name')?.textContent?.replace(/NEW$/, '').trim() || categoryId;
     
+    // Check if this is a topic tab
+    const isTopicTab = tab.classList.contains('topic-tab');
+    const topicId = tab.dataset?.topicId;
+    
     _categoryContextMenuEl = document.createElement('div');
     _categoryContextMenuEl.className = 'tr-category-context-menu';
-    _categoryContextMenuEl.innerHTML = `
-        <div class="tr-cat-ctx-item" data-action="hide">👁️‍🗨️ 隐藏栏目</div>
-        <div class="tr-cat-ctx-item" data-action="settings" style="border-top:1px solid #e5e7eb;">⚙️ 栏目设置</div>
-    `;
+    
+    if (isTopicTab && topicId) {
+        // Topic tab menu
+        _categoryContextMenuEl.innerHTML = `
+            <div class="tr-cat-ctx-item" data-action="refresh-topic">🔄 刷新</div>
+            <div class="tr-cat-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">⚙️ 编辑主题</div>
+            <div class="tr-cat-ctx-item tr-cat-ctx-danger" data-action="delete-topic" style="border-top:1px solid #e5e7eb;">🗑️ 删除主题</div>
+        `;
+    } else {
+        // Regular category tab menu
+        _categoryContextMenuEl.innerHTML = `
+            <div class="tr-cat-ctx-item" data-action="hide">👁️‍🗨️ 隐藏栏目</div>
+            <div class="tr-cat-ctx-item" data-action="settings" style="border-top:1px solid #e5e7eb;">⚙️ 栏目设置</div>
+        `;
+    }
     
     _categoryContextMenuEl.style.cssText = `
         position: fixed;
@@ -228,6 +243,9 @@ function _showCategoryContextMenu(e, tab) {
     `;
     _categoryContextMenuEl.querySelectorAll('.tr-cat-ctx-item').forEach(item => {
         item.style.cssText = itemStyle;
+        if (item.classList.contains('tr-cat-ctx-danger')) {
+            item.style.color = '#dc2626';
+        }
         item.addEventListener('mouseenter', () => item.style.background = '#f3f4f6');
         item.addEventListener('mouseleave', () => item.style.background = 'white');
     });
@@ -243,6 +261,18 @@ function _showCategoryContextMenu(e, tab) {
         } else if (action === 'settings') {
             if (window.openCategorySettings) {
                 window.openCategorySettings();
+            }
+        } else if (action === 'refresh-topic') {
+            if (window.TopicTracker?.refreshTopic) {
+                window.TopicTracker.refreshTopic(topicId);
+            }
+        } else if (action === 'edit-topic') {
+            if (window.TopicTracker?.editTopic) {
+                window.TopicTracker.editTopic(topicId);
+            }
+        } else if (action === 'delete-topic') {
+            if (window.TopicTracker?.deleteTopic) {
+                window.TopicTracker.deleteTopic(topicId);
             }
         }
     });

@@ -198,11 +198,9 @@
             tab.onclick = function() {
                 switchToTopicTab(topic.id);
             };
-            // Add right-click context menu
-            tab.oncontextmenu = function(e) {
-                e.preventDefault();
-                showTopicContextMenu(e.clientX, e.clientY, topic);
-            };
+            // Add right-click context menu - handled by extending existing category menu
+            tab.dataset.topicId = topic.id;
+            tab.dataset.topicName = topic.name;
             
             // Insert after newTopicBtn
             if (insertAfter && insertAfter.nextSibling) {
@@ -668,109 +666,6 @@
         } catch (e) {
             console.error('Delete topic failed:', e);
             alert('删除失败，请重试');
-        }
-    }
-
-    // ==================== Topic Context Menu ====================
-    
-    let topicMenuEl = null;
-    let topicMenuBackdrop = null;
-    let currentMenuTopic = null;
-    
-    /**
-     * Create topic context menu elements
-     */
-    function ensureTopicMenuExists() {
-        if (topicMenuEl) return;
-        
-        // Backdrop
-        topicMenuBackdrop = document.createElement('div');
-        topicMenuBackdrop.className = 'topic-context-menu-backdrop';
-        topicMenuBackdrop.addEventListener('click', hideTopicContextMenu);
-        document.body.appendChild(topicMenuBackdrop);
-        
-        // Menu
-        topicMenuEl = document.createElement('div');
-        topicMenuEl.className = 'topic-context-menu';
-        topicMenuEl.innerHTML = `
-            <div class="topic-context-menu-item" data-action="refresh">
-                <span class="topic-context-menu-icon">🔄</span>
-                <span>刷新</span>
-            </div>
-            <div class="topic-context-menu-item" data-action="edit">
-                <span class="topic-context-menu-icon">⚙️</span>
-                <span>编辑主题</span>
-            </div>
-            <div class="topic-context-menu-divider"></div>
-            <div class="topic-context-menu-item danger" data-action="delete">
-                <span class="topic-context-menu-icon">🗑️</span>
-                <span>删除主题</span>
-            </div>
-        `;
-        topicMenuEl.addEventListener('click', handleTopicMenuClick);
-        document.body.appendChild(topicMenuEl);
-    }
-    
-    /**
-     * Show topic context menu
-     */
-    function showTopicContextMenu(x, y, topic) {
-        ensureTopicMenuExists();
-        currentMenuTopic = topic;
-        
-        // Position menu
-        const menuWidth = 160;
-        const menuHeight = 140;
-        const padding = 10;
-        
-        let finalX = x;
-        let finalY = y;
-        
-        if (x + menuWidth > window.innerWidth - padding) {
-            finalX = window.innerWidth - menuWidth - padding;
-        }
-        if (finalY + menuHeight > window.innerHeight - padding) {
-            finalY = y - menuHeight;
-        }
-        
-        topicMenuEl.style.left = `${finalX}px`;
-        topicMenuEl.style.top = `${finalY}px`;
-        
-        topicMenuBackdrop.classList.add('show');
-        topicMenuEl.classList.add('show');
-    }
-    
-    /**
-     * Hide topic context menu
-     */
-    function hideTopicContextMenu() {
-        if (topicMenuEl) topicMenuEl.classList.remove('show');
-        if (topicMenuBackdrop) topicMenuBackdrop.classList.remove('show');
-        currentMenuTopic = null;
-    }
-    
-    /**
-     * Handle topic menu item click
-     */
-    function handleTopicMenuClick(e) {
-        const item = e.target.closest('.topic-context-menu-item');
-        if (!item || !currentMenuTopic) return;
-        
-        const action = item.dataset.action;
-        const topic = currentMenuTopic;
-        
-        hideTopicContextMenu();
-        
-        switch (action) {
-            case 'refresh':
-                refreshTopic(topic.id);
-                break;
-            case 'edit':
-                editTopic(topic.id);
-                break;
-            case 'delete':
-                deleteTopic(topic.id);
-                break;
         }
     }
 
