@@ -52,7 +52,7 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         # Get user's topics from database
         from hotnews.storage.topic_storage import TopicStorage
         storage = TopicStorage(user_db_conn)
-        topics = storage.get_user_topics(user_id)
+        topics = storage.get_topics_by_user(str(user_id))
         
         logger.info(f"Found {len(topics) if topics else 0} topics for user {user_id}")
         
