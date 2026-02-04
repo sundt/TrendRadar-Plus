@@ -1640,7 +1640,8 @@ function getDefaultCategoryConfig() {
     return {
         version: CATEGORY_CONFIG_VERSION,
         customCategories: [],
-        hiddenDefaultCategories: [],
+        // 默认隐藏的栏目：其他平台、综合新闻、社交娱乐、科技资讯、开发者
+        hiddenDefaultCategories: ['other', 'general', 'social', 'tech_news', 'developer'],
         hiddenPlatforms: [],
         categoryOrder: Object.keys(categorySettingsState.defaultCategories || {}),
         platformOrder: {},

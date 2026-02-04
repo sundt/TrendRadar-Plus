@@ -828,3 +828,168 @@
 .topic-sources-section-title:first-child {
     margin-top: 0;
 }
+
+
+/* 无新闻关键词折叠区域 - 已废弃，改用编辑页面显示 */
+
+/* 关键词新闻数量标签 */
+.topic-keyword-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.topic-keyword-count.has-news {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.topic-keyword-count.no-news {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+/* 没有新闻的关键词标签 - 半透明 */
+.topic-keyword-tag.inactive {
+    opacity: 0.6;
+    border-color: #fecaca;
+}
+
+/* 主题无新闻提示 */
+.topic-no-news-hint {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6b7280;
+}
+
+.topic-no-news-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+
+.topic-no-news-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.topic-no-news-tip {
+    font-size: 13px;
+    color: #9ca3af;
+}
+
+
+/* WeChat Auth QR Code Styles */
+.topic-wechat-auth {
+    text-align: center;
+    padding: 16px;
+}
+
+.topic-wechat-qr-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.topic-wechat-qr-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.topic-wechat-qr-image {
+    width: 180px;
+    height: 180px;
+    border-radius: 4px;
+}
+
+.topic-wechat-qr-status {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.topic-wechat-qr-status.scanned {
+    color: #f59e0b;
+}
+
+.topic-wechat-qr-status.confirmed {
+    color: #22c55e;
+}
+
+.topic-wechat-qr-status.expired,
+.topic-wechat-qr-status.error {
+    color: #ef4444;
+}
+
+.topic-wechat-qr-error {
+    color: #ef4444;
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.topic-wechat-qr-success {
+    color: #22c55e;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.topic-wechat-qr-refresh {
+    margin-top: 12px;
+    padding: 6px 14px;
+    background: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    color: #374151;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.topic-wechat-qr-refresh:hover {
+    background: #e5e7eb;
+}
+
+.topic-wechat-qr-hint {
+    font-size: 14px;
+    color: #374151;
+    margin-bottom: 8px;
+}
+
+.topic-wechat-qr-note {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.topic-wechat-qr-note a {
+    color: #3b82f6;
+    text-decoration: none;
+}
+
+.topic-wechat-qr-note a:hover {
+    text-decoration: underline;
+}
+
+.topic-mp-loading {
+    text-align: center;
+    padding: 20px;
+    color: #6b7280;
+    font-size: 14px;
+}

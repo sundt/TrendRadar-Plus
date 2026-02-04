@@ -323,10 +323,30 @@
         const topic = topics.find(t => t.id === topicId);
         if (!topic) return;
         
-        container.innerHTML = topic.keywords.map(keyword => {
-            const news = keywordsNews[keyword] || [];
-            return renderKeywordCard(keyword, news);
-        }).join('');
+        // 只渲染有新闻的关键词卡片
+        const cardsHtml = topic.keywords
+            .filter(keyword => {
+                const news = keywordsNews[keyword] || [];
+                return news.length > 0;
+            })
+            .map(keyword => {
+                const news = keywordsNews[keyword] || [];
+                return renderKeywordCard(keyword, news);
+            })
+            .join('');
+        
+        // 如果所有关键词都没有新闻，显示提示
+        if (!cardsHtml) {
+            container.innerHTML = `
+                <div class="topic-no-news-hint">
+                    <div class="topic-no-news-icon">📭</div>
+                    <div class="topic-no-news-text">暂无匹配的新闻</div>
+                    <div class="topic-no-news-tip">请编辑主题调整关键词或添加更多数据源</div>
+                </div>
+            `;
+        } else {
+            container.innerHTML = cardsHtml;
+        }
     }
 
     /**
@@ -349,12 +369,16 @@
             `).join('')
             : '<li class="news-placeholder" style="color:#9ca3af;text-align:center;padding:20px;">暂无相关新闻</li>';
         
+        // 只有有新闻时才显示数量
+        const countHtml = news.length > 0 
+            ? `<span style="font-size:12px;color:#9ca3af;margin-left:8px;">(${news.length}条)</span>`
+            : '';
+        
         return `
             <div class="platform-card" data-keyword="${escapeHtml(keyword)}">
                 <div class="platform-header">
                     <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
-                        🔍 ${escapeHtml(keyword)}
-                        <span style="font-size:12px;color:#9ca3af;margin-left:8px;">(${news.length}条)</span>
+                        🔍 ${escapeHtml(keyword)}${countHtml}
                     </div>
                 </div>
                 <ul class="news-list">${newsHtml}</ul>
@@ -483,12 +507,30 @@
     function renderKeywords() {
         if (!generatedData) return;
         
-        const html = generatedData.keywords.map(kw => `
-            <span class="topic-keyword-tag">
-                ${escapeHtml(kw)}
-                <button class="topic-keyword-remove" onclick="TopicTracker.removeKeyword('${escapeHtml(kw)}')">×</button>
-            </span>
-        `).join('') + `
+        const stats = generatedData.keywordStats || {};
+        
+        const html = generatedData.keywords.map(kw => {
+            const count = stats[kw];
+            const hasStats = count !== undefined;
+            const hasNews = count > 0;
+            
+            // 编辑模式下显示新闻数量
+            let countHtml = '';
+            if (hasStats) {
+                if (hasNews) {
+                    countHtml = `<span class="topic-keyword-count has-news">${count}</span>`;
+                } else {
+                    countHtml = `<span class="topic-keyword-count no-news" title="暂无匹配新闻">0</span>`;
+                }
+            }
+            
+            return `
+                <span class="topic-keyword-tag ${hasStats && !hasNews ? 'inactive' : ''}">
+                    ${escapeHtml(kw)}${countHtml}
+                    <button class="topic-keyword-remove" onclick="TopicTracker.removeKeyword('${escapeHtml(kw)}')">×</button>
+                </span>
+            `;
+        }).join('') + `
             <button class="topic-keyword-add" onclick="TopicTracker.addKeyword()">+ 添加关键词</button>
         `;
         
@@ -897,8 +939,22 @@
         generatedData = {
             icon: topic.icon || '🏷️',
             keywords: [...topic.keywords],
-            recommended_sources: []  // New sources to add
+            recommended_sources: [],  // New sources to add
+            keywordStats: {}  // 关键词新闻数量统计
         };
+        
+        // 获取关键词的新闻数量
+        try {
+            const response = await fetch(`/api/topics/${topicId}/news?limit=1`, { credentials: 'include' });
+            const data = await response.json();
+            if (data.ok && data.keywords_news) {
+                for (const kw of topic.keywords) {
+                    generatedData.keywordStats[kw] = (data.keywords_news[kw] || []).length;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to load keyword stats:', e);
+        }
         
         modalTitle.textContent = '编辑主题';
         topicNameInput.value = topic.name;
@@ -1020,6 +1076,15 @@
         `;
     }
     
+    // WeChat auth state for topic tracker
+    let wechatAuthState = {
+        checked: false,
+        hasAuth: false,
+        qrPolling: false,
+        pollTimer: null,
+        sessionId: null
+    };
+    
     /**
      * Show manual add source form
      */
@@ -1045,18 +1110,23 @@
                     </div>
                 </div>
                 <div class="topic-manual-content" id="manualTabWechat" style="display:none;">
-                    <div class="topic-form-group compact">
-                        <label>搜索公众号</label>
-                        <div class="topic-mp-search-box">
-                            <input type="text" id="mpSearchInput" placeholder="搜索公众号（至少2个字符）..." 
-                                   class="topic-form-input" onkeydown="if(event.key==='Enter')TopicTracker.doMpSearch()">
-                            <button class="topic-mp-search-btn" onclick="TopicTracker.doMpSearch()">搜索</button>
-                        </div>
-                        <div class="topic-mp-search-results" id="mpSearchResults">
-                            <div class="topic-mp-empty">输入关键词搜索公众号</div>
-                        </div>
+                    <div id="topicWechatAuthArea">
+                        <div class="topic-mp-loading">检查授权状态...</div>
                     </div>
-                    <div class="topic-mp-selected" id="mpSelectedList"></div>
+                    <div id="topicWechatSearchArea" style="display:none;">
+                        <div class="topic-form-group compact">
+                            <label>搜索公众号</label>
+                            <div class="topic-mp-search-box">
+                                <input type="text" id="mpSearchInput" placeholder="搜索公众号（至少2个字符）..." 
+                                       class="topic-form-input" onkeydown="if(event.key==='Enter')TopicTracker.doMpSearch()">
+                                <button class="topic-mp-search-btn" onclick="TopicTracker.doMpSearch()">搜索</button>
+                            </div>
+                            <div class="topic-mp-search-results" id="mpSearchResults">
+                                <div class="topic-mp-empty">输入关键词搜索公众号</div>
+                            </div>
+                        </div>
+                        <div class="topic-mp-selected" id="mpSelectedList"></div>
+                    </div>
                 </div>
                 <div class="topic-manual-actions">
                     <button class="topic-modal-btn cancel small" onclick="TopicTracker.hideManualAddForm()">取消</button>
@@ -1208,6 +1278,9 @@
      * Hide manual add form
      */
     function hideManualAddForm() {
+        // Stop QR polling if active
+        stopWechatQRPolling();
+        
         const form = document.getElementById('manualAddForm');
         if (form) form.remove();
         
@@ -1224,6 +1297,243 @@
         
         document.getElementById('manualTabRss').style.display = tab === 'rss' ? '' : 'none';
         document.getElementById('manualTabWechat').style.display = tab === 'wechat' ? '' : 'none';
+        
+        // Check wechat auth when switching to wechat tab
+        if (tab === 'wechat') {
+            checkWechatAuthAndRender();
+        } else {
+            // Stop QR polling when switching away
+            stopWechatQRPolling();
+        }
+    }
+    
+    /**
+     * Check WeChat auth status and render appropriate UI
+     */
+    async function checkWechatAuthAndRender() {
+        const authArea = document.getElementById('topicWechatAuthArea');
+        const searchArea = document.getElementById('topicWechatSearchArea');
+        
+        if (!authArea || !searchArea) return;
+        
+        // Show loading
+        authArea.innerHTML = '<div class="topic-mp-loading">检查授权状态...</div>';
+        authArea.style.display = '';
+        searchArea.style.display = 'none';
+        
+        try {
+            const response = await fetch('/api/wechat/auth/auto', { 
+                method: 'POST',
+                credentials: 'include'
+            });
+            const data = await response.json();
+            
+            wechatAuthState.checked = true;
+            wechatAuthState.hasAuth = data.has_auth === true;
+            
+            if (wechatAuthState.hasAuth) {
+                // Has auth, show search UI
+                authArea.style.display = 'none';
+                searchArea.style.display = '';
+            } else {
+                // No auth, show QR login UI
+                renderWechatQRAuth();
+            }
+        } catch (e) {
+            console.error('[TopicTracker] Check wechat auth failed:', e);
+            wechatAuthState.hasAuth = false;
+            renderWechatQRAuth();
+        }
+    }
+    
+    /**
+     * Render WeChat QR auth UI
+     */
+    function renderWechatQRAuth() {
+        const authArea = document.getElementById('topicWechatAuthArea');
+        if (!authArea) return;
+        
+        authArea.innerHTML = `
+            <div class="topic-wechat-auth">
+                <div class="topic-wechat-qr-area" id="topicWechatQRArea">
+                    <div class="topic-wechat-qr-loading">
+                        <span class="topic-spinner"></span>
+                        正在获取二维码...
+                    </div>
+                </div>
+                <p class="topic-wechat-qr-hint">请使用微信扫描二维码授权</p>
+                <p class="topic-wechat-qr-note">
+                    ⚠️ 需要 <a href="https://mp.weixin.qq.com/cgi-bin/registermidpage?action=index&weblogo=1&lang=zh_CN" target="_blank">注册公众号或服务号</a> 才能搜索公众号
+                </p>
+            </div>
+        `;
+        authArea.style.display = '';
+        
+        // Start QR login
+        startWechatQRLogin();
+    }
+    
+    /**
+     * Start WeChat QR login for topic tracker
+     */
+    async function startWechatQRLogin() {
+        const qrArea = document.getElementById('topicWechatQRArea');
+        if (!qrArea) return;
+        
+        qrArea.innerHTML = `
+            <div class="topic-wechat-qr-loading">
+                <span class="topic-spinner"></span>
+                正在获取二维码...
+            </div>
+        `;
+        
+        try {
+            const startResp = await fetch('/api/wechat/auth/qr/start', { 
+                method: 'POST',
+                credentials: 'include'
+            });
+            const startData = await startResp.json();
+            
+            if (!startData.ok) throw new Error(startData.error || '创建会话失败');
+            
+            wechatAuthState.sessionId = startData.session_id;
+            const qrUrl = `/api/wechat/auth/qr/image?t=${Date.now()}`;
+            
+            qrArea.innerHTML = `
+                <img src="${qrUrl}" alt="登录二维码" class="topic-wechat-qr-image" 
+                     onerror="this.parentElement.innerHTML='<p class=topic-wechat-qr-error>二维码加载失败</p>'">
+                <p id="topicWechatQRStatus" class="topic-wechat-qr-status">等待扫码...</p>
+                <button class="topic-wechat-qr-refresh" onclick="TopicTracker.refreshWechatQR()">🔄 刷新二维码</button>
+            `;
+            
+            wechatAuthState.qrPolling = true;
+            pollWechatQRStatus();
+            
+        } catch (e) {
+            console.error('[TopicTracker] Start QR error:', e);
+            qrArea.innerHTML = `
+                <p class="topic-wechat-qr-error">获取二维码失败: ${escapeHtml(e.message)}</p>
+                <button class="topic-wechat-qr-refresh" onclick="TopicTracker.refreshWechatQR()">重试</button>
+            `;
+        }
+    }
+    
+    /**
+     * Poll WeChat QR status
+     */
+    async function pollWechatQRStatus() {
+        if (!wechatAuthState.qrPolling) return;
+        
+        try {
+            const resp = await fetch('/api/wechat/auth/qr/status', { credentials: 'include' });
+            const data = await resp.json();
+            
+            const statusEl = document.getElementById('topicWechatQRStatus');
+            if (!statusEl) {
+                wechatAuthState.qrPolling = false;
+                return;
+            }
+            
+            if (data.status === 'waiting') {
+                statusEl.textContent = '等待扫码...';
+                statusEl.className = 'topic-wechat-qr-status';
+            } else if (data.status === 'scanned') {
+                statusEl.textContent = '已扫码，请在手机上确认登录';
+                statusEl.className = 'topic-wechat-qr-status scanned';
+            } else if (data.status === 'confirmed') {
+                statusEl.textContent = '已确认，正在完成登录...';
+                statusEl.className = 'topic-wechat-qr-status confirmed';
+                wechatAuthState.qrPolling = false;
+                await completeWechatQRLogin();
+                return;
+            } else if (data.status === 'expired' || data.need_refresh) {
+                statusEl.textContent = '二维码已过期';
+                statusEl.className = 'topic-wechat-qr-status expired';
+                wechatAuthState.qrPolling = false;
+                
+                const qrArea = document.getElementById('topicWechatQRArea');
+                if (qrArea) {
+                    qrArea.innerHTML = `
+                        <p class="topic-wechat-qr-error">二维码已过期</p>
+                        <button class="topic-wechat-qr-refresh" onclick="TopicTracker.refreshWechatQR()">重新获取</button>
+                    `;
+                }
+                return;
+            } else if (data.status === 'error') {
+                statusEl.textContent = data.message || '出错了';
+                statusEl.className = 'topic-wechat-qr-status error';
+            }
+            
+            if (wechatAuthState.qrPolling) {
+                wechatAuthState.pollTimer = setTimeout(pollWechatQRStatus, 2000);
+            }
+            
+        } catch (e) {
+            console.error('[TopicTracker] Poll QR error:', e);
+            if (wechatAuthState.qrPolling) {
+                wechatAuthState.pollTimer = setTimeout(pollWechatQRStatus, 3000);
+            }
+        }
+    }
+    
+    /**
+     * Complete WeChat QR login
+     */
+    async function completeWechatQRLogin() {
+        const qrArea = document.getElementById('topicWechatQRArea');
+        
+        try {
+            const resp = await fetch('/api/wechat/auth/qr/complete-and-share', { 
+                method: 'POST',
+                credentials: 'include'
+            });
+            const data = await resp.json();
+            
+            if (!data.ok) throw new Error(data.error || '登录失败');
+            
+            if (qrArea) {
+                qrArea.innerHTML = `
+                    <p class="topic-wechat-qr-success">✓ 授权成功！</p>
+                `;
+            }
+            
+            // Update state and show search UI
+            setTimeout(() => {
+                wechatAuthState.hasAuth = true;
+                const authArea = document.getElementById('topicWechatAuthArea');
+                const searchArea = document.getElementById('topicWechatSearchArea');
+                if (authArea) authArea.style.display = 'none';
+                if (searchArea) searchArea.style.display = '';
+            }, 1000);
+            
+        } catch (e) {
+            console.error('[TopicTracker] Complete QR error:', e);
+            if (qrArea) {
+                qrArea.innerHTML = `
+                    <p class="topic-wechat-qr-error">登录失败: ${escapeHtml(e.message)}</p>
+                    <button class="topic-wechat-qr-refresh" onclick="TopicTracker.refreshWechatQR()">重试</button>
+                `;
+            }
+        }
+    }
+    
+    /**
+     * Stop WeChat QR polling
+     */
+    function stopWechatQRPolling() {
+        wechatAuthState.qrPolling = false;
+        if (wechatAuthState.pollTimer) {
+            clearTimeout(wechatAuthState.pollTimer);
+            wechatAuthState.pollTimer = null;
+        }
+    }
+    
+    /**
+     * Refresh WeChat QR code
+     */
+    function refreshWechatQR() {
+        stopWechatQRPolling();
+        startWechatQRLogin();
     }
     
     /**
@@ -1458,7 +1768,8 @@
         searchWechatMps,
         doMpSearch,
         toggleMpSelection,
-        removeMpSelection
+        removeMpSelection,
+        refreshWechatQR
     };
 
     // Initialize when DOM is ready
