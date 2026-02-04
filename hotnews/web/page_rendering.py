@@ -520,6 +520,7 @@ async def render_viewer_page(
 
         data = _inject_explore_category(data)
         data = _inject_my_tags_category(data)
+        data = _inject_user_topics_as_categories(data, request)  # Inject user's tracked topics
         data = _inject_discovery_category(data)
         data = _inject_featured_mps_category(data)
         # Removed: source-subscription tab is now integrated into user settings page
