@@ -24,10 +24,7 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         from hotnews.kernel.auth.auth_service import validate_session
         
         token = _get_session_token(request)
-        logger.warning(f"[TopicInject] token={token[:20] if token else 'None'}...")
-        
         if not token:
-            logger.warning("[TopicInject] No session token, skipping topic injection")
             return data
         
         # Get database connection
@@ -39,19 +36,16 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         
         user_db_conn = get_user_db_conn(project_root)
         if not user_db_conn:
-            logger.warning("[TopicInject] No database connection, skipping")
+            logger.warning("No database connection for topic injection")
             return data
         
         # Validate session with conn and token
         is_valid, user_info = validate_session(user_db_conn, token)
-        logger.warning(f"[TopicInject] is_valid={is_valid}, user_id={user_info.get('id') if user_info else 'None'}")
-        
         if not is_valid or not user_info or not user_info.get("id"):
-            logger.warning("[TopicInject] Invalid session, skipping topic injection")
             return data
         
         user_id = user_info["id"]
-        logger.warning(f"[TopicInject] Injecting topics for user {user_id}")
+        logger.debug(f"Injecting topics for user {user_id}")
         
         # Get user's topics from database
         from hotnews.storage.topic_storage import TopicStorage
