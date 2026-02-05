@@ -62,6 +62,14 @@ class CredentialPool:
         self._cooldown_seconds = cooldown_seconds
         self._last_load_time = 0
     
+    def has_credentials(self) -> bool:
+        """Check if there are any valid credentials available."""
+        now = int(time.time())
+        return any(
+            c.is_valid and c.cooldown_until <= now
+            for c in self._credentials.values()
+        )
+    
     def load_credentials(self, online_conn, user_conn) -> int:
         """
         Load all available credentials from database.
