@@ -207,7 +207,7 @@
             {% set special_cats = ['explore', 'my-tags', 'discovery', 'knowledge', 'source-subscription', 'featured-mps'] %}
             {% for cat_id, category in data.categories.items() %}
             {% set is_active_category = (cat_id == 'my-tags') %}
-            {% set is_special = (cat_id in special_cats) %}
+            {% set is_special = (cat_id in special_cats) or category.is_topic %}
             {% set needs_lazy_load = (not is_special and not is_active_category) %}
             <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="{% if needs_lazy_load %}1{% else %}0{% endif %}">
                 {% if cat_id == 'my-tags' %}
@@ -288,6 +288,14 @@
                         <ul class="news-list" data-mb-list="slice3">
                             <li class="news-placeholder" aria-hidden="true">加载中...</li>
                         </ul>
+                    </div>
+                </div>
+                {% elif category.is_topic %}
+                {# 主题栏目 - 使用 topicCards 容器供 topic-tracker.js 加载 #}
+                <div class="platform-grid" id="topicCards-{{ category.topic_id }}" data-topic-id="{{ category.topic_id }}">
+                    <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                        <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+                        <div style="font-size:16px;">加载中...</div>
                     </div>
                 </div>
                 {% elif not is_special %}

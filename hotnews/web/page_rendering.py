@@ -396,6 +396,9 @@ def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
 # 默认隐藏的栏目（与前端 settings.js 保持一致）
 DEFAULT_HIDDEN_CATEGORIES = ['other', 'general', 'social', 'tech_news', 'developer']
 
+# 特殊栏目，不应该被服务端过滤（它们有自己的动态加载逻辑）
+PROTECTED_CATEGORIES = ['my-tags', 'discovery', 'explore', 'knowledge', 'featured-mps', 'source-subscription']
+
 
 def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str, Any]:
     """
@@ -405,6 +408,7 @@ def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str
     1. 检查用户是否有自定义配置（通过 Cookie）
     2. 如果没有自定义配置，使用默认隐藏列表
     3. 如果有自定义配置，使用用户的隐藏列表
+    4. 特殊栏目（my-tags, discovery 等）不会被过滤
     """
     try:
         cats = data.get("categories") if isinstance(data, dict) else None
@@ -424,10 +428,17 @@ def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str
         except Exception:
             pass
         
-        # 过滤隐藏的栏目
+        # 过滤隐藏的栏目（但保护特殊栏目不被过滤）
         filtered_cats = {}
         for cat_id, cat_data in cats.items():
-            if cat_id not in hidden_categories:
+            # 特殊栏目始终保留
+            if cat_id in PROTECTED_CATEGORIES:
+                filtered_cats[cat_id] = cat_data
+            # 主题栏目（topic-xxx）始终保留
+            elif cat_id.startswith('topic-'):
+                filtered_cats[cat_id] = cat_data
+            # 普通栏目根据隐藏列表过滤
+            elif cat_id not in hidden_categories:
                 filtered_cats[cat_id] = cat_data
         
         data["categories"] = filtered_cats
