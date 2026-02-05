@@ -264,20 +264,15 @@
         }
         
         const grid = document.getElementById(`topicCards-${topicId}`);
-        if (!grid) return;
-        
-        // 检查是否已有服务端预渲染的内容（有 platform-card 说明已预渲染）
-        const hasPrerenderedContent = grid.querySelector('.platform-card');
-        if (hasPrerenderedContent) {
-            console.log(`[TopicTracker] Topic ${topicId} has pre-rendered content, marking as loaded`);
-            state.loaded = true;
+        if (!grid) {
+            console.log(`[TopicTracker] Container topicCards-${topicId} not found`);
             return;
         }
         
-        // 检查是否显示"暂无匹配的新闻"提示（也是预渲染的）
-        const hasNoNewsHint = grid.querySelector('.topic-no-news-hint');
-        if (hasNoNewsHint) {
-            console.log(`[TopicTracker] Topic ${topicId} has no-news hint, marking as loaded`);
+        // 检查是否已有内容（platform-card 说明已加载）
+        const hasContent = grid.querySelector('.platform-card');
+        if (hasContent) {
+            console.log(`[TopicTracker] Topic ${topicId} already has content, marking as loaded`);
             state.loaded = true;
             return;
         }

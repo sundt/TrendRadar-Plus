@@ -291,42 +291,12 @@
                     </div>
                 </div>
                 {% elif category.is_topic %}
-                {# 主题栏目 - 服务端预渲染数据 #}
+                {# 主题栏目 - 使用 API 动态加载，与其他动态栏目保持一致 #}
                 <div class="platform-grid" id="topicCards-{{ category.topic_id }}" data-topic-id="{{ category.topic_id }}">
-                    {% if category.platforms %}
-                    {% for platform_id, platform in category.platforms.items() %}
-                    <div class="platform-card" data-platform="{{ platform_id }}" data-keyword="{{ platform.name[2:] if platform.name.startswith('🔍 ') else platform.name }}" draggable="false">
-                        <div class="platform-header">
-                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
-                                {{ platform.name }}
-                                {% if platform.news %}<span style="font-size:12px;color:#9ca3af;margin-left:8px;">({{ platform.news|length }}条)</span>{% endif %}
-                            </div>
-                        </div>
-                        <ul class="news-list">
-                            {% if platform.news %}
-                            {% for news in platform.news[:50] %}
-                            <li class="news-item" data-id="{{ news.stable_id }}" data-url="{{ news.url }}">
-                                <div class="news-item-content">
-                                    <span class="news-index">{{ loop.index }}</span>
-                                    <a class="news-title" href="{{ news.url or '#' }}" target="_blank" rel="noopener noreferrer">
-                                        {{ news.display_title or news.title }}
-                                    </a>
-                                </div>
-                            </li>
-                            {% endfor %}
-                            {% else %}
-                            <li class="news-placeholder" style="color:#9ca3af;text-align:center;padding:20px;">暂无相关新闻</li>
-                            {% endif %}
-                        </ul>
+                    <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                        <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+                        <div style="font-size:16px;">加载中...</div>
                     </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="topic-no-news-hint" style="text-align:center;padding:60px 20px;width:100%;">
-                        <div style="font-size:48px;margin-bottom:16px;">📭</div>
-                        <div style="font-size:16px;color:#374151;margin-bottom:10px;">暂无匹配的新闻</div>
-                        <div style="font-size:13px;color:#6b7280;">请编辑主题调整关键词或添加更多数据源</div>
-                    </div>
-                    {% endif %}
                 </div>
                 {% elif not is_special %}
                 {# 普通栏目（AI资讯、财经投资等） #}

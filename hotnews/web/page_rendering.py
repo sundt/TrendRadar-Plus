@@ -12,11 +12,10 @@ from fastapi.responses import HTMLResponse
 
 def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) -> Dict[str, Any]:
     """
-    Inject user's tracked topics as categories with pre-loaded news.
+    Inject user's tracked topics as categories (metadata only, news loaded via API).
     Topics are inserted after 'my-tags' category.
     """
     import logging
-    import re
     logger = logging.getLogger(__name__)
     
     try:
@@ -31,7 +30,6 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         
         # Get database connection
         from hotnews.web.user_db import get_user_db_conn
-        from hotnews.web.db_online import get_online_db_conn
         project_root = getattr(request.app.state, "project_root", None)
         if not project_root:
             from pathlib import Path
@@ -61,70 +59,51 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         if not topics:
             return data
         
-        # Get online db for news search
-        online_conn = get_online_db_conn(project_root)
-        
         cats = data.get("categories") if isinstance(data, dict) else None
         if not isinstance(cats, dict):
             return data
         
         # Build new categories dict with topics inserted after my-tags
+        # 只注入元数据，新闻通过 API 动态加载
         new_cats = {}
         for k, v in cats.items():
             new_cats[k] = v
             if k == "my-tags":
-                # Insert topics after my-tags
+                # Insert topics after my-tags (metadata only)
                 for topic in topics:
                     topic_cat_id = f"topic-{topic['id']}"
                     if topic_cat_id not in new_cats:
-                        # Pre-load news for this topic
-                        platforms = _build_topic_platforms(
-                            online_conn, 
-                            topic.get("keywords", []),
-                            topic.get("rss_sources", []),
-                            limit_per_keyword=30
-                        )
-                        news_count = sum(len(p.get("news", [])) for p in platforms.values())
-                        
                         new_cats[topic_cat_id] = {
                             "id": topic_cat_id,
                             "name": topic.get("name", "主题"),
                             "icon": topic.get("icon", "🏷️"),
-                            "platforms": platforms,
-                            "news_count": news_count,
+                            "platforms": {},  # 空，通过 API 加载
+                            "news_count": 0,
                             "filtered_count": 0,
                             "is_new": False,
                             "requires_auth": True,
-                            "is_dynamic": False,  # Changed: data is pre-loaded
+                            "is_dynamic": True,  # 标记为动态加载
                             "is_topic": True,
                             "topic_id": topic["id"],
                             "keywords": topic.get("keywords", []),
                         }
-                        logger.info(f"Injected topic category: {topic_cat_id} ({topic.get('name')}) with {news_count} news")
+                        logger.info(f"Injected topic category: {topic_cat_id} ({topic.get('name')})")
         
         # If my-tags not found, append topics at the beginning
         if not any(k.startswith("topic-") for k in new_cats):
             topic_cats = {}
             for topic in topics:
                 topic_cat_id = f"topic-{topic['id']}"
-                platforms = _build_topic_platforms(
-                    online_conn,
-                    topic.get("keywords", []),
-                    topic.get("rss_sources", []),
-                    limit_per_keyword=30
-                )
-                news_count = sum(len(p.get("news", [])) for p in platforms.values())
-                
                 topic_cats[topic_cat_id] = {
                     "id": topic_cat_id,
                     "name": topic.get("name", "主题"),
                     "icon": topic.get("icon", "🏷️"),
-                    "platforms": platforms,
-                    "news_count": news_count,
+                    "platforms": {},
+                    "news_count": 0,
                     "filtered_count": 0,
                     "is_new": False,
                     "requires_auth": True,
-                    "is_dynamic": False,
+                    "is_dynamic": True,
                     "is_topic": True,
                     "topic_id": topic["id"],
                     "keywords": topic.get("keywords", []),
@@ -745,6 +724,13 @@ async def render_viewer_page(
                 "sys_settings": sys_settings,
             },
         )
+
+        # 禁止缓存用户特定的页面内容（主题等）
+        # 这是关键：防止 CDN/浏览器缓存导致用户看到其他人的主题
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+        resp.headers["Vary"] = "Cookie"
 
         # Note: Removed automatic anonymous user creation - users must login now
 
