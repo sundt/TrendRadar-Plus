@@ -1101,11 +1101,18 @@
             if (data.ok) {
                 const topicId = data.topic?.id || (currentEditTopic ? currentEditTopic.id : null);
                 closeModal();
-                await loadTopics();
                 
-                // Switch to the created/edited topic tab
-                if (topicId) {
-                    switchToTopicTab(topicId);
+                // 创建成功后需要刷新页面以获取服务端注入的新主题 tab
+                // 因为主题 tab 是通过 /api/news 接口由服务端注入的
+                if (!currentEditTopic && topicId) {
+                    // 新建主题：刷新页面以加载新的 tab
+                    window.location.reload();
+                } else {
+                    // 编辑主题：只需刷新主题列表和切换 tab
+                    await loadTopics();
+                    if (topicId && typeof window.switchTab === 'function') {
+                        window.switchTab('topic-' + topicId);
+                    }
                 }
             } else {
                 alert(data.error || '操作失败');
@@ -1908,11 +1915,38 @@
             const data = await response.json();
             
             if (data.ok) {
-                // Switch to my-tags tab before removing
+                // 从 DOM 中移除主题 tab 和对应的内容面板
+                const categoryId = 'topic-' + topicId;
+                
+                // 移除 tab
+                const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+                if (tab) {
+                    tab.remove();
+                    console.log(`[TopicTracker] Removed tab for topic ${topicId}`);
+                }
+                
+                // 移除 tab-pane
+                const pane = document.getElementById(`tab-${categoryId}`);
+                if (pane) {
+                    pane.remove();
+                    console.log(`[TopicTracker] Removed pane for topic ${topicId}`);
+                }
+                
+                // 清除该主题的加载状态
+                resetTopicState(topicId);
+                
+                // 切换到我的关注 tab
                 if (typeof window.switchTab === 'function') {
                     window.switchTab('my-tags');
                 }
-                loadTopics();
+                
+                // 更新本地主题列表
+                topics = topics.filter(t => t.id !== topicId);
+                
+                // 显示成功提示
+                if (window.TR?.toast?.show) {
+                    window.TR.toast.show(`已删除主题「${topic.name}」`, { variant: 'success' });
+                }
             } else {
                 alert(data.error || '删除失败');
             }
