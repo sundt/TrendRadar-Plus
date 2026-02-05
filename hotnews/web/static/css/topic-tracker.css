@@ -993,3 +993,48 @@
     color: #6b7280;
     font-size: 14px;
 }
+
+
+/* Topic Tab Skeleton Loading */
+.topic-tab-skeleton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: linear-gradient(90deg, #f0fdf4 25%, #dcfce7 50%, #f0fdf4 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s infinite;
+    border-radius: 8px;
+    border: 1px solid #86efac;
+    min-width: 80px;
+    height: 40px;
+}
+
+.topic-tab-skeleton .skeleton-icon {
+    width: 20px;
+    height: 20px;
+    background: rgba(134, 239, 172, 0.5);
+    border-radius: 4px;
+}
+
+.topic-tab-skeleton .skeleton-text {
+    width: 50px;
+    height: 14px;
+    background: rgba(134, 239, 172, 0.5);
+    border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Topic Tabs Loading Container */
+.topic-tabs-loading {
+    display: inline-flex;
+    gap: 8px;
+}

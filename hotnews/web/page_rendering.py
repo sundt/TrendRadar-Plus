@@ -681,7 +681,9 @@ async def render_viewer_page(
 
         data = _inject_explore_category(data)
         data = _inject_my_tags_category(data)
-        data = _inject_user_topics_as_categories(data, request)  # Inject user's tracked topics
+        # 安全修复：不再在服务端注入用户主题，改为前端动态加载
+        # 这样即使页面被 CDN/Nginx 缓存，也不会泄露用户主题
+        # data = _inject_user_topics_as_categories(data, request)
         data = _inject_discovery_category(data)
         data = _inject_featured_mps_category(data)
         # Removed: source-subscription tab is now integrated into user settings page

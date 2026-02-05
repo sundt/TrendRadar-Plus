@@ -87,7 +87,8 @@
         validateTopicTabsOwnership();
         
         createModal();
-        loadTopics();
+        // 前端动态加载主题 tabs（不再依赖服务端注入）
+        loadAndRenderTopicTabs();
         addNewTopicButton();
         
         // Listen for tab switch events (like my-tags.js does)
@@ -109,7 +110,8 @@
             // 重置所有主题的加载状态，因为 DOM 已经被重新渲染
             resetAllTopicStates();
             addNewTopicButton();
-            setupTopicTabListeners();
+            // 重新加载主题 tabs
+            loadAndRenderTopicTabs();
             
             // 如果当前激活的是主题 tab，重新加载
             const activePane = document.querySelector('.tab-pane.active[id^="tab-topic-"]');
@@ -120,6 +122,17 @@
             }
         });
         
+        // Listen for auth state changes to reload topics
+        window.addEventListener('authStateChanged', (event) => {
+            console.log('[TopicTracker] Auth state changed, reloading topics...');
+            // 清除现有的主题 tabs
+            removeAllTopicTabs();
+            // 重新加载
+            if (event?.detail?.user) {
+                loadAndRenderTopicTabs();
+            }
+        });
+        
         // Check if a topic tab is already active on page load
         const activeTopicPane = document.querySelector('.tab-pane.active[id^="tab-topic-"]');
         if (activeTopicPane) {
@@ -127,6 +140,204 @@
             console.log('[TopicTracker] Topic tab already active on page load:', topicId);
             setTimeout(() => loadTopicNewsIfNeeded(topicId), 200);
         }
+    }
+    
+    /**
+     * Remove all topic tabs from DOM (used when user logs out)
+     */
+    function removeAllTopicTabs() {
+        // Remove all topic tabs
+        document.querySelectorAll('.category-tab.topic-tab').forEach(tab => tab.remove());
+        // Remove all topic panes
+        document.querySelectorAll('.tab-pane[id^="tab-topic-"]').forEach(pane => pane.remove());
+        // Clear loading states
+        resetAllTopicStates();
+        // Clear topics array
+        topics = [];
+    }
+    
+    /**
+     * Load topics from API and render tabs (frontend dynamic loading)
+     * This replaces server-side injection to prevent cache leakage
+     */
+    async function loadAndRenderTopicTabs() {
+        // Check if user is logged in
+        if (!isUserLoggedIn()) {
+            console.log('[TopicTracker] User not logged in, skipping topic tabs loading');
+            return;
+        }
+        
+        const categoryTabs = document.querySelector('.category-tabs');
+        if (!categoryTabs) {
+            console.warn('[TopicTracker] category-tabs not found');
+            return;
+        }
+        
+        // Show skeleton loading state
+        const skeletonContainer = showTopicTabsSkeleton(categoryTabs);
+        
+        try {
+            console.log('[TopicTracker] Loading topics from API...');
+            const response = await fetch('/api/topics', { credentials: 'include' });
+            const data = await response.json();
+            
+            // Remove skeleton
+            if (skeletonContainer) {
+                skeletonContainer.remove();
+            }
+            
+            if (data.ok && data.topics?.length > 0) {
+                topics = data.topics;
+                console.log(`[TopicTracker] Loaded ${topics.length} topics, rendering tabs...`);
+                renderTopicTabsFromData(topics);
+            } else {
+                console.log('[TopicTracker] No topics found or API error:', data.detail || data.error);
+                topics = [];
+            }
+        } catch (e) {
+            console.error('[TopicTracker] Failed to load topics:', e);
+            // Remove skeleton on error
+            if (skeletonContainer) {
+                skeletonContainer.remove();
+            }
+            topics = [];
+        }
+    }
+    
+    /**
+     * Show skeleton loading state for topic tabs
+     */
+    function showTopicTabsSkeleton(categoryTabs) {
+        // Find my-tags tab position
+        const myTagsTab = categoryTabs.querySelector('[data-category="my-tags"]');
+        
+        // Create skeleton container
+        const skeletonContainer = document.createElement('div');
+        skeletonContainer.className = 'topic-tabs-loading';
+        skeletonContainer.id = 'topicTabsSkeleton';
+        
+        // Add 2 skeleton tabs (typical user has 1-3 topics)
+        for (let i = 0; i < 2; i++) {
+            const skeleton = document.createElement('div');
+            skeleton.className = 'topic-tab-skeleton';
+            skeleton.innerHTML = `
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-text"></div>
+            `;
+            skeletonContainer.appendChild(skeleton);
+        }
+        
+        // Insert before my-tags
+        if (myTagsTab) {
+            categoryTabs.insertBefore(skeletonContainer, myTagsTab);
+        } else {
+            // Insert after new topic button
+            const newTopicBtn = document.getElementById('newTopicBtn');
+            if (newTopicBtn && newTopicBtn.nextSibling) {
+                categoryTabs.insertBefore(skeletonContainer, newTopicBtn.nextSibling);
+            } else {
+                categoryTabs.appendChild(skeletonContainer);
+            }
+        }
+        
+        return skeletonContainer;
+    }
+    
+    /**
+     * Render topic tabs from data (frontend dynamic rendering)
+     */
+    function renderTopicTabsFromData(topicsData) {
+        const categoryTabs = document.querySelector('.category-tabs');
+        if (!categoryTabs) {
+            console.warn('[TopicTracker] category-tabs not found');
+            return;
+        }
+        
+        // Find my-tags tab position
+        const myTagsTab = categoryTabs.querySelector('[data-category="my-tags"]');
+        
+        topicsData.forEach(topic => {
+            const categoryId = `topic-${topic.id}`;
+            
+            // Check if tab already exists
+            if (document.querySelector(`[data-category="${categoryId}"]`)) {
+                console.log(`[TopicTracker] Tab ${categoryId} already exists, skipping`);
+                return;
+            }
+            
+            // Create tab element
+            const tab = document.createElement('div');
+            tab.className = 'category-tab topic-tab';
+            tab.dataset.category = categoryId;
+            tab.draggable = false;
+            tab.onclick = () => {
+                if (typeof window.switchTab === 'function') {
+                    window.switchTab(categoryId);
+                }
+            };
+            tab.innerHTML = `
+                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
+                <div class="category-tab-icon">${escapeHtml(topic.icon || '🏷️')}</div>
+                <div class="category-tab-name">${escapeHtml(topic.name)}</div>
+            `;
+            
+            // Insert before my-tags
+            if (myTagsTab) {
+                categoryTabs.insertBefore(tab, myTagsTab);
+            } else {
+                // Insert after new topic button
+                const newTopicBtn = document.getElementById('newTopicBtn');
+                if (newTopicBtn && newTopicBtn.nextSibling) {
+                    categoryTabs.insertBefore(tab, newTopicBtn.nextSibling);
+                } else {
+                    categoryTabs.appendChild(tab);
+                }
+            }
+            
+            // Create corresponding tab-pane
+            createTopicTabPane(topic);
+            
+            console.log(`[TopicTracker] Created tab for topic: ${topic.name}`);
+        });
+        
+        // Setup event listeners for the new tabs
+        setupTopicTabListeners();
+    }
+    
+    /**
+     * Create tab pane for a topic
+     */
+    function createTopicTabPane(topic) {
+        const categoryId = `topic-${topic.id}`;
+        const tabContent = document.querySelector('.tab-content');
+        if (!tabContent) return;
+        
+        // Check if pane already exists
+        if (document.getElementById(`tab-${categoryId}`)) return;
+        
+        const pane = document.createElement('div');
+        pane.className = 'tab-pane';
+        pane.id = `tab-${categoryId}`;
+        pane.innerHTML = `
+            <div class="topic-header">
+                <div class="topic-title">
+                    <span class="topic-icon">${escapeHtml(topic.icon || '🏷️')}</span>
+                    <span class="topic-name">${escapeHtml(topic.name)}</span>
+                </div>
+                <div class="topic-actions">
+                    <button class="topic-action-btn" onclick="TopicTracker.editTopic('${topic.id}')">✏️ 编辑</button>
+                    <button class="topic-action-btn danger" onclick="TopicTracker.deleteTopic('${topic.id}')">🗑️ 删除</button>
+                </div>
+            </div>
+            <div class="cards-grid" id="topicCards-${topic.id}">
+                <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                    <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+                    <div style="font-size:16px;">加载中...</div>
+                </div>
+            </div>
+        `;
+        
+        tabContent.appendChild(pane);
     }
 
     /**
@@ -250,27 +461,12 @@
     }
 
     /**
-     * Load user's topics
+     * Load user's topics (legacy function, now uses loadAndRenderTopicTabs)
+     * @deprecated Use loadAndRenderTopicTabs instead
      */
     async function loadTopics() {
-        try {
-            const response = await fetch('/api/topics', { credentials: 'include' });
-            const data = await response.json();
-            
-            if (data.ok) {
-                topics = data.topics || [];
-                // 主题 tabs 现在由服务端注入，不需要前端渲染
-                // 但需要设置事件监听来加载新闻
-                setupTopicTabListeners();
-            } else {
-                // 未登录或其他错误，清空主题
-                console.log('[TopicTracker] Load topics failed:', data.detail || data.error);
-                topics = [];
-            }
-        } catch (e) {
-            console.error('Failed to load topics:', e);
-            topics = [];
-        }
+        // Delegate to the new function
+        await loadAndRenderTopicTabs();
     }
 
     /**
