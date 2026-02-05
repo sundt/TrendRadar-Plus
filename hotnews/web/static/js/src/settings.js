@@ -1062,26 +1062,14 @@ export const settings = {
     applyCategoryConfigToData(serverCategories) {
         console.log('[Settings] applyCategoryConfigToData called with', Object.keys(serverCategories || {}).length, 'categories');
         
-        // Initialize _defaultCategories from serverCategories FIRST
-        // This ensures getMergedCategoryConfig has correct data
-        if (!_defaultCategories) {
-            _defaultCategories = {};
-            _allPlatforms = {};
-        }
+        // IMPORTANT: Reset _defaultCategories to ensure deleted categories are removed
+        // This fixes the issue where deleted topics remain in the cache
+        _defaultCategories = {};
+        _allPlatforms = {};
         
-        // Always update from serverCategories
+        // Initialize from serverCategories
         Object.entries(serverCategories).forEach(([catId, cat]) => {
-            if (!_defaultCategories[catId]) {
-                _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
-            } else {
-                if (!_defaultCategories[catId].platforms) _defaultCategories[catId].platforms = [];
-                const existingPlatforms = new Set(_defaultCategories[catId].platforms || []);
-                Object.keys(cat.platforms || {}).forEach((pid) => {
-                    if (!existingPlatforms.has(pid)) {
-                        _defaultCategories[catId].platforms.push(pid);
-                    }
-                });
-            }
+            _defaultCategories[catId] = { id: catId, name: cat.name, icon: cat.icon, isDefault: true, platforms: Object.keys(cat.platforms || {}) };
 
             Object.entries(cat.platforms || {}).forEach(([pid, p]) => {
                 if (!_allPlatforms[pid]) {
