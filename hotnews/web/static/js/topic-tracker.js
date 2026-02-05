@@ -993,6 +993,16 @@
                 body: JSON.stringify({ topic_name: topicName })
             });
             
+            // 处理 401 未授权错误
+            if (response.status === 401) {
+                alert('登录已过期，请重新登录');
+                // 尝试打开登录弹窗
+                if (typeof openLoginModal === 'function') {
+                    openLoginModal();
+                }
+                return;
+            }
+            
             const data = await response.json();
             
             if (data.ok) {
@@ -1006,7 +1016,7 @@
                 renderGeneratedData();
                 submitBtn.disabled = false;
             } else {
-                alert(data.error || 'AI 生成失败，请手动输入关键词');
+                alert(data.error || data.detail || 'AI 生成失败，请手动输入关键词');
             }
         } catch (e) {
             console.error('Generate keywords failed:', e);
@@ -1679,15 +1689,61 @@
                 const topicId = data.topic?.id || (currentEditTopic ? currentEditTopic.id : null);
                 closeModal();
                 
-                // 创建成功后需要刷新页面以获取服务端注入的新主题 tab
-                // 因为主题 tab 是通过 /api/news 接口由服务端注入的
                 if (!currentEditTopic && topicId) {
-                    // 新建主题：刷新页面以加载新的 tab
-                    window.location.reload();
-                } else {
-                    // 编辑主题：只需刷新主题列表和切换 tab
+                    // 新建主题：动态添加 tab 并切换到该主题
+                    const newTopic = data.topic;
+                    if (newTopic) {
+                        // 添加新主题到 topics 数组
+                        topics.push(newTopic);
+                        
+                        // 动态创建 tab 和 pane
+                        const categoryTabs = document.querySelector('.category-tabs');
+                        const myTagsTab = categoryTabs?.querySelector('[data-category="my-tags"]');
+                        
+                        if (categoryTabs) {
+                            const categoryId = `topic-${newTopic.id}`;
+                            
+                            // 创建 tab
+                            const tab = document.createElement('div');
+                            tab.className = 'category-tab topic-tab';
+                            tab.dataset.category = categoryId;
+                            tab.draggable = false;
+                            tab.onclick = () => {
+                                if (typeof window.switchTab === 'function') {
+                                    window.switchTab(categoryId);
+                                }
+                            };
+                            tab.innerHTML = `
+                                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
+                                <div class="category-tab-icon">${escapeHtml(newTopic.icon || '🏷️')}</div>
+                                <div class="category-tab-name">${escapeHtml(newTopic.name)}</div>
+                            `;
+                            
+                            // 插入到 my-tags 之前
+                            if (myTagsTab) {
+                                categoryTabs.insertBefore(tab, myTagsTab);
+                            } else {
+                                categoryTabs.appendChild(tab);
+                            }
+                            
+                            // 创建 tab pane
+                            createTopicTabPane(newTopic);
+                            
+                            // 设置事件监听
+                            setupTopicTabListeners();
+                            
+                            // 切换到新主题
+                            setTimeout(() => {
+                                if (typeof window.switchTab === 'function') {
+                                    window.switchTab(categoryId);
+                                }
+                            }, 100);
+                        }
+                    }
+                } else if (topicId) {
+                    // 编辑主题：刷新主题列表并切换 tab
                     await loadTopics();
-                    if (topicId && typeof window.switchTab === 'function') {
+                    if (typeof window.switchTab === 'function') {
                         window.switchTab('topic-' + topicId);
                     }
                 }

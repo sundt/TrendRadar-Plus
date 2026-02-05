@@ -78,7 +78,9 @@ async def _trigger_source_fetch(source_ids: List[str], project_root: Path) -> No
 
 def _get_session_token(request: Request) -> str:
     """Get session token from cookie."""
-    return request.cookies.get(SESSION_COOKIE_NAME, "")
+    token = request.cookies.get(SESSION_COOKIE_NAME, "")
+    logger.debug(f"[TopicAPI] Session token from cookie: {token[:20] if token else 'EMPTY'}...")
+    return token
 
 
 def _get_current_user(request: Request) -> dict:
@@ -87,14 +89,17 @@ def _get_current_user(request: Request) -> dict:
     
     session_token = _get_session_token(request)
     if not session_token:
+        logger.warning("[TopicAPI] No session token in cookie")
         raise HTTPException(status_code=401, detail="请先登录")
     
     conn = get_user_db_conn(request.app.state.project_root)
     is_valid, user_info = validate_session(conn, session_token)
     
     if not is_valid or not user_info:
+        logger.warning(f"[TopicAPI] Session validation failed: is_valid={is_valid}, user_info={user_info}")
         raise HTTPException(status_code=401, detail="请先登录")
     
+    logger.debug(f"[TopicAPI] User authenticated: {user_info.get('id')}")
     return user_info
 
 
@@ -290,7 +295,7 @@ async def generate_keywords(request: Request, body: Dict[str, Any] = Body(...)):
 def _check_wechat_credentials(online_conn, user_conn=None) -> bool:
     """检查是否有有效的微信凭证"""
     try:
-        from hotnews.kernel.wechat.credential_pool import CredentialPool
+        from hotnews.kernel.services.mp_credential_pool import CredentialPool
         pool = CredentialPool()
         pool.load_credentials(online_conn, user_conn)
         cred = pool.get_credential()
