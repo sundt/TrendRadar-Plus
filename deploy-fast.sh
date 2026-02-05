@@ -46,11 +46,11 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     git checkout \$BRANCH 2>/dev/null || git checkout -b \$BRANCH origin/\$BRANCH
     git reset --hard origin/\$BRANCH
     
-    echo "   [Remote] Restarting containers (no rebuild)..."
+    echo "   [Remote] Recreating containers (force recreate to avoid bytecode cache)..."
     cd docker
-    docker compose -f docker-compose-build.yml restart hotnews hotnews-viewer hotnews-mcp
+    docker compose -f docker-compose-build.yml up -d --force-recreate hotnews hotnews-viewer hotnews-mcp
     
-    echo "   ✅ Containers restarted."
+    echo "   ✅ Containers recreated."
 EOF
 
 # Step 3: Health Check
