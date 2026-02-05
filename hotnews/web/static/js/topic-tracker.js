@@ -561,19 +561,33 @@
      */
     function renderKeywordCard(keyword, news) {
         const newsHtml = news.length > 0 
-            ? news.slice(0, 50).map((item, idx) => `
-                <li class="news-item">
+            ? news.slice(0, 50).map((item, idx) => {
+                const newsId = item.id || `topic-${Date.now()}-${idx}`;
+                const safeTitle = escapeHtml(item.title || '');
+                const safeUrl = escapeHtml(item.url || '');
+                const escapedTitle = safeTitle.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const escapedUrl = safeUrl.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                const sourceId = `topic-kw-${keyword}`;
+                const escapedSourceName = escapeHtml(keyword).replace(/'/g, "\\'");
+                
+                // 总结按钮 HTML
+                const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${newsId}" data-title="${safeTitle}" data-url="${safeUrl}" data-source-id="${sourceId}" data-source-name="${escapedSourceName}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${newsId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSourceName}')"></button>`;
+                
+                return `
+                <li class="news-item" data-news-id="${newsId}" data-news-title="${safeTitle}" data-news-url="${safeUrl}">
                     <div class="news-item-content">
                         <span class="news-index">${idx + 1}</span>
-                        <a class="news-title" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">
-                            ${escapeHtml(item.title)}
+                        <a class="news-title" href="${safeUrl}" target="_blank" rel="noopener noreferrer">
+                            ${safeTitle}
                         </a>
                         <div class="news-actions">
                             <span class="tr-news-date">${formatDate(item.published_at)}</span>
+                            ${summaryBtnHtml}
                         </div>
                     </div>
                 </li>
-            `).join('')
+            `;
+            }).join('')
             : '<li class="news-placeholder" style="color:#9ca3af;text-align:center;padding:20px;">暂无相关新闻</li>';
         
         // 只有有新闻时才显示数量

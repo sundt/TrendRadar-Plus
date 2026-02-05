@@ -296,7 +296,8 @@ async def _quick_validate_rss_url(url: str) -> bool:
         return False
     
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        # 减少超时时间到 5 秒，避免长时间等待
+        async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
             response = await client.get(url, headers={
                 "User-Agent": "Mozilla/5.0 (compatible; HotNews/1.0)"
             })
@@ -425,40 +426,50 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[
             sources_result = json.loads(data["choices"][0]["message"]["content"])
             raw_sources = sources_result.get("sources", [])
             
-            # 预验证 AI 推荐的源，只保留有效的
-            for src in raw_sources:
-                if src.get("type") == "rss":
+            # 并行验证 AI 推荐的 RSS 源，大幅减少等待时间
+            rss_sources = [src for src in raw_sources if src.get("type") == "rss" and src.get("url")]
+            mp_sources = [src for src in raw_sources if src.get("type") == "wechat_mp"]
+            
+            # 并行验证所有 RSS 源
+            if rss_sources:
+                async def validate_rss_source(src):
                     url_to_check = src.get("url", "")
-                    if url_to_check:
-                        is_valid = await _quick_validate_rss_url(url_to_check)
-                        if is_valid:
-                            src["verified"] = True
-                            src["source"] = "ai_verified"
-                            ai_recommended_sources.append(src)
-                            logger.info(f"AI RSS source validated: {src.get('name')}")
-                        else:
-                            logger.info(f"AI RSS source invalid, skipped: {src.get('name')} - {url_to_check}")
-                elif src.get("type") == "wechat_mp":
-                    # 验证公众号是否真实存在（必须通过实时搜索验证）
-                    mp_name = src.get("name") or src.get("wechat_id", "")
-                    if mp_name and online_conn:
-                        mp_info = await _validate_mp_by_search(online_conn, mp_name)
-                        if mp_info:
-                            # 公众号验证成功，使用真实信息
-                            src["verified"] = True
-                            src["source"] = "ai_verified"
-                            src["wechat_id"] = mp_info.get("fakeid", "")
-                            src["name"] = mp_info.get("nickname", mp_name)
-                            src["avatar"] = mp_info.get("round_head_img", "")
-                            if mp_info.get("signature"):
-                                src["description"] = mp_info.get("signature", "")
-                            ai_recommended_sources.append(src)
-                            logger.info(f"AI MP source validated: {mp_name} -> {mp_info.get('nickname')}")
-                        else:
-                            logger.info(f"AI MP source not found, skipped: {mp_name}")
+                    is_valid = await _quick_validate_rss_url(url_to_check)
+                    return (src, is_valid)
+                
+                rss_results = await asyncio.gather(*[validate_rss_source(src) for src in rss_sources])
+                
+                for src, is_valid in rss_results:
+                    if is_valid:
+                        src["verified"] = True
+                        src["source"] = "ai_verified"
+                        ai_recommended_sources.append(src)
+                        logger.info(f"AI RSS source validated: {src.get('name')}")
                     else:
-                        # 没有数据库连接，跳过公众号
-                        logger.info(f"AI MP source skipped (no conn): {mp_name}")
+                        logger.info(f"AI RSS source invalid, skipped: {src.get('name')} - {src.get('url')}")
+            
+            # 串行验证公众号（因为需要数据库连接）
+            for src in mp_sources:
+                # 验证公众号是否真实存在（必须通过实时搜索验证）
+                mp_name = src.get("name") or src.get("wechat_id", "")
+                if mp_name and online_conn:
+                    mp_info = await _validate_mp_by_search(online_conn, mp_name)
+                    if mp_info:
+                        # 公众号验证成功，使用真实信息
+                        src["verified"] = True
+                        src["source"] = "ai_verified"
+                        src["wechat_id"] = mp_info.get("fakeid", "")
+                        src["name"] = mp_info.get("nickname", mp_name)
+                        src["avatar"] = mp_info.get("round_head_img", "")
+                        if mp_info.get("signature"):
+                            src["description"] = mp_info.get("signature", "")
+                        ai_recommended_sources.append(src)
+                        logger.info(f"AI MP source validated: {mp_name} -> {mp_info.get('nickname')}")
+                    else:
+                        logger.info(f"AI MP source not found, skipped: {mp_name}")
+                else:
+                    # 没有数据库连接，跳过公众号
+                    logger.info(f"AI MP source skipped (no conn): {mp_name}")
             
             logger.info(f"AI recommended {len(raw_sources)} sources, {len(ai_recommended_sources)} passed validation")
     except Exception as e:
