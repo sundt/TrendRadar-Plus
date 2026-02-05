@@ -204,8 +204,15 @@ ready(function () {
         (config.platformOrder && typeof config.platformOrder === 'object' && Object.keys(config.platformOrder).length > 0)
     );
 
-    if (hasCustomConfig) {
-        // 有自定义配置，触发数据刷新来应用用户配置
+    // 获取默认配置中的隐藏栏目
+    const defaultConfig = TR.settings.getDefaultCategoryConfig();
+    const hasDefaultHiddenCategories = defaultConfig && 
+        defaultConfig.hiddenDefaultCategories && 
+        defaultConfig.hiddenDefaultCategories.length > 0;
+
+    // 如果有自定义配置，或者有默认隐藏的栏目，都需要刷新数据
+    if (hasCustomConfig || hasDefaultHiddenCategories) {
+        // 触发数据刷新来应用配置
         // renderViewerFromData 完成后会添加 .categories-ready 类
         TR.data.refreshViewerData({ preserveScroll: false });
 

@@ -706,8 +706,15 @@ export const data = {
             const badgeSports = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
             const badge = `${badgeCategory}${badgeSports}`;
             const activeClass = (String(catId) === String(activeTabId)) ? ' active' : '';
+            
+            // Check if this is a topic tab
+            const isTopicTab = String(catId).startsWith('topic-');
+            const topicId = isTopicTab ? catId.replace('topic-', '') : '';
+            const topicTabClass = isTopicTab ? ' topic-tab' : '';
+            const topicIdAttr = isTopicTab ? ` data-topic-id="${escapeHtml(topicId)}"` : '';
+            
             return `
-            <div class="category-tab${activeClass}" data-category="${escapeHtml(catId)}" draggable="false" onclick="switchTab('${escapeHtml(catId)}')">
+            <div class="category-tab${activeClass}${topicTabClass}" data-category="${escapeHtml(catId)}"${topicIdAttr} draggable="false" onclick="switchTab('${escapeHtml(catId)}')">
                 <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
                 <div class="category-tab-icon">${icon}</div>
                 <div class="category-tab-name">${name}${badge}</div>

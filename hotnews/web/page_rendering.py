@@ -234,12 +234,14 @@ def _build_topic_platforms(
             except Exception:
                 pass
         
-        platforms[platform_id] = {
-            "id": platform_id,
-            "name": f"🔍 {kw}",
-            "news": news_items,
-            "is_new": False,
-        }
+        # Only add platform if it has news
+        if news_items:
+            platforms[platform_id] = {
+                "id": platform_id,
+                "name": f"🔍 {kw}",
+                "news": news_items,
+                "is_new": False,
+            }
     
     return platforms
 

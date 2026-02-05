@@ -118,9 +118,11 @@ export const settings = {
     },
 
     getDefaultCategoryConfig() {
+        console.log('[Settings] getDefaultCategoryConfig called, _defaultCategories:', _defaultCategories ? Object.keys(_defaultCategories).length : 'null');
         if (!_defaultCategories) {
             _defaultCategories = {};
             _allPlatforms = {};
+            console.log('[Settings] Initializing _defaultCategories from DOM');
             document.querySelectorAll('.category-tab').forEach(tab => {
                 const catId = tab.dataset.category;
                 const icon = tab.querySelector('.category-tab-icon')?.textContent?.trim() || '📁';
@@ -142,6 +144,7 @@ export const settings = {
                 }
             });
         }
+        console.log('[Settings] getDefaultCategoryConfig returning with categoryOrder:', Object.keys(_defaultCategories));
         return {
             version: CATEGORY_CONFIG_VERSION,
             customCategories: [],
@@ -1039,6 +1042,8 @@ export const settings = {
     },
 
     applyCategoryConfigToData(serverCategories) {
+        console.log('[Settings] applyCategoryConfigToData called with', Object.keys(serverCategories || {}).length, 'categories');
+        
         // Initialize _defaultCategories from serverCategories FIRST
         // This ensures getMergedCategoryConfig has correct data
         if (!_defaultCategories) {
@@ -1069,6 +1074,8 @@ export const settings = {
 
         // Now get merged config (with _defaultCategories properly initialized)
         const merged = this.getMergedCategoryConfig();
+        
+        console.log('[Settings] applyCategoryConfigToData - hiddenCategories:', merged.hiddenDefaultCategories);
 
         const allPlatformData = {};
         Object.values(serverCategories).forEach(cat => {
@@ -1079,14 +1086,27 @@ export const settings = {
 
         const result = {};
         const hiddenCategories = merged.hiddenDefaultCategories || [];
+        console.log('[Settings] applyCategoryConfigToData - filtering with hiddenCategories:', hiddenCategories);
         const hiddenPlatforms = (merged.hiddenPlatforms || []).map((x) => String(x || '').trim()).filter(Boolean);
         const hiddenPlatformSet = new Set(hiddenPlatforms);
-        const categoryOrder = merged.categoryOrder || Object.keys(serverCategories);
+        // Fix: use serverCategories keys if categoryOrder is empty
+        let categoryOrder = merged.categoryOrder;
+        if (!categoryOrder || categoryOrder.length === 0) {
+            categoryOrder = Object.keys(serverCategories);
+            console.log('[Settings] applyCategoryConfigToData - categoryOrder was empty, using serverCategories keys');
+        }
         const customCategories = merged.customCategories || [];
         const platformOrder = merged.platformOrder || {};
+        
+        console.log('[Settings] applyCategoryConfigToData - categoryOrder:', categoryOrder);
+        console.log('[Settings] applyCategoryConfigToData - categoryOrder.length:', categoryOrder.length);
+        console.log('[Settings] applyCategoryConfigToData - serverCategories keys:', Object.keys(serverCategories));
 
         categoryOrder.forEach(catId => {
-            if (hiddenCategories.includes(catId)) return;
+            if (hiddenCategories.includes(catId)) {
+                console.log('[Settings] Hiding category:', catId);
+                return;
+            }
 
             if (String(catId || '').startsWith('rsscol-')) return;
 
