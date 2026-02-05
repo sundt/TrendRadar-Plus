@@ -1008,6 +1008,8 @@ export const data = {
         // 数据渲染完成，移除早期隐藏样式并揭开幕布显示栏目
         const earlyHide = document.getElementById('early-hide');
         if (earlyHide) earlyHide.remove();
+        const earlyHideCategories = document.getElementById('early-hide-categories');
+        if (earlyHideCategories) earlyHideCategories.remove();
         document.body.classList.add('categories-ready');
 
         TR.paging.scheduleAutofillActiveTab({ force: true, maxSteps: 1 });

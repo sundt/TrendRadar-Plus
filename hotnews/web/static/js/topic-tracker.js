@@ -9,6 +9,24 @@
     let topics = [];
     let currentEditTopic = null;
     let generatedData = null; // { icon, keywords, recommended_sources }
+    
+    // Loading state management (per topic)
+    const topicLoadingState = new Map(); // topicId -> { loading: boolean, loaded: boolean }
+    
+    function getTopicState(topicId) {
+        if (!topicLoadingState.has(topicId)) {
+            topicLoadingState.set(topicId, { loading: false, loaded: false });
+        }
+        return topicLoadingState.get(topicId);
+    }
+    
+    function resetTopicState(topicId) {
+        topicLoadingState.set(topicId, { loading: false, loaded: false });
+    }
+    
+    function resetAllTopicStates() {
+        topicLoadingState.clear();
+    }
 
     // DOM Elements (will be initialized after DOM ready)
     let modalOverlay = null;
@@ -197,10 +215,35 @@
             const catId = tab.dataset.category;
             const topicId = catId.replace('topic-', '');
             
-            // 添加点击事件来加载新闻
+            // Click 事件
             tab.addEventListener('click', () => {
                 setTimeout(() => loadTopicNewsIfNeeded(topicId), 100);
             });
+            
+            // Touch 事件（移动端/微信浏览器）
+            tab.addEventListener('touchstart', () => {
+                setTimeout(() => loadTopicNewsIfNeeded(topicId), 100);
+            }, { passive: true });
+        });
+        
+        // MutationObserver 监听 Tab 激活（兼容微信浏览器等特殊环境）
+        document.querySelectorAll('.tab-pane[id^="tab-topic-"]').forEach(pane => {
+            const topicId = pane.id.replace('tab-topic-', '');
+            
+            const observer = new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                        if (pane.classList.contains('active')) {
+                            const state = getTopicState(topicId);
+                            if (!state.loading && !state.loaded) {
+                                loadTopicNewsIfNeeded(topicId);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            observer.observe(pane, { attributes: true, attributeFilter: ['class'] });
         });
     }
 
@@ -208,11 +251,20 @@
      * Load topic news if not already loaded
      */
     function loadTopicNewsIfNeeded(topicId) {
+        const state = getTopicState(topicId);
+        
+        // 防止重复加载
+        if (state.loading) {
+            console.log(`[TopicTracker] Topic ${topicId} already loading, skipping`);
+            return;
+        }
+        if (state.loaded) {
+            console.log(`[TopicTracker] Topic ${topicId} already loaded, skipping`);
+            return;
+        }
+        
         const grid = document.getElementById(`topicCards-${topicId}`);
         if (!grid) return;
-        
-        // 检查是否已加载（没有 placeholder）
-        if (!grid.querySelector('.news-placeholder')) return;
         
         loadTopicNews(topicId);
     }
@@ -244,19 +296,125 @@
     }
 
     /**
-     * Load news for a topic
+     * Load news for a topic with timeout and error handling
      */
-    async function loadTopicNews(topicId) {
+    async function loadTopicNews(topicId, force = false) {
+        const state = getTopicState(topicId);
+        
+        // 防止重复加载
+        if (state.loading) {
+            console.log(`[TopicTracker] Topic ${topicId} already loading, skipping`);
+            return;
+        }
+        if (state.loaded && !force) {
+            console.log(`[TopicTracker] Topic ${topicId} already loaded, skipping`);
+            return;
+        }
+        
+        const container = document.getElementById(`topicCards-${topicId}`);
+        if (!container) {
+            console.error(`[TopicTracker] Container topicCards-${topicId} not found`);
+            return;
+        }
+        
+        state.loading = true;
+        console.log(`[TopicTracker] Loading news for topic ${topicId}...`);
+        
+        // 显示加载状态
+        showLoadingState(container);
+        
         try {
-            const response = await fetch(`/api/topics/${topicId}/news?limit=50`, { credentials: 'include' });
+            // 带超时的 API 请求（15秒）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            
+            const response = await fetch(`/api/topics/${topicId}/news?limit=50`, {
+                credentials: 'include',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    renderLoginRequired(container, topicId);
+                    return;
+                }
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
             
             if (data.ok && data.keywords_news) {
                 renderTopicNews(topicId, data.keywords_news);
+                state.loaded = true;
+                
+                // Log cache status
+                if (data.cached) {
+                    console.log(`[TopicTracker] Loaded from cache (age: ${data.cache_age}s)`);
+                }
+            } else {
+                throw new Error(data.error || '加载失败');
             }
         } catch (e) {
-            console.error('Failed to load topic news:', e);
+            console.error(`[TopicTracker] Load topic ${topicId} failed:`, e);
+            const errorMsg = e.name === 'AbortError' ? '请求超时，请重试' : (e.message || '加载失败');
+            renderError(container, errorMsg, topicId);
+        } finally {
+            state.loading = false;
         }
+    }
+    
+    /**
+     * Show loading state in container
+     */
+    function showLoadingState(container) {
+        container.innerHTML = `
+            <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                <div style="font-size:48px;margin-bottom:16px;">🔍</div>
+                <div style="font-size:16px;">加载中...</div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Render error state with retry button
+     */
+    function renderError(container, message, topicId) {
+        container.innerHTML = `
+            <div class="topic-error-state" style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;">
+                <div style="font-size:48px;margin-bottom:16px;">😕</div>
+                <div style="font-size:16px;margin-bottom:16px;">加载失败: ${escapeHtml(message)}</div>
+                <button onclick="TopicTracker.retryLoadTopic('${escapeHtml(topicId)}')" 
+                        style="padding:8px 16px;background:#22c55e;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;">
+                    重试
+                </button>
+            </div>
+        `;
+    }
+    
+    /**
+     * Render login required state
+     */
+    function renderLoginRequired(container, topicId) {
+        container.innerHTML = `
+            <div class="topic-login-required" style="text-align:center;padding:60px 20px;width:100%;">
+                <div style="font-size:48px;margin-bottom:16px;">🔒</div>
+                <div style="font-size:16px;color:#374151;margin-bottom:10px;font-weight:600;">请先登录</div>
+                <div style="font-size:13px;color:#6b7280;margin-bottom:20px;">登录后即可查看主题新闻</div>
+                <button onclick="openLoginModal()" 
+                        style="padding:10px 22px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:white;border:none;cursor:pointer;border-radius:8px;font-weight:500;font-size:14px;">
+                    立即登录
+                </button>
+            </div>
+        `;
+    }
+    
+    /**
+     * Retry loading a topic (called from error state)
+     */
+    function retryLoadTopic(topicId) {
+        resetTopicState(topicId);
+        loadTopicNews(topicId, true);
     }
 
     /**
@@ -897,10 +1055,11 @@
     }
 
     /**
-     * Refresh a topic's news
+     * Refresh a topic's news (force reload)
      */
     function refreshTopic(topicId) {
-        loadTopicNews(topicId);
+        resetTopicState(topicId);
+        loadTopicNews(topicId, true);
     }
 
     /**
@@ -1750,7 +1909,9 @@
         doMpSearch,
         toggleMpSelection,
         removeMpSelection,
-        refreshWechatQR
+        refreshWechatQR,
+        retryLoadTopic,
+        loadTopicNews
     };
 
     // Initialize when DOM is ready

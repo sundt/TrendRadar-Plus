@@ -112,6 +112,15 @@ export const settings = {
             } else {
                 document.cookie = `hotnews_has_config=; path=/; max-age=0`;
             }
+            
+            // 同步隐藏的栏目列表到 Cookie，供服务端过滤使用
+            const hiddenCats = config.hiddenDefaultCategories || [];
+            if (hiddenCats.length > 0) {
+                const hiddenJson = JSON.stringify(hiddenCats);
+                document.cookie = `hotnews_hidden_cats=${encodeURIComponent(hiddenJson)}; path=/; max-age=${maxAge}; SameSite=Lax`;
+            } else {
+                document.cookie = `hotnews_hidden_cats=; path=/; max-age=0`;
+            }
         } catch (e) {
             console.error('Failed to sync config to cookie:', e);
         }
@@ -165,7 +174,11 @@ export const settings = {
         console.log('[Settings] userConfig:', userConfig);
         console.log('[Settings] defaultConfig.hiddenDefaultCategories:', defaultConfig.hiddenDefaultCategories);
         
-        if (!userConfig) return defaultConfig;
+        if (!userConfig) {
+            // 新用户：同步默认隐藏列表到 Cookie
+            this.syncConfigToCookie(defaultConfig);
+            return defaultConfig;
+        }
 
         const merged = {
             ...defaultConfig,

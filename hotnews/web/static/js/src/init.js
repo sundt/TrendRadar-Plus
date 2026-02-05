@@ -120,6 +120,8 @@ ready(function () {
             try {
                 const early = document.getElementById('early-hide');
                 if (early) early.remove();
+                const earlyCategories = document.getElementById('early-hide-categories');
+                if (earlyCategories) earlyCategories.remove();
             } catch (e) {
                 // ignore
             }
@@ -226,6 +228,8 @@ ready(function () {
                 try {
                     const early = document.getElementById('early-hide');
                     if (early) early.remove();
+                    const earlyCategories = document.getElementById('early-hide-categories');
+                    if (earlyCategories) earlyCategories.remove();
                 } catch (e) {
                     // ignore
                 }

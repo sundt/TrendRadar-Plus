@@ -393,6 +393,49 @@ def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+# 默认隐藏的栏目（与前端 settings.js 保持一致）
+DEFAULT_HIDDEN_CATEGORIES = ['other', 'general', 'social', 'tech_news', 'developer']
+
+
+def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str, Any]:
+    """
+    过滤默认隐藏的栏目，减少 SSR 数据量。
+    
+    逻辑：
+    1. 检查用户是否有自定义配置（通过 Cookie）
+    2. 如果没有自定义配置，使用默认隐藏列表
+    3. 如果有自定义配置，使用用户的隐藏列表
+    """
+    try:
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if not isinstance(cats, dict):
+            return data
+        
+        # 尝试从 Cookie 读取用户的隐藏配置
+        hidden_categories = DEFAULT_HIDDEN_CATEGORIES
+        try:
+            config_cookie = request.cookies.get("hotnews_hidden_cats", "")
+            if config_cookie:
+                # Cookie 值是 URL 编码的 JSON，需要先解码
+                decoded_cookie = unquote(config_cookie)
+                user_hidden = json.loads(decoded_cookie)
+                if isinstance(user_hidden, list) and len(user_hidden) > 0:
+                    hidden_categories = user_hidden
+        except Exception:
+            pass
+        
+        # 过滤隐藏的栏目
+        filtered_cats = {}
+        for cat_id, cat_data in cats.items():
+            if cat_id not in hidden_categories:
+                filtered_cats[cat_id] = cat_data
+        
+        data["categories"] = filtered_cats
+        return data
+    except Exception:
+        return data
+
+
 def _inject_explore_category(data: Dict[str, Any]) -> Dict[str, Any]:
     try:
         cats = data.get("categories") if isinstance(data, dict) else None
@@ -660,6 +703,9 @@ async def render_viewer_page(
                 data = merge_rss_subscription_news_into_data(request=request, data=data)
             except Exception:
                 pass
+
+        # 过滤默认隐藏的栏目，减少 SSR 数据量
+        data = _filter_default_hidden_categories(data, request)
 
         # 优化：只保留第一个激活栏目的完整数据，其他栏目只保留元数据
         # 这样可以大幅减少初始 HTML 大小

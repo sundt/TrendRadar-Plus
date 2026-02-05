@@ -295,17 +295,161 @@ discovery_news_cache = TimelineCache(max_items=1500)  # 新发现 (discovery)
 # featured_mps uses API-level caching, not timeline cache
 
 
+class TopicNewsCache:
+    """Per-user per-topic cache for topic news."""
+    
+    def __init__(
+        self,
+        ttl_seconds: int = DEFAULT_CACHE_TTL,
+        max_topics_per_user: int = 20,
+        max_users: int = DEFAULT_MAX_USERS
+    ):
+        """
+        Initialize per-user per-topic cache.
+        
+        Args:
+            ttl_seconds: Cache time-to-live in seconds
+            max_topics_per_user: Maximum topics per user (LRU eviction)
+            max_users: Maximum number of users to cache
+        """
+        self._ttl = ttl_seconds
+        self._max_topics = max_topics_per_user
+        self._max_users = max_users
+        # Dict of user_id -> {topic_id -> {keywords_news, created_at}}
+        self._cache: Dict[int, Dict[str, Dict[str, Any]]] = {}
+        # Track user access order for LRU
+        self._user_access_order: List[int] = []
+    
+    def _touch_user(self, user_id: int) -> None:
+        """Update user access order for LRU."""
+        if user_id in self._user_access_order:
+            self._user_access_order.remove(user_id)
+        self._user_access_order.append(user_id)
+    
+    def _evict_users_if_needed(self) -> None:
+        """Evict oldest users if over limit."""
+        while len(self._cache) >= self._max_users and self._user_access_order:
+            oldest_user = self._user_access_order.pop(0)
+            self._cache.pop(oldest_user, None)
+    
+    def get(self, user_id: int, topic_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get cached topic news if valid.
+        
+        Args:
+            user_id: User ID
+            topic_id: Topic ID
+            
+        Returns:
+            Cached keywords_news dict or None if cache miss/expired
+        """
+        user_cache = self._cache.get(user_id)
+        if not user_cache:
+            return None
+        
+        entry = user_cache.get(topic_id)
+        if not entry:
+            return None
+        
+        # Check TTL
+        if (time.time() - entry["created_at"]) >= self._ttl:
+            user_cache.pop(topic_id, None)
+            return None
+        
+        self._touch_user(user_id)
+        return entry["keywords_news"]
+    
+    def set(self, user_id: int, topic_id: str, keywords_news: Dict[str, Any]) -> None:
+        """
+        Store topic news in cache.
+        
+        Args:
+            user_id: User ID
+            topic_id: Topic ID
+            keywords_news: Dict of keyword -> news list
+        """
+        self._evict_users_if_needed()
+        
+        if user_id not in self._cache:
+            self._cache[user_id] = {}
+        
+        user_cache = self._cache[user_id]
+        
+        # LRU eviction for topics within user
+        if len(user_cache) >= self._max_topics and topic_id not in user_cache:
+            # Find oldest topic
+            oldest_topic = min(user_cache.items(), key=lambda x: x[1]["created_at"])
+            user_cache.pop(oldest_topic[0], None)
+        
+        user_cache[topic_id] = {
+            "keywords_news": keywords_news,
+            "created_at": time.time()
+        }
+        self._touch_user(user_id)
+    
+    def invalidate(self, user_id: Optional[int] = None, topic_id: Optional[str] = None) -> None:
+        """
+        Clear cache.
+        
+        Args:
+            user_id: If provided, clear only this user's cache
+            topic_id: If provided with user_id, clear only this topic
+        """
+        if user_id is None:
+            self._cache.clear()
+            self._user_access_order.clear()
+        elif topic_id is None:
+            self._cache.pop(user_id, None)
+            if user_id in self._user_access_order:
+                self._user_access_order.remove(user_id)
+        else:
+            if user_id in self._cache:
+                self._cache[user_id].pop(topic_id, None)
+    
+    @property
+    def is_valid(self) -> bool:
+        """Check if any cache entries exist."""
+        return len(self._cache) > 0
+    
+    @property
+    def user_count(self) -> int:
+        """Get number of cached users."""
+        return len(self._cache)
+    
+    @property
+    def topic_count(self) -> int:
+        """Get total number of cached topics across all users."""
+        return sum(len(topics) for topics in self._cache.values())
+    
+    @property
+    def age_seconds(self) -> float:
+        """Get age of oldest cache entry."""
+        if not self._cache:
+            return float('inf')
+        oldest = float('inf')
+        for user_cache in self._cache.values():
+            for entry in user_cache.values():
+                oldest = min(oldest, time.time() - entry["created_at"])
+        return oldest
+
+
+# Topic news cache instance
+topic_news_cache = TopicNewsCache()
+
+
 def clear_all_timeline_caches() -> Dict[str, bool]:
     """Clear all timeline caches."""
     brief_timeline_cache.invalidate()
     explore_timeline_cache.invalidate()
     my_tags_cache.invalidate()
     discovery_news_cache.invalidate()
+    topic_news_cache.invalidate()
     return {
         "brief_cleared": True,
         "explore_cleared": True,
         "my_tags_cleared": True,
         "discovery_cleared": True,
+        "topic_news_cleared": True,
     }
 
 
@@ -332,5 +476,11 @@ def get_cache_status() -> Dict[str, Any]:
             "valid": discovery_news_cache.is_valid,
             "item_count": discovery_news_cache.item_count,
             "age_seconds": round(discovery_news_cache.age_seconds, 1),
+        },
+        "topic_news": {
+            "valid": topic_news_cache.is_valid,
+            "user_count": topic_news_cache.user_count,
+            "topic_count": topic_news_cache.topic_count,
+            "age_seconds": round(topic_news_cache.age_seconds, 1),
         },
     }

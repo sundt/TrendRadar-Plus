@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse
 from hotnews.storage.topic_storage import TopicStorage, init_topic_tables
 from hotnews.web.db_online import get_online_db_conn
 from hotnews.web.user_db import get_user_db_conn
+from hotnews.web.timeline_cache import topic_news_cache
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,7 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
 async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = Body(...)):
     """Update a topic."""
     user = _get_current_user(request)
+    user_id = user["id"]
     storage = _get_storage(request)
     
     # Validate
@@ -179,7 +181,7 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
     
     success = storage.update_topic(
         topic_id=topic_id,
-        user_id=str(user["id"]),
+        user_id=str(user_id),
         name=name,
         icon=body.get("icon"),
         keywords=keywords,
@@ -191,13 +193,17 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
     if not success:
         return JSONResponse({"ok": False, "error": "更新失败，主题不存在或无权限"}, status_code=404)
     
+    # Invalidate cache for this topic
+    topic_news_cache.invalidate(user_id=user_id, topic_id=topic_id)
+    logger.debug(f"[TopicAPI] Cache invalidated for user={user_id}, topic={topic_id}")
+    
     # 如果更新了数据源，立即触发抓取
     rss_source_ids = body.get("rss_source_ids")
     if rss_source_ids:
         asyncio.create_task(_trigger_source_fetch(rss_source_ids, request.app.state.project_root))
     
     # Return updated topic
-    topic = storage.get_topic_by_id(topic_id, str(user["id"]))
+    topic = storage.get_topic_by_id(topic_id, str(user_id))
     return {"ok": True, "topic": topic}
 
 
@@ -205,12 +211,17 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
 async def delete_topic(request: Request, topic_id: str):
     """Delete a topic."""
     user = _get_current_user(request)
+    user_id = user["id"]
     storage = _get_storage(request)
     
-    success = storage.delete_topic(topic_id, str(user["id"]))
+    success = storage.delete_topic(topic_id, str(user_id))
     
     if not success:
         return JSONResponse({"ok": False, "error": "删除失败，主题不存在或无权限"}, status_code=404)
+    
+    # Invalidate cache for this topic
+    topic_news_cache.invalidate(user_id=user_id, topic_id=topic_id)
+    logger.debug(f"[TopicAPI] Cache invalidated for deleted topic: user={user_id}, topic={topic_id}")
     
     return {"ok": True}
 
@@ -1125,11 +1136,13 @@ async def get_topic_news(
 ):
     """
     Get news for a topic, grouped by keywords.
+    Uses caching for better performance.
     """
     user = _get_current_user(request)
+    user_id = user["id"]
     storage = _get_storage(request)
     
-    topic = storage.get_topic_by_id(topic_id, str(user["id"]))
+    topic = storage.get_topic_by_id(topic_id, str(user_id))
     if not topic:
         return JSONResponse({"ok": False, "error": "主题不存在或无权限"}, status_code=404)
     
@@ -1140,6 +1153,15 @@ async def get_topic_news(
             return JSONResponse({"ok": False, "error": "关键词不存在"}, status_code=400)
         keywords = [keyword]
     
+    # Check cache first (only for full topic, not filtered by keyword)
+    if not keyword:
+        cached = topic_news_cache.get(user_id, topic_id)
+        if cached is not None:
+            cache_age = topic_news_cache._cache.get(user_id, {}).get(topic_id, {}).get("created_at", 0)
+            age_seconds = int(time.time() - cache_age) if cache_age else 0
+            logger.debug(f"[TopicAPI] Cache hit for user={user_id}, topic={topic_id}, age={age_seconds}s")
+            return {"ok": True, "keywords_news": cached, "cached": True, "cache_age": age_seconds}
+    
     # Get news for each keyword
     conn = get_online_db_conn(project_root=request.app.state.project_root)
     keywords_news = {}
@@ -1148,7 +1170,12 @@ async def get_topic_news(
         news = _search_news_by_keyword(conn, kw, topic["rss_sources"], limit)
         keywords_news[kw] = news
     
-    return {"ok": True, "keywords_news": keywords_news}
+    # Store in cache (only for full topic)
+    if not keyword:
+        topic_news_cache.set(user_id, topic_id, keywords_news)
+        logger.debug(f"[TopicAPI] Cache set for user={user_id}, topic={topic_id}")
+    
+    return {"ok": True, "keywords_news": keywords_news, "cached": False}
 
 
 def _search_news_by_keyword(
