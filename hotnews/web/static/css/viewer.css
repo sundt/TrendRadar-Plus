@@ -1,7 +1,9 @@
         :root {
-            --primary-color: #4f46e5;
-            --secondary-color: #7c3aed;
-            --cross-platform-color: #f97316;
+            --primary-color: #1d1d1f;
+            --secondary-color: #86868b;
+            --cross-platform-color: #0071e3;
+            --apple-bg: #f5f5f7;
+            --apple-card-bg: #ffffff;
         }
 
         .news-checkbox {
@@ -13,11 +15,11 @@
         }
 
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--apple-bg);
             min-height: 100vh;
             padding: 24px 0 56px;
             margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
             overflow-y: scroll;
         }
 
@@ -173,7 +175,7 @@
 
         .tr-footer-top-toggle {
             margin-left: 10px;
-            color: rgba(255, 255, 255, 0.55);
+            color: rgba(0, 0, 0, 0.45);
             font-size: 12px;
             font-weight: 600;
             text-decoration: none;
@@ -184,7 +186,7 @@
 
         .tr-footer-top-toggle:hover,
         .tr-footer-top-toggle:focus-visible {
-            color: #ffffff;
+            color: rgba(0, 0, 0, 0.7);
             text-decoration: underline;
             outline: none;
         }
@@ -7143,12 +7145,12 @@ body.eye-protection-mode .subscribe-qr-retry:hover {
 }
 
 .footer-icp {
-    color: rgba(255, 255, 255, 0.5) !important;
+    color: rgba(0, 0, 0, 0.45) !important;
     text-decoration: none !important;
 }
 
 .footer-icp:hover {
-    color: rgba(255, 255, 255, 0.8) !important;
+    color: rgba(0, 0, 0, 0.7) !important;
 }
 
 .footer-qr-wrapper {
@@ -7157,13 +7159,13 @@ body.eye-protection-mode .subscribe-qr-retry:hover {
 }
 
 .footer-qr-trigger {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(0, 0, 0, 0.5);
     text-decoration: none;
     cursor: pointer;
 }
 
 .footer-qr-trigger:hover {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(0, 0, 0, 0.75);
 }
 
 .footer-qr-popup {
@@ -7196,11 +7198,11 @@ body.eye-protection-mode .subscribe-qr-retry:hover {
 
 /* Eye protection mode */
 body.eye-protection-mode .footer-icp {
-    color: rgba(255, 255, 255, 0.35) !important;
+    color: rgba(0, 0, 0, 0.3) !important;
 }
 
 body.eye-protection-mode .footer-qr-trigger {
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(0, 0, 0, 0.35);
 }
 
 /* Mobile */
