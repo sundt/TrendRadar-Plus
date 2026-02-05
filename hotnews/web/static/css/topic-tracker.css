@@ -4,28 +4,23 @@
  */
 
 /* Topic Tab in Category Bar */
-.category-tab.topic-tab,
-.category-tab.my-tags-tab {
+.category-tab.topic-tab {
     background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
     border: 1px solid #86efac !important;
 }
 
-.category-tab.topic-tab:hover,
-.category-tab.my-tags-tab:hover {
+.category-tab.topic-tab:hover {
     background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important;
 }
 
-.category-tabs .category-tab.topic-tab.active,
-.category-tabs .category-tab.my-tags-tab.active {
+.category-tabs .category-tab.topic-tab.active {
     background: linear-gradient(135deg, #22c55e, #16a34a) !important;
     color: white !important;
     border-color: #16a34a !important;
 }
 
 .category-tabs .category-tab.topic-tab.active .category-tab-icon,
-.category-tabs .category-tab.topic-tab.active .category-tab-name,
-.category-tabs .category-tab.my-tags-tab.active .category-tab-icon,
-.category-tabs .category-tab.my-tags-tab.active .category-tab-name {
+.category-tabs .category-tab.topic-tab.active .category-tab-name {
     color: white !important;
 }
 

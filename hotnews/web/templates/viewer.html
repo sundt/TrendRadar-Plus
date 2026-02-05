@@ -191,8 +191,7 @@
             {% for cat_id, category in data.categories.items() %}
             {% set is_active = (cat_id == 'my-tags') %}
             {% set is_topic = category.is_topic %}
-            {% set is_my_tags = (cat_id == 'my-tags') %}
-            <div class="category-tab {% if is_active %}active{% endif %}{% if is_topic %} topic-tab{% endif %}{% if is_my_tags %} my-tags-tab{% endif %}" data-category="{{ cat_id }}"{% if is_topic %} data-owner-user-id="{{ category.owner_user_id }}"{% endif %} draggable="false"
+            <div class="category-tab {% if is_active %}active{% endif %}{% if is_topic %} topic-tab{% endif %}" data-category="{{ cat_id }}"{% if is_topic %} data-owner-user-id="{{ category.owner_user_id }}"{% endif %} draggable="false"
                 onclick="switchTab('{{ cat_id }}')">
                 <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
                 <div class="category-tab-icon">{{ category.icon }}</div>

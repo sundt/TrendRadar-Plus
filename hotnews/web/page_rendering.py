@@ -61,13 +61,12 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         if not isinstance(cats, dict):
             return data
         
-        # Build new categories dict with topics inserted after my-tags
+        # Build new categories dict with topics inserted BEFORE my-tags
         # 只注入元数据，新闻通过 API 动态加载
         new_cats = {}
         for k, v in cats.items():
-            new_cats[k] = v
             if k == "my-tags":
-                # Insert topics after my-tags (metadata only)
+                # Insert topics BEFORE my-tags (metadata only)
                 for topic in topics:
                     topic_cat_id = f"topic-{topic['id']}"
                     if topic_cat_id not in new_cats:
@@ -87,6 +86,7 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
                             "owner_user_id": user_id,  # 用于前端验证
                         }
                         logger.debug(f"Injected topic category: {topic_cat_id} ({topic.get('name')})")
+            new_cats[k] = v
         
         # If my-tags not found, append topics at the beginning
         if not any(k.startswith("topic-") for k in new_cats):
@@ -117,7 +117,6 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
         import logging
         logging.getLogger(__name__).warning(f"Failed to inject user topics: {e}", exc_info=True)
         return data
-
 
 def _build_topic_platforms(
     conn,
