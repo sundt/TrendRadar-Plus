@@ -245,9 +245,13 @@ async def generate_keywords(request: Request, body: Dict[str, Any] = Body(...)):
     try:
         # 获取数据库连接
         online_conn = get_online_db_conn(project_root=request.app.state.project_root)
+        user_conn = get_user_db_conn(request.app.state.project_root)
+        
+        # 检查是否有有效的微信凭证
+        has_wechat_credentials = _check_wechat_credentials(online_conn, user_conn)
         
         # Step 1: AI 生成关键词和推荐源（传入 conn 用于验证公众号）
-        ai_result = await _generate_keywords_with_ai(topic_name, online_conn)
+        ai_result = await _generate_keywords_with_ai(topic_name, online_conn, user_conn)
         
         icon = ai_result.get("icon", "🏷️")
         keywords = ai_result.get("keywords", [])
@@ -272,7 +276,8 @@ async def generate_keywords(request: Request, body: Dict[str, Any] = Body(...)):
             "ok": True,
             "icon": icon,
             "keywords": keywords,
-            "recommended_sources": all_sources
+            "recommended_sources": all_sources,
+            "has_wechat_credentials": has_wechat_credentials
         }
     except Exception as e:
         logger.error(f"AI generate keywords failed: {e}")
@@ -280,6 +285,35 @@ async def generate_keywords(request: Request, body: Dict[str, Any] = Body(...)):
             {"ok": False, "error": f"AI 生成失败: {str(e)}，请手动输入关键词"},
             status_code=500
         )
+
+
+def _check_wechat_credentials(online_conn, user_conn=None) -> bool:
+    """检查是否有有效的微信凭证"""
+    try:
+        from hotnews.kernel.wechat.credential_pool import CredentialPool
+        pool = CredentialPool()
+        pool.load_credentials(online_conn, user_conn)
+        cred = pool.get_credential()
+        return cred is not None
+    except Exception as e:
+        logger.warning(f"Failed to check wechat credentials: {e}")
+        return False
+
+
+@router.get("/check-credentials")
+async def check_credentials(request: Request):
+    """检查是否有有效的微信凭证"""
+    try:
+        user = _get_current_user(request)
+        online_conn = get_online_db_conn(project_root=request.app.state.project_root)
+        user_conn = get_user_db_conn(request.app.state.project_root)
+        has_credentials = _check_wechat_credentials(online_conn, user_conn)
+        return {"ok": True, "has_wechat_credentials": has_credentials}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Check credentials failed: {e}")
+        return {"ok": False, "has_wechat_credentials": False}
 
 
 async def _quick_validate_rss_url(url: str) -> bool:
@@ -320,13 +354,14 @@ async def _quick_validate_rss_url(url: str) -> bool:
         return False
 
 
-async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[str, Any]:
+async def _generate_keywords_with_ai(topic_name: str, online_conn=None, user_conn=None) -> Dict[str, Any]:
     """
     Call AI to generate keywords and recommend sources.
     
     Args:
         topic_name: Topic name to generate keywords for
         online_conn: Database connection for MP validation (optional)
+        user_conn: User database connection for user credentials (optional)
     
     Returns:
         Dict with icon, keywords, recommended_sources
@@ -382,12 +417,12 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[
     keywords = keywords_result.get("keywords", [])
     
     # 使用腾讯混元模型生成推荐源（更精准的公众号推荐）
-    ai_recommended_sources = await _generate_sources_with_hunyuan(topic_name, online_conn)
+    ai_recommended_sources = await _generate_sources_with_hunyuan(topic_name, online_conn, user_conn)
     
     # 如果混元模型没有返回结果，回退到阿里云模型
     if not ai_recommended_sources:
         logger.info("Hunyuan returned no sources, falling back to Dashscope")
-        ai_recommended_sources = await _generate_sources_with_dashscope(topic_name, online_conn)
+        ai_recommended_sources = await _generate_sources_with_dashscope(topic_name, online_conn, user_conn)
     
     logger.info(f"Returning keywords={len(keywords)}, ai_sources={len(ai_recommended_sources)}")
     return {
@@ -397,7 +432,7 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[
     }
 
 
-async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None) -> list:
+async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None, user_conn=None) -> list:
     """
     使用腾讯混元模型生成推荐数据源。
     混元模型对公众号有更精准的知识，可以返回准确的公众号 ID。
@@ -405,6 +440,7 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None) -> l
     Args:
         topic_name: 主题名称
         online_conn: 数据库连接（用于验证公众号）
+        user_conn: 用户数据库连接（用于用户凭证）
         
     Returns:
         推荐源列表
@@ -417,7 +453,7 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None) -> l
         logger.info("HUNYUAN_API_KEY not configured, skipping Hunyuan")
         return []
     
-    model = os.environ.get("HUNYUAN_MODEL", "hunyuan-t1")
+    model = os.environ.get("HUNYUAN_MODEL", "hunyuan-2.0-thinking-20251109")
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
     
     # 针对公众号推荐的专用 prompt
@@ -453,14 +489,26 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None) -> l
     
     try:
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(url, headers=headers, json={
+            # 混元 API 使用 OpenAI 兼容格式
+            request_body = {
                 "model": model,
                 "messages": [{"role": "user", "content": sources_prompt}],
                 "temperature": 0.5,
-                "enable_enhancement": True,  # 开启功能增强（搜索）
-                "force_search_enhancement": True,  # 强制搜索增强
-                "search_info": True,  # 返回搜索信息
-            })
+            }
+            
+            # 混元特有参数（使用 extra_body 方式或直接添加）
+            # 根据文档，这些参数直接放在请求体中
+            request_body["enable_enhancement"] = True  # 开启功能增强（搜索）
+            
+            logger.info(f"Calling Hunyuan API with model: {model}")
+            
+            response = await client.post(url, headers=headers, json=request_body)
+            
+            # 记录响应状态
+            if response.status_code != 200:
+                error_text = response.text
+                logger.warning(f"Hunyuan API error: {response.status_code} - {error_text[:500]}")
+            
             response.raise_for_status()
             data = response.json()
             
@@ -498,7 +546,7 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None) -> l
             for src in mp_sources:
                 mp_name = src.get("name") or src.get("wechat_id", "")
                 if mp_name and online_conn:
-                    mp_info = await _validate_mp_by_search(online_conn, mp_name)
+                    mp_info = await _validate_mp_by_search(online_conn, mp_name, user_conn)
                     if mp_info:
                         src["verified"] = True
                         src["source"] = "hunyuan_verified"
@@ -549,7 +597,7 @@ def _extract_json_from_response(content: str) -> str:
     return content
 
 
-async def _generate_sources_with_dashscope(topic_name: str, online_conn=None) -> list:
+async def _generate_sources_with_dashscope(topic_name: str, online_conn=None, user_conn=None) -> list:
     """
     使用阿里云 Dashscope 模型生成推荐数据源（回退方案）。
     """
@@ -637,7 +685,7 @@ async def _generate_sources_with_dashscope(topic_name: str, online_conn=None) ->
             for src in mp_sources:
                 mp_name = src.get("name") or src.get("wechat_id", "")
                 if mp_name and online_conn:
-                    mp_info = await _validate_mp_by_search(online_conn, mp_name)
+                    mp_info = await _validate_mp_by_search(online_conn, mp_name, user_conn)
                     if mp_info:
                         src["verified"] = True
                         src["source"] = "dashscope_verified"
@@ -767,6 +815,7 @@ async def validate_and_create_sources(request: Request, body: Dict[str, Any] = B
         return {"ok": True, "validated_sources": [], "failed_sources": []}
     
     conn = get_online_db_conn(project_root=request.app.state.project_root)
+    user_conn = get_user_db_conn(request.app.state.project_root)
     validated_sources = []
     failed_sources = []
     
@@ -794,7 +843,7 @@ async def validate_and_create_sources(request: Request, body: Dict[str, Any] = B
                 continue
             
             # Create WeChat MP source with auto-search
-            result = await _create_wechat_mp_source_async(conn, name, wechat_id, source.get("description", ""))
+            result = await _create_wechat_mp_source_async(conn, name, wechat_id, source.get("description", ""), user_conn)
             if result:
                 if result.get("verified", True):
                     validated_sources.append(result)
@@ -1078,7 +1127,7 @@ async def _validate_and_create_rss_source(
         return None, "数据库写入失败"
 
 
-async def _validate_mp_by_search(online_conn, name: str) -> Dict[str, Any] | None:
+async def _validate_mp_by_search(online_conn, name: str, user_conn=None) -> Dict[str, Any] | None:
     """
     Validate a WeChat MP by real-time search (not database lookup).
     
@@ -1089,6 +1138,7 @@ async def _validate_mp_by_search(online_conn, name: str) -> Dict[str, Any] | Non
     Args:
         online_conn: Online database connection (for credentials)
         name: MP name to search
+        user_conn: User database connection (for user credentials)
         
     Returns:
         MP info dict with fakeid, nickname, etc. or None if not found
@@ -1098,7 +1148,7 @@ async def _validate_mp_by_search(online_conn, name: str) -> Dict[str, Any] | Non
     
     try:
         pool = CredentialPool()
-        pool.load_credentials(online_conn, None)
+        pool.load_credentials(online_conn, user_conn)
         
         cred = pool.get_credential()
         if not cred:
@@ -1137,13 +1187,14 @@ async def _validate_mp_by_search(online_conn, name: str) -> Dict[str, Any] | Non
     return None
 
 
-async def _search_mp_by_name(online_conn, name: str) -> Dict[str, Any] | None:
+async def _search_mp_by_name(online_conn, name: str, user_conn=None) -> Dict[str, Any] | None:
     """
     Search for a WeChat MP by name using system credentials.
     
     Args:
         online_conn: Online database connection
         name: MP name to search
+        user_conn: User database connection (optional, for user credentials)
         
     Returns:
         MP info dict with fakeid, nickname, etc. or None if not found
@@ -1171,9 +1222,8 @@ async def _search_mp_by_name(online_conn, name: str) -> Dict[str, Any] | None:
     try:
         pool = CredentialPool()
         
-        # Load credentials - online_conn already has shared credentials
-        # Just load from online_conn, skip user credentials for system search
-        pool.load_credentials(online_conn, None)
+        # Load credentials from both online_conn (shared) and user_conn (user's own)
+        pool.load_credentials(online_conn, user_conn)
         
         cred = pool.get_credential()
         if not cred:
@@ -1216,7 +1266,8 @@ async def _create_wechat_mp_source_async(
     conn,
     name: str,
     wechat_id: str,
-    description: str
+    description: str,
+    user_conn=None
 ) -> Dict[str, Any] | None:
     """
     Create a WeChat MP source reference with auto-search.
@@ -1231,7 +1282,7 @@ async def _create_wechat_mp_source_async(
     nickname = name or wechat_id
     
     # Try to find real fakeid by searching
-    mp_info = await _search_mp_by_name(conn, nickname)
+    mp_info = await _search_mp_by_name(conn, nickname, user_conn)
     
     if mp_info:
         # Found real MP, use its fakeid
@@ -1324,8 +1375,12 @@ async def get_topic_news(
     limit: int = Query(50, ge=1, le=100, description="Max news per keyword")
 ):
     """
-    Get news for a topic, grouped by keywords.
+    Get news for a topic, grouped by keywords and sources.
     Uses caching for better performance.
+    
+    Returns:
+        - keywords_news: 关键词搜索结果（按关键词分组）
+        - sources_news: 订阅源最新文章（按订阅源分组）
     """
     user = _get_current_user(request)
     user_id = user["id"]
@@ -1336,6 +1391,8 @@ async def get_topic_news(
         return JSONResponse({"ok": False, "error": "主题不存在或无权限"}, status_code=404)
     
     keywords = topic["keywords"]
+    rss_sources = topic.get("rss_sources", [])
+    
     if keyword:
         # Filter to specific keyword
         if keyword not in keywords:
@@ -1343,28 +1400,189 @@ async def get_topic_news(
         keywords = [keyword]
     
     # Check cache first (only for full topic, not filtered by keyword)
+    cache_key = f"{topic_id}_v2"  # 新版本缓存 key
     if not keyword:
-        cached = topic_news_cache.get(user_id, topic_id)
+        cached = topic_news_cache.get(user_id, cache_key)
         if cached is not None:
-            cache_age = topic_news_cache._cache.get(user_id, {}).get(topic_id, {}).get("created_at", 0)
+            cache_age = topic_news_cache._cache.get(user_id, {}).get(cache_key, {}).get("created_at", 0)
             age_seconds = int(time.time() - cache_age) if cache_age else 0
             logger.debug(f"[TopicAPI] Cache hit for user={user_id}, topic={topic_id}, age={age_seconds}s")
-            return {"ok": True, "keywords_news": cached, "cached": True, "cache_age": age_seconds}
+            return {
+                "ok": True, 
+                "keywords_news": cached.get("keywords_news", {}),
+                "sources_news": cached.get("sources_news", {}),
+                "cached": True, 
+                "cache_age": age_seconds
+            }
     
-    # Get news for each keyword
+    # Get database connection
     conn = get_online_db_conn(project_root=request.app.state.project_root)
-    keywords_news = {}
     
+    # 1. Get news for each keyword (关键词搜索结果)
+    keywords_news = {}
     for kw in keywords:
-        news = _search_news_by_keyword(conn, kw, topic["rss_sources"], limit)
+        news = _search_news_by_keyword(conn, kw, rss_sources, limit)
         keywords_news[kw] = news
+    
+    # 2. Get latest articles from subscribed sources (订阅源最新文章)
+    sources_news = {}
+    if rss_sources:
+        sources_news = _get_sources_latest_articles(conn, rss_sources, limit_per_source=10)
     
     # Store in cache (only for full topic)
     if not keyword:
-        topic_news_cache.set(user_id, topic_id, keywords_news)
+        topic_news_cache.set(user_id, cache_key, {
+            "keywords_news": keywords_news,
+            "sources_news": sources_news
+        })
         logger.debug(f"[TopicAPI] Cache set for user={user_id}, topic={topic_id}")
     
-    return {"ok": True, "keywords_news": keywords_news, "cached": False}
+    return {
+        "ok": True, 
+        "keywords_news": keywords_news, 
+        "sources_news": sources_news,
+        "cached": False
+    }
+
+
+def _get_sources_latest_articles(
+    conn,
+    source_ids: List[str],
+    limit_per_source: int = 10
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    获取订阅源的最新文章。
+    
+    Args:
+        conn: 数据库连接
+        source_ids: 订阅源 ID 列表（如 mp-xxx, rss-xxx）
+        limit_per_source: 每个源的最大文章数
+        
+    Returns:
+        按源名称分组的文章字典 { "源名称": [文章列表] }
+    """
+    if not source_ids:
+        return {}
+    
+    results = {}
+    
+    # 分离公众号和 RSS 源
+    mp_fakeids = []
+    rss_ids = []
+    
+    for sid in source_ids:
+        if sid.startswith("mp-"):
+            mp_fakeids.append(sid[3:])  # 去掉 "mp-" 前缀
+        else:
+            rss_ids.append(sid)
+    
+    # 1. 获取公众号文章
+    if mp_fakeids:
+        # 先获取公众号名称
+        mp_names = {}
+        placeholders = ",".join("?" * len(mp_fakeids))
+        try:
+            cur = conn.execute(
+                f"SELECT fakeid, nickname FROM featured_wechat_mps WHERE fakeid IN ({placeholders})",
+                mp_fakeids
+            )
+            for row in cur.fetchall():
+                mp_names[row[0]] = row[1]
+        except Exception as e:
+            logger.warning(f"Failed to get MP names: {e}")
+        
+        # 获取公众号文章（从 rss_entries 中查询 mp- 前缀的源）
+        mp_source_ids = [f"mp-{fid}" for fid in mp_fakeids]
+        placeholders = ",".join("?" * len(mp_source_ids))
+        try:
+            cur = conn.execute(
+                f"""
+                SELECT source_id, id, title, url, published_at
+                FROM rss_entries
+                WHERE source_id IN ({placeholders})
+                ORDER BY published_at DESC
+                """,
+                mp_source_ids
+            )
+            
+            # 按源分组
+            source_articles = {}
+            for row in cur.fetchall():
+                source_id = row[0]
+                if source_id not in source_articles:
+                    source_articles[source_id] = []
+                if len(source_articles[source_id]) < limit_per_source:
+                    source_articles[source_id].append({
+                        "id": f"rss-{row[1]}",
+                        "title": row[2],
+                        "url": row[3],
+                        "source": source_id,
+                        "source_type": "wechat_mp",
+                        "published_at": row[4]
+                    })
+            
+            # 转换为按名称分组
+            for source_id, articles in source_articles.items():
+                fakeid = source_id[3:]  # 去掉 "mp-" 前缀
+                name = mp_names.get(fakeid, source_id)
+                results[name] = articles
+                
+        except Exception as e:
+            logger.warning(f"Failed to get MP articles: {e}")
+    
+    # 2. 获取 RSS 源文章
+    if rss_ids:
+        # 先获取 RSS 源名称
+        rss_names = {}
+        placeholders = ",".join("?" * len(rss_ids))
+        try:
+            cur = conn.execute(
+                f"SELECT id, name FROM rss_sources WHERE id IN ({placeholders})",
+                rss_ids
+            )
+            for row in cur.fetchall():
+                rss_names[row[0]] = row[1]
+        except Exception as e:
+            logger.warning(f"Failed to get RSS names: {e}")
+        
+        # 获取 RSS 文章
+        try:
+            cur = conn.execute(
+                f"""
+                SELECT source_id, id, title, url, published_at
+                FROM rss_entries
+                WHERE source_id IN ({placeholders})
+                ORDER BY published_at DESC
+                """,
+                rss_ids
+            )
+            
+            # 按源分组
+            source_articles = {}
+            for row in cur.fetchall():
+                source_id = row[0]
+                if source_id not in source_articles:
+                    source_articles[source_id] = []
+                if len(source_articles[source_id]) < limit_per_source:
+                    source_articles[source_id].append({
+                        "id": f"rss-{row[1]}",
+                        "title": row[2],
+                        "url": row[3],
+                        "source": source_id,
+                        "source_type": "rss",
+                        "published_at": row[4]
+                    })
+            
+            # 转换为按名称分组
+            for source_id, articles in source_articles.items():
+                name = rss_names.get(source_id, source_id)
+                results[name] = articles
+                
+        except Exception as e:
+            logger.warning(f"Failed to get RSS articles: {e}")
+    
+    logger.info(f"Got articles from {len(results)} sources")
+    return results
 
 
 def _search_news_by_keyword(
