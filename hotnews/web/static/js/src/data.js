@@ -804,6 +804,19 @@ export const data = {
                 </div>`;
             }
 
+            // Special handling for discovery (dynamically loaded)
+            if (String(catId) === 'discovery') {
+                return `
+                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
+                    <div class="platform-grid" id="discoveryGrid">
+                        <div class="discovery-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                            <div style="font-size:48px;margin-bottom:16px;">✨</div>
+                            <div style="font-size:16px;">发现中...</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             if (String(catId) === 'knowledge') {
                 const gridInner = _knowledgeGridHtml || `
                     <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">

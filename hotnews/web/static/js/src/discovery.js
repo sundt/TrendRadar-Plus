@@ -193,16 +193,31 @@ async function loadDiscovery(force = false) {
         return;
     }
 
+    // 先检查 tab pane 是否存在且激活
+    const tabPane = document.getElementById('tab-discovery');
+    if (!tabPane) {
+        console.log('[Discovery] Tab pane #tab-discovery not found, will retry...');
+        setTimeout(() => loadDiscovery(force), 200);
+        return;
+    }
+
+    // 如果 tab pane 不是激活状态，不加载
+    if (!tabPane.classList.contains('active')) {
+        console.log('[Discovery] Tab pane is not active, skipping load');
+        return;
+    }
+
     const container = document.getElementById('discoveryGrid');
     if (!container) {
-        console.error('[Discovery] Container #discoveryGrid not found!');
+        console.log('[Discovery] Container #discoveryGrid not found, will retry...');
         // Retry after a short delay (for WeChat browser where DOM might not be ready)
         // 增加多次重试，延长间隔
         const retryDelays = [100, 300, 500, 1000, 2000];
         retryDelays.forEach((delay, idx) => {
             setTimeout(() => {
+                const retryPane = document.getElementById('tab-discovery');
                 const retryContainer = document.getElementById('discoveryGrid');
-                if (retryContainer && !discoveryLoaded && !discoveryLoading) {
+                if (retryPane?.classList.contains('active') && retryContainer && !discoveryLoaded && !discoveryLoading) {
                     console.log(`[Discovery] Retrying after ${delay}ms (attempt ${idx + 1})`);
                     loadDiscovery(force);
                 }
@@ -428,7 +443,52 @@ function init() {
 
     setTimeout(observeTabActivation, 100);
 
+    // Patch renderViewerFromData to reset state when DOM is re-rendered
+    _patchRenderHook();
+
     console.log('[Discovery] Module initialized');
+}
+
+/**
+ * Patch TR.data.renderViewerFromData to reset discovery state after DOM re-render
+ */
+function _patchRenderHook() {
+    if (window._discoveryRenderPatched) return;
+    
+    // Wait for TR.data to be available
+    const tryPatch = () => {
+        const orig = window.TR?.data?.renderViewerFromData;
+        if (typeof orig !== 'function') {
+            setTimeout(tryPatch, 100);
+            return;
+        }
+        
+        window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
+            orig.call(window.TR.data, data, state);
+            try {
+                // Reset discovery state after DOM re-render
+                console.log('[Discovery] renderViewerFromData called, resetting state');
+                discoveryLoaded = false;
+                discoveryLoading = false;
+                
+                // If discovery tab is active, reload
+                setTimeout(() => {
+                    const activePane = document.querySelector('#tab-discovery.active');
+                    if (activePane) {
+                        console.log('[Discovery] Tab is active after re-render, loading...');
+                        loadDiscovery();
+                    }
+                }, 100);
+            } catch (e) {
+                console.error('[Discovery] renderViewerFromData patch error:', e);
+            }
+        };
+        
+        window._discoveryRenderPatched = true;
+        console.log('[Discovery] renderViewerFromData patched');
+    };
+    
+    tryPatch();
 }
 
 // Export for global access

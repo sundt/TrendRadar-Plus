@@ -56,9 +56,20 @@
         
         // Listen for viewer data rendered event to setup topic tab listeners
         document.addEventListener('viewerDataRendered', () => {
-            console.log('[TopicTracker] viewerDataRendered event received, setting up listeners...');
+            console.log('[TopicTracker] viewerDataRendered event received, resetting states and setting up listeners...');
+            // 重置所有主题的加载状态，因为 DOM 已经被重新渲染
+            resetAllTopicStates();
             addNewTopicButton();
             setupTopicTabListeners();
+            
+            // 如果当前激活的是主题 tab，重新加载
+            const activePane = document.querySelector('.tab-pane.active[id^="tab-topic-"]');
+            if (activePane) {
+                const topicId = activePane.id.replace('tab-topic-', '');
+                console.log('[TopicTracker] Active topic tab detected after re-render:', topicId);
+                setTimeout(() => loadTopicNewsIfNeeded(topicId), 100);
+            }
+        });
         });
     }
 
