@@ -190,7 +190,8 @@
         <div class="category-tabs">
             {% for cat_id, category in data.categories.items() %}
             {% set is_active = (cat_id == 'my-tags') %}
-            <div class="category-tab {% if is_active %}active{% endif %}" data-category="{{ cat_id }}" draggable="false"
+            {% set is_topic = category.is_topic %}
+            <div class="category-tab {% if is_active %}active{% endif %}{% if is_topic %} topic-tab{% endif %}" data-category="{{ cat_id }}" draggable="false"
                 onclick="switchTab('{{ cat_id }}')">
                 <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
                 <div class="category-tab-icon">{{ category.icon }}</div>
