@@ -192,10 +192,6 @@ async function loadDiscovery(force = false) {
         console.log('[Discovery] Already loading, skipping');
         return;
     }
-    if (discoveryLoaded && !force) {
-        console.log('[Discovery] Already loaded, skipping');
-        return;
-    }
 
     const container = document.getElementById('discoveryGrid');
     if (!container) {
@@ -208,6 +204,25 @@ async function loadDiscovery(force = false) {
                 loadDiscovery(force);
             }
         }, 500);
+        return;
+    }
+
+    // 关键修复：检查实际 DOM 内容，而不是只看状态标记
+    // 这样即使 DOM 被重新渲染，也能正确重新加载
+    const hasContent = container.querySelector('.platform-card');
+    if (hasContent && !force) {
+        console.log('[Discovery] Already has content in DOM, skipping');
+        discoveryLoaded = true;  // 确保状态同步
+        return;
+    }
+
+    // 如果没有内容，重置状态
+    if (!hasContent) {
+        discoveryLoaded = false;
+    }
+
+    if (discoveryLoaded && !force) {
+        console.log('[Discovery] Already loaded, skipping');
         return;
     }
 

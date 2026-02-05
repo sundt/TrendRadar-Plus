@@ -8,6 +8,35 @@
 
 ---
 
+## 🔴 根本原因已确认
+
+**Nginx 缓存配置问题**
+
+```nginx
+# /etc/nginx/conf.d/hot.uihash.com.conf
+location = / {
+    proxy_cache app_cache;
+    proxy_cache_valid 200 30s;
+    proxy_ignore_headers Cache-Control;  # ⚠️ 这是问题所在！
+}
+```
+
+**问题**: `proxy_ignore_headers Cache-Control` 导致 Nginx 忽略后端返回的 `Cache-Control: no-store` 头，仍然缓存页面 30 秒。
+
+**结果**: 用户 A 访问页面 → Nginx 缓存包含用户 A 主题的页面 → 用户 B 在 30 秒内访问 → 看到用户 A 的主题
+
+---
+
+## 数据库验证
+
+主题归属是正确的：
+- user_id=8394 (微信用户) → 1 个主题 "苹果公司"
+- user_id=8434 (chenjk9527@gmail.com) → 2 个主题 "苹果公司"
+
+问题不在数据库，而在 Nginx 缓存。
+
+---
+
 ## 代码流程分析
 
 ### 1. 主题注入流程 (`page_rendering.py`)
@@ -168,78 +197,115 @@ logger.info(f"Found {len(topics)} topics for user {user_id}: {[t['name'] for t i
 
 ---
 
+## 修复状态
+
+### ✅ 已完成
+
+1. **Nginx 缓存已禁用** - 首页、/viewer、/index.html 的缓存已注释掉
+2. **Nginx 已重载** - 配置生效
+3. **后端响应头正确** - 返回 `Cache-Control: no-store, no-cache`
+
+### ⚠️ 待处理
+
+**阿里云 CDN 缓存**
+
+响应头显示有 CDN 层：
+```
+via: cache28.l2eu95-4[255,0], kunlun10.cn9041[281,0]
+```
+
+需要在阿里云 CDN 控制台配置：
+1. 登录阿里云 CDN 控制台
+2. 找到 hot.uihash.com 域名
+3. 配置缓存规则：对 `/` 和 `/viewer` 路径设置"不缓存"
+4. 或者配置"遵循源站 Cache-Control 头"
+
+---
+
 ## 修复方案
 
-### 方案 1: 确保页面不被缓存（已实施）
+### ✅ 方案 1: 修改 Nginx 配置（推荐）
 
-```python
-# page_rendering.py - render_viewer_page()
-resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private, max-age=0"
-resp.headers["Pragma"] = "no-cache"
-resp.headers["Expires"] = "0"
-resp.headers["Vary"] = "Cookie"
-```
-
-### 方案 2: 清除 CDN 缓存
-
-如果使用 Cloudflare 或其他 CDN：
-```bash
-# Cloudflare API 清除缓存
-curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" \
-     -H "Authorization: Bearer {api_token}" \
-     -H "Content-Type: application/json" \
-     --data '{"purge_everything":true}'
-```
-
-### 方案 3: 在 Nginx 层面禁用缓存
+修改 `/etc/nginx/conf.d/hot.uihash.com.conf`，为首页添加基于 Cookie 的缓存键：
 
 ```nginx
-location / {
-    # 禁用缓存
-    add_header Cache-Control "no-store, no-cache, must-revalidate, private, max-age=0";
-    add_header Pragma "no-cache";
-    add_header Expires "0";
-    
-    proxy_pass http://localhost:8000;
-    proxy_no_cache 1;
-    proxy_cache_bypass 1;
+# 首页 - 按用户 Cookie 分别缓存
+location = / {
+    proxy_pass http://127.0.0.1:8090/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # 按 Cookie 分别缓存（不同用户不同缓存）
+    proxy_cache app_cache;
+    proxy_cache_key "$scheme$request_method$host$request_uri$cookie_hotnews_session";
+    proxy_cache_valid 200 30s;
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_background_update on;
+    proxy_cache_lock on;
+    # 移除 proxy_ignore_headers，尊重后端的 Cache-Control
+    # proxy_ignore_headers Cache-Control;  # 删除这行
+    add_header X-Cache-Status $upstream_cache_status;
 }
 ```
 
-### 方案 4: 前端验证 user_id
+**或者完全禁用首页缓存**（更安全）：
 
-在前端 JS 中添加额外的验证：
+```nginx
+location = / {
+    proxy_pass http://127.0.0.1:8090/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 
-```javascript
-// 在 topic-tracker.js 中
-async function validateTopicOwnership() {
-    const response = await fetch('/api/auth/me', { credentials: 'include' });
-    const data = await response.json();
-    
-    if (!data.ok || !data.user) {
-        // 未登录，隐藏所有主题栏目
-        document.querySelectorAll('[data-category^="topic-"]').forEach(el => {
-            el.style.display = 'none';
-        });
-    }
+    # 禁用缓存
+    proxy_no_cache 1;
+    proxy_cache_bypass 1;
+    add_header X-Cache-Status "BYPASS";
 }
+```
+
+### 执行命令
+
+```bash
+# SSH 到服务器
+ssh -p 52222 root@120.77.222.205
+
+# 备份配置
+cp /etc/nginx/conf.d/hot.uihash.com.conf /etc/nginx/conf.d/hot.uihash.com.conf.bak.$(date +%Y%m%d%H%M%S)
+
+# 编辑配置
+vim /etc/nginx/conf.d/hot.uihash.com.conf
+
+# 测试配置
+nginx -t
+
+# 重载 Nginx
+systemctl reload nginx
+
+# 清除缓存（如果有）
+rm -rf /var/cache/nginx/*
 ```
 
 ---
 
 ## 下一步行动
 
-1. **立即**: SSH 到服务器，检查数据库中的主题归属
-2. **立即**: 检查 Nginx 配置，确保没有缓存
-3. **立即**: 清除所有可能的缓存（CDN、浏览器）
-4. **验证**: 让其他用户清除浏览器缓存后重新访问
+1. **立即**: 修改 Nginx 配置，禁用首页缓存或按 Cookie 分别缓存
+2. **立即**: 重载 Nginx 配置
+3. **验证**: 不同用户登录后检查是否只能看到自己的主题
 
 ---
 
 ## 验证清单
 
-- [ ] 服务器响应头包含 `Cache-Control: no-store`
-- [ ] Nginx 配置禁用缓存
-- [ ] CDN 缓存已清除（如果使用）
-- [ ] 数据库中主题的 user_id 正确
-- [ ] 不同用户登录后看到的主题不同
+- [x] Nginx 配置已修改（禁用首页缓存）
+- [x] Nginx 配置测试通过 (`nginx -t`)
+- [x] Nginx 已重载 (`systemctl reload nginx`)
+- [x] 后端返回正确的 Cache-Control 头
+- [ ] 阿里云 CDN 配置不缓存首页（需要手动配置）
+- [ ] 用户 A 登录后只能看到自己的主题
+- [ ] 用户 B 登录后只能看到自己的主题
+- [ ] 未登录用户看不到任何主题
