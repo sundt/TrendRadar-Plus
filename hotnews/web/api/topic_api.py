@@ -381,8 +381,188 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[
     icon = keywords_result.get("icon", "🏷️")
     keywords = keywords_result.get("keywords", [])
     
-    # Prompt for recommending data sources (with web search)
-    # 改进 prompt，要求 AI 更谨慎地推荐
+    # 使用腾讯混元模型生成推荐源（更精准的公众号推荐）
+    ai_recommended_sources = await _generate_sources_with_hunyuan(topic_name, online_conn)
+    
+    # 如果混元模型没有返回结果，回退到阿里云模型
+    if not ai_recommended_sources:
+        logger.info("Hunyuan returned no sources, falling back to Dashscope")
+        ai_recommended_sources = await _generate_sources_with_dashscope(topic_name, online_conn)
+    
+    logger.info(f"Returning keywords={len(keywords)}, ai_sources={len(ai_recommended_sources)}")
+    return {
+        "icon": icon,
+        "keywords": keywords,
+        "recommended_sources": ai_recommended_sources
+    }
+
+
+async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None) -> list:
+    """
+    使用腾讯混元模型生成推荐数据源。
+    混元模型对公众号有更精准的知识，可以返回准确的公众号 ID。
+    
+    Args:
+        topic_name: 主题名称
+        online_conn: 数据库连接（用于验证公众号）
+        
+    Returns:
+        推荐源列表
+    """
+    import httpx
+    import os
+    
+    api_key = os.environ.get("HUNYUAN_API_KEY", "")
+    if not api_key:
+        logger.info("HUNYUAN_API_KEY not configured, skipping Hunyuan")
+        return []
+    
+    model = os.environ.get("HUNYUAN_MODEL", "hunyuan-t1")
+    url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+    
+    # 针对公众号推荐的专用 prompt
+    sources_prompt = f"""你是一个微信公众号和 RSS 数据源专家。用户想要追踪关于「{topic_name}」的新闻和资讯。
+
+请推荐 8-10 个与该主题相关的信息源：
+
+要求：
+1. 微信公众号：请提供准确的公众号名称和微信号（如果知道的话），优先推荐 5-6 个公众号
+2. RSS 源：请提供确实存在的 RSS/Atom 订阅地址，推荐 3-4 个 RSS 源
+
+重要：
+- 只推荐你确定存在的公众号和 RSS 源
+- 公众号要与主题高度相关
+- 优先推荐官方账号、权威媒体、行业头部自媒体
+
+请按以下 JSON 格式输出：
+{{
+    "sources": [
+        {{"name": "公众号名称", "type": "wechat_mp", "wechat_id": "微信号（如果知道）", "description": "简短描述"}},
+        {{"name": "网站名称", "type": "rss", "url": "https://example.com/feed", "description": "简短描述"}}
+    ]
+}}
+
+只输出 JSON，不要其他内容。"""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    ai_recommended_sources = []
+    
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(url, headers=headers, json={
+                "model": model,
+                "messages": [{"role": "user", "content": sources_prompt}],
+                "temperature": 0.5,
+                "enable_enhancement": True,  # 开启功能增强（搜索）
+                "force_search_enhancement": True,  # 强制搜索增强
+                "search_info": True,  # 返回搜索信息
+            })
+            response.raise_for_status()
+            data = response.json()
+            
+            content = data["choices"][0]["message"]["content"]
+            # 混元模型可能返回带 markdown 的 JSON，需要提取
+            content = _extract_json_from_response(content)
+            sources_result = json.loads(content)
+            raw_sources = sources_result.get("sources", [])
+            
+            logger.info(f"Hunyuan returned {len(raw_sources)} sources for topic: {topic_name}")
+            
+            # 分离 RSS 源和公众号
+            rss_sources = [src for src in raw_sources if src.get("type") == "rss" and src.get("url")]
+            mp_sources = [src for src in raw_sources if src.get("type") == "wechat_mp"]
+            
+            # 并行验证 RSS 源
+            if rss_sources:
+                async def validate_rss_source(src):
+                    url_to_check = src.get("url", "")
+                    is_valid = await _quick_validate_rss_url(url_to_check)
+                    return (src, is_valid)
+                
+                rss_results = await asyncio.gather(*[validate_rss_source(src) for src in rss_sources])
+                
+                for src, is_valid in rss_results:
+                    if is_valid:
+                        src["verified"] = True
+                        src["source"] = "hunyuan_verified"
+                        ai_recommended_sources.append(src)
+                        logger.info(f"Hunyuan RSS source validated: {src.get('name')}")
+                    else:
+                        logger.info(f"Hunyuan RSS source invalid: {src.get('name')} - {src.get('url')}")
+            
+            # 验证公众号
+            for src in mp_sources:
+                mp_name = src.get("name") or src.get("wechat_id", "")
+                if mp_name and online_conn:
+                    mp_info = await _validate_mp_by_search(online_conn, mp_name)
+                    if mp_info:
+                        src["verified"] = True
+                        src["source"] = "hunyuan_verified"
+                        src["wechat_id"] = mp_info.get("fakeid", "")
+                        src["name"] = mp_info.get("nickname", mp_name)
+                        src["avatar"] = mp_info.get("round_head_img", "")
+                        if mp_info.get("signature"):
+                            src["description"] = mp_info.get("signature", "")
+                        ai_recommended_sources.append(src)
+                        logger.info(f"Hunyuan MP source validated: {mp_name} -> {mp_info.get('nickname')}")
+                    else:
+                        # 即使验证失败，也添加到列表（标记为未验证）
+                        src["verified"] = False
+                        src["source"] = "hunyuan_unverified"
+                        ai_recommended_sources.append(src)
+                        logger.info(f"Hunyuan MP source unverified: {mp_name}")
+                else:
+                    src["verified"] = False
+                    src["source"] = "hunyuan_unverified"
+                    ai_recommended_sources.append(src)
+                    logger.info(f"Hunyuan MP source added (no validation): {mp_name}")
+            
+            logger.info(f"Hunyuan: {len(raw_sources)} sources -> {len(ai_recommended_sources)} after validation")
+            
+    except Exception as e:
+        logger.warning(f"Hunyuan API failed: {e}")
+    
+    return ai_recommended_sources
+
+
+def _extract_json_from_response(content: str) -> str:
+    """
+    从 AI 响应中提取 JSON 内容。
+    有些模型会返回带 markdown 代码块的 JSON。
+    """
+    import re
+    
+    # 尝试提取 ```json ... ``` 代码块
+    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
+    if json_match:
+        return json_match.group(1).strip()
+    
+    # 尝试提取 { ... } JSON 对象
+    json_match = re.search(r'\{[\s\S]*\}', content)
+    if json_match:
+        return json_match.group(0)
+    
+    return content
+
+
+async def _generate_sources_with_dashscope(topic_name: str, online_conn=None) -> list:
+    """
+    使用阿里云 Dashscope 模型生成推荐数据源（回退方案）。
+    """
+    import httpx
+    import os
+    
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        return []
+    
+    model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
+    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    
     sources_prompt = f"""你是一个数据源搜索专家。用户想要追踪关于「{topic_name}」的新闻。
 
 请通过网络搜索，推荐 3-5 个**确实存在且可访问**的信息源：
@@ -406,14 +586,19 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[
 
 只输出 JSON，不要其他内容。"""
 
-    # Call AI with web search enabled
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
     ai_recommended_sources = []
+    
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(url, headers=headers, json={
                 "model": model,
                 "messages": [{"role": "user", "content": sources_prompt}],
-                "temperature": 0.5,  # 降低温度，减少随机性
+                "temperature": 0.5,
                 "response_format": {"type": "json_object"},
                 "enable_search": True,
                 "search_options": {
@@ -442,45 +627,38 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None) -> Dict[
                 for src, is_valid in rss_results:
                     if is_valid:
                         src["verified"] = True
-                        src["source"] = "ai_verified"
+                        src["source"] = "dashscope_verified"
                         ai_recommended_sources.append(src)
-                        logger.info(f"AI RSS source validated: {src.get('name')}")
+                        logger.info(f"Dashscope RSS source validated: {src.get('name')}")
                     else:
-                        logger.info(f"AI RSS source invalid, skipped: {src.get('name')} - {src.get('url')}")
+                        logger.info(f"Dashscope RSS source invalid: {src.get('name')} - {src.get('url')}")
             
-            # 串行验证公众号（因为需要数据库连接）
+            # 验证公众号
             for src in mp_sources:
-                # 验证公众号是否真实存在（必须通过实时搜索验证）
                 mp_name = src.get("name") or src.get("wechat_id", "")
                 if mp_name and online_conn:
                     mp_info = await _validate_mp_by_search(online_conn, mp_name)
                     if mp_info:
-                        # 公众号验证成功，使用真实信息
                         src["verified"] = True
-                        src["source"] = "ai_verified"
+                        src["source"] = "dashscope_verified"
                         src["wechat_id"] = mp_info.get("fakeid", "")
                         src["name"] = mp_info.get("nickname", mp_name)
                         src["avatar"] = mp_info.get("round_head_img", "")
                         if mp_info.get("signature"):
                             src["description"] = mp_info.get("signature", "")
                         ai_recommended_sources.append(src)
-                        logger.info(f"AI MP source validated: {mp_name} -> {mp_info.get('nickname')}")
+                        logger.info(f"Dashscope MP source validated: {mp_name}")
                     else:
-                        logger.info(f"AI MP source not found, skipped: {mp_name}")
+                        logger.info(f"Dashscope MP source not found: {mp_name}")
                 else:
-                    # 没有数据库连接，跳过公众号
-                    logger.info(f"AI MP source skipped (no conn): {mp_name}")
+                    logger.info(f"Dashscope MP source skipped (no conn): {mp_name}")
             
-            logger.info(f"AI recommended {len(raw_sources)} sources, {len(ai_recommended_sources)} passed validation")
+            logger.info(f"Dashscope: {len(raw_sources)} sources -> {len(ai_recommended_sources)} after validation")
+            
     except Exception as e:
-        logger.warning(f"Failed to get AI recommended sources: {e}")
+        logger.warning(f"Dashscope API failed: {e}")
     
-    logger.info(f"Returning keywords={len(keywords)}, ai_sources={len(ai_recommended_sources)}")
-    return {
-        "icon": icon,
-        "keywords": keywords,
-        "recommended_sources": ai_recommended_sources
-    }
+    return ai_recommended_sources
 
 
 async def _search_sources_from_database(topic_name: str, keywords: list, online_conn) -> list:

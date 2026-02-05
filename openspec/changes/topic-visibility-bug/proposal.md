@@ -164,15 +164,17 @@ function createTopicTabPane(topic) {
 
 ## 实现状态
 
-### ✅ 已完成
+### ✅ 已完成（2026-02-05）
 
 1. **移除服务端主题注入** - `page_rendering.py` 中注释掉 `_inject_user_topics_as_categories`
 2. **前端动态加载主题** - `topic-tracker.js` 添加 `loadAndRenderTopicTabs()` 函数
 3. **用户登出时清除主题** - 监听 `authStateChanged` 事件
+4. **骨架屏优化** - 加载主题时显示绿色骨架屏动画，提升用户体验
+5. **已部署上线**
 
 ### 验证步骤
 
-1. 部署代码：`./deploy-fast.sh`
+1. ✅ 部署代码：`./deploy-fast.sh`
 2. 清除浏览器缓存
 3. 用户 A 登录，创建主题
 4. 用户 B 登录（不同浏览器/隐身模式），确认看不到用户 A 的主题
