@@ -84,8 +84,9 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
                             "is_topic": True,
                             "topic_id": topic["id"],
                             "keywords": topic.get("keywords", []),
+                            "owner_user_id": user_id,  # 用于前端验证
                         }
-                        logger.info(f"Injected topic category: {topic_cat_id} ({topic.get('name')})")
+                        logger.debug(f"Injected topic category: {topic_cat_id} ({topic.get('name')})")
         
         # If my-tags not found, append topics at the beginning
         if not any(k.startswith("topic-") for k in new_cats):
@@ -105,9 +106,10 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
                     "is_topic": True,
                     "topic_id": topic["id"],
                     "keywords": topic.get("keywords", []),
+                    "owner_user_id": user_id,  # 用于前端验证
                 }
             new_cats = {**topic_cats, **new_cats}
-            logger.info(f"Injected {len(topic_cats)} topics at beginning (my-tags not found)")
+            logger.debug(f"Injected {len(topic_cats)} topics at beginning (my-tags not found)")
         
         data["categories"] = new_cats
         return data

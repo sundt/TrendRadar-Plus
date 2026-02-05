@@ -38,6 +38,38 @@
     let submitBtn = null;
 
     /**
+     * Validate topic tabs ownership - remove tabs that don't belong to current user
+     * This is a security measure to prevent cached pages from showing other users' topics
+     */
+    function validateTopicTabsOwnership() {
+        // Get current user ID from auth state
+        const currentUser = window.authState?.getUser?.();
+        const currentUserId = currentUser?.id;
+        
+        // Find all topic tabs with owner info
+        const topicTabs = document.querySelectorAll('.category-tab.topic-tab[data-owner-user-id]');
+        
+        topicTabs.forEach(tab => {
+            const ownerUserId = tab.dataset.ownerUserId;
+            const categoryId = tab.dataset.category;
+            
+            // If user is not logged in, or owner doesn't match current user, remove the tab
+            if (!currentUserId || String(ownerUserId) !== String(currentUserId)) {
+                console.warn(`[TopicTracker] Removing mismatched topic tab: ${categoryId}, owner=${ownerUserId}, current=${currentUserId}`);
+                
+                // Remove the tab
+                tab.remove();
+                
+                // Remove the corresponding tab-pane
+                const pane = document.getElementById(`tab-${categoryId}`);
+                if (pane) {
+                    pane.remove();
+                }
+            }
+        });
+    }
+
+    /**
      * Initialize topic tracker
      */
     function init() {
@@ -49,6 +81,10 @@
             setTimeout(init, 100);
             return;
         }
+        
+        // Security: Validate topic tabs ownership before anything else
+        // This prevents cached pages from showing other users' topics
+        validateTopicTabsOwnership();
         
         createModal();
         loadTopics();
@@ -68,6 +104,8 @@
         // Listen for viewer data rendered event to setup topic tab listeners
         document.addEventListener('viewerDataRendered', () => {
             console.log('[TopicTracker] viewerDataRendered event received, resetting states and setting up listeners...');
+            // Security: Re-validate after re-render
+            validateTopicTabsOwnership();
             // 重置所有主题的加载状态，因为 DOM 已经被重新渲染
             resetAllTopicStates();
             addNewTopicButton();
