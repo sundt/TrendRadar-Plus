@@ -970,7 +970,10 @@ export const data = {
         const updatedAtEl = document.getElementById('updatedAt');
         if (updatedAtEl && data?.updated_at) updatedAtEl.textContent = formatUpdatedAt(data.updated_at);
 
-        const desiredTab = (state && typeof state.activeTab === 'string') ? state.activeTab : null;
+        // 重新从 localStorage 读取当前的 activeTab，而不是使用 state.activeTab
+        // 这是因为用户可能在 API 请求期间切换了 tab，state.activeTab 是旧值
+        const currentStoredTab = storage.getRaw(TAB_STORAGE_KEY);
+        const desiredTab = currentStoredTab || (state && typeof state.activeTab === 'string' ? state.activeTab : null);
         if (desiredTab) {
             const escapedDesired = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(desiredTab) : desiredTab;
             const desiredTabEl = document.querySelector(`.category-tab[data-category="${escapedDesired}"]`);
