@@ -280,10 +280,11 @@
             return;
         }
         
-        // 检查是否已有内容（platform-card 说明已加载）
-        const hasContent = grid.querySelector('.platform-card');
-        if (hasContent) {
-            console.log(`[TopicTracker] Topic ${topicId} already has content, marking as loaded`);
+        // 检查是否已有真实内容（news-item 说明已加载，而不是骨架卡片）
+        // 骨架卡片只有 .news-placeholder，真实内容有 .news-item
+        const hasRealContent = grid.querySelector('.news-item');
+        if (hasRealContent) {
+            console.log(`[TopicTracker] Topic ${topicId} already has real content, marking as loaded`);
             state.loaded = true;
             return;
         }
