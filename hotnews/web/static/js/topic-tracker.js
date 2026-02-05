@@ -54,6 +54,17 @@
         loadTopics();
         addNewTopicButton();
         
+        // Listen for tab switch events (like my-tags.js does)
+        window.addEventListener('tr_tab_switched', (event) => {
+            const categoryId = event?.detail?.categoryId;
+            console.log('[TopicTracker] tr_tab_switched event received, categoryId:', categoryId);
+            if (categoryId && String(categoryId).startsWith('topic-')) {
+                const topicId = String(categoryId).replace('topic-', '');
+                console.log('[TopicTracker] Topic tab switched, loading:', topicId);
+                loadTopicNewsIfNeeded(topicId);
+            }
+        });
+        
         // Listen for viewer data rendered event to setup topic tab listeners
         document.addEventListener('viewerDataRendered', () => {
             console.log('[TopicTracker] viewerDataRendered event received, resetting states and setting up listeners...');
@@ -70,7 +81,14 @@
                 setTimeout(() => loadTopicNewsIfNeeded(topicId), 100);
             }
         });
-        });
+        
+        // Check if a topic tab is already active on page load
+        const activeTopicPane = document.querySelector('.tab-pane.active[id^="tab-topic-"]');
+        if (activeTopicPane) {
+            const topicId = activeTopicPane.id.replace('tab-topic-', '');
+            console.log('[TopicTracker] Topic tab already active on page load:', topicId);
+            setTimeout(() => loadTopicNewsIfNeeded(topicId), 200);
+        }
     }
 
     /**
@@ -351,21 +369,28 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000);
             
-            const response = await fetch(`/api/topics/${topicId}/news?limit=50`, {
+            const apiUrl = `/api/topics/${topicId}/news?limit=50`;
+            console.log(`[TopicTracker] Fetching: ${apiUrl}`);
+            
+            const response = await fetch(apiUrl, {
                 credentials: 'include',
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
             
+            console.log(`[TopicTracker] API response status: ${response.status}`);
+            
             if (!response.ok) {
                 if (response.status === 401) {
                     renderLoginRequired(container, topicId);
+                    state.loading = false;
                     return;
                 }
                 throw new Error(`HTTP ${response.status}`);
             }
             
             const data = await response.json();
+            console.log(`[TopicTracker] API response:`, { ok: data.ok, hasKeywordsNews: !!data.keywords_news, cached: data.cached });
             
             if (data.ok && data.keywords_news) {
                 renderTopicNews(topicId, data.keywords_news);
@@ -442,16 +467,32 @@
 
     /**
      * Render news for a topic
+     * 不再依赖 topics 数组，直接使用 API 返回的 keywordsNews
      */
     function renderTopicNews(topicId, keywordsNews) {
         const container = document.getElementById(`topicCards-${topicId}`);
-        if (!container) return;
+        if (!container) {
+            console.error(`[TopicTracker] renderTopicNews: container topicCards-${topicId} not found`);
+            return;
+        }
         
-        const topic = topics.find(t => t.id === topicId);
-        if (!topic) return;
+        // 直接从 keywordsNews 获取关键词列表，不依赖 topics 数组
+        const keywords = Object.keys(keywordsNews || {});
+        console.log(`[TopicTracker] renderTopicNews: topicId=${topicId}, keywords=`, keywords);
+        
+        if (keywords.length === 0) {
+            container.innerHTML = `
+                <div class="topic-no-news-hint">
+                    <div class="topic-no-news-icon">📭</div>
+                    <div class="topic-no-news-text">暂无匹配的新闻</div>
+                    <div class="topic-no-news-tip">请编辑主题调整关键词或添加更多数据源</div>
+                </div>
+            `;
+            return;
+        }
         
         // 只渲染有新闻的关键词卡片
-        const cardsHtml = topic.keywords
+        const cardsHtml = keywords
             .filter(keyword => {
                 const news = keywordsNews[keyword] || [];
                 return news.length > 0;
@@ -473,6 +514,7 @@
             `;
         } else {
             container.innerHTML = cardsHtml;
+            console.log(`[TopicTracker] renderTopicNews: rendered ${keywords.length} keyword cards`);
         }
     }
 
