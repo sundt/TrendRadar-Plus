@@ -252,8 +252,70 @@ GROUP BY user_id;
 
 ---
 
+## 代码审查结论
+
+### 已完成的修复
+
+1. **主题可见性 Bug** - ✅ 已修复
+   - `page_rendering.py` 已添加 `Cache-Control: no-store, no-cache` 等响应头
+   - 主题注入逻辑 `_inject_user_topics_as_categories` 正确按 user_id 查询
+   - 代码逻辑正确，问题应该已解决
+
+2. **主题栏目加载** - ✅ 已修复
+   - `page_rendering.py` 中主题只注入元数据（`platforms: {}`）
+   - `viewer.html` 中主题栏目显示加载状态，等待 API
+   - `topic-tracker.js` 中 `loadTopicNewsIfNeeded` 逻辑正确
+
+### 仍需验证的问题
+
+1. **新发现栏目空白**
+   - `discovery.js` 代码逻辑完整，有多重 fallback 机制
+   - 可能是 JS 模块加载顺序问题
+   - 需要在浏览器控制台查看 `[Discovery]` 日志
+
+2. **主题切换后空白**
+   - 需要验证部署后是否解决
+   - 如果仍有问题，检查 `topicCards-{id}` 容器是否存在
+
+---
+
+## 诊断步骤
+
+### 1. 新发现栏目诊断
+
+在浏览器控制台执行：
+```javascript
+// 检查容器是否存在
+console.log('discoveryGrid:', document.getElementById('discoveryGrid'));
+
+// 检查模块是否初始化
+console.log('HotNews.discovery:', window.HotNews?.discovery);
+
+// 手动触发加载
+window.HotNews?.discovery?.load(true);
+```
+
+### 2. 主题栏目诊断
+
+```javascript
+// 检查主题容器
+document.querySelectorAll('[id^="topicCards-"]').forEach(el => {
+    console.log('Topic container:', el.id, 'content:', el.innerHTML.substring(0, 100));
+});
+
+// 手动加载主题
+TopicTracker.loadTopicNews('YOUR_TOPIC_ID', true);
+```
+
+---
+
 ## 下一步行动
 
-1. **立即**：检查 session 验证和页面缓存，修复主题可见性 Bug
-2. **今天**：简化主题栏目的加载逻辑，改为纯 API 加载
-3. **今天**：增强 discovery.js 的初始化和 fallback 机制
+1. **部署验证**：运行 `./deploy-fast.sh` 部署最新代码
+2. **浏览器测试**：
+   - 清除浏览器缓存
+   - 打开控制台查看 `[Discovery]` 和 `[TopicTracker]` 日志
+   - 测试新发现和主题栏目
+3. **如果仍有问题**：
+   - 提供控制台日志
+   - 检查网络请求是否成功
