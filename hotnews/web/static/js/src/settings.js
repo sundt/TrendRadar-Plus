@@ -134,6 +134,11 @@ export const settings = {
             console.log('[Settings] Initializing _defaultCategories from DOM');
             document.querySelectorAll('.category-tab').forEach(tab => {
                 const catId = tab.dataset.category;
+                // 跳过没有 data-category 属性的元素，避免产生 undefined 键
+                if (!catId) {
+                    console.warn('[Settings] Skipping category-tab without data-category:', tab);
+                    return;
+                }
                 const icon = tab.querySelector('.category-tab-icon')?.textContent?.trim() || '📁';
                 const name = tab.querySelector('.category-tab-name')?.textContent?.replace(/NEW$/, '')?.trim() || catId;
                 _defaultCategories[catId] = { id: catId, name, icon, isDefault: true };

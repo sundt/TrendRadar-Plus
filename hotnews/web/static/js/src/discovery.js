@@ -197,13 +197,17 @@ async function loadDiscovery(force = false) {
     if (!container) {
         console.error('[Discovery] Container #discoveryGrid not found!');
         // Retry after a short delay (for WeChat browser where DOM might not be ready)
-        setTimeout(() => {
-            const retryContainer = document.getElementById('discoveryGrid');
-            if (retryContainer && !discoveryLoaded && !discoveryLoading) {
-                console.log('[Discovery] Retrying after container found');
-                loadDiscovery(force);
-            }
-        }, 500);
+        // 增加多次重试，延长间隔
+        const retryDelays = [100, 300, 500, 1000, 2000];
+        retryDelays.forEach((delay, idx) => {
+            setTimeout(() => {
+                const retryContainer = document.getElementById('discoveryGrid');
+                if (retryContainer && !discoveryLoaded && !discoveryLoading) {
+                    console.log(`[Discovery] Retrying after ${delay}ms (attempt ${idx + 1})`);
+                    loadDiscovery(force);
+                }
+            }, delay);
+        });
         return;
     }
 
