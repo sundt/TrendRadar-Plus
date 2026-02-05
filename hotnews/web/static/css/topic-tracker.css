@@ -15,17 +15,17 @@
     background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important;
 }
 
-.category-tab.topic-tab.active,
-.category-tab.my-tags-tab.active {
+.category-tabs .category-tab.topic-tab.active,
+.category-tabs .category-tab.my-tags-tab.active {
     background: linear-gradient(135deg, #22c55e, #16a34a) !important;
     color: white !important;
     border-color: #16a34a !important;
 }
 
-.category-tab.topic-tab.active .category-tab-icon,
-.category-tab.topic-tab.active .category-tab-name,
-.category-tab.my-tags-tab.active .category-tab-icon,
-.category-tab.my-tags-tab.active .category-tab-name {
+.category-tabs .category-tab.topic-tab.active .category-tab-icon,
+.category-tabs .category-tab.topic-tab.active .category-tab-name,
+.category-tabs .category-tab.my-tags-tab.active .category-tab-icon,
+.category-tabs .category-tab.my-tags-tab.active .category-tab-name {
     color: white !important;
 }
 
