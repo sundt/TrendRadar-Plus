@@ -420,6 +420,12 @@
                             </div>
                         </div>
                     </div>
+                    <div id="topicFetchProgress" class="topic-fetch-progress" style="display:none;">
+                        <div class="topic-fetch-progress-text">正在抓取数据源...</div>
+                        <div class="topic-fetch-progress-bar">
+                            <div class="topic-fetch-progress-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
                     <div class="topic-modal-footer">
                         <button class="topic-modal-btn cancel" onclick="TopicTracker.closeModal()">取消</button>
                         <button class="topic-modal-btn primary" id="topicAiBtn" onclick="TopicTracker.generateKeywords()">
@@ -809,6 +815,9 @@
      * Render a source card with articles (订阅源卡片)
      */
     function renderSourceCard(sourceName, articles) {
+        // 从文章中获取 source_id（如 mp-xxx 或 rss-xxx）
+        const realSourceId = articles[0]?.source || '';
+        
         const newsHtml = articles.length > 0 
             ? articles.slice(0, 50).map((item, idx) => {
                 const newsId = item.id || `source-${Date.now()}-${idx}`;
@@ -849,7 +858,7 @@
         const icon = isWechatMp ? '📱' : '📰';
         
         return `
-            <div class="platform-card topic-source-card" data-source="${escapeHtml(sourceName)}">
+            <div class="platform-card topic-source-card" data-source="${escapeHtml(sourceName)}" data-source-id="${escapeHtml(realSourceId)}">
                 <div class="platform-header">
                     <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
                         ${icon} ${escapeHtml(sourceName)}${countHtml}
@@ -970,6 +979,215 @@
         modalOverlay.classList.remove('active');
         currentEditTopic = null;
         generatedData = null;
+    }
+    
+    /**
+     * Show dialog for inactive sources confirmation
+     * @param {Array} inactiveSources - List of inactive sources with id, name, days_inactive
+     * @param {string} topicId - Topic ID
+     * @returns {Promise<boolean>} - true if user wants to remove inactive sources
+     */
+    function showInactiveSourcesDialog(inactiveSources, topicId) {
+        return new Promise((resolve) => {
+            // 创建对话框
+            const dialogHtml = `
+                <div class="topic-inactive-dialog-overlay" id="inactiveSourcesDialog">
+                    <div class="topic-inactive-dialog">
+                        <div class="topic-inactive-dialog-header">
+                            <span class="topic-inactive-dialog-icon">⚠️</span>
+                            <h3>检测到不活跃的公众号</h3>
+                        </div>
+                        <div class="topic-inactive-dialog-body">
+                            <p class="topic-inactive-dialog-desc">以下 ${inactiveSources.length} 个公众号已超过 2 个月没有更新，可能已停更：</p>
+                            <ul class="topic-inactive-source-list">
+                                ${inactiveSources.map(s => {
+                                    const daysText = s.days_inactive > 0 
+                                        ? `${s.days_inactive} 天未更新` 
+                                        : '从未更新';
+                                    return `<li>
+                                        <span class="topic-inactive-source-name">📱 ${escapeHtml(s.name)}</span>
+                                        <span class="topic-inactive-source-days">${daysText}</span>
+                                    </li>`;
+                                }).join('')}
+                            </ul>
+                            <p class="topic-inactive-dialog-tip">移除不活跃账号可以让主题内容更精准</p>
+                        </div>
+                        <div class="topic-inactive-dialog-footer">
+                            <button class="topic-inactive-btn secondary" id="inactiveKeepBtn">保留全部</button>
+                            <button class="topic-inactive-btn primary" id="inactiveRemoveBtn">移除不活跃账号</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', dialogHtml);
+            
+            const dialog = document.getElementById('inactiveSourcesDialog');
+            const keepBtn = document.getElementById('inactiveKeepBtn');
+            const removeBtn = document.getElementById('inactiveRemoveBtn');
+            
+            // 添加样式
+            const style = document.createElement('style');
+            style.id = 'inactiveDialogStyle';
+            style.textContent = `
+                .topic-inactive-dialog-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.5);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 10001;
+                    animation: fadeIn 0.2s ease;
+                }
+                .topic-inactive-dialog {
+                    background: white;
+                    border-radius: 16px;
+                    width: 90%;
+                    max-width: 420px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    animation: slideUp 0.3s ease;
+                }
+                @keyframes slideUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                .topic-inactive-dialog-header {
+                    padding: 24px 24px 16px;
+                    text-align: center;
+                }
+                .topic-inactive-dialog-icon {
+                    font-size: 48px;
+                    display: block;
+                    margin-bottom: 12px;
+                }
+                .topic-inactive-dialog-header h3 {
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: 600;
+                    color: #111827;
+                }
+                .topic-inactive-dialog-body {
+                    padding: 0 24px 20px;
+                }
+                .topic-inactive-dialog-desc {
+                    font-size: 14px;
+                    color: #6b7280;
+                    margin: 0 0 16px;
+                    text-align: center;
+                }
+                .topic-inactive-source-list {
+                    list-style: none;
+                    padding: 0;
+                    margin: 0 0 16px;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    background: #f9fafb;
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+                .topic-inactive-source-list li {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .topic-inactive-source-list li:last-child {
+                    border-bottom: none;
+                }
+                .topic-inactive-source-name {
+                    font-size: 14px;
+                    color: #374151;
+                    font-weight: 500;
+                }
+                .topic-inactive-source-days {
+                    font-size: 12px;
+                    color: #ef4444;
+                    background: #fef2f2;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                }
+                .topic-inactive-dialog-tip {
+                    font-size: 13px;
+                    color: #9ca3af;
+                    margin: 0;
+                    text-align: center;
+                }
+                .topic-inactive-dialog-footer {
+                    padding: 16px 24px 24px;
+                    display: flex;
+                    gap: 12px;
+                }
+                .topic-inactive-btn {
+                    flex: 1;
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    border: none;
+                }
+                .topic-inactive-btn.secondary {
+                    background: #f3f4f6;
+                    color: #374151;
+                }
+                .topic-inactive-btn.secondary:hover {
+                    background: #e5e7eb;
+                }
+                .topic-inactive-btn.primary {
+                    background: linear-gradient(135deg, #ef4444, #dc2626);
+                    color: white;
+                }
+                .topic-inactive-btn.primary:hover {
+                    background: linear-gradient(135deg, #dc2626, #b91c1c);
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // 绑定事件
+            keepBtn.onclick = () => {
+                dialog.remove();
+                document.getElementById('inactiveDialogStyle')?.remove();
+                resolve(false);
+            };
+            
+            removeBtn.onclick = () => {
+                dialog.remove();
+                document.getElementById('inactiveDialogStyle')?.remove();
+                resolve(true);
+            };
+        });
+    }
+    
+    /**
+     * Remove inactive sources from topic
+     */
+    async function removeInactiveSources(topicId, inactiveSources, currentSourceIds) {
+        const inactiveIds = new Set(inactiveSources.map(s => s.id));
+        const newSourceIds = currentSourceIds.filter(id => !inactiveIds.has(id));
+        
+        try {
+            const response = await fetch(`/api/topics/${topicId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ rss_source_ids: newSourceIds })
+            });
+            
+            const data = await response.json();
+            if (data.ok) {
+                console.log(`[TopicTracker] Removed ${inactiveSources.length} inactive sources`);
+            } else {
+                console.error('[TopicTracker] Failed to remove inactive sources:', data.error);
+            }
+        } catch (e) {
+            console.error('[TopicTracker] Failed to remove inactive sources:', e);
+        }
     }
 
     /**
@@ -1808,8 +2026,60 @@
                     const sourceCount = allSourceIds.length;
                     
                     if (sourceCount > 0) {
-                        // 显示抓取进度
-                        submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取数据源 (0/${sourceCount})...`;
+                        // 显示进度条
+                        const progressEl = document.getElementById('topicFetchProgress');
+                        const progressText = progressEl?.querySelector('.topic-fetch-progress-text');
+                        const progressFill = progressEl?.querySelector('.topic-fetch-progress-fill');
+                        
+                        if (progressEl) {
+                            progressEl.style.display = 'block';
+                        }
+                        
+                        // 按钮也显示状态
+                        submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取中...`;
+                        
+                        // 进度步骤 - 更细粒度，让等待感觉更自然
+                        const fetchSteps = [
+                            { percent: 5, text: `📡 正在连接数据源 (${sourceCount}个)...` },
+                            { percent: 15, text: '🔄 正在初始化抓取任务...' },
+                            { percent: 25, text: '📱 正在抓取公众号文章...' },
+                            { percent: 35, text: '📰 正在获取 RSS 内容...' },
+                            { percent: 45, text: '📥 正在下载文章数据...' },
+                            { percent: 55, text: '🔍 正在解析文章内容...' },
+                            { percent: 65, text: '💾 正在保存到数据库...' },
+                            { percent: 72, text: '📊 正在整理文章列表...' },
+                            { percent: 78, text: '⏳ 即将完成，请稍候...' },
+                            { percent: 83, text: '⏳ 正在做最后处理...' },
+                            { percent: 87, text: '⏳ 马上就好...' },
+                            { percent: 90, text: '⏳ 还差一点点...' },
+                            { percent: 92, text: '⏳ 快完成了...' },
+                            { percent: 94, text: '⏳ 即将完成...' }
+                        ];
+                        let stepIndex = 0;
+                        
+                        const updateFetchProgress = () => {
+                            const step = fetchSteps[stepIndex];
+                            if (progressFill) progressFill.style.width = step.percent + '%';
+                            if (progressText) progressText.textContent = step.text;
+                        };
+                        updateFetchProgress();
+                        
+                        // 前面步骤快一些，后面步骤慢一些
+                        const getFetchInterval = () => {
+                            if (stepIndex < 4) return 1500;      // 前4步：1.5秒
+                            if (stepIndex < 8) return 2500;      // 中间4步：2.5秒
+                            return 4000;                          // 最后几步：4秒
+                        };
+                        
+                        const advanceFetchProgress = () => {
+                            if (stepIndex < fetchSteps.length - 1) {
+                                stepIndex++;
+                                updateFetchProgress();
+                                fetchProgressTimer = setTimeout(advanceFetchProgress, getFetchInterval());
+                            }
+                        };
+                        
+                        let fetchProgressTimer = setTimeout(advanceFetchProgress, getFetchInterval());
                         
                         try {
                             // 调用抓取 API
@@ -1820,15 +2090,37 @@
                             
                             const fetchData = await fetchResponse.json();
                             
+                            clearTimeout(fetchProgressTimer);
+                            
                             if (fetchData.ok) {
                                 const fetched = fetchData.fetched || 0;
-                                submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取完成 (${fetched}条)，跳转中...`;
+                                if (progressFill) progressFill.style.width = '100%';
+                                if (progressText) progressText.textContent = `✅ 抓取完成 (${fetched}条新闻)`;
+                                submitBtn.innerHTML = `<span class="topic-spinner"></span> 处理中...`;
                                 console.log(`[TopicTracker] Fetch completed: ${fetched} articles from ${sourceCount} sources`);
+                                
+                                // 检查是否有不活跃的公众号
+                                const inactiveSources = fetchData.inactive_sources || [];
+                                if (inactiveSources.length > 0) {
+                                    // 弹出确认窗口
+                                    const shouldRemove = await showInactiveSourcesDialog(inactiveSources, topicId);
+                                    if (shouldRemove) {
+                                        // 用户选择移除不活跃账号
+                                        if (progressText) progressText.textContent = '🗑️ 正在移除不活跃账号...';
+                                        await removeInactiveSources(topicId, inactiveSources, allSourceIds);
+                                    }
+                                }
                             } else {
                                 console.warn('[TopicTracker] Fetch sources warning:', fetchData.error);
+                                if (progressFill) progressFill.style.width = '100%';
+                                if (progressText) progressText.textContent = '✅ 抓取完成，即将跳转...';
                             }
+                            
+                            // 等待一下让用户看到完成状态
+                            await new Promise(r => setTimeout(r, 800));
                         } catch (fetchError) {
                             console.error('[TopicTracker] Fetch sources failed:', fetchError);
+                            clearTimeout(fetchProgressTimer);
                             // 抓取失败不阻止跳转，用户可以稍后刷新
                         }
                     }

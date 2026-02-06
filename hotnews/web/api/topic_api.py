@@ -239,6 +239,7 @@ async def fetch_topic_sources(request: Request, topic_id: str):
     同步抓取主题的数据源文章。
     
     创建主题后调用此 API，等待所有数据源抓取完成后返回。
+    同时返回每个公众号的最后更新时间，用于检测不活跃账号。
     """
     user = _get_current_user(request)
     user_id = user["id"]
@@ -324,14 +325,91 @@ async def fetch_topic_sources(request: Request, topic_id: str):
     cache_key = f"{topic_id}_v2"
     topic_news_cache.invalidate(user_id=user_id, topic_id=cache_key)
     
+    # 获取公众号的最后更新时间，用于检测不活跃账号
+    inactive_sources = []
+    if mp_fakeids:
+        inactive_sources = await _check_inactive_mp_sources(
+            request.app.state.project_root, 
+            mp_fakeids,
+            inactive_days=60  # 超过 60 天没更新视为不活跃
+        )
+    
     return {
         "ok": True,
         "fetched": fetched_count,
         "total_sources": len(source_ids),
         "mp_count": len(mp_fakeids),
         "rss_count": len(rss_ids),
-        "errors": errors if errors else None
+        "errors": errors if errors else None,
+        "inactive_sources": inactive_sources if inactive_sources else None
     }
+
+
+async def _check_inactive_mp_sources(project_root: Path, mp_fakeids: List[str], inactive_days: int = 60) -> List[Dict]:
+    """
+    检查公众号是否不活跃（超过指定天数没有更新）。
+    
+    Args:
+        project_root: 项目根目录
+        mp_fakeids: 公众号 fakeid 列表
+        inactive_days: 不活跃天数阈值
+        
+    Returns:
+        不活跃公众号列表，包含 id, name, last_update, days_inactive
+    """
+    if not mp_fakeids:
+        return []
+    
+    inactive_sources = []
+    now = time.time()
+    threshold_ts = now - (inactive_days * 24 * 60 * 60)
+    
+    try:
+        conn = get_online_db_conn(project_root=project_root)
+        
+        # 获取公众号名称
+        placeholders = ",".join("?" * len(mp_fakeids))
+        cur = conn.execute(
+            f"SELECT fakeid, nickname FROM featured_wechat_mps WHERE fakeid IN ({placeholders})",
+            mp_fakeids
+        )
+        mp_names = {row[0]: row[1] for row in cur.fetchall()}
+        
+        # 获取每个公众号的最新文章时间
+        mp_source_ids = [f"mp-{fid}" for fid in mp_fakeids]
+        placeholders = ",".join("?" * len(mp_source_ids))
+        cur = conn.execute(
+            f"""
+            SELECT source_id, MAX(published_at) as last_update
+            FROM rss_entries
+            WHERE source_id IN ({placeholders})
+            GROUP BY source_id
+            """,
+            mp_source_ids
+        )
+        
+        last_updates = {row[0]: row[1] for row in cur.fetchall()}
+        
+        for fid in mp_fakeids:
+            source_id = f"mp-{fid}"
+            last_update = last_updates.get(source_id, 0)
+            
+            # 如果没有文章或最后更新时间超过阈值
+            if last_update < threshold_ts:
+                days_inactive = int((now - last_update) / (24 * 60 * 60)) if last_update > 0 else -1
+                inactive_sources.append({
+                    "id": source_id,
+                    "name": mp_names.get(fid, fid),
+                    "last_update": last_update,
+                    "days_inactive": days_inactive
+                })
+        
+        logger.info(f"[TopicAPI] Found {len(inactive_sources)} inactive MP sources out of {len(mp_fakeids)}")
+        
+    except Exception as e:
+        logger.warning(f"[TopicAPI] Failed to check inactive sources: {e}")
+    
+    return inactive_sources
 
 
 @router.post("/generate-keywords")

@@ -81,9 +81,9 @@ function hidePlatformCard(cardEl, platformId, categoryId) {
 }
 
 /**
- * Hide a source from a topic by calling the API to update the topic's rss_source_ids
+ * Remove a source from a topic by calling the API to update the topic's rss_source_ids
  */
-async function hideTopicSource(cardEl, sourceName, topicId) {
+async function removeTopicSource(cardEl, sourceName, topicId) {
     if (!sourceName || !topicId) return;
     
     try {
@@ -104,19 +104,53 @@ async function hideTopicSource(cardEl, sourceName, topicId) {
         const topic = data.topic;
         const currentSourceIds = topic.rss_source_ids || [];
         
-        // Find the source ID to remove (by matching source name)
-        // Source cards have data-source attribute which is the source name
-        // We need to find the corresponding source ID
-        let sourceIdToRemove = null;
+        // Get source ID from card's data-source-id attribute (e.g., mp-xxx or rss-xxx)
+        const sourceId = cardEl?.dataset?.sourceId;
         
-        // Try to find by iterating through source IDs and matching names
-        // For now, we'll remove by name match from the card's data
-        // The source name in the card should match the source name in the API response
+        if (!sourceId) {
+            // Fallback: try to find by source name match
+            console.warn('Source ID not found in card, cannot remove');
+            if (window.TR?.toast?.show) {
+                window.TR.toast.show('无法删除此数据源，请通过编辑主题移除', { variant: 'warning', durationMs: 3000 });
+            }
+            return;
+        }
         
-        // Since we don't have direct access to source ID from the card,
-        // we need to call an API to get the mapping or store it in the card
-        // For simplicity, let's just remove the card visually and show a message
-        // that the user should edit the topic to permanently remove the source
+        // Filter out the source to remove
+        const newSourceIds = currentSourceIds.filter(id => id !== sourceId);
+        
+        // If nothing changed, the source wasn't in the list
+        if (newSourceIds.length === currentSourceIds.length) {
+            console.warn('Source not found in topic sources:', sourceId);
+            // Still remove the card visually
+            if (cardEl) {
+                cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
+                cardEl.style.opacity = '0';
+                cardEl.style.transform = 'scale(0.95)';
+                setTimeout(() => cardEl.remove(), 300);
+            }
+            if (window.TR?.toast?.show) {
+                window.TR.toast.show(`已移除「${sourceName}」`, { variant: 'success', durationMs: 2000 });
+            }
+            return;
+        }
+        
+        // Update topic with new source list
+        const updateResponse = await fetch(`/api/topics/${topicId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ rss_source_ids: newSourceIds })
+        });
+        
+        if (!updateResponse.ok) {
+            throw new Error('更新主题失败');
+        }
+        
+        const updateData = await updateResponse.json();
+        if (!updateData.ok) {
+            throw new Error(updateData.error || '更新主题失败');
+        }
         
         // Remove card from DOM with animation
         if (cardEl) {
@@ -126,15 +160,104 @@ async function hideTopicSource(cardEl, sourceName, topicId) {
             setTimeout(() => cardEl.remove(), 300);
         }
         
-        // Show toast with instruction
+        // Show success toast
         if (window.TR?.toast?.show) {
-            window.TR.toast.show(`已临时隐藏「${sourceName}」，刷新后会恢复。如需永久移除，请编辑主题`, { variant: 'info', durationMs: 4000 });
+            window.TR.toast.show(`已从主题中移除「${sourceName}」`, { variant: 'success', durationMs: 2500 });
         }
         
     } catch (e) {
-        console.error('Hide topic source failed:', e);
+        console.error('Remove topic source failed:', e);
         if (window.TR?.toast?.show) {
-            window.TR.toast.show('操作失败，请重试', { variant: 'error', durationMs: 2000 });
+            window.TR.toast.show('删除失败，请重试', { variant: 'error', durationMs: 2000 });
+        }
+    }
+}
+
+/**
+ * Remove a keyword from a topic by calling the API to update the topic's keywords
+ */
+async function removeTopicKeyword(cardEl, keyword, topicId) {
+    if (!keyword || !topicId) return;
+    
+    try {
+        // First, get the current topic data
+        const response = await fetch(`/api/topics/${topicId}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) {
+            throw new Error('获取主题信息失败');
+        }
+        
+        const data = await response.json();
+        if (!data.ok || !data.topic) {
+            throw new Error('主题不存在');
+        }
+        
+        const topic = data.topic;
+        const currentKeywords = topic.keywords || [];
+        
+        // Filter out the keyword to remove
+        const newKeywords = currentKeywords.filter(k => k !== keyword);
+        
+        // Check if we have at least one keyword left
+        if (newKeywords.length === 0) {
+            if (window.TR?.toast?.show) {
+                window.TR.toast.show('至少需要保留一个关键词', { variant: 'warning', durationMs: 2500 });
+            }
+            return;
+        }
+        
+        // If nothing changed, the keyword wasn't in the list
+        if (newKeywords.length === currentKeywords.length) {
+            console.warn('Keyword not found in topic:', keyword);
+            // Still remove the card visually
+            if (cardEl) {
+                cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
+                cardEl.style.opacity = '0';
+                cardEl.style.transform = 'scale(0.95)';
+                setTimeout(() => cardEl.remove(), 300);
+            }
+            if (window.TR?.toast?.show) {
+                window.TR.toast.show(`已移除关键词「${keyword}」`, { variant: 'success', durationMs: 2000 });
+            }
+            return;
+        }
+        
+        // Update topic with new keywords list
+        const updateResponse = await fetch(`/api/topics/${topicId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ keywords: newKeywords })
+        });
+        
+        if (!updateResponse.ok) {
+            throw new Error('更新主题失败');
+        }
+        
+        const updateData = await updateResponse.json();
+        if (!updateData.ok) {
+            throw new Error(updateData.error || '更新主题失败');
+        }
+        
+        // Remove card from DOM with animation
+        if (cardEl) {
+            cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
+            cardEl.style.opacity = '0';
+            cardEl.style.transform = 'scale(0.95)';
+            setTimeout(() => cardEl.remove(), 300);
+        }
+        
+        // Show success toast
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show(`已从主题中移除关键词「${keyword}」`, { variant: 'success', durationMs: 2500 });
+        }
+        
+    } catch (e) {
+        console.error('Remove topic keyword failed:', e);
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show('删除失败，请重试', { variant: 'error', durationMs: 2000 });
         }
     }
 }
@@ -655,14 +778,15 @@ export const platformReorder = {
             } else if (isTopic) {
                 // Topic tab: show different options for keyword vs source cards
                 if (keyword) {
-                    // Keyword card: only show edit option (to edit topic and remove keyword)
+                    // Keyword card: show remove keyword option
                     menuHtml = `
-                        <div class="tr-ctx-item" data-action="edit-topic">✏️ 编辑主题</div>
+                        <div class="tr-ctx-item" data-action="remove-keyword">🗑️ 删除此关键词</div>
+                        <div class="tr-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">✏️ 编辑主题</div>
                     `;
                 } else if (source) {
-                    // Source card: show hide option
+                    // Source card: show remove option
                     menuHtml = `
-                        <div class="tr-ctx-item" data-action="hide-source">👁️‍🗨️ 隐藏此数据源</div>
+                        <div class="tr-ctx-item" data-action="remove-source">🗑️ 删除此数据源</div>
                         <div class="tr-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">✏️ 编辑主题</div>
                     `;
                 }
@@ -739,11 +863,19 @@ export const platformReorder = {
                     return;
                 }
 
-                if (action === 'hide-source' && isTopic && source) {
-                    // Hide source from topic
+                if (action === 'remove-keyword' && isTopic && keyword) {
+                    // Remove keyword from topic
                     hideContextMenu();
                     const topicId = categoryId.replace('topic-', '');
-                    hideTopicSource(card, source, topicId);
+                    removeTopicKeyword(card, keyword, topicId);
+                    return;
+                }
+
+                if (action === 'remove-source' && isTopic && source) {
+                    // Remove source from topic
+                    hideContextMenu();
+                    const topicId = categoryId.replace('topic-', '');
+                    removeTopicSource(card, source, topicId);
                     return;
                 }
 

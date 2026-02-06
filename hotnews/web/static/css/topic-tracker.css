@@ -474,6 +474,34 @@
     text-decoration: underline;
 }
 
+/* Fetch Progress Bar */
+.topic-fetch-progress {
+    padding: 12px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e5e7eb;
+}
+
+.topic-fetch-progress-text {
+    font-size: 13px;
+    color: #6b7280;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.topic-fetch-progress-bar {
+    height: 6px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.topic-fetch-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
 /* Modal Footer */
 .topic-modal-footer {
     display: flex;
