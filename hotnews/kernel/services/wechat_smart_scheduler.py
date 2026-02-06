@@ -405,13 +405,22 @@ def get_due_mps(conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, An
     )
     subscriptions = {r[0]: r[1] for r in sub_cur.fetchall()}
     
-    if not subscriptions:
+    # Get all featured fakeids
+    featured_cur = conn.execute(
+        "SELECT fakeid, nickname FROM featured_wechat_mps WHERE enabled = 1"
+    )
+    featured = {r[0]: r[1] for r in featured_cur.fetchall()}
+    
+    # Merge: featured takes priority for nickname
+    all_mps = {**subscriptions, **featured}
+    
+    if not all_mps:
         return []
     
     # Get due sources from unified table
     due_sources = get_due_sources(conn, now, source_type=MP_SOURCE_TYPE, limit=limit * 2)
     
-    # Filter to only subscribed MPs and convert format
+    # Filter to only MPs in our list and convert format
     due_mps = []
     seen_fakeids = set()
     
@@ -419,18 +428,18 @@ def get_due_mps(conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, An
         source_id = src.get("source_id", "")
         fakeid = _extract_fakeid(source_id)
         
-        if fakeid in subscriptions and fakeid not in seen_fakeids:
+        if fakeid in all_mps and fakeid not in seen_fakeids:
             seen_fakeids.add(fakeid)
             due_mps.append({
                 "fakeid": fakeid,
-                "nickname": subscriptions.get(fakeid, ""),
+                "nickname": all_mps.get(fakeid, ""),
                 "cadence": src.get("cadence", "P2"),
                 "next_due_at": src.get("next_due_at", 0),
                 "fail_count": src.get("fail_count", 0),
             })
     
-    # Add subscribed MPs that don't have stats yet (always due)
-    for fakeid, nickname in subscriptions.items():
+    # Add MPs that don't have stats yet (always due)
+    for fakeid, nickname in all_mps.items():
         if fakeid not in seen_fakeids:
             due_mps.append({
                 "fakeid": fakeid,

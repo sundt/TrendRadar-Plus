@@ -521,11 +521,12 @@ def get_due_sources(conn, now: int, source_type: str = None, limit: int = 20) ->
         )
     elif source_type == "mp":
         # MP sources use featured_wechat_mps table
+        # Note: source_id format is 'mp-{fakeid}', so we need to strip the 'mp-' prefix for JOIN
         cur = conn.execute(
             """
             SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
             FROM source_stats ss
-            INNER JOIN featured_wechat_mps m ON ss.source_id = m.fakeid
+            INNER JOIN featured_wechat_mps m ON REPLACE(ss.source_id, 'mp-', '') = m.fakeid
             WHERE ss.source_type = 'mp' 
               AND ss.next_due_at <= ? 
               AND ss.backoff_until <= ?
@@ -564,7 +565,7 @@ def get_due_sources(conn, now: int, source_type: str = None, limit: int = 20) ->
             UNION ALL
             SELECT ss.source_id, ss.source_type, ss.cadence, ss.next_due_at, ss.backoff_until, ss.fail_count
             FROM source_stats ss
-            INNER JOIN featured_wechat_mps m ON ss.source_id = m.fakeid AND m.enabled = 1
+            INNER JOIN featured_wechat_mps m ON REPLACE(ss.source_id, 'mp-', '') = m.fakeid AND m.enabled = 1
             WHERE ss.source_type = 'mp' AND ss.next_due_at <= ? AND ss.backoff_until <= ?
             ORDER BY next_due_at ASC
             LIMIT ?
