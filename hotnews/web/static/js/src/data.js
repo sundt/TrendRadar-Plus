@@ -660,6 +660,15 @@ export const data = {
         const tabsEl = document.querySelector('.category-tabs');
         if (!tabsEl || !contentEl) return;
 
+        // Reset dynamic module states before re-rendering
+        try {
+            if (window.HotNews?.featuredMps?.resetState) {
+                window.HotNews.featuredMps.resetState();
+            }
+        } catch (e) {
+            // ignore
+        }
+
         let _knowledgeGridHtml = '';
         try {
             const existingPane = document.getElementById('tab-knowledge');

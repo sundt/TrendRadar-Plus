@@ -20,6 +20,15 @@ let featuredMpsLoaded = false;
 let featuredMpsLoading = false;
 
 /**
+ * Reset loaded state (called when viewer data is refreshed)
+ */
+function resetLoadedState() {
+    featuredMpsLoaded = false;
+    featuredMpsLoading = false;
+    console.log('[FeaturedMPs] State reset');
+}
+
+/**
  * Get cached data from localStorage
  * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
  * Backend has cache, so no performance impact.
@@ -379,6 +388,7 @@ if (typeof window !== 'undefined') {
         load: loadFeaturedMps,
         init: init,
         clearCache: clearCache,
+        resetState: resetLoadedState,
     };
 }
 
