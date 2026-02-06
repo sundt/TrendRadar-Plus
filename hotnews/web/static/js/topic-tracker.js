@@ -49,16 +49,19 @@
         const currentUser = window.authState?.getUser?.();
         const currentUserId = currentUser?.id;
         
-        // Find all topic tabs with owner info
-        const topicTabs = document.querySelectorAll('.category-tab.topic-tab[data-owner-user-id]');
+        // Find ALL topic tabs (both server-rendered and dynamically created)
+        const topicTabs = document.querySelectorAll('.category-tab.topic-tab');
         
         topicTabs.forEach(tab => {
             const ownerUserId = tab.dataset.ownerUserId;
             const categoryId = tab.dataset.category;
             
-            // If user is not logged in, or owner doesn't match current user, remove the tab
-            if (!currentUserId || String(ownerUserId) !== String(currentUserId)) {
-                console.warn(`[TopicTracker] Removing mismatched topic tab: ${categoryId}, owner=${ownerUserId}, current=${currentUserId}`);
+            // Remove tab if:
+            // 1. User is not logged in
+            // 2. Tab has owner info but doesn't match current user
+            // 3. Tab is server-rendered (has owner info) - we'll reload from API
+            if (!currentUserId || (ownerUserId && String(ownerUserId) !== String(currentUserId))) {
+                console.warn(`[TopicTracker] Removing topic tab: ${categoryId}, owner=${ownerUserId}, current=${currentUserId}`);
                 
                 // Remove the tab
                 tab.remove();
@@ -68,6 +71,29 @@
                 if (pane) {
                     pane.remove();
                 }
+            }
+        });
+    }
+    
+    /**
+     * Remove all server-rendered topic tabs (to prevent cache leakage)
+     * We'll reload them from API for the current user
+     */
+    function removeServerRenderedTopicTabs() {
+        // Find all topic tabs that have owner-user-id (server-rendered)
+        const serverTabs = document.querySelectorAll('.category-tab.topic-tab[data-owner-user-id]');
+        
+        serverTabs.forEach(tab => {
+            const categoryId = tab.dataset.category;
+            console.log(`[TopicTracker] Removing server-rendered topic tab: ${categoryId}`);
+            
+            // Remove the tab
+            tab.remove();
+            
+            // Remove the corresponding tab-pane
+            const pane = document.getElementById(`tab-${categoryId}`);
+            if (pane) {
+                pane.remove();
             }
         });
     }
@@ -85,8 +111,12 @@
             return;
         }
         
-        // Security: Validate topic tabs ownership before anything else
+        // Security: First remove ALL server-rendered topic tabs
         // This prevents cached pages from showing other users' topics
+        // We'll reload the correct topics from API for the current user
+        removeServerRenderedTopicTabs();
+        
+        // Then validate any remaining topic tabs (shouldn't be any at this point)
         validateTopicTabsOwnership();
         
         createModal();

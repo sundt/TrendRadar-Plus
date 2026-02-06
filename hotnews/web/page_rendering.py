@@ -14,7 +14,17 @@ def _inject_user_topics_as_categories(data: Dict[str, Any], request: Request) ->
     """
     Inject user's tracked topics as categories (metadata only, news loaded via API).
     Topics are inserted after 'my-tags' category.
+    
+    NOTE: Disabled to prevent cache leakage issues when multiple users are online.
+    Topics are now loaded entirely via frontend API calls.
     """
+    # Disabled - topics are now loaded via frontend API to prevent cache issues
+    # When pages are cached (CDN/Nginx), server-rendered topics from user A
+    # could be shown to user B. Frontend loading ensures each user only sees
+    # their own topics.
+    return data
+    
+    # Original implementation below (kept for reference):
     import logging
     logger = logging.getLogger(__name__)
     
