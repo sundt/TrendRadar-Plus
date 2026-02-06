@@ -228,7 +228,14 @@
                         window.switchTab(savedTab);
                     }
                 } else {
-                    console.log(`[TopicTracker] Topic tab not found: ${savedTab}`);
+                    // 主题 tab 不存在（可能已被删除），清除保存的 tab 并切换到默认 tab
+                    console.log(`[TopicTracker] Topic tab not found, clearing saved tab: ${savedTab}`);
+                    localStorage.removeItem('tr_active_tab');
+                    
+                    // 切换到我的关注或第一个可用的 tab
+                    if (typeof window.switchTab === 'function') {
+                        window.switchTab('my-tags');
+                    }
                 }
             }
         } catch (e) {
@@ -661,6 +668,35 @@
             if (!response.ok) {
                 if (response.status === 401) {
                     renderLoginRequired(container, topicId);
+                    state.loading = false;
+                    return;
+                }
+                if (response.status === 404) {
+                    // 主题不存在（可能已被删除），移除 tab 并切换到其他 tab
+                    console.log(`[TopicTracker] Topic ${topicId} not found (404), removing tab`);
+                    const categoryId = `topic-${topicId}`;
+                    
+                    // 移除 tab
+                    const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+                    if (tab) tab.remove();
+                    
+                    // 移除 pane
+                    const pane = document.getElementById(`tab-${categoryId}`);
+                    if (pane) pane.remove();
+                    
+                    // 清除 localStorage
+                    try {
+                        const savedTab = localStorage.getItem('tr_active_tab');
+                        if (savedTab === categoryId) {
+                            localStorage.removeItem('tr_active_tab');
+                        }
+                    } catch (e) {}
+                    
+                    // 切换到我的关注
+                    if (typeof window.switchTab === 'function') {
+                        window.switchTab('my-tags');
+                    }
+                    
                     state.loading = false;
                     return;
                 }
@@ -2970,6 +3006,15 @@
                 
                 // 清除该主题的加载状态
                 resetTopicState(topicId);
+                
+                // 清除 localStorage 中保存的 tab（避免刷新后还指向已删除的主题）
+                try {
+                    const savedTab = localStorage.getItem('tr_active_tab');
+                    if (savedTab === categoryId) {
+                        localStorage.removeItem('tr_active_tab');
+                        console.log(`[TopicTracker] Cleared saved tab for deleted topic ${topicId}`);
+                    }
+                } catch (e) {}
                 
                 // 切换到我的关注 tab
                 if (typeof window.switchTab === 'function') {
