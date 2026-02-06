@@ -493,7 +493,9 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None, user
     ai_recommended_sources = []
     
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        # 设置较短的超时（45秒），thinking 模型可能较慢
+        # 如果超时，会回退到 Dashscope
+        async with httpx.AsyncClient(timeout=45) as client:
             # 混元 API 使用 OpenAI 兼容格式
             request_body = {
                 "model": model,
