@@ -378,8 +378,11 @@
      */
     function createTopicTabPane(topic) {
         const categoryId = `topic-${topic.id}`;
-        const tabContent = document.querySelector('.tab-content');
-        if (!tabContent) return;
+        const tabContent = document.querySelector('.tab-content-area');
+        if (!tabContent) {
+            console.error('[TopicTracker] tab-content-area not found');
+            return;
+        }
         
         // Check if pane already exists
         if (document.getElementById(`tab-${categoryId}`)) return;
@@ -387,18 +390,11 @@
         const pane = document.createElement('div');
         pane.className = 'tab-pane';
         pane.id = `tab-${categoryId}`;
+        pane.dataset.lazyLoad = '0';
+        
+        // 使用与服务端渲染一致的结构
         pane.innerHTML = `
-            <div class="topic-header">
-                <div class="topic-title">
-                    <span class="topic-icon">${escapeHtml(topic.icon || '🏷️')}</span>
-                    <span class="topic-name">${escapeHtml(topic.name)}</span>
-                </div>
-                <div class="topic-actions">
-                    <button class="topic-action-btn" onclick="TopicTracker.editTopic('${topic.id}')">✏️ 编辑</button>
-                    <button class="topic-action-btn danger" onclick="TopicTracker.deleteTopic('${topic.id}')">🗑️ 删除</button>
-                </div>
-            </div>
-            <div class="cards-grid platform-grid" id="topicCards-${topic.id}">
+            <div class="platform-grid" id="topicCards-${topic.id}" data-topic-id="${topic.id}">
                 <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
                     <div style="font-size:48px;margin-bottom:16px;">🔍</div>
                     <div style="font-size:16px;">加载中...</div>
