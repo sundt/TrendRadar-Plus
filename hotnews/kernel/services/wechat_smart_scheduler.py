@@ -417,30 +417,42 @@ def get_due_mps(conn, user_conn, now: int, limit: int = 20) -> List[Dict[str, An
     if not all_mps:
         return []
     
-    # Get due sources from unified table
-    due_sources = get_due_sources(conn, now, source_type=MP_SOURCE_TYPE, limit=limit * 2)
-    
-    # Filter to only MPs in our list and convert format
-    due_mps = []
-    seen_fakeids = set()
-    
-    for src in due_sources:
-        source_id = src.get("source_id", "")
+    # Get all MP stats from source_stats table
+    stats_cur = conn.execute(
+        """
+        SELECT source_id, cadence, next_due_at, fail_count
+        FROM source_stats
+        WHERE source_type = 'mp'
+        """
+    )
+    mp_stats = {}
+    for row in stats_cur.fetchall():
+        source_id = row[0]
         fakeid = _extract_fakeid(source_id)
-        
-        if fakeid in all_mps and fakeid not in seen_fakeids:
-            seen_fakeids.add(fakeid)
-            due_mps.append({
-                "fakeid": fakeid,
-                "nickname": all_mps.get(fakeid, ""),
-                "cadence": src.get("cadence", "P2"),
-                "next_due_at": src.get("next_due_at", 0),
-                "fail_count": src.get("fail_count", 0),
-            })
+        mp_stats[fakeid] = {
+            "cadence": row[1],
+            "next_due_at": row[2] or 0,
+            "fail_count": row[3] or 0,
+        }
     
-    # Add MPs that don't have stats yet (always due)
+    # Build due list
+    due_mps = []
     for fakeid, nickname in all_mps.items():
-        if fakeid not in seen_fakeids:
+        if fakeid in mp_stats:
+            # Has stats, use stored values
+            stats = mp_stats[fakeid]
+            next_due_at = stats["next_due_at"]
+            # Only include if due
+            if next_due_at <= now:
+                due_mps.append({
+                    "fakeid": fakeid,
+                    "nickname": nickname,
+                    "cadence": stats["cadence"],
+                    "next_due_at": next_due_at,
+                    "fail_count": stats["fail_count"],
+                })
+        else:
+            # No stats yet, always due
             due_mps.append({
                 "fakeid": fakeid,
                 "nickname": nickname,
