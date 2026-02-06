@@ -473,8 +473,13 @@ async def _quick_validate_rss_url(url: str) -> bool:
 
 async def _generate_keywords_with_ai(topic_name: str, online_conn=None, user_conn=None) -> Dict[str, Any]:
     """
-    Call AI to generate keywords and recommend sources.
-    优先使用混元模型，失败则回退到 Dashscope。
+    通过联网搜索生成关键词和推荐数据源。
+    
+    流程：
+    1. 使用 qwen3-max 联网搜索该主题的权威报道机构
+    2. 从搜索结果中提取：公众号（谁在报道）+ 关键词（报道中的高频词）
+    3. RSS 从数据库匹配（AI 生成的 RSS 不可靠）
+    4. 验证公众号的有效性
     
     Args:
         topic_name: Topic name to generate keywords for
@@ -484,33 +489,345 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None, user_con
     Returns:
         Dict with icon, keywords, recommended_sources
     """
+    # 优先使用 qwen3-max，qwen-plus 作为回退
+    result = await _search_and_extract_with_dashscope(topic_name, online_conn, user_conn, model="qwen3-max")
+    
+    if not result.get("keywords") and not result.get("recommended_sources"):
+        logger.info("qwen3-max failed, falling back to qwen-plus")
+        result = await _search_and_extract_with_dashscope(topic_name, online_conn, user_conn, model="qwen-plus")
+    
+    # 如果都失败，使用离线关键词生成
+    if not result.get("keywords"):
+        logger.info("Web search failed, falling back to offline keyword generation")
+        icon, keywords = await _generate_keywords_with_dashscope(topic_name)
+        result["icon"] = icon
+        result["keywords"] = keywords
+    
+    # 从数据库匹配 RSS 源（AI 生成的 RSS 不可靠）
+    if result.get("keywords") and online_conn:
+        rss_sources = await _match_rss_from_database(topic_name, result.get("keywords", []), online_conn)
+        # 合并到推荐源中
+        existing_sources = result.get("recommended_sources", [])
+        for rss in rss_sources:
+            existing_sources.append(rss)
+        result["recommended_sources"] = existing_sources
+    
+    logger.info(f"[TopicAI] Result: keywords={len(result.get('keywords', []))}, sources={len(result.get('recommended_sources', []))}")
+    return result
+
+
+async def _match_rss_from_database(topic_name: str, keywords: list, online_conn) -> list:
+    """
+    从数据库中匹配 RSS 源。
+    
+    AI 生成的 RSS URL 不可靠（测试准确率 0%），所以改为从数据库已有的 RSS 源中匹配。
+    """
+    matched_sources = []
+    seen_urls = set()
+    
+    # 构建搜索词：主题名 + 关键词
+    search_terms = [topic_name] + (keywords[:5] if keywords else [])
+    
+    try:
+        cursor = online_conn.cursor()
+        
+        for term in search_terms:
+            if len(matched_sources) >= 5:  # 最多匹配 5 个 RSS
+                break
+            
+            # 在 rss_sources 表中搜索
+            cursor.execute("""
+                SELECT url, name, description 
+                FROM rss_sources 
+                WHERE name LIKE ? OR description LIKE ?
+                LIMIT 10
+            """, (f"%{term}%", f"%{term}%"))
+            
+            for row in cursor.fetchall():
+                url, name, desc = row
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    matched_sources.append({
+                        "name": name or url,
+                        "type": "rss",
+                        "url": url,
+                        "description": desc or "",
+                        "verified": True,
+                        "source": "database"
+                    })
+        
+        logger.info(f"[TopicAI] Matched {len(matched_sources)} RSS sources from database")
+    except Exception as e:
+        logger.warning(f"[TopicAI] RSS matching failed: {e}")
+    
+    return matched_sources
+
+
+async def _search_and_extract_with_dashscope(topic_name: str, online_conn=None, user_conn=None, model: str = None) -> Dict[str, Any]:
+    """
+    使用 Dashscope 联网搜索，获取公众号推荐和关键词。
+    
+    注意：不再让 AI 生成 RSS（测试准确率 0%），RSS 改为从数据库匹配。
+    """
     import httpx
     import os
     
-    # 先尝试用混元生成关键词
-    icon, keywords = await _generate_keywords_with_hunyuan(topic_name)
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        return {"icon": "🏷️", "keywords": [], "recommended_sources": []}
     
-    # 如果混元失败，回退到 Dashscope
-    if not keywords:
-        logger.info("Hunyuan keywords generation failed, falling back to Dashscope")
-        icon, keywords = await _generate_keywords_with_dashscope(topic_name)
+    # 使用传入的 model 参数，默认 qwen3-max
+    if not model:
+        model = os.environ.get("DASHSCOPE_MODEL", "qwen3-max")
+    url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     
-    logger.info(f"[TopicAI] Generated keywords for '{topic_name}': {keywords}")
-    
-    # 使用腾讯混元模型生成推荐源（传入关键词以获得更全面的推荐）
-    ai_recommended_sources = await _generate_sources_with_hunyuan(topic_name, keywords, online_conn, user_conn)
-    
-    # 如果混元模型没有返回结果，回退到阿里云模型
-    if not ai_recommended_sources:
-        logger.info("Hunyuan returned no sources, falling back to Dashscope")
-        ai_recommended_sources = await _generate_sources_with_dashscope(topic_name, keywords, online_conn, user_conn)
-    
-    logger.info(f"[TopicAI] Returning keywords={len(keywords)}, ai_sources={len(ai_recommended_sources)}")
-    return {
-        "icon": icon,
-        "keywords": keywords,
-        "recommended_sources": ai_recommended_sources
+    # 优化后的 Prompt：只要公众号，不要 RSS
+    search_prompt = f"""你是一个专业的新闻追踪专家。用户想要追踪关于「{topic_name}」的新闻和资讯。
+
+## 任务
+请通过网络搜索，完成以下任务：
+
+### 第一步：搜索权威报道机构
+搜索「{topic_name}」相关的新闻报道，找出哪些微信公众号在持续报道这个领域。
+
+要求：
+- 找出 10-15 个相关的微信公众号
+- 优先推荐官方账号、权威媒体、行业垂直媒体
+- 确保公众号名称准确（可通过搜索验证）
+
+### 第二步：从报道中提取关键词
+从搜索到的报道标题和内容中，提取 6-10 个高频出现的关键词：
+- 必须是该领域的专有名词（机构名、政策名、产品名、人名等）
+- 能精准匹配该主题的新闻标题
+- 避免泛化词（如：新闻、发展、行业、市场、科技）
+
+### 第三步：选择图标
+选择一个最能代表「{topic_name}」的 emoji 图标。
+
+## 输出格式
+请严格按以下 JSON 格式输出：
+{{
+    "icon": "emoji图标",
+    "keywords": ["关键词1", "关键词2", ...],
+    "sources": [
+        {{"name": "公众号名称", "type": "wechat_mp", "description": "推荐理由"}}
+    ]
+}}
+
+只输出 JSON，不要其他内容。"""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
     }
+    
+    try:
+        logger.info(f"[Dashscope] Calling {model} for topic: {topic_name}")
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(url, headers=headers, json={
+                "model": model,
+                "messages": [{"role": "user", "content": search_prompt}],
+                "temperature": 0.5,
+                "response_format": {"type": "json_object"},
+                "enable_search": True,
+                "search_options": {
+                    "forced_search": True,
+                    "search_strategy": "standard"
+                }
+            })
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            result = json.loads(content)
+            
+            icon = result.get("icon", "🏷️")
+            keywords = result.get("keywords", [])
+            raw_sources = result.get("sources", [])
+            
+            logger.info(f"[Dashscope {model}] Got {len(keywords)} keywords, {len(raw_sources)} sources for '{topic_name}'")
+            
+            # 验证公众号（只用名称搜索，不用 wechat_id）
+            verified_sources = await _validate_ai_sources(raw_sources, topic_name, keywords, online_conn, user_conn, f"dashscope_{model}")
+            
+            return {
+                "icon": icon,
+                "keywords": keywords,
+                "recommended_sources": verified_sources
+            }
+    except Exception as e:
+        logger.warning(f"[Dashscope Search] Failed: {e}")
+        return {"icon": "🏷️", "keywords": [], "recommended_sources": []}
+
+
+async def _search_and_extract_with_hunyuan(topic_name: str, online_conn=None, user_conn=None) -> Dict[str, Any]:
+    """
+    使用混元联网搜索，一次性获取数据源和关键词（回退方案）。
+    """
+    import httpx
+    import os
+    
+    api_key = os.environ.get("HUNYUAN_API_KEY", "")
+    if not api_key:
+        return {"icon": "🏷️", "keywords": [], "recommended_sources": []}
+    
+    model = os.environ.get("HUNYUAN_MODEL", "hunyuan-2.0-thinking-20251109")
+    url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
+    
+    search_prompt = f"""你是一个专业的新闻追踪专家。用户想要追踪关于「{topic_name}」的新闻和资讯。
+
+## 任务
+请通过网络搜索，完成以下任务：
+
+### 第一步：搜索权威报道机构
+搜索「{topic_name}」相关的新闻报道，找出：
+1. 哪些微信公众号在持续报道这个领域？（找 10-15 个）
+2. 哪些网站有相关的 RSS 订阅源？（找 3-5 个）
+
+### 第二步：从报道中提取关键词
+从搜索到的报道标题和内容中，提取 6-10 个高频出现的关键词，这些关键词应该：
+- 是该领域的专有名词（机构名、政策名、产品名、人名等）
+- 能精准匹配该主题的新闻标题
+- 避免泛化词（如：新闻、发展、行业、市场）
+
+### 第三步：选择图标
+选择一个最能代表「{topic_name}」的 emoji 图标。
+
+## 输出格式
+请严格按以下 JSON 格式输出：
+{{
+    "icon": "emoji图标",
+    "keywords": ["关键词1", "关键词2", ...],
+    "sources": [
+        {{"name": "公众号名称", "type": "wechat_mp", "wechat_id": "微信号ID", "description": "为什么推荐"}},
+        {{"name": "网站名称", "type": "rss", "url": "https://example.com/feed", "description": "简短描述"}}
+    ]
+}}
+
+只输出 JSON，不要其他内容。"""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(url, headers=headers, json={
+                "model": model,
+                "messages": [{"role": "user", "content": search_prompt}],
+                "temperature": 0.5,
+                "enable_enhancement": True,  # 混元的联网搜索参数
+            })
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            content = _extract_json_from_response(content)
+            result = json.loads(content)
+            
+            icon = result.get("icon", "🏷️")
+            keywords = result.get("keywords", [])
+            raw_sources = result.get("sources", [])
+            
+            logger.info(f"[Hunyuan Search] Got {len(keywords)} keywords, {len(raw_sources)} raw sources for '{topic_name}'")
+            
+            # 验证数据源
+            verified_sources = await _validate_ai_sources(raw_sources, topic_name, keywords, online_conn, user_conn, "hunyuan")
+            
+            return {
+                "icon": icon,
+                "keywords": keywords,
+                "recommended_sources": verified_sources
+            }
+    except Exception as e:
+        logger.warning(f"[Hunyuan Search] Failed: {e}")
+        return {"icon": "🏷️", "keywords": [], "recommended_sources": []}
+
+
+async def _validate_ai_sources(raw_sources: list, topic_name: str, keywords: list, online_conn, user_conn, source_tag: str) -> list:
+    """
+    验证 AI 推荐的数据源。
+    
+    Args:
+        raw_sources: AI 返回的原始数据源列表
+        topic_name: 主题名称
+        keywords: 关键词列表
+        online_conn: 数据库连接
+        user_conn: 用户数据库连接
+        source_tag: 来源标签（dashscope/hunyuan）
+    
+    Returns:
+        验证后的数据源列表
+    """
+    verified_sources = []
+    
+    # 分离 RSS 源和公众号
+    rss_sources = [src for src in raw_sources if src.get("type") == "rss" and src.get("url")]
+    mp_sources = [src for src in raw_sources if src.get("type") == "wechat_mp"]
+    
+    # 并行验证 RSS 源
+    if rss_sources:
+        async def validate_rss(src):
+            url_to_check = src.get("url", "")
+            is_valid = await _quick_validate_rss_url(url_to_check)
+            return (src, is_valid)
+        
+        rss_results = await asyncio.gather(*[validate_rss(src) for src in rss_sources])
+        
+        for src, is_valid in rss_results:
+            if is_valid:
+                src["verified"] = True
+                src["source"] = f"{source_tag}_verified"
+                verified_sources.append(src)
+                logger.info(f"[{source_tag}] RSS validated: {src.get('name')}")
+            else:
+                logger.info(f"[{source_tag}] RSS invalid (skipped): {src.get('name')} - {src.get('url')}")
+    
+    # 验证公众号（只用名称搜索，AI 返回的 wechat_id 不可靠）
+    for src in mp_sources:
+        mp_name = src.get("name", "")
+        
+        if mp_name and online_conn:
+            # 直接用公众号名称搜索（不用 wechat_id，测试证明 AI 生成的 wechat_id 基本都是编造的）
+            mp_info = await _validate_mp_by_search(online_conn, mp_name, user_conn)
+            
+            if mp_info:
+                nickname = mp_info.get("nickname", "")
+                signature = mp_info.get("signature", "")
+                
+                # 检查名称是否匹配（避免搜索结果偏差太大）
+                if not _is_name_similar(mp_name, nickname):
+                    logger.info(f"[{source_tag}] MP name mismatch (skipped): {mp_name} -> {nickname}")
+                    continue
+                
+                # 注意：不再检查相关性，因为 AI 已经根据主题推荐了
+                # 之前的相关性检查会过滤掉很多有效的公众号
+                
+                fakeid = mp_info.get("fakeid", "")
+                src["verified"] = True
+                src["source"] = f"{source_tag}_verified"
+                src["wechat_id"] = fakeid
+                src["id"] = f"mp-{fakeid}" if fakeid else None
+                src["name"] = nickname
+                src["avatar"] = mp_info.get("round_head_img", "")
+                if signature:
+                    src["description"] = signature
+                verified_sources.append(src)
+                logger.info(f"[{source_tag}] MP validated: {mp_name} -> {nickname}")
+            else:
+                # 搜索失败，但仍然添加为未验证的源（让用户自己判断）
+                src["verified"] = False
+                src["source"] = f"{source_tag}_unverified"
+                verified_sources.append(src)
+                logger.info(f"[{source_tag}] MP not found, added as unverified: {mp_name}")
+        elif mp_name:
+            # 没有数据库连接，添加为未验证的源
+            src["verified"] = False
+            src["source"] = f"{source_tag}_unverified"
+            verified_sources.append(src)
+            logger.info(f"[{source_tag}] No DB conn, added as unverified: {mp_name}")
+    
+    logger.info(f"[{source_tag}] Validated {len(verified_sources)} sources from {len(raw_sources)} raw")
+    return verified_sources
 
 
 async def _generate_keywords_with_hunyuan(topic_name: str) -> tuple:
@@ -526,24 +843,32 @@ async def _generate_keywords_with_hunyuan(topic_name: str) -> tuple:
     model = os.environ.get("HUNYUAN_MODEL", "hunyuan-2.0-thinking-20251109")
     url = "https://api.hunyuan.cloud.tencent.com/v1/chat/completions"
     
-    keywords_prompt = f"""你是一个新闻追踪专家。用户想要追踪关于「{topic_name}」的新闻。
+    keywords_prompt = f"""你是一个专业的新闻追踪专家。用户想要追踪关于「{topic_name}」的新闻和资讯。
 
-请为这个主题生成：
-1. 一个最合适的 emoji 图标（单个 emoji）
-2. 8-12 个相关的搜索关键词，用于在新闻标题中匹配
+## 分析步骤
+1. 首先理解「{topic_name}」的核心含义和领域
+2. 识别该主题的官方名称、别名、缩写
+3. 找出相关的核心人物、机构、产品名称
+4. 生成能精准匹配该主题新闻的关键词
 
-关键词要求：
-- 包含中文和英文关键词
-- 包含主题的不同表述方式（如公司名、产品名、人名等）
-- 关键词要具体，避免太宽泛
+## 生成要求
+请生成：
+1. 一个最能代表该主题的 emoji 图标（单个 emoji）
+2. 6-10 个精准的搜索关键词
 
-请按以下 JSON 格式输出：
+## 关键词质量标准
+- 必须与「{topic_name}」直接相关，能精准定位该主题的新闻
+- 优先使用专有名词（公司名、产品名、人名、机构名）
+- 包含中英文关键词（如有英文名称）
+- 避免过于宽泛的词（如：新闻、发展、行业、市场、科技）
+- 避免与其他主题混淆的通用词
+
+## 输出格式
+请严格按以下 JSON 格式输出，不要包含任何其他内容：
 {{
-    "icon": "�",
-    "keywords": ["关键词1", "关键词2", "Keyword3", ...]
-}}
-
-只输出 JSON，不要其他内容。"""
+    "icon": "emoji",
+    "keywords": ["关键词1", "关键词2", "Keyword3"]
+}}"""
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -555,7 +880,7 @@ async def _generate_keywords_with_hunyuan(topic_name: str) -> tuple:
             response = await client.post(url, headers=headers, json={
                 "model": model,
                 "messages": [{"role": "user", "content": keywords_prompt}],
-                "temperature": 0.7,
+                "temperature": 0.5,
             })
             response.raise_for_status()
             data = response.json()
@@ -584,24 +909,32 @@ async def _generate_keywords_with_dashscope(topic_name: str) -> tuple:
     model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus")
     url = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
     
-    keywords_prompt = f"""你是一个新闻追踪专家。用户想要追踪关于「{topic_name}」的新闻。
+    keywords_prompt = f"""你是一个专业的新闻追踪专家。用户想要追踪关于「{topic_name}」的新闻和资讯。
 
-请为这个主题生成：
-1. 一个最合适的 emoji 图标（单个 emoji）
-2. 8-12 个相关的搜索关键词，用于在新闻标题中匹配
+## 分析步骤
+1. 首先理解「{topic_name}」的核心含义和领域
+2. 识别该主题的官方名称、别名、缩写
+3. 找出相关的核心人物、机构、产品名称
+4. 生成能精准匹配该主题新闻的关键词
 
-关键词要求：
-- 包含中文和英文关键词
-- 包含主题的不同表述方式（如公司名、产品名、人名等）
-- 关键词要具体，避免太宽泛
+## 生成要求
+请生成：
+1. 一个最能代表该主题的 emoji 图标（单个 emoji）
+2. 6-10 个精准的搜索关键词
 
-请按以下 JSON 格式输出：
+## 关键词质量标准
+- 必须与「{topic_name}」直接相关，能精准定位该主题的新闻
+- 优先使用专有名词（公司名、产品名、人名、机构名）
+- 包含中英文关键词（如有英文名称）
+- 避免过于宽泛的词（如：新闻、发展、行业、市场、科技）
+- 避免与其他主题混淆的通用词
+
+## 输出格式
+请严格按以下 JSON 格式输出，不要包含任何其他内容：
 {{
-    "icon": "🍎",
-    "keywords": ["关键词1", "关键词2", "Keyword3", ...]
-}}
-
-只输出 JSON，不要其他内容。"""
+    "icon": "emoji",
+    "keywords": ["关键词1", "关键词2", "Keyword3"]
+}}"""
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -613,7 +946,7 @@ async def _generate_keywords_with_dashscope(topic_name: str) -> tuple:
             response = await client.post(url, headers=headers, json={
                 "model": model,
                 "messages": [{"role": "user", "content": keywords_prompt}],
-                "temperature": 0.7,
+                "temperature": 0.5,
                 "response_format": {"type": "json_object"}
             })
             response.raise_for_status()
@@ -627,6 +960,43 @@ async def _generate_keywords_with_dashscope(topic_name: str) -> tuple:
     except Exception as e:
         logger.warning(f"[Dashscope] Keywords generation failed: {e}")
         return "🏷️", []
+
+
+def _is_name_similar(expected: str, actual: str) -> bool:
+    """
+    检查公众号名称是否相似。
+    
+    用于验证微信搜索返回的结果是否与预期匹配，避免搜索结果偏差太大。
+    
+    Args:
+        expected: AI 推荐的公众号名称
+        actual: 微信搜索返回的公众号名称
+        
+    Returns:
+        True 如果名称相似，False 如果不相似
+    """
+    expected = expected.lower().replace(" ", "")
+    actual = actual.lower().replace(" ", "")
+    
+    # 完全包含
+    if expected in actual or actual in expected:
+        return True
+    
+    # 前缀匹配（至少2个字符）
+    if len(expected) >= 2 and len(actual) >= 2:
+        if expected[:2] in actual or actual[:2] in expected:
+            return True
+    
+    # 繁简体转换（如 做书 vs 做書）
+    try:
+        # 简单处理：去掉最后一个字符再比较
+        if len(expected) >= 2 and len(actual) >= 2:
+            if expected[:-1] == actual[:-1]:
+                return True
+    except:
+        pass
+    
+    return False
 
 
 def _is_source_relevant(topic_name: str, keywords: list, source_name: str, source_desc: str) -> bool:
