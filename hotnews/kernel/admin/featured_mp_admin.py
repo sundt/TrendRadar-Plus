@@ -854,11 +854,11 @@ async def get_featured_mps_public(
                 "cache_age": now - _featured_mps_cache["timestamp"]
             }
     
-    # Query featured MPs
+    # Query featured MPs (only admin-added ones)
     query = """
         SELECT fakeid, nickname, round_head_img, signature, category
         FROM featured_wechat_mps
-        WHERE enabled = 1
+        WHERE enabled = 1 AND (source IS NULL OR source = 'admin')
     """
     params = []
     

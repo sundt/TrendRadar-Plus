@@ -123,6 +123,66 @@ def auto_adjust_cadence(db_path: str) -> dict:
     return {"sources_checked": len(sources), "cadence_adjusted": adjusted}
 
 
+def cleanup_inactive_mps(db_path: str, inactive_days: int = 60) -> dict:
+    """
+    清理超过指定天数没有更新的用户添加的公众号
+    
+    Args:
+        db_path: 数据库路径
+        inactive_days: 不活跃天数阈值（默认60天，即2个月）
+        
+    Returns:
+        清理统计
+    """
+    conn = sqlite3.connect(db_path)
+    now_ts = int(time.time())
+    cutoff_ts = now_ts - (inactive_days * 86400)
+    
+    # 查找不活跃的公众号（所有来源）
+    query = """
+        SELECT 
+            f.fakeid,
+            f.nickname,
+            f.source,
+            MAX(e.published_at) as last_article_at
+        FROM featured_wechat_mps f
+        LEFT JOIN rss_entries e ON e.source_id = 'mp-' || f.fakeid
+        WHERE f.enabled = 1
+        GROUP BY f.fakeid
+        HAVING last_article_at IS NULL OR last_article_at < ?
+    """
+    
+    cursor = conn.execute(query, (cutoff_ts,))
+    inactive_mps = cursor.fetchall()
+    
+    if not inactive_mps:
+        conn.close()
+        return {"checked": 0, "deleted": 0}
+    
+    # 删除这些公众号记录
+    fakeids = [row[0] for row in inactive_mps]
+    placeholders = ",".join(["?"] * len(fakeids))
+    
+    conn.execute(
+        f"DELETE FROM featured_wechat_mps WHERE fakeid IN ({placeholders})",
+        fakeids
+    )
+    conn.commit()
+    
+    # 打印详情
+    for fakeid, nickname, source, last_at in inactive_mps:
+        if last_at:
+            last_str = datetime.fromtimestamp(last_at).strftime("%Y-%m-%d")
+        else:
+            last_str = "从未更新"
+        source_str = source or "admin"
+        print(f"  [Inactive MP] 删除: {nickname} ({source_str}, 最后更新: {last_str})")
+    
+    conn.close()
+    
+    return {"checked": len(inactive_mps), "deleted": len(fakeids)}
+
+
 def main():
     """主入口"""
     db_path = os.environ.get("ONLINE_DB_PATH", "/app/output/online.db")
@@ -154,6 +214,10 @@ def main():
     cadence_stats = auto_adjust_cadence(db_path)
     print(f"[Auto-Cadence] Checked {cadence_stats['sources_checked']} sources, "
           f"adjusted {cadence_stats['cadence_adjusted']}")
+    
+    # 3. 清理不活跃的用户公众号（超过60天没更新）
+    mp_stats = cleanup_inactive_mps(db_path, inactive_days=60)
+    print(f"[Inactive MPs] Deleted {mp_stats['deleted']} inactive user-added MPs")
     
     print(f"[Cleanup] Completed at {datetime.now()}")
 
