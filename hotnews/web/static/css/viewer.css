@@ -7436,3 +7436,106 @@ body.eye-protection-mode .discovery-count {
     background: #9ca3af;
     cursor: not-allowed;
 }
+
+/* ==========================================================================
+   Quota Error State (Usage limit reached)
+   ========================================================================== */
+
+.summary-quota-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    gap: 16px;
+    min-height: 280px;
+}
+
+.quota-error-icon {
+    font-size: 48px;
+}
+
+.quota-error-title {
+    color: #374151;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.quota-error-text {
+    color: #6b7280;
+    font-size: 14px;
+    text-align: center;
+}
+
+.quota-error-actions {
+    margin-top: 8px;
+}
+
+.quota-upgrade-btn {
+    padding: 12px 32px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+}
+
+.quota-upgrade-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+}
+
+.quota-fallback-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.quota-read-btn {
+    padding: 8px 16px;
+    border-radius: 16px;
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.quota-read-btn:hover {
+    background: #e5e7eb;
+}
+
+.quota-action-btn {
+    padding: 8px 14px;
+    border-radius: 16px;
+    background: transparent;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quota-action-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .quota-error-title { color: #f3f4f6; }
+    .quota-error-text { color: #9ca3af; }
+    .quota-fallback-actions { border-top-color: rgba(255,255,255,0.1); }
+    .quota-read-btn { background: rgba(255,255,255,0.1); color: #e5e7eb; }
+    .quota-read-btn:hover { background: rgba(255,255,255,0.15); }
+    .quota-action-btn { border-color: rgba(255,255,255,0.15); color: #9ca3af; }
+    .quota-action-btn:hover { background: rgba(255,255,255,0.05); }
+}

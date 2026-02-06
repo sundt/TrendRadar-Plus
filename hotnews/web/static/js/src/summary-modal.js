@@ -878,19 +878,13 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
             // Quota exhausted - show upgrade prompt
             body.innerHTML = `
                 <div class="summary-quota-error">
-                    <div class="quota-error-icon">💎</div>
-                    <div class="quota-error-title">本月额度已用完</div>
-                    <div class="quota-error-text">${errorMsg}</div>
+                    <div class="quota-error-icon">✨</div>
+                    <div class="quota-error-title">额度已用完</div>
+                    <div class="quota-error-text">充值后即可继续使用</div>
                     <div class="quota-error-actions">
                         <button class="quota-upgrade-btn" onclick="openPaymentModal()">
-                            ✨ 升级会员
+                            立即充值
                         </button>
-                        <button class="quota-recharge-btn" onclick="openPaymentModal('recharge')">
-                            🪙 充值额度
-                        </button>
-                    </div>
-                    <div class="quota-error-hint">
-                        升级会员可享受更多 AI 总结次数
                     </div>
                     <div class="quota-fallback-actions">
                         <a href="${url}" target="_blank" rel="noopener noreferrer" class="quota-read-btn">
@@ -1318,19 +1312,13 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
             // Quota exhausted - show upgrade prompt
             body.innerHTML = `
                 <div class="summary-quota-error">
-                    <div class="quota-error-icon">💎</div>
-                    <div class="quota-error-title">本月额度已用完</div>
-                    <div class="quota-error-text">${errorMsg}</div>
+                    <div class="quota-error-icon">✨</div>
+                    <div class="quota-error-title">额度已用完</div>
+                    <div class="quota-error-text">充值后即可继续使用</div>
                     <div class="quota-error-actions">
                         <button class="quota-upgrade-btn" onclick="openPaymentModal()">
-                            ✨ 升级会员
+                            立即充值
                         </button>
-                        <button class="quota-recharge-btn" onclick="openPaymentModal('recharge')">
-                            🪙 充值额度
-                        </button>
-                    </div>
-                    <div class="quota-error-hint">
-                        升级会员可享受更多 AI 总结次数
                     </div>
                     <div class="quota-fallback-actions">
                         <a href="${url}" target="_blank" rel="noopener noreferrer" class="quota-read-btn">

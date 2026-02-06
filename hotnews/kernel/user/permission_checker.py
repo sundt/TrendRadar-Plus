@@ -98,7 +98,7 @@ def get_permission_error_message(permission_type: PermissionType, extra_info: Di
     if permission_type == "quota_exceeded":
         is_vip = extra_info.get('is_vip', False)
         if is_vip:
-            return "本月使用次数已用完，请等待下月重置"
+            return "本月额度已用完，充值后可继续使用"
         else:
-            return "本月免费次数已用完，订阅会员可获得更多次数"
+            return "免费额度已用完，充值后可继续使用"
     return "无法使用此功能"
