@@ -1329,3 +1329,58 @@
 .wechat-qrcode-btn.primary:hover {
     background: linear-gradient(135deg, #16a34a, #15803d);
 }
+
+
+/* Progress Bar */
+.topic-progress-container {
+    margin-top: 12px;
+    padding: 12px 16px;
+    background: #f9fafb;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+
+.topic-progress-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.topic-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.5s ease-out;
+}
+
+.topic-progress-text {
+    font-size: 13px;
+    color: #374151;
+    text-align: center;
+}
+
+
+/* End of file */
+
+.stale-notice-close {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #92400e;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.stale-notice-close:hover {
+    background: rgba(0, 0, 0, 0.2);
+}

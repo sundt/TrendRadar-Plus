@@ -36,6 +36,9 @@
     let sourcesContainer = null;
     let aiGenerateBtn = null;
     let submitBtn = null;
+    
+    // 缓存微信凭证状态，避免重复检查
+    let hasWechatCredentialsCache = null;
 
     /**
      * Validate topic tabs ownership - remove tabs that don't belong to current user
@@ -190,6 +193,9 @@
                 topics = data.topics;
                 console.log(`[TopicTracker] Loaded ${topics.length} topics, rendering tabs...`);
                 renderTopicTabsFromData(topics);
+                
+                // 检查是否需要切换到某个主题 tab（创建主题后刷新页面的情况）
+                tryRestoreTopicTab();
             } else {
                 console.log('[TopicTracker] No topics found or API error:', data.detail || data.error);
                 topics = [];
@@ -201,6 +207,32 @@
                 skeletonContainer.remove();
             }
             topics = [];
+        }
+    }
+    
+    /**
+     * 尝试恢复到主题 tab（用于创建主题后刷新页面的情况）
+     */
+    function tryRestoreTopicTab() {
+        try {
+            const savedTab = localStorage.getItem('tr_active_tab');
+            if (savedTab && savedTab.startsWith('topic-')) {
+                const tabEl = document.querySelector(`.category-tab[data-category="${savedTab}"]`);
+                const paneEl = document.getElementById(`tab-${savedTab}`);
+                
+                if (tabEl && paneEl) {
+                    console.log(`[TopicTracker] Restoring to topic tab: ${savedTab}`);
+                    
+                    // 切换到该 tab
+                    if (typeof window.switchTab === 'function') {
+                        window.switchTab(savedTab);
+                    }
+                } else {
+                    console.log(`[TopicTracker] Topic tab not found: ${savedTab}`);
+                }
+            }
+        } catch (e) {
+            console.error('[TopicTracker] Failed to restore topic tab:', e);
         }
     }
     
@@ -329,7 +361,7 @@
                     <button class="topic-action-btn danger" onclick="TopicTracker.deleteTopic('${topic.id}')">🗑️ 删除</button>
                 </div>
             </div>
-            <div class="cards-grid" id="topicCards-${topic.id}">
+            <div class="cards-grid platform-grid" id="topicCards-${topic.id}">
                 <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
                     <div style="font-size:48px;margin-bottom:16px;">🔍</div>
                     <div style="font-size:16px;">加载中...</div>
@@ -356,9 +388,12 @@
                             <label class="topic-form-label">主题名称</label>
                             <input type="text" class="topic-form-input" id="topicNameInput" 
                                    placeholder="例如：苹果公司、特斯拉、人工智能" maxlength="50">
-                            <button class="topic-ai-btn" id="topicAiBtn" onclick="TopicTracker.generateKeywords()">
-                                🤖 生成关键词和推荐源
-                            </button>
+                            <div class="topic-progress-container" id="topicProgressContainer" style="display:none;">
+                                <div class="topic-progress-bar">
+                                    <div class="topic-progress-fill" id="topicProgressFill"></div>
+                                </div>
+                                <div class="topic-progress-text" id="topicProgressText">准备中...</div>
+                            </div>
                         </div>
                         
                         <div class="topic-form-group" id="topicIconGroup" style="display:none;">
@@ -387,7 +422,10 @@
                     </div>
                     <div class="topic-modal-footer">
                         <button class="topic-modal-btn cancel" onclick="TopicTracker.closeModal()">取消</button>
-                        <button class="topic-modal-btn primary" id="topicSubmitBtn" onclick="TopicTracker.submitTopic()" disabled>
+                        <button class="topic-modal-btn primary" id="topicAiBtn" onclick="TopicTracker.generateKeywords()">
+                            🤖 生成关键词和推荐源
+                        </button>
+                        <button class="topic-modal-btn primary" id="topicSubmitBtn" onclick="TopicTracker.submitTopic()" style="display:none;">
                             创建并开始追踪
                         </button>
                     </div>
@@ -914,8 +952,12 @@
         document.getElementById('topicIconGroup').style.display = 'none';
         document.getElementById('topicKeywordsGroup').style.display = 'none';
         document.getElementById('topicSourcesGroup').style.display = 'none';
-        submitBtn.textContent = '创建并开始追踪';
-        submitBtn.disabled = true;
+        
+        // 新建时：显示"生成"按钮，隐藏"创建"按钮
+        aiGenerateBtn.style.display = '';
+        aiGenerateBtn.disabled = false;
+        aiGenerateBtn.innerHTML = '🤖 生成关键词和推荐源';
+        submitBtn.style.display = 'none';
         
         modalOverlay.classList.add('active');
         topicNameInput.focus();
@@ -963,27 +1005,55 @@
         }
         
         aiGenerateBtn.disabled = true;
-        aiGenerateBtn.classList.add('loading');
         
-        // 显示进度提示
+        // 显示进度条
+        const progressContainer = document.getElementById('topicProgressContainer');
+        const progressFill = document.getElementById('topicProgressFill');
+        const progressText = document.getElementById('topicProgressText');
+        progressContainer.style.display = 'block';
+        
+        // 进度步骤 - 更细粒度，让等待感觉更自然
         const progressSteps = [
-            '🤖 正在分析主题...',
-            '🔍 正在生成关键词...',
-            '📡 正在搜索数据源...',
-            '✅ 正在验证数据源...'
+            { percent: 5, text: '🤖 正在分析主题...' },
+            { percent: 15, text: '🔍 正在理解主题含义...' },
+            { percent: 25, text: '📝 正在生成关键词...' },
+            { percent: 35, text: '🎯 正在优化关键词...' },
+            { percent: 45, text: '📡 正在搜索相关数据源...' },
+            { percent: 55, text: '🔎 正在匹配公众号...' },
+            { percent: 65, text: '🌐 正在查找 RSS 源...' },
+            { percent: 72, text: '✅ 正在验证数据源...' },
+            { percent: 78, text: '📊 正在整理推荐结果...' },
+            { percent: 83, text: '⏳ 即将完成，请稍候...' },
+            { percent: 87, text: '⏳ 正在做最后处理...' },
+            { percent: 90, text: '⏳ 马上就好...' },
+            { percent: 92, text: '⏳ 还差一点点...' },
+            { percent: 94, text: '⏳ 快完成了...' }
         ];
         let stepIndex = 0;
         
         const updateProgress = () => {
-            aiGenerateBtn.innerHTML = `<span class="topic-spinner"></span> ${progressSteps[stepIndex]}`;
+            const step = progressSteps[stepIndex];
+            progressFill.style.width = step.percent + '%';
+            progressText.textContent = step.text;
         };
         updateProgress();
         
-        // 每2秒切换进度提示
-        const progressInterval = setInterval(() => {
-            stepIndex = Math.min(stepIndex + 1, progressSteps.length - 1);
-            updateProgress();
-        }, 2000);
+        // 前面步骤快一些（2秒），后面步骤慢一些（4秒）
+        const getInterval = () => {
+            if (stepIndex < 5) return 2000;      // 前5步：2秒
+            if (stepIndex < 9) return 3000;      // 中间4步：3秒
+            return 4000;                          // 最后几步：4秒
+        };
+        
+        const advanceProgress = () => {
+            if (stepIndex < progressSteps.length - 1) {
+                stepIndex++;
+                updateProgress();
+                progressInterval = setTimeout(advanceProgress, getInterval());
+            }
+        };
+        
+        let progressInterval = setTimeout(advanceProgress, getInterval());
         
         try {
             const response = await fetch('/api/topics/generate-keywords', {
@@ -996,7 +1066,6 @@
             // 处理 401 未授权错误
             if (response.status === 401) {
                 alert('登录已过期，请重新登录');
-                // 尝试打开登录弹窗
                 if (typeof openLoginModal === 'function') {
                     openLoginModal();
                 }
@@ -1006,6 +1075,10 @@
             const data = await response.json();
             
             if (data.ok) {
+                // 完成进度
+                progressFill.style.width = '100%';
+                progressText.textContent = '✅ 生成完成！';
+                
                 generatedData = {
                     icon: data.icon || '🏷️',
                     keywords: data.keywords || [],
@@ -1013,19 +1086,39 @@
                     has_wechat_credentials: data.has_wechat_credentials
                 };
                 
-                renderGeneratedData();
-                submitBtn.disabled = false;
+                // 短暂延迟后隐藏进度条并显示结果
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    renderGeneratedData();
+                    
+                    // 生成成功后：隐藏"生成"按钮，显示"创建"按钮
+                    aiGenerateBtn.style.display = 'none';
+                    submitBtn.style.display = '';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = '创建并开始追踪';
+                }, 500);
             } else {
-                alert(data.error || data.detail || 'AI 生成失败，请手动输入关键词');
+                progressFill.style.width = '100%';
+                progressFill.style.background = '#ef4444';
+                progressText.textContent = '❌ ' + (data.error || 'AI 生成失败');
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressFill.style.background = '';
+                }, 2000);
             }
         } catch (e) {
             console.error('Generate keywords failed:', e);
-            alert('AI 生成失败，请手动输入关键词');
+            progressFill.style.width = '100%';
+            progressFill.style.background = '#ef4444';
+            progressText.textContent = '❌ AI 生成失败，请重试';
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+                progressFill.style.background = '';
+            }, 2000);
         } finally {
-            clearInterval(progressInterval);
+            clearTimeout(progressInterval);
             aiGenerateBtn.disabled = false;
             aiGenerateBtn.innerHTML = '🤖 生成关键词和推荐源';
-            aiGenerateBtn.classList.remove('loading');
         }
     }
     
@@ -1033,16 +1126,33 @@
      * Check if wechat credentials are available
      */
     async function checkWechatCredentials() {
+        // 如果已经缓存了结果（扫码成功后），直接返回
+        if (hasWechatCredentialsCache === true) {
+            return true;
+        }
+        
         try {
             const response = await fetch('/api/topics/check-credentials', {
                 credentials: 'include'
             });
             const data = await response.json();
-            return data.has_wechat_credentials === true;
+            const result = data.has_wechat_credentials === true;
+            // 只缓存成功的结果
+            if (result) {
+                hasWechatCredentialsCache = true;
+            }
+            return result;
         } catch (e) {
             console.error('Check credentials failed:', e);
             return false;
         }
+    }
+    
+    /**
+     * Mark wechat credentials as available (called after successful QR scan)
+     */
+    function markWechatCredentialsAvailable() {
+        hasWechatCredentialsCache = true;
     }
     
     /**
@@ -1220,6 +1330,9 @@
                     statusEl.textContent = '✅ 授权成功！正在生成...';
                     statusEl.className = 'wechat-qrcode-status confirmed';
                 }
+                
+                // 标记凭证已可用，避免下次再检查
+                markWechatCredentialsAvailable();
                 
                 // 授权成功，关闭弹窗并继续生成（跳过凭证检查）
                 setTimeout(() => {
@@ -1521,11 +1634,13 @@
                 const typeLabel = isRss ? 'RSS' : '公众号';
                 const typeClass = isRss ? '' : 'wechat';
                 const urlOrId = isRss ? source.url : `微信号: ${source.wechat_id}`;
+                // 如果源已验证，添加 data-source-id 属性
+                const sourceIdAttr = source.verified && source.id ? `data-source-id="${escapeHtml(source.id)}"` : '';
                 
                 return `
                     <div class="topic-source-item">
                         <input type="checkbox" class="topic-source-checkbox" 
-                               id="source-${idx}" data-source-idx="${idx}" checked>
+                               id="source-${idx}" data-source-idx="${idx}" ${sourceIdAttr} checked>
                         <div class="topic-source-info">
                             <div class="topic-source-name">${escapeHtml(source.name)}</div>
                             <div class="topic-source-url">${escapeHtml(urlOrId)}</div>
@@ -1687,65 +1802,57 @@
             
             if (data.ok) {
                 const topicId = data.topic?.id || (currentEditTopic ? currentEditTopic.id : null);
-                closeModal();
                 
                 if (!currentEditTopic && topicId) {
-                    // 新建主题：动态添加 tab 并切换到该主题
-                    const newTopic = data.topic;
-                    if (newTopic) {
-                        // 添加新主题到 topics 数组
-                        topics.push(newTopic);
+                    // 新建主题：先抓取数据源，再跳转
+                    const sourceCount = allSourceIds.length;
+                    
+                    if (sourceCount > 0) {
+                        // 显示抓取进度
+                        submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取数据源 (0/${sourceCount})...`;
                         
-                        // 动态创建 tab 和 pane
-                        const categoryTabs = document.querySelector('.category-tabs');
-                        const myTagsTab = categoryTabs?.querySelector('[data-category="my-tags"]');
-                        
-                        if (categoryTabs) {
-                            const categoryId = `topic-${newTopic.id}`;
+                        try {
+                            // 调用抓取 API
+                            const fetchResponse = await fetch(`/api/topics/${topicId}/fetch-sources`, {
+                                method: 'POST',
+                                credentials: 'include'
+                            });
                             
-                            // 创建 tab
-                            const tab = document.createElement('div');
-                            tab.className = 'category-tab topic-tab';
-                            tab.dataset.category = categoryId;
-                            tab.draggable = false;
-                            tab.onclick = () => {
-                                if (typeof window.switchTab === 'function') {
-                                    window.switchTab(categoryId);
-                                }
-                            };
-                            tab.innerHTML = `
-                                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
-                                <div class="category-tab-icon">${escapeHtml(newTopic.icon || '🏷️')}</div>
-                                <div class="category-tab-name">${escapeHtml(newTopic.name)}</div>
-                            `;
+                            const fetchData = await fetchResponse.json();
                             
-                            // 插入到 my-tags 之前
-                            if (myTagsTab) {
-                                categoryTabs.insertBefore(tab, myTagsTab);
+                            if (fetchData.ok) {
+                                const fetched = fetchData.fetched || 0;
+                                submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取完成 (${fetched}条)，跳转中...`;
+                                console.log(`[TopicTracker] Fetch completed: ${fetched} articles from ${sourceCount} sources`);
                             } else {
-                                categoryTabs.appendChild(tab);
+                                console.warn('[TopicTracker] Fetch sources warning:', fetchData.error);
                             }
-                            
-                            // 创建 tab pane
-                            createTopicTabPane(newTopic);
-                            
-                            // 设置事件监听
-                            setupTopicTabListeners();
-                            
-                            // 切换到新主题
-                            setTimeout(() => {
-                                if (typeof window.switchTab === 'function') {
-                                    window.switchTab(categoryId);
-                                }
-                            }, 100);
+                        } catch (fetchError) {
+                            console.error('[TopicTracker] Fetch sources failed:', fetchError);
+                            // 抓取失败不阻止跳转，用户可以稍后刷新
                         }
                     }
+                    
+                    closeModal();
+                    
+                    // 跳转到新主题
+                    const categoryId = `topic-${topicId}`;
+                    try {
+                        localStorage.setItem('tr_active_tab', categoryId);
+                    } catch (e) {}
+                    
+                    // 刷新页面
+                    window.location.reload();
                 } else if (topicId) {
-                    // 编辑主题：刷新主题列表并切换 tab
-                    await loadTopics();
-                    if (typeof window.switchTab === 'function') {
-                        window.switchTab('topic-' + topicId);
-                    }
+                    // 编辑主题：刷新页面并定位到该主题
+                    closeModal();
+                    const categoryId = `topic-${topicId}`;
+                    
+                    try {
+                        localStorage.setItem('tr_active_tab', categoryId);
+                    } catch (e) {}
+                    
+                    window.location.reload();
                 }
             } else {
                 alert(data.error || '操作失败');
@@ -1803,6 +1910,10 @@
         
         modalTitle.textContent = '编辑主题';
         topicNameInput.value = topic.name;
+        
+        // 编辑模式：隐藏"生成"按钮，显示"保存"按钮
+        aiGenerateBtn.style.display = 'none';
+        submitBtn.style.display = '';
         submitBtn.textContent = '保存更改';
         submitBtn.disabled = false;
         
