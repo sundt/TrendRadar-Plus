@@ -464,10 +464,10 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None, user
     # 针对公众号推荐的专用 prompt
     sources_prompt = f"""你是一个微信公众号和 RSS 数据源专家。用户想要追踪关于「{topic_name}」的新闻和资讯。
 
-请推荐 8-10 个与该主题相关的信息源：
+请推荐 11-14 个与该主题相关的信息源：
 
 要求：
-1. 微信公众号：请提供准确的公众号名称和微信号（如果知道的话），优先推荐 5-6 个公众号
+1. 微信公众号：请提供准确的公众号名称和微信号（如果知道的话），优先推荐 8-10 个公众号
 2. RSS 源：请提供确实存在的 RSS/Atom 订阅地址，推荐 3-4 个 RSS 源
 
 重要：
@@ -547,7 +547,11 @@ async def _generate_sources_with_hunyuan(topic_name: str, online_conn=None, user
                         ai_recommended_sources.append(src)
                         logger.info(f"Hunyuan RSS source validated: {src.get('name')}")
                     else:
-                        logger.info(f"Hunyuan RSS source invalid: {src.get('name')} - {src.get('url')}")
+                        # RSS 验证失败也添加，标记为未验证，让用户自己确认
+                        src["verified"] = False
+                        src["source"] = "hunyuan_unverified"
+                        ai_recommended_sources.append(src)
+                        logger.info(f"Hunyuan RSS source unverified (added anyway): {src.get('name')} - {src.get('url')}")
             
             # 验证公众号
             for src in mp_sources:
@@ -686,7 +690,11 @@ async def _generate_sources_with_dashscope(topic_name: str, online_conn=None, us
                         ai_recommended_sources.append(src)
                         logger.info(f"Dashscope RSS source validated: {src.get('name')}")
                     else:
-                        logger.info(f"Dashscope RSS source invalid: {src.get('name')} - {src.get('url')}")
+                        # RSS 验证失败也添加，标记为未验证
+                        src["verified"] = False
+                        src["source"] = "dashscope_unverified"
+                        ai_recommended_sources.append(src)
+                        logger.info(f"Dashscope RSS source unverified (added anyway): {src.get('name')} - {src.get('url')}")
             
             # 验证公众号
             for src in mp_sources:
@@ -1434,7 +1442,7 @@ async def get_topic_news(
     # 2. Get latest articles from subscribed sources (订阅源最新文章)
     sources_news = {}
     if rss_sources:
-        sources_news = _get_sources_latest_articles(conn, rss_sources, limit_per_source=10)
+        sources_news = _get_sources_latest_articles(conn, rss_sources, limit_per_source=20)
     
     # Store in cache (only for full topic)
     if not keyword:
