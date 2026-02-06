@@ -858,15 +858,50 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
         console.error('[Summary] Error:', e);
         clearAllTimers();
         
-        // Check if it's a content access error
-        const isAccessError = e.message && (
-            e.message.includes('访问限制') || 
-            e.message.includes('无法获取') ||
-            e.message.includes('无法访问') ||
-            e.message.includes('请求失败')
-        );
+        const errorMsg = e.message || '未知错误';
         
-        if (isAccessError) {
+        // Check if it's a quota/permission error (403)
+        const isQuotaError = errorMsg.includes('用完') || 
+                            errorMsg.includes('配额') || 
+                            errorMsg.includes('次数') ||
+                            errorMsg.includes('额度') ||
+                            errorMsg.includes('升级') ||
+                            errorMsg.includes('会员');
+        
+        // Check if it's a content access error
+        const isAccessError = errorMsg.includes('访问限制') || 
+                             errorMsg.includes('无法获取') ||
+                             errorMsg.includes('无法访问') ||
+                             errorMsg.includes('请求失败');
+        
+        if (isQuotaError) {
+            // Quota exhausted - show upgrade prompt
+            body.innerHTML = `
+                <div class="summary-quota-error">
+                    <div class="quota-error-icon">💎</div>
+                    <div class="quota-error-title">本月额度已用完</div>
+                    <div class="quota-error-text">${errorMsg}</div>
+                    <div class="quota-error-actions">
+                        <button class="quota-upgrade-btn" onclick="openPaymentModal()">
+                            ✨ 升级会员
+                        </button>
+                        <button class="quota-recharge-btn" onclick="openPaymentModal('recharge')">
+                            🪙 充值额度
+                        </button>
+                    </div>
+                    <div class="quota-error-hint">
+                        升级会员可享受更多 AI 总结次数
+                    </div>
+                    <div class="quota-fallback-actions">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="quota-read-btn">
+                            📖 阅读原文
+                        </a>
+                        <button class="quota-action-btn" onclick="addCurrentToTodo()">📋 Todo</button>
+                        <button class="quota-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                    </div>
+                </div>
+            `;
+        } else if (isAccessError) {
             body.innerHTML = `
                 <div class="summary-access-error">
                     <div class="summary-access-error-icon">🔒</div>
@@ -885,9 +920,20 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
                 </div>
             `;
         } else {
-            // Generic error - just close modal, don't show another error page
-            closeSummaryModal();
-            return;
+            // Generic error - show error message with retry option
+            body.innerHTML = `
+                <div class="summary-access-error">
+                    <div class="summary-access-error-icon">❌</div>
+                    <div class="summary-access-error-title">总结失败</div>
+                    <div class="summary-access-error-text">${errorMsg}</div>
+                    <div class="summary-access-error-actions">
+                        <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                            📖 阅读原文
+                        </a>
+                    </div>
+                </div>
+            `;
         }
     }
 }
@@ -1252,15 +1298,50 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
         console.error('[Summary] Force error:', e);
         clearAllTimers();
         
-        // Check if it's a content access error
-        const isAccessError = e.message && (
-            e.message.includes('访问限制') || 
-            e.message.includes('无法获取') ||
-            e.message.includes('无法访问') ||
-            e.message.includes('请求失败')
-        );
+        const errorMsg = e.message || '未知错误';
         
-        if (isAccessError) {
+        // Check if it's a quota/permission error (403)
+        const isQuotaError = errorMsg.includes('用完') || 
+                            errorMsg.includes('配额') || 
+                            errorMsg.includes('次数') ||
+                            errorMsg.includes('额度') ||
+                            errorMsg.includes('升级') ||
+                            errorMsg.includes('会员');
+        
+        // Check if it's a content access error
+        const isAccessError = errorMsg.includes('访问限制') || 
+                             errorMsg.includes('无法获取') ||
+                             errorMsg.includes('无法访问') ||
+                             errorMsg.includes('请求失败');
+        
+        if (isQuotaError) {
+            // Quota exhausted - show upgrade prompt
+            body.innerHTML = `
+                <div class="summary-quota-error">
+                    <div class="quota-error-icon">💎</div>
+                    <div class="quota-error-title">本月额度已用完</div>
+                    <div class="quota-error-text">${errorMsg}</div>
+                    <div class="quota-error-actions">
+                        <button class="quota-upgrade-btn" onclick="openPaymentModal()">
+                            ✨ 升级会员
+                        </button>
+                        <button class="quota-recharge-btn" onclick="openPaymentModal('recharge')">
+                            🪙 充值额度
+                        </button>
+                    </div>
+                    <div class="quota-error-hint">
+                        升级会员可享受更多 AI 总结次数
+                    </div>
+                    <div class="quota-fallback-actions">
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="quota-read-btn">
+                            📖 阅读原文
+                        </a>
+                        <button class="quota-action-btn" onclick="addCurrentToTodo()">📋 Todo</button>
+                        <button class="quota-action-btn" onclick="addCurrentToFavorites()">⭐ 收藏</button>
+                    </div>
+                </div>
+            `;
+        } else if (isAccessError) {
             body.innerHTML = `
                 <div class="summary-access-error">
                     <div class="summary-access-error-icon">🔒</div>
@@ -1279,9 +1360,20 @@ async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
                 </div>
             `;
         } else {
-            // Generic error - just close modal
-            closeSummaryModal();
-            return;
+            // Generic error - show error message with retry option
+            body.innerHTML = `
+                <div class="summary-access-error">
+                    <div class="summary-access-error-icon">❌</div>
+                    <div class="summary-access-error-title">总结失败</div>
+                    <div class="summary-access-error-text">${errorMsg}</div>
+                    <div class="summary-access-error-actions">
+                        <button class="summary-retry-btn" onclick="retrySummaryModal()">重试</button>
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="summary-view-original-btn">
+                            📖 阅读原文
+                        </a>
+                    </div>
+                </div>
+            `;
         }
     }
 }
