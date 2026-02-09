@@ -595,42 +595,54 @@ async def get_followed_news(
     if filter_type not in ("tag", "source", "keyword", "wechat"):
         filter_type = None  # Show all
     
-    # Get followed tag_ids (skip if filtering for other types)
+    # Get followed tag_ids with created_at (skip if filtering for other types)
     followed_tag_ids = []
+    tag_follow_times = {}  # tag_id -> created_at
     if filter_type is None or filter_type == "tag":
         cur = conn.execute(
-            "SELECT tag_id FROM user_tag_settings WHERE user_id = ? AND preference = 'follow'",
+            "SELECT tag_id, created_at FROM user_tag_settings WHERE user_id = ? AND preference = 'follow'",
             (user["id"],)
         )
-        followed_tag_ids = [r[0] for r in cur.fetchall() or []]
+        for r in cur.fetchall() or []:
+            followed_tag_ids.append(r[0])
+            tag_follow_times[r[0]] = r[1] or 0
     
-    # Get subscribed source_ids (skip if filtering for other types)
+    # Get subscribed source_ids with created_at (skip if filtering for other types)
     subscribed_sources = []
+    source_follow_times = {}  # source_id -> created_at
     if filter_type is None or filter_type == "source":
         sub_cur = conn.execute(
-            "SELECT source_id, display_name FROM user_rss_subscriptions WHERE user_id = ?",
+            "SELECT source_id, display_name, created_at FROM user_rss_subscriptions WHERE user_id = ?",
             (user["id"],)
         )
-        subscribed_sources = [(r[0], r[1]) for r in sub_cur.fetchall() or []]
+        for r in sub_cur.fetchall() or []:
+            subscribed_sources.append((r[0], r[1]))
+            source_follow_times[r[0]] = r[2] or 0
     
-    # Get user keywords (skip if filtering for other types)
+    # Get user keywords with created_at (skip if filtering for other types)
     user_keywords = []
+    keyword_follow_times = {}  # keyword_id -> created_at
     if filter_type is None or filter_type == "keyword":
         kw_cur = conn.execute(
-            "SELECT id, keyword, keyword_type, priority FROM user_keywords WHERE user_id = ? AND enabled = 1",
+            "SELECT id, keyword, keyword_type, priority, created_at FROM user_keywords WHERE user_id = ? AND enabled = 1",
             (user["id"],)
         )
-        user_keywords = [(r[0], r[1], r[2], r[3]) for r in kw_cur.fetchall() or []]
+        for r in kw_cur.fetchall() or []:
+            user_keywords.append((r[0], r[1], r[2], r[3]))
+            keyword_follow_times[r[0]] = r[4] or 0
     
-    # Get WeChat MP subscriptions (skip if filtering for other types)
+    # Get WeChat MP subscriptions with subscribed_at (skip if filtering for other types)
     wechat_subscriptions = []
+    wechat_follow_times = {}  # fakeid -> subscribed_at
     if filter_type is None or filter_type == "wechat":
         try:
             wechat_cur = conn.execute(
-                "SELECT fakeid, nickname FROM wechat_mp_subscriptions WHERE user_id = ?",
+                "SELECT fakeid, nickname, subscribed_at FROM wechat_mp_subscriptions WHERE user_id = ?",
                 (user["id"],)
             )
-            wechat_subscriptions = [(r[0], r[1]) for r in wechat_cur.fetchall() or []]
+            for r in wechat_cur.fetchall() or []:
+                wechat_subscriptions.append((r[0], r[1]))
+                wechat_follow_times[r[0]] = r[2] or 0
         except Exception:
             pass  # Table may not exist in public mode
     
@@ -719,6 +731,7 @@ async def get_followed_news(
                 "news": news_items,
                 "count": len(news_items),
                 "item_type": "tag",
+                "followed_at": tag_follow_times.get(tag_id, 0),
             })
     
     # === Part 2: Get news for subscribed sources ===
@@ -770,6 +783,7 @@ async def get_followed_news(
             "news": news_items,
             "count": len(news_items),
             "item_type": "source",
+            "followed_at": source_follow_times.get(source_id, 0),
         })
     
     # === Part 3: Get news for user keywords (search in rss_entries only) ===
@@ -814,6 +828,7 @@ async def get_followed_news(
             "count": len(news_items),
             "item_type": "keyword",
             "keyword_id": kw_id,
+            "followed_at": keyword_follow_times.get(kw_id, 0),
         })
     
     # === Part 4: Get news for WeChat MP subscriptions ===
@@ -853,6 +868,7 @@ async def get_followed_news(
                 "count": len(news_items),
                 "item_type": "wechat",
                 "fakeid": fakeid,
+                "followed_at": wechat_follow_times.get(fakeid, 0),
             })
         except Exception:
             # MP articles may not be available in public mode
@@ -866,21 +882,27 @@ async def get_followed_news(
     order_row = order_cur.fetchone()
     tag_order = order_row[0].split(",") if order_row and order_row[0] else []
     
-    # Sort: tags by user order, then keywords, then wechat, then sources at the end
+    # Sort: newest followed/subscribed items first, regardless of type.
+    # Within same followed_at time, use tag_order for tags, then count for others.
     def sort_key(item):
+        followed_at = item.get("followed_at", 0)
         item_type = item.get("item_type", "tag")
         item_id = item["tag"]["id"]
+        # Primary: newest followed first (negate for descending)
+        # Secondary: type order (tag=0, keyword=1, wechat=2, source=3)
+        # Tertiary: tag_order for tags, count for others
         if item_type == "tag":
             try:
-                return (0, tag_order.index(item_id))
+                tertiary = tag_order.index(item_id)
             except ValueError:
-                return (0, 9999)  # Unordered tags
+                tertiary = 9999
+            return (-followed_at, 0, tertiary)
         elif item_type == "keyword":
-            return (1, -item["count"])  # Keywords sorted by count
+            return (-followed_at, 1, -item["count"])
         elif item_type == "wechat":
-            return (2, -item["count"])  # WeChat sorted by count
+            return (-followed_at, 2, -item["count"])
         else:
-            return (3, -item["count"])  # Sources sorted by count
+            return (-followed_at, 3, -item["count"])
     
     result.sort(key=sort_key)
     
