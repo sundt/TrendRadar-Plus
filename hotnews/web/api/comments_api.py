@@ -305,6 +305,77 @@ async def delete_comment(request: Request, comment_id: int):
 
 
 # ---------------------------------------------------------------------------
+# POST /api/comments/{comment_id}/reply  —  回复评论
+# ---------------------------------------------------------------------------
+
+@router.post("/{comment_id}/reply")
+async def reply_comment(request: Request, comment_id: int):
+    user = _require_user(request)
+    data = await request.json()
+
+    content = str(data.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
+
+    conn = _get_online_db(request)
+    conn.row_factory = sqlite3.Row
+
+    # 查找父评论
+    parent = conn.execute(
+        "SELECT id, article_url, article_url_hash, article_title, root_id, user_id, user_name FROM article_comments WHERE id = ? AND status = 'active'",
+        (comment_id,),
+    ).fetchone()
+    if not parent:
+        raise HTTPException(status_code=404, detail="评论不存在")
+
+    # root_id: 如果父评论本身就是顶级评论(root_id=0)，则 root_id = parent.id
+    # 否则继承父评论的 root_id
+    root_id = parent["root_id"] if parent["root_id"] != 0 else parent["id"]
+    now = _now_ts()
+
+    cur = conn.execute(
+        """
+        INSERT INTO article_comments
+            (article_url, article_url_hash, article_title,
+             selected_text, text_xpath, text_start_offset, text_end_offset,
+             text_context_before, text_context_after,
+             content, parent_id, root_id,
+             reply_to_user_id, reply_to_user_name,
+             user_id, user_name, user_avatar,
+             status, created_at, updated_at)
+        VALUES (?, ?, ?, '', '', 0, 0, '', '', ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+        """,
+        (
+            parent["article_url"],
+            parent["article_url_hash"],
+            parent["article_title"],
+            content[:2000],
+            comment_id,
+            root_id,
+            int(parent["user_id"]),
+            str(parent["user_name"] or ""),
+            int(user.get("id", 0)),
+            str(user.get("nickname") or user.get("email") or ""),
+            str(user.get("avatar_url") or ""),
+            now,
+            now,
+        ),
+    )
+
+    # 更新顶级评论的 reply_count
+    top_comment_id = root_id
+    conn.execute(
+        "UPDATE article_comments SET reply_count = reply_count + 1, updated_at = ? WHERE id = ?",
+        (now, top_comment_id),
+    )
+
+    conn.commit()
+    reply_id = cur.lastrowid
+
+    return _json({"success": True, "data": {"id": reply_id}})
+
+
+# ---------------------------------------------------------------------------
 # Emoji reactions helpers
 # ---------------------------------------------------------------------------
 
