@@ -645,6 +645,84 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     from hotnews.kernel.services.summary_failure_tracker import init_failure_tables
     init_failure_tables(conn)
 
+    # ========== Article Comments (文章评论) ==========
+    # 存储用户对文章选中内容或全文的评论（支持顶级评论和回复）
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS article_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            article_url TEXT NOT NULL,
+            article_url_hash TEXT NOT NULL,
+            article_title TEXT DEFAULT '',
+            selected_text TEXT DEFAULT '',
+            text_xpath TEXT DEFAULT '',
+            text_start_offset INTEGER DEFAULT 0,
+            text_end_offset INTEGER DEFAULT 0,
+            text_context_before TEXT DEFAULT '',
+            text_context_after TEXT DEFAULT '',
+            content TEXT NOT NULL,
+            parent_id INTEGER DEFAULT 0,
+            reply_to_user_id INTEGER DEFAULT 0,
+            reply_to_user_name TEXT DEFAULT '',
+            root_id INTEGER DEFAULT 0,
+            user_id INTEGER NOT NULL,
+            user_name TEXT DEFAULT '',
+            user_avatar TEXT DEFAULT '',
+            like_count INTEGER DEFAULT 0,
+            reply_count INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'active',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_article_hash ON article_comments(article_url_hash, status, created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_user ON article_comments(user_id, created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_parent ON article_comments(parent_id, created_at ASC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comments_root ON article_comments(root_id, created_at ASC)")
+
+    # ========== Article Comment Likes (评论点赞) ==========
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS article_comment_likes (
+            comment_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (comment_id, user_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_likes_user ON article_comment_likes(user_id)")
+
+    # ========== Article Comment Reactions (评论 Emoji 反应) ==========
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS article_comment_reactions (
+            comment_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            emoji TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (comment_id, user_id, emoji)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_comment_reactions_comment ON article_comment_reactions(comment_id)")
+
+    # ========== Article View Stats (文章阅读统计) ==========
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS article_view_stats (
+            article_url_hash TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            view_type TEXT NOT NULL,
+            first_seen_at INTEGER NOT NULL,
+            last_seen_at INTEGER NOT NULL,
+            PRIMARY KEY (article_url_hash, user_id, view_type)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_view_stats_article ON article_view_stats(article_url_hash)")
+
     conn.commit()
 
     _online_db_conn = conn

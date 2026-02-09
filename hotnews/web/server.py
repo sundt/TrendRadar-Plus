@@ -569,6 +569,12 @@ app.include_router(_news_search_router)
 from hotnews.web.api.topic_api import router as _topic_router
 app.include_router(_topic_router)
 
+# Article comments API (评论、Emoji 反应、文章统计)
+from hotnews.web.api.comments_api import router as _comments_router
+from hotnews.web.api.comments_api import stats_router as _article_stats_router
+app.include_router(_comments_router)
+app.include_router(_article_stats_router)
+
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
 if kernel_static.exists():
