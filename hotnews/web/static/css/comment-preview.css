@@ -1,0 +1,66 @@
+/* 评论预览弹窗 */
+.hn-comment-preview-popup {
+  position: fixed;
+  z-index: 10000;
+  width: 300px;
+  background: var(--card-bg, #fff);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  overflow: hidden;
+  animation: hn-cpp-in 0.15s ease-out;
+}
+@keyframes hn-cpp-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.hn-cpp-header {
+  padding: 10px 14px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  border-bottom: 1px solid var(--border-color, #f0f0f0);
+}
+.hn-cpp-list { padding: 6px 0; }
+.hn-cpp-item {
+  padding: 6px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary, #555);
+}
+.hn-cpp-item + .hn-cpp-item {
+  border-top: 1px solid var(--border-color, #f5f5f5);
+}
+.hn-cpp-name {
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+.hn-cpp-quote {
+  color: var(--text-tertiary, #999);
+  font-size: 12px;
+}
+.hn-cpp-more {
+  display: block;
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--accent-color, #1890ff);
+  text-decoration: none;
+  border-top: 1px solid var(--border-color, #f0f0f0);
+  text-align: center;
+}
+.hn-cpp-more:hover { background: var(--hover-bg, #f7f7f7); }
+
+/* 标题后的评论数 badge */
+.hn-comment-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--accent-color, #1890ff);
+  background: var(--accent-bg, #e6f7ff);
+  border-radius: 10px;
+  font-weight: normal;
+  vertical-align: middle;
+  white-space: nowrap;
+}
