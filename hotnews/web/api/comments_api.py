@@ -127,7 +127,7 @@ async def create_comment(request: Request):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, 'active', ?, ?)
         """,
         (
-            norm_url,
+            article_url,
             url_hash,
             str(data.get("article_title") or "")[:200],
             str(data.get("selected_text") or ""),
