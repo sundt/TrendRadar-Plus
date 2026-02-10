@@ -48,7 +48,7 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     
     echo "   [Remote] Recreating containers (force recreate to avoid bytecode cache)..."
     cd docker
-    docker compose -f docker-compose-build.yml up -d --force-recreate hotnews hotnews-viewer hotnews-mcp
+    docker compose -f docker-compose-build.yml up -d --force-recreate hotnews hotnews-viewer
     
     echo "   ✅ Containers recreated."
 EOF

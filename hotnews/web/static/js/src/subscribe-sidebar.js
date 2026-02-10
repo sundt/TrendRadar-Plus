@@ -16,6 +16,7 @@ const SIDEBAR_DEFAULT_WIDTH = 420;
 // ============ 状态 ============
 let sidebarOpen = false;
 let activeTab = 'recommendations';
+let preloadPromise = null;  // 预加载 Promise
 
 // Tab 状态
 const tabStates = {
@@ -25,6 +26,48 @@ const tabStates = {
     keywords: { loading: false, keywords: [], inputValue: '', loaded: false },
     wechat: { loading: false, authStatus: null, subscriptions: [], searchQuery: '', searchResults: [], loaded: false },
 };
+
+// ============ 预加载功能 ============
+/**
+ * 预加载推荐标签数据（在用户 hover 订阅按钮时调用）
+ * 这样当用户真正点击时，数据已经准备好了
+ */
+function preloadRecommendations() {
+    // 如果已经加载过或正在加载，跳过
+    if (tabStates.recommendations.loaded || preloadPromise) {
+        return;
+    }
+    
+    // 需要登录才能预加载
+    const user = authState.getUser();
+    if (!user) {
+        return;
+    }
+    
+    console.log('[SubscribeSidebar] Preloading recommendations...');
+    preloadPromise = fetch('/api/user/preferences/recommended-tags')
+        .then(resp => {
+            if (!resp.ok) throw new Error('预加载失败');
+            return resp.json();
+        })
+        .then(data => {
+            // 存储预加载的数据
+            tabStates.recommendations.data = [
+                ...(data.new_tags || []),
+                ...(data.hot_tags || []),
+                ...(data.related_tags || [])
+            ];
+            tabStates.recommendations.loaded = true;
+            console.log('[SubscribeSidebar] Preload complete:', tabStates.recommendations.data.length, 'items');
+        })
+        .catch(e => {
+            console.warn('[SubscribeSidebar] Preload failed:', e.message);
+            // 预加载失败不影响后续正常加载
+        })
+        .finally(() => {
+            preloadPromise = null;
+        });
+}
 
 // ============ 登录检查 ============
 function requireLogin() {
@@ -1386,9 +1429,11 @@ async function toggleWechatSubscribe(fakeid, subscribe) {
 // ============ 导出 ============
 window.openSubscribeSidebar = openSubscribeSidebar;
 window.closeSubscribeSidebar = closeSubscribeSidebar;
+window.preloadSubscribeSidebar = preloadRecommendations;
 
 export {
     openSubscribeSidebar,
     closeSubscribeSidebar,
-    isSubscribeSidebarOpen
+    isSubscribeSidebarOpen,
+    preloadRecommendations
 };

@@ -12,7 +12,7 @@ SERVER_PORT="${HOTNEWS_SSH_PORT:-22}"
 SERVER_PROJECT_ROOT="${HOTNEWS_REMOTE_ROOT:-~/hotnews}"
 
 # Service names (Mapped from user request "trend-radar" to actual "hotnews")
-SERVICES="hotnews hotnews-viewer hotnews-mcp"
+SERVICES="hotnews hotnews-viewer"
 DC_FILE="docker-compose-build.yml"
 
 echo "========================================"

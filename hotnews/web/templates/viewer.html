@@ -170,7 +170,7 @@
                     </button>
 
                     <!-- 设置按钮 - 需要登录才能进入设置页面 -->
-                    <button class="icon-btn category-settings-btn has-tooltip" onclick="goToSettings()" data-tooltip="订阅更多内容">
+                    <button class="icon-btn category-settings-btn has-tooltip" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()" data-tooltip="订阅更多内容">
                         ➕ <span class="new-badge-text" id="categorySettingsNewBadge" style="display:block">NEW</span>
                     </button>
 

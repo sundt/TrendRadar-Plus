@@ -292,6 +292,7 @@ brief_timeline_cache = TimelineCache(max_items=1000)  # 知识库 (knowledge)
 explore_timeline_cache = TimelineCache(max_items=1000)  # 探索 (explore)
 my_tags_cache = UserTimelineCache()  # 我的关注 (my-tags) - per-user
 discovery_news_cache = TimelineCache(max_items=1500)  # 新发现 (discovery)
+recommended_tags_cache = TimelineCache(ttl_seconds=300, max_items=100)  # 推荐标签 (5分钟缓存，数据变化不频繁)
 # featured_mps uses API-level caching, not timeline cache
 
 
@@ -444,12 +445,14 @@ def clear_all_timeline_caches() -> Dict[str, bool]:
     my_tags_cache.invalidate()
     discovery_news_cache.invalidate()
     topic_news_cache.invalidate()
+    recommended_tags_cache.invalidate()
     return {
         "brief_cleared": True,
         "explore_cleared": True,
         "my_tags_cleared": True,
         "discovery_cleared": True,
         "topic_news_cleared": True,
+        "recommended_tags_cleared": True,
     }
 
 
@@ -482,5 +485,10 @@ def get_cache_status() -> Dict[str, Any]:
             "user_count": topic_news_cache.user_count,
             "topic_count": topic_news_cache.topic_count,
             "age_seconds": round(topic_news_cache.age_seconds, 1),
+        },
+        "recommended_tags": {
+            "valid": recommended_tags_cache.is_valid,
+            "item_count": recommended_tags_cache.item_count,
+            "age_seconds": round(recommended_tags_cache.age_seconds, 1),
         },
     }

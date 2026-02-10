@@ -365,6 +365,9 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
     - hot_tags: Popular tags by recent news count (last 30 days)
     - new_tags: Recently discovered dynamic tags
     - related_tags: Tags related to user's followed tags (if any)
+    
+    Performance: hot_tags and new_tags are cached for 5 minutes (shared across users).
+    Only related_tags is computed per-user.
     """
     # Set no-cache headers to prevent CDN/browser caching of user-specific data
     for key, value in NO_CACHE_HEADERS.items():
@@ -382,10 +385,90 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
     followed = set(r[0] for r in cur.fetchall() or [])
     
     now = _now_ts()
-    days_30_ago = now - 30 * 86400
-    days_7_ago = now - 7 * 86400
     
-    # 1. Hot tags: Most used in recent news (by entry count)
+    # Try to get hot_tags and new_tags from cache
+    from hotnews.web.timeline_cache import recommended_tags_cache
+    
+    cached_data = recommended_tags_cache.get()
+    if cached_data:
+        # Use cached data, just filter out followed tags
+        all_hot_tags = cached_data.get("hot_tags", [])
+        all_new_tags = cached_data.get("new_tags", [])
+        cache_age = recommended_tags_cache.age_seconds
+    else:
+        # Cache miss - compute hot_tags and new_tags
+        all_hot_tags = _compute_hot_tags(online_conn, now)
+        all_new_tags = _compute_new_tags(online_conn, now)
+        
+        # Store in cache (without filtering by followed - that's user-specific)
+        recommended_tags_cache.set([{
+            "hot_tags": all_hot_tags,
+            "new_tags": all_new_tags,
+        }])
+        cache_age = 0
+    
+    # Filter out followed tags (user-specific)
+    hot_tags = [t for t in all_hot_tags if t["id"] not in followed][:8]
+    new_tags = [t for t in all_new_tags if t["id"] not in followed][:20]
+    
+    # 3. Related tags: Based on user's followed tags (computed per-user, but simplified)
+    related_tags = []
+    if followed:
+        try:
+            # Simplified query: just get tags that co-occur with followed tags
+            # Limit the subquery to recent entries for performance
+            days_7_ago = now - 7 * 86400
+            placeholders = ",".join(["?"] * len(followed))
+            related_cur = online_conn.execute(
+                f"""
+                SELECT t.id, t.name, t.name_en, t.type, t.icon, t.color, t.is_dynamic,
+                       COUNT(*) as co_count
+                FROM tags t
+                JOIN rss_entry_tags et ON t.id = et.tag_id
+                WHERE et.dedup_key IN (
+                    SELECT DISTINCT dedup_key FROM rss_entry_tags 
+                    WHERE tag_id IN ({placeholders}) AND created_at >= ?
+                    LIMIT 1000
+                )
+                AND t.id NOT IN ({placeholders})
+                AND t.lifecycle = 'active'
+                GROUP BY t.id
+                ORDER BY co_count DESC
+                LIMIT 10
+                """,
+                tuple(followed) + (days_7_ago,) + tuple(followed)
+            )
+            already_recommended = set(t["id"] for t in hot_tags + new_tags)
+            for row in related_cur.fetchall() or []:
+                tag_id = row[0]
+                if tag_id not in already_recommended:
+                    related_tags.append({
+                        "id": tag_id, "name": row[1], "name_en": row[2],
+                        "type": row[3], "icon": row[4], "color": row[5],
+                        "is_dynamic": bool(row[6]),
+                        "badge": "related",
+                        "reason": "与你关注的标签相关"
+                    })
+                    if len(related_tags) >= 5:
+                        break
+        except Exception:
+            related_tags = []
+    
+    return {
+        "ok": True,
+        "hot_tags": hot_tags,
+        "new_tags": new_tags,
+        "related_tags": related_tags,
+        "followed_count": len(followed),
+        "cached": cache_age > 0,
+        "cache_age": round(cache_age, 1) if cache_age > 0 else None,
+    }
+
+
+def _compute_hot_tags(online_conn, now: int) -> list:
+    """Compute hot tags (cached separately from user-specific filtering)."""
+    days_30_ago = now - 30 * 86400
+    
     try:
         hot_cur = online_conn.execute(
             """
@@ -402,33 +485,31 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
         )
         hot_tags = []
         for row in hot_cur.fetchall() or []:
-            tag_id = row[0]
-            if tag_id not in followed:
-                hot_tags.append({
-                    "id": tag_id, "name": row[1], "name_en": row[2],
-                    "type": row[3], "icon": row[4], "color": row[5],
-                    "is_dynamic": bool(row[6]),
-                    "news_count": row[7] or 0,
-                    "badge": "hot",
-                    "reason": "热门标签，最近30天活跃"
-                })
-                if len(hot_tags) >= 8:
-                    break
+            hot_tags.append({
+                "id": row[0], "name": row[1], "name_en": row[2],
+                "type": row[3], "icon": row[4], "color": row[5],
+                "is_dynamic": bool(row[6]),
+                "news_count": row[7] or 0,
+                "badge": "hot",
+                "reason": "热门标签，最近30天活跃"
+            })
+        return hot_tags
     except Exception:
-        hot_tags = []
+        return []
+
+
+def _compute_new_tags(online_conn, now: int) -> list:
+    """Compute new tags (cached separately from user-specific filtering)."""
+    from datetime import datetime
     
-    # 2. New tags: Candidates that meet fast-track or standard promotion criteria
-    # Use the same criteria as defined in tag_discovery.py
+    # Time boundaries for fast-track criteria
+    hours_4_ago = now - 4 * 3600
+    hours_12_ago = now - 12 * 3600
+    hours_24_ago = now - 24 * 3600
+    days_3_ago = now - 3 * 86400
+    
     try:
-        from datetime import datetime
-        
-        # Time boundaries for fast-track criteria
-        hours_4_ago = now - 4 * 3600
-        hours_12_ago = now - 12 * 3600
-        hours_24_ago = now - 24 * 3600
-        days_3_ago = now - 3 * 86400
-        
-        # Get all pending candidates, we'll filter in Python to match the complex criteria
+        # Get all pending candidates
         cand_cur = online_conn.execute(
             """
             SELECT tag_id, name, name_en, type, NULL as icon, NULL as color, 
@@ -445,19 +526,11 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
         
         for row in cand_cur.fetchall() or []:
             tag_id = row[0]
-            if tag_id in followed or tag_id in [t["id"] for t in hot_tags]:
-                continue
-                
             first_seen_ts = row[6] or now
             occurrence_count = row[7] or 0
             avg_confidence = row[8] or 0
             
-            # Check if meets any promotion criteria:
-            # 1. Fast-track 4h: first_seen >= 4h ago, occurrence >= 8, confidence >= 0.9
-            # 2. Fast-track 12h: first_seen >= 12h ago, occurrence >= 15, confidence >= 0.9
-            # 3. Fast-track 24h: first_seen >= 24h ago, occurrence >= 20, confidence >= 0.8
-            # 4. Standard: first_seen <= 3 days ago, occurrence >= 10, confidence >= 0.7
-            
+            # Check if meets any promotion criteria
             qualifies = False
             if first_seen_ts >= hours_4_ago and occurrence_count >= 8 and avg_confidence >= 0.9:
                 qualifies = True
@@ -485,23 +558,23 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
                 "reason": f"首次发现: {first_seen_date}"
             })
             seen_ids.add(tag_id)
-            if len(new_tags) >= 20:
+            if len(new_tags) >= 30:
                 break
         
         # Also include recently promoted dynamic tags
-        if len(new_tags) < 20:
+        if len(new_tags) < 30:
             new_cur = online_conn.execute(
                 """
                 SELECT id, name, name_en, type, icon, color, created_at
                 FROM tags
                 WHERE is_dynamic = 1 AND lifecycle = 'active'
                 ORDER BY created_at DESC
-                LIMIT 20
+                LIMIT 30
                 """,
             )
             for row in new_cur.fetchall() or []:
                 tag_id = row[0]
-                if tag_id not in followed and tag_id not in seen_ids and tag_id not in [t["id"] for t in hot_tags]:
+                if tag_id not in seen_ids:
                     created_ts = row[6] or now
                     created_date = datetime.fromtimestamp(created_ts).strftime("%m-%d")
                     new_tags.append({
@@ -514,57 +587,12 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
                         "reason": f"首次发现: {created_date}"
                     })
                     seen_ids.add(tag_id)
-                    if len(new_tags) >= 20:
+                    if len(new_tags) >= 30:
                         break
+        
+        return new_tags
     except Exception:
-        new_tags = []
-    
-    # 3. Related tags: Based on user's followed tags (simple co-occurrence)
-    related_tags = []
-    if followed:
-        try:
-            # Find tags that often appear with user's followed tags
-            placeholders = ",".join(["?"] * len(followed))
-            related_cur = online_conn.execute(
-                f"""
-                SELECT t.id, t.name, t.name_en, t.type, t.icon, t.color, t.is_dynamic,
-                       COUNT(DISTINCT et.dedup_key) as co_count
-                FROM tags t
-                JOIN rss_entry_tags et ON t.id = et.tag_id
-                WHERE et.dedup_key IN (
-                    SELECT DISTINCT dedup_key FROM rss_entry_tags WHERE tag_id IN ({placeholders})
-                )
-                AND t.id NOT IN ({placeholders})
-                AND t.lifecycle = 'active'
-                GROUP BY t.id
-                ORDER BY co_count DESC
-                LIMIT 10
-                """,
-                tuple(followed) + tuple(followed)
-            )
-            already_recommended = set(t["id"] for t in hot_tags + new_tags)
-            for row in related_cur.fetchall() or []:
-                tag_id = row[0]
-                if tag_id not in already_recommended:
-                    related_tags.append({
-                        "id": tag_id, "name": row[1], "name_en": row[2],
-                        "type": row[3], "icon": row[4], "color": row[5],
-                        "is_dynamic": bool(row[6]),
-                        "badge": "related",
-                        "reason": "与你关注的标签相关"
-                    })
-                    if len(related_tags) >= 5:
-                        break
-        except Exception:
-            related_tags = []
-    
-    return {
-        "ok": True,
-        "hot_tags": hot_tags,
-        "new_tags": new_tags,
-        "related_tags": related_tags,
-        "followed_count": len(followed),
-    }
+        return []
 
 
 # ==================== Followed News ====================
