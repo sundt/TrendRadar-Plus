@@ -147,7 +147,22 @@ async def create_comment(request: Request):
     conn.commit()
     comment_id = cur.lastrowid
 
-    return _json({"success": True, "data": {"id": comment_id}})
+    # 返回完整评论对象，方便前端乐观更新
+    return _json({
+        "success": True,
+        "data": {
+            "id": comment_id,
+            "content": content[:2000],
+            "selected_text": str(data.get("selected_text") or ""),
+            "user_name": str(user.get("nickname") or user.get("email") or ""),
+            "user_avatar": str(user.get("avatar_url") or ""),
+            "created_at": now,
+            "is_mine": True,
+            "reactions": {},
+            "my_reactions": [],
+            "replies": [],
+        }
+    })
 
 
 # ---------------------------------------------------------------------------
