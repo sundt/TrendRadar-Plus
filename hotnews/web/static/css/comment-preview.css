@@ -67,19 +67,11 @@
   text-align: center;
 }
 
-/* 标题后的评论数 badge */
-.hn-comment-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  padding: 1px 6px;
-  font-size: 11px;
-  color: var(--accent-color, #1890ff);
-  background: var(--accent-bg, #e6f7ff);
-  border-radius: 10px;
-  font-weight: normal;
-  vertical-align: middle;
-  white-space: nowrap;
+/* 评论按钮上的评论数 — 通过 data-count 属性显示 */
+.news-comment-btn[data-count]::after {
+    content: attr(data-count);
+    margin-left: 2px;
+    font-size: 10px;
 }
 
 /* ==========================================================================

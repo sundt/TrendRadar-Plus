@@ -391,10 +391,14 @@
 
 .news-comment-btn.has-comments {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    opacity: 1;
+    pointer-events: auto;
 }
 
-.news-comment-btn.has-comments::before {
-    content: "💬";
+.news-comment-btn[data-count]::after {
+    content: attr(data-count);
+    margin-left: 2px;
+    font-size: 10px;
 }
 
 /* Desktop: hover to show AI button, hide date */
