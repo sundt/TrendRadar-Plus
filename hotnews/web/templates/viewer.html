@@ -351,7 +351,10 @@
                                         {% if news.timestamp %}
                                         <span class="tr-news-date" data-timestamp="{{ news.timestamp }}">{{ news.timestamp[5:10] }}</span>
                                         {% endif %}
-                                        <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
+                                        <div class="news-hover-btns">
+                                            <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
+                                            <button class="news-comment-btn" data-url="{{ news.url }}" data-title="{{ news.display_title or news.title }}"></button>
+                                        </div>
                                     </div>
                                 </div>
                                 {% if news.meta and not platform_id.startswith('rss-') %}<div class="news-subtitle">{{
@@ -492,7 +495,7 @@
                             var aiDotHtml = '<span class="news-ai-indicator" data-news-id="' + item.id + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></span>';
                             var dateHtml = dateStr ? '<span class="tr-news-date">' + dateStr + '</span>' : '';
                             var summaryBtnHtml = '<button class="news-summary-btn" data-news-id="' + item.id + '" data-title="' + safeTitle + '" data-url="' + (item.url || '') + '" data-source-id="' + tag.id + '" data-source-name="' + (tagName || '') + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></button>';
-                            var actionsHtml = '<div class="news-actions">' + dateHtml + summaryBtnHtml + '</div>';
+                            var actionsHtml = '<div class="news-actions">' + dateHtml + '<div class="news-hover-btns">' + summaryBtnHtml + '<button class="news-comment-btn" data-url="' + (item.url || '') + '" data-title="' + safeTitle + '"></button></div></div>';
                             
                             return '<li class="news-item" data-news-id="' + (item.id || '') + '" data-news-title="' + safeTitle + '" data-news-url="' + (item.url || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">' + (item.title || '') + '</a>' + aiDotHtml + actionsHtml + '</div></li>';
                         }).join('') : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
@@ -575,7 +578,7 @@
                             var aiDotHtml = '<span class="news-ai-indicator" data-news-id="' + item.id + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></span>';
                             var dateHtml = dateStr ? '<span class="tr-news-date">' + dateStr + '</span>' : '';
                             var summaryBtnHtml = '<button class="news-summary-btn" data-news-id="' + item.id + '" data-title="' + safeTitle + '" data-url="' + (item.url || '') + '" data-source-id="' + tag.id + '" data-source-name="' + (tagName || '') + '" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, \'' + item.id + '\', \'' + escapedTitle + '\', \'' + escapedUrl + '\', \'' + tag.id + '\', \'' + escapedTagName + '\')"></button>';
-                            var actionsHtml = '<div class="news-actions">' + dateHtml + summaryBtnHtml + '</div>';
+                            var actionsHtml = '<div class="news-actions">' + dateHtml + '<div class="news-hover-btns">' + summaryBtnHtml + '<button class="news-comment-btn" data-url="' + (item.url || '') + '" data-title="' + safeTitle + '"></button></div></div>';
                             
                             return '<li class="news-item" data-news-id="' + (item.id || '') + '" data-news-title="' + safeTitle + '" data-news-url="' + (item.url || '') + '"><div class="news-item-content"><span class="news-index">' + (idx + 1) + '</span><a class="news-title" href="' + (item.url || '#') + '" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">' + (item.title || '') + '</a>' + aiDotHtml + actionsHtml + '</div></li>';
                         }).join('') : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';

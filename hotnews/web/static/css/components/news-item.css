@@ -293,6 +293,17 @@
     position: relative;
     background: transparent;
     padding-left: 8px;
+    gap: 4px;
+}
+
+.news-hover-btns {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .news-ai-indicator {
@@ -319,7 +330,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 3px 10px;
+    padding: 3px 8px;
     background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
     color: white;
     border: none;
@@ -331,14 +342,10 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s ease;
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
 }
 
 .news-summary-btn::before {
-    content: "AI ✨";
+    content: "AI";
 }
 
 /* Has summary - green style */
@@ -356,13 +363,48 @@
     font-weight: 600;
 }
 
+/* ==========================================================================
+   Comment Button
+   ========================================================================== */
+
+.news-comment-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.news-comment-btn::before {
+    content: "💬";
+}
+
+.news-comment-btn.has-comments {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.news-comment-btn.has-comments::before {
+    content: "💬";
+}
+
 /* Desktop: hover to show AI button, hide date */
 @media (hover: hover) {
     .news-item:hover .tr-news-date {
         opacity: 0;
     }
     
-    .news-item:hover .news-summary-btn {
+    .news-item:hover .news-summary-btn,
+    .news-item:hover .news-comment-btn {
         opacity: 1;
         pointer-events: auto;
     }
@@ -373,7 +415,8 @@
     opacity: 0;
 }
 
-.news-item.expanded .news-summary-btn {
+.news-item.expanded .news-summary-btn,
+.news-item.expanded .news-comment-btn {
     opacity: 1;
     pointer-events: auto;
 }

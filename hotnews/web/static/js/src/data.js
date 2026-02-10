@@ -127,6 +127,10 @@ function _createNewsLi(n, idx, platformId, platformName) {
         actions.appendChild(dateSpan);
     }
 
+    // Hover buttons container
+    const hoverBtns = document.createElement('div');
+    hoverBtns.className = 'news-hover-btns';
+
     // Summary button
     const summaryBtn = document.createElement('button');
     summaryBtn.className = 'news-summary-btn';
@@ -142,7 +146,18 @@ function _createNewsLi(n, idx, platformId, platformName) {
             window.handleSummaryClick(e, newsId, String(n?.display_title || n?.title || ''), String(n?.url || ''), platformId, platformName);
         }
     };
-    actions.appendChild(summaryBtn);
+    hoverBtns.appendChild(summaryBtn);
+
+    // Comment button
+    const commentBtn = document.createElement('button');
+    commentBtn.className = 'news-comment-btn';
+    commentBtn.dataset.url = String(n?.url || '');
+    commentBtn.dataset.title = String(n?.display_title || n?.title || '');
+    hoverBtns.appendChild(commentBtn);
+
+    actions.appendChild(hoverBtns);
+
+    content.appendChild(actions);
 
     content.appendChild(actions);
 
@@ -400,10 +415,11 @@ function _buildPlatformCardElement(categoryId, platformId, platform, state, opts
         // AI indicator dot (breathing purple)
         const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
         
-        // Actions container (date + summary button)
+        // Actions container (date + summary button + comment button)
         const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
-        const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
+        const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
         
         // 使用简化的 data 属性，移除内联事件处理器
         return `
@@ -918,7 +934,8 @@ export const data = {
                         // Actions container
                         const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
                         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
-                        const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+                        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
+                        const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
                         
                         // 使用简化的 data 属性
                         return `
