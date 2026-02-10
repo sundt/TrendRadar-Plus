@@ -42,7 +42,8 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const t = _fmtTime(n?.published_at || n?.created_at);
         const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${sourceId}', '${sourceName.replace(/'/g, "\\'")}')" ></button>`;
-        const actionsHtml = `<div class="news-actions">${timeHtml}${summaryBtnHtml}</div>`;
+        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
+        const actionsHtml = `<div class="news-actions">${timeHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
         return `
             <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">

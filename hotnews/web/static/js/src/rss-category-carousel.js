@@ -662,12 +662,15 @@ function _renderCard(card) {
         const title = escapeHtml(e?.title || '');
         const link = escapeHtml(e?.link || '#');
         const itemDate = escapeHtml(_formatTs(e?.ts || 0));
+        const dateHtml = itemDate ? `<span class="tr-news-date">${itemDate}</span>` : '';
+        const commentBtnHtml = `<button class="news-comment-btn" data-url="${link.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
+        const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${commentBtnHtml}</div></div>`;
         return `
             <li class="news-item" data-news-id="" data-news-title="${title}">
                 <div class="news-item-content">
                     <span class="news-index">${String(start + idx + 1)}</span>
                     <a class="news-title tr-news-title-lg tr-title-hover-accent tr-hover-glass tr-title-hover-wave" href="${link}" target="_blank" rel="noopener noreferrer">${title}</a>
-                    <span class="rss-entry-date" style="flex:0 0 auto;margin-left:8px;color:#6b7280;font-size:0.75rem;white-space:nowrap;${itemDate ? '' : 'display:none;'}">${itemDate}</span>
+                    ${actionsHtml}
                 </div>
             </li>`;
     }).join('');

@@ -294,7 +294,7 @@ async function refreshPanelComments(panel, url, title) {
   // Extension hint
   const hint = document.createElement('div');
   hint.className = 'hn-cp-extension-hint';
-  hint.innerHTML = `💡 安装浏览器插件可选中文字评论 <a href="https://chromewebstore.google.com/detail/hotnews-summarizer/YOUR_EXTENSION_ID" target="_blank">安装</a>`;
+  hint.innerHTML = `💡 安装浏览器插件可选中文字评论 <a href="/extension/install" target="_blank">安装</a>`;
   panel.querySelector('.hn-cp-header').after(hint);
 
   // Input area

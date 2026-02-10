@@ -136,7 +136,8 @@ function createMPCard(mpData) {
             // Actions container (date + summary button)
             const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
             const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="mp-${fakeid}" data-source-name="${nickname || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', 'mp-${fakeid}', '${escapedNickname}')"></button>`;
-            const actionsHtml = `<div class="news-actions">${dateHtml}${summaryBtnHtml}</div>`;
+            const commentBtnHtml = `<button class="news-comment-btn" data-url="${(item.url || '').replace(/"/g, '&quot;')}" data-title="${safeTitle}"></button>`;
+            const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
             
             return `
             <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
