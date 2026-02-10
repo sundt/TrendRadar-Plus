@@ -892,6 +892,7 @@
                 
                 // 总结按钮 HTML
                 const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${newsId}" data-title="${safeTitle}" data-url="${safeUrl}" data-source-id="${sourceId}" data-source-name="${escapedSourceName}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${newsId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSourceName}')"></button>`;
+                const commentBtnHtml = `<button class="news-comment-btn" data-url="${safeUrl}" data-title="${safeTitle}"></button>`;
                 
                 return `
                 <li class="news-item" data-news-id="${newsId}" data-news-title="${safeTitle}" data-news-url="${safeUrl}">
@@ -902,7 +903,7 @@
                         </a>
                         <div class="news-actions">
                             <span class="tr-news-date">${formatDate(item.published_at)}</span>
-                            ${summaryBtnHtml}
+                            <div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div>
                         </div>
                     </div>
                 </li>
@@ -947,6 +948,7 @@
                 
                 // 总结按钮 HTML
                 const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${newsId}" data-title="${safeTitle}" data-url="${safeUrl}" data-source-id="${sourceId}" data-source-name="${escapedSourceName}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${newsId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSourceName}')"></button>`;
+                const commentBtnHtml = `<button class="news-comment-btn" data-url="${safeUrl}" data-title="${safeTitle}"></button>`;
                 
                 return `
                 <li class="news-item" data-news-id="${newsId}" data-news-title="${safeTitle}" data-news-url="${safeUrl}">
@@ -957,7 +959,7 @@
                         </a>
                         <div class="news-actions">
                             <span class="tr-news-date">${formatDate(item.published_at)}</span>
-                            ${summaryBtnHtml}
+                            <div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div>
                         </div>
                     </div>
                 </li>
