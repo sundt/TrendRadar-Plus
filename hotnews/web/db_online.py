@@ -273,6 +273,14 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_entry ON rss_entry_tags(source_id, dedup_key)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_created ON rss_entry_tags(created_at DESC)")
 
+    # === Performance optimization indexes (cold-cache-performance-optimization) ===
+    # Composite index for Brief Timeline JOIN on rss_entry_ai_labels
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_labels_source_dedup_action ON rss_entry_ai_labels(source_id, dedup_key, action, score, confidence)")
+    # Composite index for Brief Timeline JOIN on rss_entry_tags
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_tags_source_dedup_tag ON rss_entry_tags(source_id, dedup_key, tag_id)")
+    # Composite index for rss_entries covering published_at + source_id + dedup_key
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub_source_dedup ON rss_entries(published_at DESC, source_id, dedup_key)")
+
     # Tag candidates table (AI-discovered tags pending approval)
     conn.execute(
         """

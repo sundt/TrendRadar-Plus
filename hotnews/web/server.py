@@ -3464,14 +3464,29 @@ async def api_subscriptions_rss_news(request: Request):
 
 
 async def _warmup_cache():
-    """预热缓存：在服务启动时预加载数据"""
+    """预热缓存：在服务启动时预加载数据（直接查询数据库，不使用 HTTP 请求）"""
     try:
         print("🔥 预热缓存中...")
         start_time = time.time()
-        
-        # 1. 预加载新闻数据到缓存（普通栏目）
+
+        # 0. 读取预热配置
+        try:
+            import yaml as _yaml
+            _cfg_path = project_root / "config" / "config.yaml"
+            with open(_cfg_path, "r", encoding="utf-8") as _f:
+                _full_cfg = _yaml.safe_load(_f) or {}
+        except Exception:
+            _full_cfg = {}
+
+        from hotnews.web.cache_warmup import CacheWarmupService, WarmupConfig
+        warmup_config = WarmupConfig.from_yaml(_full_cfg)
+
+        if not warmup_config.enabled:
+            print("  ⏭️ 缓存预热已禁用 (config: performance.cache_warmup.enabled=false)")
+            return
+
+        # 1. 预加载新闻数据到缓存（普通栏目 - 首页 SSR 用）
         viewer_service, _ = get_services()
-        # Load settings
         sys_settings = get_system_settings(project_root)
         items_per_card = sys_settings.get("display", {}).get("items_per_card", 50)
 
@@ -3482,23 +3497,20 @@ async def _warmup_cache():
             filter_mode=None,
             per_platform_limit=items_per_card
         )
-        
-        # 2. 预热 Brief Timeline 缓存（知识库）
+        print("  ✅ 分类新闻缓存已预热")
+
+        # 2. 预热 Timeline 缓存（直接查询数据库）
         try:
-            import httpx
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Brief Timeline - 预热 500 条
-                resp = await client.get("http://127.0.0.1:8090/api/rss/brief/timeline?limit=500&offset=0")
-                if resp.status_code == 200:
-                    print("  ✅ Brief Timeline 缓存已预热")
-                
-                # Explore Timeline - 预热 150 条
-                resp = await client.get("http://127.0.0.1:8090/api/rss/explore/timeline?limit=150&offset=0")
-                if resp.status_code == 200:
-                    print("  ✅ Explore Timeline 缓存已预热")
+            conn = _get_online_db_conn()
+            service = CacheWarmupService(db_conn=conn, config=warmup_config)
+            result = await service.warmup_all()
+
+            if result.errors:
+                for err in result.errors:
+                    print(f"  ⚠️ {err}")
         except Exception as e:
             print(f"  ⚠️ Timeline 缓存预热失败: {e}")
-        
+
         elapsed = time.time() - start_time
         print(f"✅ 缓存预热完成 ({elapsed:.2f}s)")
     except Exception as e:

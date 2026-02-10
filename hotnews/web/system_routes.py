@@ -127,3 +127,11 @@ async def api_fetch_now(request: Request):
     except Exception:
         pass
     return UnicodeJSONResponse(content=result)
+
+@router.get("/api/cache/status")
+async def api_cache_status():
+    """获取缓存状态和预热信息"""
+    from hotnews.web.timeline_cache import get_cache_status
+    status = get_cache_status()
+    return UnicodeJSONResponse(content={"caches": status})
+

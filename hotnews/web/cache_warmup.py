@@ -1,0 +1,355 @@
+"""
+Cache Warmup Service
+
+服务启动时预热缓存，避免冷缓存导致首次请求慢。
+直接调用数据库查询，不使用 HTTP 请求。
+
+使用方式：
+    from hotnews.web.cache_warmup import CacheWarmupService, WarmupConfig
+    
+    service = CacheWarmupService(db_conn=conn, config=warmup_config)
+    result = await service.warmup_all()
+"""
+
+import hashlib
+import json
+import logging
+import sqlite3
+import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Set
+
+from hotnews.web.timeline_cache import (
+    brief_timeline_cache,
+    explore_timeline_cache,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WarmupConfig:
+    """缓存预热配置"""
+    enabled: bool = True
+    brief_timeline_limit: int = 5000
+    explore_timeline_limit: int = 1000
+    timeout_seconds: int = 60
+
+    @classmethod
+    def from_yaml(cls, config: dict) -> "WarmupConfig":
+        perf = config.get("performance", {}) or {}
+        warmup = perf.get("cache_warmup", {}) or {}
+        return cls(
+            enabled=warmup.get("enabled", True),
+            brief_timeline_limit=warmup.get("brief_timeline_limit", 5000),
+            explore_timeline_limit=warmup.get("explore_timeline_limit", 1000),
+            timeout_seconds=warmup.get("timeout_seconds", 60),
+        )
+
+
+@dataclass
+class WarmupResult:
+    """预热结果"""
+    success: bool = False
+    brief_count: int = 0
+    explore_count: int = 0
+    elapsed_ms: int = 0
+    errors: List[str] = field(default_factory=list)
+
+
+def _generate_news_id(platform_id: str, title: str) -> str:
+    """Generate stable news ID (same logic as server.py generate_news_id)."""
+    key = f"{platform_id}:{title}"
+    return hashlib.md5(key.encode("utf-8")).hexdigest()[:12]
+
+
+def _rss_row_to_item(*, platform_id: str, source_id: str, source_name: str,
+                     title: str, url: str, created_at: int) -> Dict[str, Any]:
+    """Convert a DB row to a timeline item dict."""
+    t = (title or "").strip()
+    u = (url or "").strip()
+    if not t:
+        t = u
+    return {
+        "source_id": (source_id or "").strip(),
+        "source_name": (source_name or "").strip() or (source_id or "").strip(),
+        "title": t,
+        "display_title": t,
+        "url": u,
+        "created_at": int(created_at or 0),
+        "stable_id": _generate_news_id(platform_id, t),
+    }
+
+
+def _load_brief_rules(conn: sqlite3.Connection) -> Dict[str, Any]:
+    """Load morning brief rules from admin_kv (simplified version)."""
+    defaults = {
+        "enabled": True,
+        "drop_published_at_zero": True,
+        "category_whitelist_enabled": True,
+        "category_whitelist": ["explore", "tech_news", "ainews", "developer", "ai"],
+        "tag_whitelist_enabled": True,
+        "tag_whitelist": ["ai_ml"],
+    }
+    try:
+        cur = conn.execute(
+            "SELECT value FROM admin_kv WHERE key = ? LIMIT 1",
+            ("morning_brief_rules_v1",),
+        )
+        row = cur.fetchone()
+        raw = str(row[0] or "") if row else ""
+        if raw.strip():
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                defaults = {**defaults, **parsed}
+    except Exception:
+        pass
+
+    # Normalize whitelist fields
+    cw = defaults.get("category_whitelist")
+    if not isinstance(cw, list):
+        defaults["category_whitelist"] = ["explore", "tech_news", "ainews", "developer", "ai"]
+    else:
+        defaults["category_whitelist"] = [str(x or "").strip().lower() for x in cw if str(x or "").strip()]
+
+    tw = defaults.get("tag_whitelist")
+    if not isinstance(tw, list):
+        defaults["tag_whitelist"] = ["ai_ml"]
+    else:
+        defaults["tag_whitelist"] = [str(x or "").strip().lower() for x in tw if str(x or "").strip()]
+
+    return defaults
+
+
+class CacheWarmupService:
+    """缓存预热服务 - 直接查询数据库填充缓存"""
+
+    def __init__(self, db_conn: sqlite3.Connection, config: WarmupConfig):
+        self.conn = db_conn
+        self.config = config
+
+    async def warmup_all(self) -> WarmupResult:
+        """预热所有公共缓存"""
+        if not self.config.enabled:
+            logger.info("Cache warmup is disabled by config")
+            return WarmupResult(success=True)
+
+        start = time.time()
+        result = WarmupResult()
+        errors: List[str] = []
+
+        # Brief Timeline
+        try:
+            result.brief_count = self._warmup_brief_timeline()
+            logger.info(f"  ✅ Brief Timeline 缓存已预热: {result.brief_count} 条")
+        except Exception as e:
+            msg = f"Brief Timeline warmup failed: {e}"
+            logger.warning(f"  ⚠️ {msg}")
+            errors.append(msg)
+
+        # Explore Timeline
+        try:
+            result.explore_count = self._warmup_explore_timeline()
+            logger.info(f"  ✅ Explore Timeline 缓存已预热: {result.explore_count} 条")
+        except Exception as e:
+            msg = f"Explore Timeline warmup failed: {e}"
+            logger.warning(f"  ⚠️ {msg}")
+            errors.append(msg)
+
+        result.elapsed_ms = int((time.time() - start) * 1000)
+        result.errors = errors
+        result.success = len(errors) == 0
+        return result
+
+    # ------------------------------------------------------------------
+    # Brief Timeline warmup
+    # ------------------------------------------------------------------
+    def _warmup_brief_timeline(self) -> int:
+        """预热 Brief Timeline 缓存，返回加载的条目数"""
+        rules = _load_brief_rules(self.conn)
+        drop_zero = bool(rules.get("drop_published_at_zero", True))
+
+        category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
+        category_whitelist = set(rules.get("category_whitelist") or [])
+        tag_whitelist_enabled = bool(rules.get("tag_whitelist_enabled", True))
+        tag_whitelist = set(rules.get("tag_whitelist") or [])
+
+        raw_fetch = min(self.config.brief_timeline_limit * 4, 20000)
+
+        # AI mode is always enabled
+        if drop_zero:
+            cur = self.conn.execute(
+                """
+                SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at,
+                       COALESCE(s.name, ''), COALESCE(s.category, ''),
+                       GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
+                FROM rss_entries e
+                JOIN rss_entry_ai_labels l
+                  ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+                LEFT JOIN rss_sources s ON s.id = e.source_id
+                LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
+                WHERE e.published_at > 0
+                  AND l.action = 'include'
+                  AND l.score >= 75
+                  AND l.confidence >= 0.70
+                GROUP BY e.source_id, e.dedup_key
+                ORDER BY e.published_at DESC, e.id DESC
+                LIMIT ?
+                """,
+                (raw_fetch,),
+            )
+        else:
+            cur = self.conn.execute(
+                """
+                SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url, e.created_at, e.published_at,
+                       COALESCE(s.name, ''), COALESCE(s.category, ''),
+                       GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
+                FROM rss_entries e
+                JOIN rss_entry_ai_labels l
+                  ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+                LEFT JOIN rss_sources s ON s.id = e.source_id
+                LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
+                WHERE l.action = 'include'
+                  AND l.score >= 75
+                  AND l.confidence >= 0.70
+                GROUP BY e.source_id, e.dedup_key
+                ORDER BY e.published_at DESC, e.id DESC
+                LIMIT ?
+                """,
+                (raw_fetch,),
+            )
+
+        rows = cur.fetchall() or []
+
+        # Timestamp validation range
+        MIN_TS = 946684800  # 2000-01-01
+        MAX_TS = int(time.time()) + 7 * 86400
+
+        items: List[Dict[str, Any]] = []
+        seen_urls: Set[str] = set()
+        seen_titles: Set[str] = set()
+
+        for r in rows:
+            sid = str(r[0] or "").strip()
+            title = str(r[2] or "")
+            url = str(r[3] or "")
+            created_at = int(r[4] or 0)
+            published_at = int(r[5] or 0)
+            sname = str(r[6] or "")
+            scategory = str(r[7] or "").strip().lower()
+            tag_ids_str = str(r[8] or "").strip()
+
+            tag_ids = set(t.strip().lower() for t in tag_ids_str.split(",") if t.strip()) if tag_ids_str else set()
+
+            u = url.strip()
+            if not u or u in seen_urls:
+                continue
+            title_norm = title.strip().lower()
+            if title_norm and title_norm in seen_titles:
+                continue
+            if drop_zero and published_at <= 0:
+                continue
+            if published_at > 0 and (published_at < MIN_TS or published_at > MAX_TS):
+                continue
+
+            # Tag/category whitelist filtering
+            if tag_whitelist_enabled and tag_whitelist:
+                if not tag_ids or not tag_ids.intersection(tag_whitelist):
+                    continue
+            elif category_whitelist_enabled and category_whitelist:
+                if scategory not in category_whitelist:
+                    continue
+
+            seen_urls.add(u)
+            if title_norm:
+                seen_titles.add(title_norm)
+
+            pid = f"rss-{sid}" if sid else "rss-unknown"
+            it = _rss_row_to_item(
+                platform_id=pid, source_id=sid, source_name=sname,
+                title=title, url=u, created_at=created_at,
+            )
+            it["published_at"] = int(published_at)
+            items.append(it)
+
+        # Build cache config (same keys as server.py)
+        cache_config = {
+            "drop_zero": drop_zero,
+            "ai_mode": True,
+            "rules_hash": hash(str(sorted(rules.items()))),
+            "category_whitelist": tuple(sorted(category_whitelist)),
+            "tag_whitelist": tuple(sorted(tag_whitelist)),
+        }
+        brief_timeline_cache.set(items, cache_config)
+        return len(items)
+
+    # ------------------------------------------------------------------
+    # Explore Timeline warmup
+    # ------------------------------------------------------------------
+    def _warmup_explore_timeline(self) -> int:
+        """预热 Explore Timeline 缓存，返回加载的条目数"""
+        min_ts = 946684800
+        max_ts = int(time.time()) + 365 * 86400
+        fetch_limit = min(self.config.explore_timeline_limit * 2, 2000)
+
+        cur = self.conn.execute(
+            """
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
+            FROM rss_entries e
+            JOIN rss_sources s ON e.source_id = s.id
+            WHERE e.published_at > 0
+              AND s.enabled = 1
+              AND s.category = 'explore'
+              AND e.published_at >= ?
+              AND e.published_at <= ?
+            ORDER BY e.published_at DESC, e.id DESC
+            LIMIT ?
+            """,
+            (min_ts, max_ts, fetch_limit),
+        )
+        rows = cur.fetchall() or []
+
+        # Batch fetch source names
+        source_ids = list(set(str(r[0] or "").strip() for r in rows if r[0]))
+        source_names: Dict[str, str] = {}
+        if source_ids:
+            try:
+                ph = ",".join("?" * len(source_ids))
+                cur2 = self.conn.execute(
+                    f"SELECT id, name FROM rss_sources WHERE id IN ({ph})", source_ids
+                )
+                source_names = {str(r[0]): str(r[1] or "") for r in cur2.fetchall()}
+            except Exception:
+                pass
+
+        items: List[Dict[str, Any]] = []
+        seen_titles: Set[str] = set()
+        max_items = 1000
+
+        for r in rows:
+            if len(items) >= max_items:
+                break
+            sid = str(r[0] or "").strip()
+            title = str(r[1] or "").strip()
+            url = str(r[2] or "")
+            created_at = int(r[3] or 0)
+            published_at = int(r[4] or 0)
+            sname = source_names.get(sid, "")
+
+            if not url.strip():
+                continue
+            tk = title.lower()
+            if tk in seen_titles:
+                continue
+            seen_titles.add(tk)
+
+            pid = f"rss-{sid}" if sid else "rss-unknown"
+            it = _rss_row_to_item(
+                platform_id=pid, source_id=sid, source_name=sname,
+                title=title, url=url, created_at=created_at,
+            )
+            it["published_at"] = published_at
+            items.append(it)
+
+        explore_timeline_cache.set(items)
+        return len(items)

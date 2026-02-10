@@ -39,6 +39,14 @@ viewer:
   fetch_interval_minutes: 15      # 获取间隔（分钟），范围 5-1440
   fetch_on_startup: true          # 服务启动时是否立即获取一次数据
 
+# 性能优化配置
+performance:
+  cache_warmup:
+    enabled: true                    # 是否启用缓存预热（服务启动时预加载数据）
+    brief_timeline_limit: 5000       # Brief Timeline 预热条数
+    explore_timeline_limit: 1000     # Explore Timeline 预热条数
+    timeout_seconds: 60              # 预热超时时间（秒）
+
 # 存储配置
 storage:
   # 存储后端选择: local / remote / auto
