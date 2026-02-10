@@ -250,6 +250,44 @@ def _get_comments_summary(conn: sqlite3.Connection, url_hash: str, user_id: int)
     })
 
 
+# ---------------------------------------------------------------------------
+# POST /api/comments/batch-counts  —  批量查询评论数
+# ---------------------------------------------------------------------------
+
+@router.post("/batch-counts")
+async def batch_comment_counts(request: Request):
+    """批量查询多个 URL 的评论数，用于实时更新评论按钮 badge"""
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    urls = data.get("urls", [])
+    if not isinstance(urls, list) or len(urls) == 0:
+        return _json({"success": True, "data": {}})
+    
+    # 限制批量查询数量
+    urls = urls[:100]
+    
+    conn = _get_online_db(request)
+    conn.row_factory = sqlite3.Row
+    
+    result = {}
+    for url in urls:
+        if not isinstance(url, str) or not url.strip():
+            continue
+        url_hash = _sha256(_normalize_url(url.strip()))
+        count_row = conn.execute(
+            "SELECT COUNT(*) FROM article_comments WHERE article_url_hash = ? AND status = 'active'",
+            (url_hash,),
+        ).fetchone()
+        count = count_row[0] if count_row else 0
+        if count > 0:
+            result[url.strip()] = count
+    
+    return _json({"success": True, "data": result})
+
+
 def _get_comments_full(conn: sqlite3.Connection, url_hash: str, user_id: int) -> JSONResponse:
     """完整评论列表（含回复树）"""
     rows = conn.execute(
@@ -410,7 +448,22 @@ async def reply_comment(request: Request, comment_id: int):
     conn.commit()
     reply_id = cur.lastrowid
 
-    return _json({"success": True, "data": {"id": reply_id}})
+    # Return full reply object for optimistic update
+    reply_data = {
+        "id": reply_id,
+        "content": content[:2000],
+        "user_id": int(user.get("id", 0)),
+        "user_name": str(user.get("nickname") or user.get("email") or ""),
+        "user_avatar": str(user.get("avatar_url") or ""),
+        "parent_user_name": str(parent["user_name"] or ""),
+        "created_at": now,
+        "is_mine": True,
+        "reactions": {},
+        "my_reactions": [],
+        "replies": [],
+    }
+
+    return _json({"success": True, "data": reply_data})
 
 
 # ---------------------------------------------------------------------------

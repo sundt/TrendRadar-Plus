@@ -193,8 +193,43 @@ function bindPanelEvents(panel, url, title) {
     if (target.classList.contains('hn-cp-delete')) {
       const cid = target.dataset.commentId;
       if (!confirm('确定删除？')) return;
+      
+      // Optimistic delete - remove from UI immediately
+      const commentEl = panel.querySelector(`[data-comment-id="${cid}"]`);
+      if (commentEl) {
+        commentEl.style.opacity = '0.5';
+        commentEl.style.pointerEvents = 'none';
+      }
+      
+      // Update count in header
+      const header = panel.querySelector('.hn-cp-header span');
+      const currentCount = parseInt(header?.textContent?.match(/\d+/)?.[0] || '0');
+      if (header && currentCount > 0) header.textContent = `评论 (${currentCount - 1})`;
+      
       const res = await deleteCommentApi(cid);
-      if (res.success) refreshPanelComments(panel, url, title);
+      if (res.success) {
+        // Remove element completely
+        if (commentEl) commentEl.remove();
+        // Update badge
+        updateCommentBtnBadge(url, Math.max(0, currentCount - 1));
+        // Show empty state if no comments left
+        const listEl = panel.querySelector('.hn-cp-list');
+        if (listEl && listEl.children.length === 0) {
+          listEl.remove();
+          const empty = document.createElement('div');
+          empty.className = 'hn-cp-empty';
+          empty.textContent = '暂无评论，来抢沙发吧';
+          panel.appendChild(empty);
+        }
+      } else {
+        // Restore on failure
+        if (commentEl) {
+          commentEl.style.opacity = '';
+          commentEl.style.pointerEvents = '';
+        }
+        if (header) header.textContent = `评论 (${currentCount})`;
+        alert(res.message || '删除失败');
+      }
       return;
     }
 
@@ -202,8 +237,7 @@ function bindPanelEvents(panel, url, title) {
       if (!authState.isLoggedIn) { openLoginModal(); return; }
       const cid = target.dataset.commentId;
       const emoji = target.dataset.emoji;
-      await toggleReaction(cid, emoji);
-      refreshPanelComments(panel, url, title);
+      optimisticToggleReaction(target, cid, emoji);
       return;
     }
 
@@ -216,8 +250,15 @@ function bindPanelEvents(panel, url, title) {
     if (target.classList.contains('hn-cp-emoji-option')) {
       const cid = target.dataset.commentId;
       const emoji = target.textContent.trim();
-      await toggleReaction(cid, emoji);
-      refreshPanelComments(panel, url, title);
+      // Close picker first
+      const picker = target.closest('.hn-cp-emoji-picker');
+      if (picker) picker.remove();
+      // Find reactions container and do optimistic update
+      const commentEl = panel.querySelector(`[data-comment-id="${cid}"]`);
+      if (commentEl) {
+        const reactionsEl = commentEl.querySelector('.hn-cp-reactions');
+        optimisticAddReaction(reactionsEl, cid, emoji);
+      }
       return;
     }
 
@@ -229,13 +270,65 @@ function bindPanelEvents(panel, url, title) {
 
     if (target.classList.contains('hn-cp-reply-submit')) {
       const cid = target.dataset.commentId;
-      const textarea = target.closest('.hn-cp-reply-input').querySelector('textarea');
+      const replyInputEl = target.closest('.hn-cp-reply-input');
+      const textarea = replyInputEl.querySelector('textarea');
       const content = textarea.value.trim();
       if (!content) return;
-      target.disabled = true;
+      
+      // Optimistic update: show reply immediately
+      const tempId = 'temp-reply-' + Date.now();
+      const tempReply = {
+        id: tempId,
+        content: content,
+        user_name: authState.user?.nickname || authState.user?.name || '我',
+        user_avatar: authState.user?.avatar || '',
+        created_at: Math.floor(Date.now() / 1000),
+        is_mine: true,
+        reactions: {},
+        my_reactions: [],
+        replies: []
+      };
+      
+      // Find parent comment and add reply
+      const parentComment = panel.querySelector(`[data-comment-id="${cid}"]`);
+      let repliesEl = parentComment?.querySelector('.hn-cp-replies');
+      if (!repliesEl && parentComment) {
+        repliesEl = document.createElement('div');
+        repliesEl.className = 'hn-cp-replies';
+        parentComment.appendChild(repliesEl);
+      }
+      
+      if (repliesEl) {
+        const tempHtml = renderComment(tempReply, true);
+        repliesEl.insertAdjacentHTML('beforeend', tempHtml);
+        const tempEl = repliesEl.querySelector(`[data-comment-id="${tempId}"]`);
+        if (tempEl) tempEl.classList.add('hn-cp-sending');
+      }
+      
+      // Remove input area
+      replyInputEl.remove();
+      
+      // Send to backend
       const res = await postReply(cid, content);
-      if (res.success) refreshPanelComments(panel, url, title);
-      else { target.disabled = false; alert(res.message || '回复失败'); }
+      
+      if (res.success) {
+        // Update temp reply with real ID
+        const tempEl = repliesEl?.querySelector(`[data-comment-id="${tempId}"]`);
+        if (tempEl && res.data) {
+          tempEl.classList.remove('hn-cp-sending');
+          tempEl.dataset.commentId = res.data.id;
+          const delBtn = tempEl.querySelector('.hn-cp-delete');
+          if (delBtn) delBtn.dataset.commentId = res.data.id;
+          const replyBtn = tempEl.querySelector('.hn-cp-reply-btn');
+          if (replyBtn) replyBtn.dataset.commentId = res.data.id;
+          tempEl.querySelectorAll('.hn-cp-reaction').forEach(r => r.dataset.commentId = res.data.id);
+        }
+      } else {
+        // Remove temp reply on failure
+        const tempEl = repliesEl?.querySelector(`[data-comment-id="${tempId}"]`);
+        if (tempEl) tempEl.remove();
+        alert(res.message || '回复失败');
+      }
       return;
     }
 
@@ -261,6 +354,59 @@ function showReplyInput(replyBtn) {
     </div>`;
   replyBtn.after(div);
   div.querySelector('textarea').focus();
+}
+
+// Optimistic reaction toggle for existing reaction button
+function optimisticToggleReaction(btn, commentId, emoji) {
+  const isActive = btn.classList.contains('active');
+  const countMatch = btn.textContent.match(/\d+/);
+  let count = countMatch ? parseInt(countMatch[0]) : 0;
+  
+  // Optimistic UI update
+  if (isActive) {
+    btn.classList.remove('active');
+    count = Math.max(0, count - 1);
+    if (count === 0) {
+      btn.remove();
+    } else {
+      btn.textContent = `${emoji} ${count}`;
+    }
+  } else {
+    btn.classList.add('active');
+    count++;
+    btn.textContent = `${emoji} ${count}`;
+  }
+  
+  // Fire and forget - no need to wait
+  toggleReaction(commentId, emoji).catch(console.warn);
+}
+
+// Optimistic add new reaction from picker
+function optimisticAddReaction(reactionsEl, commentId, emoji) {
+  if (!reactionsEl) return;
+  
+  // Check if reaction already exists
+  const existing = reactionsEl.querySelector(`[data-emoji="${emoji}"]`);
+  if (existing && !existing.classList.contains('hn-cp-add-reaction')) {
+    optimisticToggleReaction(existing, commentId, emoji);
+    return;
+  }
+  
+  // Add new reaction button before the + button
+  const addBtn = reactionsEl.querySelector('.hn-cp-add-reaction');
+  const newReaction = document.createElement('span');
+  newReaction.className = 'hn-cp-reaction active';
+  newReaction.dataset.emoji = emoji;
+  newReaction.dataset.commentId = commentId;
+  newReaction.textContent = `${emoji} 1`;
+  if (addBtn) {
+    addBtn.before(newReaction);
+  } else {
+    reactionsEl.appendChild(newReaction);
+  }
+  
+  // Fire and forget
+  toggleReaction(commentId, emoji).catch(console.warn);
 }
 
 function showEmojiPicker(addBtn) {
@@ -342,6 +488,9 @@ async function refreshPanelComments(panel, url, title) {
       const currentCount = parseInt(header?.textContent?.match(/\d+/)?.[0] || '0');
       if (header) header.textContent = `评论 (${currentCount + 1})`;
       
+      // Optimistic update: update badge immediately
+      updateCommentBtnBadge(url, currentCount + 1);
+      
       // Clear input
       const savedContent = textarea.value;
       textarea.value = '';
@@ -365,11 +514,13 @@ async function refreshPanelComments(panel, url, title) {
           // Update reaction buttons
           tempEl.querySelectorAll('.hn-cp-reaction').forEach(r => r.dataset.commentId = res.data.id);
         }
-        updateCommentBtnBadge(url, currentCount + 1);
+        // Badge already updated optimistically, no need to update again
       } else {
         // Remove temp comment on failure
         if (tempEl) tempEl.remove();
         if (header) header.textContent = `评论 (${currentCount})`;
+        // Rollback badge
+        updateCommentBtnBadge(url, currentCount);
         textarea.value = savedContent;
         alert(res.message || '评论失败');
       }
@@ -444,6 +595,46 @@ async function loadVisibleBadges() {
 }
 
 // ---------------------------------------------------------------------------
+// Batch refresh comment counts (for real-time updates)
+// ---------------------------------------------------------------------------
+
+async function batchRefreshCommentCounts() {
+  const btns = document.querySelectorAll('.news-comment-btn[data-url]');
+  const urls = [];
+  btns.forEach(btn => {
+    const u = btn.dataset.url;
+    if (u && !urls.includes(u)) urls.push(u);
+  });
+  
+  if (urls.length === 0) return;
+  
+  try {
+    const resp = await fetch('/api/comments/batch-counts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ urls })
+    });
+    if (!resp.ok) return;
+    const result = await resp.json();
+    if (result.success && result.data) {
+      // Update all badges
+      for (const [url, count] of Object.entries(result.data)) {
+        updateCommentBtnBadge(url, count);
+      }
+      // Clear badges for URLs not in result (no comments)
+      urls.forEach(url => {
+        if (!(url in result.data)) {
+          updateCommentBtnBadge(url, 0);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('[comment-preview] batch refresh error:', e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
@@ -463,12 +654,28 @@ function initCommentPreview() {
 
   loadVisibleBadges();
 
+  // Observe DOM changes to load badges for new elements
   let badgeTimer = null;
   const observer = new MutationObserver(() => {
     clearTimeout(badgeTimer);
     badgeTimer = setTimeout(loadVisibleBadges, 500);
   });
   observer.observe(document.body, { childList: true, subtree: true });
+
+  // Periodic refresh of comment counts (every 60 seconds when page is visible)
+  const REFRESH_INTERVAL = 60000;
+  setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      batchRefreshCommentCounts();
+    }
+  }, REFRESH_INTERVAL);
+
+  // Also refresh when page becomes visible
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      setTimeout(batchRefreshCommentCounts, 1000);
+    }
+  });
 }
 
 ready(initCommentPreview);
