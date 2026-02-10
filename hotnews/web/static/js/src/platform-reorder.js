@@ -782,12 +782,14 @@ export const platformReorder = {
                     menuHtml = `
                         <div class="tr-ctx-item" data-action="remove-keyword">🗑️ 删除此关键词</div>
                         <div class="tr-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">✏️ 编辑主题</div>
+                        <div class="tr-ctx-item tr-ctx-danger" data-action="delete-topic" style="border-top:1px solid #e5e7eb;color:#dc2626;">🗑️ 删除主题</div>
                     `;
                 } else if (source) {
                     // Source card: show remove option
                     menuHtml = `
                         <div class="tr-ctx-item" data-action="remove-source">🗑️ 删除此数据源</div>
                         <div class="tr-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">✏️ 编辑主题</div>
+                        <div class="tr-ctx-item tr-ctx-danger" data-action="delete-topic" style="border-top:1px solid #e5e7eb;color:#dc2626;">🗑️ 删除主题</div>
                     `;
                 }
             } else {
@@ -859,6 +861,16 @@ export const platformReorder = {
                     const topicId = categoryId.replace('topic-', '');
                     if (window.TopicTracker && typeof window.TopicTracker.editTopic === 'function') {
                         window.TopicTracker.editTopic(topicId);
+                    }
+                    return;
+                }
+
+                if (action === 'delete-topic' && isTopic) {
+                    // Delete topic
+                    hideContextMenu();
+                    const topicId = categoryId.replace('topic-', '');
+                    if (window.TopicTracker && typeof window.TopicTracker.deleteTopic === 'function') {
+                        window.TopicTracker.deleteTopic(topicId);
                     }
                     return;
                 }
