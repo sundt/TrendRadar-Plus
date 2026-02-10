@@ -338,3 +338,16 @@
     max-height: 60vh;
   }
 }
+
+
+/* Sending state - optimistic update */
+.hn-cp-comment.hn-cp-sending {
+  opacity: 0.7;
+}
+.hn-cp-comment.hn-cp-sending::after {
+  content: '发送中...';
+  display: block;
+  font-size: 11px;
+  color: var(--text-tertiary, #999);
+  margin-top: 4px;
+}

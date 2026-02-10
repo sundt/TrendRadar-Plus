@@ -308,10 +308,71 @@ async function refreshPanelComments(panel, url, title) {
     submitBtn.addEventListener('click', async () => {
       const content = textarea.value.trim();
       if (!content) return;
+      
+      // Optimistic update: show comment immediately
+      const tempId = 'temp-' + Date.now();
+      const tempComment = {
+        id: tempId,
+        content: content,
+        user_name: authState.user?.nickname || authState.user?.name || '我',
+        user_avatar: authState.user?.avatar || '',
+        created_at: Math.floor(Date.now() / 1000),
+        is_mine: true,
+        reactions: {},
+        my_reactions: [],
+        replies: []
+      };
+      
+      // Add to UI immediately
+      let listEl = panel.querySelector('.hn-cp-list');
+      const emptyEl = panel.querySelector('.hn-cp-empty');
+      if (emptyEl) emptyEl.remove();
+      if (!listEl) {
+        listEl = document.createElement('div');
+        listEl.className = 'hn-cp-list';
+        panel.appendChild(listEl);
+      }
+      const tempHtml = renderComment(tempComment, false);
+      listEl.insertAdjacentHTML('afterbegin', tempHtml);
+      const tempEl = listEl.querySelector(`[data-comment-id="${tempId}"]`);
+      if (tempEl) tempEl.classList.add('hn-cp-sending');
+      
+      // Update count in header
+      const header = panel.querySelector('.hn-cp-header span');
+      const currentCount = parseInt(header?.textContent?.match(/\d+/)?.[0] || '0');
+      if (header) header.textContent = `评论 (${currentCount + 1})`;
+      
+      // Clear input
+      const savedContent = textarea.value;
+      textarea.value = '';
       submitBtn.disabled = true;
+      
+      // Send to backend
       const res = await postComment(url, title, content);
-      if (res.success) { textarea.value = ''; submitBtn.disabled = false; refreshPanelComments(panel, url, title); }
-      else { submitBtn.disabled = false; alert(res.message || '评论失败'); }
+      submitBtn.disabled = false;
+      
+      if (res.success) {
+        // Replace temp comment with real one
+        if (tempEl && res.data) {
+          tempEl.classList.remove('hn-cp-sending');
+          tempEl.dataset.commentId = res.data.id;
+          // Update delete button
+          const delBtn = tempEl.querySelector('.hn-cp-delete');
+          if (delBtn) delBtn.dataset.commentId = res.data.id;
+          // Update reply button
+          const replyBtn = tempEl.querySelector('.hn-cp-reply-btn');
+          if (replyBtn) replyBtn.dataset.commentId = res.data.id;
+          // Update reaction buttons
+          tempEl.querySelectorAll('.hn-cp-reaction').forEach(r => r.dataset.commentId = res.data.id);
+        }
+        updateCommentBtnBadge(url, currentCount + 1);
+      } else {
+        // Remove temp comment on failure
+        if (tempEl) tempEl.remove();
+        if (header) header.textContent = `评论 (${currentCount})`;
+        textarea.value = savedContent;
+        alert(res.message || '评论失败');
+      }
     });
   } else {
     const loginHint = document.createElement('div');
