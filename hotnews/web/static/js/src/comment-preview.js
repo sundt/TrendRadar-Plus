@@ -1,21 +1,21 @@
 /**
  * comment-preview.js
- * 新闻评论按钮：hover 预览摘要，click 打开完整评论面板
- * 评论数直接显示在右侧评论按钮上（有评论时 💬N，无评论时 💬）
+ * 新闻评论按钮：hover 直接打开完整评论面板（可回复、emoji、删除）
+ * 评论数直接显示在评论按钮上（有评论时 💬N，无评论时 💬）
  */
 
 import { ready } from './core.js';
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
 
-const SHOW_DELAY = 300;
-const HIDE_DELAY = 400;
+const SHOW_DELAY = 250;
+const HIDE_DELAY = 350;
 let showTimer = null;
 let hideTimer = null;
-let activePopup = null;
 let activePanel = null;
-let commentCache = {};
+let activeBtnEl = null;
 let fullCommentCache = {};
+let summaryCache = {};
 
 const ALLOWED_EMOJIS = ['👍', '🔥', '😂', '🤔', '❤️', '👀', '🎉', '💯'];
 
@@ -52,12 +52,12 @@ function ck(url) {
 
 async function fetchCommentSummary(url) {
   const k = ck(url);
-  if (commentCache[k]) return commentCache[k];
+  if (summaryCache[k]) return summaryCache[k];
   try {
     const params = new URLSearchParams({ url, summary: '1' });
     const resp = await fetch(`/api/comments?${params}`, { credentials: 'include' });
     const result = await resp.json();
-    if (result.success && result.data) { commentCache[k] = result.data; return result.data; }
+    if (result.success && result.data) { summaryCache[k] = result.data; return result.data; }
   } catch (e) { console.warn('[comment-preview] fetch summary error:', e); }
   return null;
 }
@@ -92,77 +92,9 @@ async function deleteCommentApi(commentId) {
   return resp.json();
 }
 
-
 // ---------------------------------------------------------------------------
-// Hover Preview Popup
+// Panel rendering helpers
 // ---------------------------------------------------------------------------
-
-function createPreviewPopup(data, anchorRect) {
-  removePopup();
-  const popup = document.createElement('div');
-  popup.className = 'hn-comment-preview-popup';
-
-  const comments = data.comments || [];
-  const total = data.total || comments.length;
-
-  let html = `<div class="hn-cpp-header">评论 (${total})</div>`;
-  if (comments.length === 0) {
-    html += `<div class="hn-cpp-empty">暂无评论</div>`;
-  } else {
-    html += `<div class="hn-cpp-list">`;
-    comments.slice(0, 3).forEach(c => {
-      const name = escapeHtml(c.user_name || c.nickname || '匿名');
-      const text = escapeHtml((c.content || '').slice(0, 60));
-      const quote = c.quote_text ? `<div class="hn-cpp-quote">"${escapeHtml(c.quote_text.slice(0, 40))}"</div>` : '';
-      html += `<div class="hn-cpp-item">${quote}<span class="hn-cpp-name">${name}:</span> ${text}</div>`;
-    });
-    html += `</div>`;
-    if (total > 3) {
-      html += `<div class="hn-cpp-footer">查看全部 ${total} 条评论</div>`;
-    }
-  }
-  popup.innerHTML = html;
-
-  document.body.appendChild(popup);
-  // Position
-  const pr = popup.getBoundingClientRect();
-  let top = anchorRect.bottom + 6;
-  let left = anchorRect.left + anchorRect.width / 2 - pr.width / 2;
-  if (left < 8) left = 8;
-  if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - 8 - pr.width;
-  if (top + pr.height > window.innerHeight - 8) top = anchorRect.top - pr.height - 6;
-  popup.style.top = top + 'px';
-  popup.style.left = left + 'px';
-
-  // Keep popup alive on hover
-  popup.addEventListener('mouseenter', () => { clearTimeout(hideTimer); });
-  popup.addEventListener('mouseleave', () => {
-    hideTimer = setTimeout(removePopup, HIDE_DELAY);
-  });
-  // Click footer to open panel
-  const footer = popup.querySelector('.hn-cpp-footer');
-  if (footer) {
-    footer.addEventListener('click', () => {
-      const btn = popup._anchorBtn;
-      if (btn) openCommentPanel(btn);
-    });
-  }
-
-  activePopup = popup;
-  return popup;
-}
-
-function removePopup() {
-  if (activePopup) { activePopup.remove(); activePopup = null; }
-}
-
-// ---------------------------------------------------------------------------
-// Full Comment Panel
-// ---------------------------------------------------------------------------
-
-function removePanel() {
-  if (activePanel) { activePanel.remove(); activePanel = null; }
-}
 
 function renderReactions(comment) {
   const reactions = comment.reactions || {};
@@ -190,12 +122,10 @@ function renderComment(c, isReply) {
   const content = `<div class="hn-cp-content">${replyTo}${escapeHtml(c.content)}</div>`;
   const reactions = renderReactions(c);
   const replyBtn = `<button class="hn-cp-reply-btn" data-comment-id="${c.id}">回复</button>`;
-
   let repliesHtml = '';
   if (c.replies && c.replies.length > 0) {
     repliesHtml = `<div class="hn-cp-replies">${c.replies.map(r => renderComment(r, true)).join('')}</div>`;
   }
-
   const cls = isReply ? 'hn-cp-reply' : 'hn-cp-comment';
   return `<div class="${cls}" data-comment-id="${c.id}">
     <div class="hn-cp-comment-header">${avatar}<span class="hn-cp-name">${name}</span><span class="hn-cp-time">${time}</span>${deleteBtn}</div>
@@ -204,9 +134,26 @@ function renderComment(c, isReply) {
 }
 
 
+// ---------------------------------------------------------------------------
+// Full Comment Panel (opens on hover)
+// ---------------------------------------------------------------------------
+
+function removePanel() {
+  if (activePanel) { activePanel.remove(); activePanel = null; activeBtnEl = null; }
+}
+
+function cancelHide() { clearTimeout(hideTimer); }
+function scheduleHide() {
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(removePanel, HIDE_DELAY);
+}
+
 function openCommentPanel(btn) {
-  removePopup();
+  // If panel already open for same button, just cancel hide
+  if (activePanel && activeBtnEl === btn) { cancelHide(); return; }
+
   removePanel();
+  activeBtnEl = btn;
 
   const url = btn.dataset.url;
   const title = btn.dataset.title || '';
@@ -228,20 +175,21 @@ function openCommentPanel(btn) {
   panel.style.top = top + 'px';
   panel.style.left = left + 'px';
 
+  // Hover keep-alive: mouse in panel cancels hide, mouse out schedules hide
+  panel.addEventListener('mouseenter', cancelHide);
+  panel.addEventListener('mouseleave', scheduleHide);
+
   activePanel = panel;
   bindPanelEvents(panel, url, title);
   refreshPanelComments(panel, url, title);
 }
 
 function bindPanelEvents(panel, url, title) {
-  // Close
   panel.querySelector('.hn-cp-close').addEventListener('click', removePanel);
 
-  // Delegate clicks
   panel.addEventListener('click', async (e) => {
     const target = e.target;
 
-    // Delete
     if (target.classList.contains('hn-cp-delete')) {
       const cid = target.dataset.commentId;
       if (!confirm('确定删除？')) return;
@@ -250,7 +198,6 @@ function bindPanelEvents(panel, url, title) {
       return;
     }
 
-    // Reaction
     if (target.classList.contains('hn-cp-reaction') && !target.classList.contains('hn-cp-add-reaction')) {
       if (!authState.isLoggedIn) { openLoginModal(); return; }
       const cid = target.dataset.commentId;
@@ -260,14 +207,12 @@ function bindPanelEvents(panel, url, title) {
       return;
     }
 
-    // Add reaction (show picker)
     if (target.classList.contains('hn-cp-add-reaction')) {
       if (!authState.isLoggedIn) { openLoginModal(); return; }
       showEmojiPicker(target);
       return;
     }
 
-    // Emoji option
     if (target.classList.contains('hn-cp-emoji-option')) {
       const cid = target.dataset.commentId;
       const emoji = target.textContent.trim();
@@ -276,14 +221,12 @@ function bindPanelEvents(panel, url, title) {
       return;
     }
 
-    // Reply button
     if (target.classList.contains('hn-cp-reply-btn')) {
       if (!authState.isLoggedIn) { openLoginModal(); return; }
       showReplyInput(target);
       return;
     }
 
-    // Reply submit
     if (target.classList.contains('hn-cp-reply-submit')) {
       const cid = target.dataset.commentId;
       const textarea = target.closest('.hn-cp-reply-input').querySelector('textarea');
@@ -296,7 +239,6 @@ function bindPanelEvents(panel, url, title) {
       return;
     }
 
-    // Reply cancel
     if (target.classList.contains('hn-cp-reply-cancel')) {
       const ri = target.closest('.hn-cp-reply-input');
       if (ri) ri.remove();
@@ -306,10 +248,8 @@ function bindPanelEvents(panel, url, title) {
 }
 
 function showReplyInput(replyBtn) {
-  // Remove any existing reply inputs
   const panel = replyBtn.closest('.hn-comment-panel');
   panel.querySelectorAll('.hn-cp-reply-input').forEach(el => el.remove());
-
   const commentEl = replyBtn.closest('[data-comment-id]');
   const cid = commentEl.dataset.commentId;
   const div = document.createElement('div');
@@ -324,7 +264,6 @@ function showReplyInput(replyBtn) {
 }
 
 function showEmojiPicker(addBtn) {
-  // Remove existing pickers
   document.querySelectorAll('.hn-cp-emoji-picker').forEach(el => el.remove());
   const cid = addBtn.dataset.commentId;
   const picker = document.createElement('div');
@@ -332,7 +271,6 @@ function showEmojiPicker(addBtn) {
   picker.innerHTML = ALLOWED_EMOJIS.map(e => `<button class="hn-cp-emoji-option" data-comment-id="${cid}">${e}</button>`).join('');
   addBtn.style.position = 'relative';
   addBtn.appendChild(picker);
-  // Auto-close on outside click
   setTimeout(() => {
     const handler = (ev) => {
       if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', handler, true); }
@@ -341,15 +279,13 @@ function showEmojiPicker(addBtn) {
   }, 0);
 }
 
+
 async function refreshPanelComments(panel, url, title) {
-  const list = panel.querySelector('.hn-cp-list');
   const loading = panel.querySelector('.hn-cp-loading');
   if (loading) loading.textContent = '加载中…';
 
   const comments = await fetchFullComments(url);
-  // Remove loading
   if (loading) loading.remove();
-  // Remove old list / empty / input area / extension hint
   panel.querySelectorAll('.hn-cp-list, .hn-cp-empty, .hn-cp-input-area, .hn-cp-extension-hint, .hn-cp-login-hint').forEach(el => el.remove());
 
   const header = panel.querySelector('.hn-cp-header span');
@@ -385,7 +321,6 @@ async function refreshPanelComments(panel, url, title) {
     loginHint.querySelector('.hn-cp-login-btn').addEventListener('click', openLoginModal);
   }
 
-  // Comment list
   if (!comments || comments.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'hn-cp-empty';
@@ -398,13 +333,11 @@ async function refreshPanelComments(panel, url, title) {
     panel.appendChild(listEl);
   }
 
-  // Also update the button badge
   updateCommentBtnBadge(url, comments ? comments.length : 0);
 }
 
-
 // ---------------------------------------------------------------------------
-// Comment Button Badge (count on the button itself)
+// Comment Button Badge
 // ---------------------------------------------------------------------------
 
 function updateCommentBtnBadge(url, count) {
@@ -420,56 +353,32 @@ function updateCommentBtnBadge(url, count) {
 }
 
 // ---------------------------------------------------------------------------
-// Event Handlers
+// Event Handlers — hover opens panel directly
 // ---------------------------------------------------------------------------
 
-function handleCommentBtnEnter(e) {
+function handleBtnEnter(e) {
   const btn = e.target;
-  clearTimeout(hideTimer);
+  cancelHide();
   clearTimeout(showTimer);
-  showTimer = setTimeout(async () => {
-    const url = btn.dataset.url;
-    if (!url) return;
-    const data = await fetchCommentSummary(url);
-    if (!data) return;
-    const rect = btn.getBoundingClientRect();
-    const popup = createPreviewPopup(data, rect);
-    if (popup) popup._anchorBtn = btn;
-  }, SHOW_DELAY);
+  showTimer = setTimeout(() => openCommentPanel(btn), SHOW_DELAY);
 }
 
-function handleCommentBtnLeave() {
+function handleBtnLeave() {
   clearTimeout(showTimer);
-  hideTimer = setTimeout(removePopup, HIDE_DELAY);
-}
-
-function handleCommentBtnClick(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  clearTimeout(showTimer);
-  clearTimeout(hideTimer);
-  removePopup();
-  openCommentPanel(e.currentTarget);
+  scheduleHide();
 }
 
 // ---------------------------------------------------------------------------
-// Load visible badges (scan visible comment buttons, fetch counts)
+// Load visible badges
 // ---------------------------------------------------------------------------
 
 async function loadVisibleBadges() {
   const btns = document.querySelectorAll('.news-comment-btn[data-url]');
   const urlSet = new Set();
-  btns.forEach(btn => {
-    const url = btn.dataset.url;
-    if (url) urlSet.add(url);
-  });
-
-  // Batch fetch — use summary endpoint for each unique URL
+  btns.forEach(btn => { const u = btn.dataset.url; if (u) urlSet.add(u); });
   for (const url of urlSet) {
     const data = await fetchCommentSummary(url);
-    if (data) {
-      updateCommentBtnBadge(url, data.total || 0);
-    }
+    if (data) updateCommentBtnBadge(url, data.count ?? data.total ?? 0);
   }
 }
 
@@ -478,42 +387,21 @@ async function loadVisibleBadges() {
 // ---------------------------------------------------------------------------
 
 function initCommentPreview() {
-  // Delegate events on document for dynamically added buttons
   document.addEventListener('mouseenter', (e) => {
-    if (e.target.classList && e.target.classList.contains('news-comment-btn')) {
-      handleCommentBtnEnter(e);
-    }
+    if (e.target.classList && e.target.classList.contains('news-comment-btn')) handleBtnEnter(e);
   }, true);
 
   document.addEventListener('mouseleave', (e) => {
-    if (e.target.classList && e.target.classList.contains('news-comment-btn')) {
-      handleCommentBtnLeave(e);
-    }
+    if (e.target.classList && e.target.classList.contains('news-comment-btn')) handleBtnLeave();
   }, true);
-
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.news-comment-btn');
-    if (btn) {
-      e.preventDefault();
-      e.stopPropagation();
-      clearTimeout(showTimer);
-      clearTimeout(hideTimer);
-      removePopup();
-      openCommentPanel(btn);
-    }
-  });
 
   // Close panel on outside click
   document.addEventListener('mousedown', (e) => {
-    if (activePanel && !activePanel.contains(e.target) && !e.target.closest('.news-comment-btn')) {
-      removePanel();
-    }
+    if (activePanel && !activePanel.contains(e.target) && !e.target.closest('.news-comment-btn')) removePanel();
   });
 
-  // Load badges for visible buttons
   loadVisibleBadges();
 
-  // Re-scan when new content is loaded (MutationObserver, debounced)
   let badgeTimer = null;
   const observer = new MutationObserver(() => {
     clearTimeout(badgeTimer);
