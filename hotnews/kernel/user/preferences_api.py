@@ -389,9 +389,10 @@ async def get_recommended_tags(request: Request, response: Response, limit: int 
     # Try to get hot_tags and new_tags from cache
     from hotnews.web.timeline_cache import recommended_tags_cache
     
-    cached_data = recommended_tags_cache.get()
-    if cached_data:
+    cached_list = recommended_tags_cache.get()
+    if cached_list and len(cached_list) > 0:
         # Use cached data, just filter out followed tags
+        cached_data = cached_list[0]
         all_hot_tags = cached_data.get("hot_tags", [])
         all_new_tags = cached_data.get("new_tags", [])
         cache_age = recommended_tags_cache.age_seconds
