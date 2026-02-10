@@ -1733,7 +1733,7 @@ async def api_rss_brief_timeline(
     
     # Cache miss - fetch from database - Fetch slightly more to account for post-filtering
     raw_fetch = max(5000, int((off + lim) * 20))
-    raw_fetch = min(20000, raw_fetch)
+    raw_fetch = min(10000, raw_fetch)
 
     # Category whitelist settings (needed for both cache check and response)
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
