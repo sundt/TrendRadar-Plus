@@ -26,10 +26,32 @@ def _sha256(s: str) -> str:
 
 
 def _normalize_url(url: str) -> str:
-    """去除 query 和 fragment，保留 scheme + host + path"""
-    from urllib.parse import urlparse, urlunparse
-    p = urlparse(url)
-    return urlunparse((p.scheme, p.netloc, p.path, "", "", ""))
+    """规范化 URL：去除追踪参数和 fragment，保留文章标识参数"""
+    from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
+    try:
+        p = urlparse(url)
+    except Exception:
+        return url
+    # 只去掉追踪/分享类参数，保留文章标识参数
+    tracking_params = {
+        "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+        "spm", "from", "src", "source", "ref", "referer",
+        "share", "share_token", "share_source",
+        "nsukey", "scene", "subscene", "clicktime",
+        "enterid", "sessionid", "pass_ticket",
+    }
+    try:
+        filtered = []
+        for k, v in parse_qsl(p.query or "", keep_blank_values=True):
+            if k.lower() in tracking_params:
+                continue
+            if k.lower().startswith("utm_"):
+                continue
+            filtered.append((k, v))
+        query = urlencode(filtered, doseq=True)
+    except Exception:
+        query = p.query or ""
+    return urlunparse((p.scheme.lower(), p.netloc.lower(), p.path, "", query, ""))
 
 
 def _get_online_db(request: Request) -> sqlite3.Connection:
@@ -260,6 +282,7 @@ def _get_comments_full(conn: sqlite3.Connection, url_hash: str, user_id: int) ->
             "reply_count": r["reply_count"],
             "reactions": reactions,
             "my_reactions": my_reactions,
+            "is_mine": r["user_id"] == user_id and user_id != 0,
             "created_at": r["created_at"],
             "replies": [],
         }
