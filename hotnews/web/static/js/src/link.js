@@ -47,6 +47,10 @@ export const link = {
 
         // Desktop: allow default navigation
         if (this.isHoverDevice()) {
+            // Save state before navigating (for bfcache / WeChat back)
+            if (TR.scroll && typeof TR.scroll.saveNavigationState === 'function') {
+                TR.scroll.saveNavigationState();
+            }
             return;
         }
 
@@ -54,7 +58,11 @@ export const link = {
         const isExpanded = item.classList.contains('expanded');
         
         if (isExpanded) {
-            // Second tap - allow navigation, collapse
+            // Second tap - save state before allowing navigation
+            // Critical for WeChat browser where target="_blank" navigates in-place
+            if (TR.scroll && typeof TR.scroll.saveNavigationState === 'function') {
+                TR.scroll.saveNavigationState();
+            }
             item.classList.remove('expanded');
             return; // Let the default link behavior happen
         }

@@ -1082,25 +1082,28 @@ export const data = {
         const preserveScroll = opts.preserveScroll !== false;
 
         // Check for saved navigation state (back-navigation from WeChat etc.)
+        // Peek first, consume after render to avoid losing it on error
         const navState = TR.scroll?.peekNavigationState?.() || null;
+        const effectivePreserveScroll = preserveScroll || !!navState;
 
         if (_ajaxRefreshInFlight) {
             if (!_ajaxRefreshPending) {
-                _ajaxRefreshPending = { preserveScroll };
+                _ajaxRefreshPending = { preserveScroll: effectivePreserveScroll };
             } else {
-                _ajaxRefreshPending.preserveScroll = _ajaxRefreshPending.preserveScroll && preserveScroll;
+                _ajaxRefreshPending.preserveScroll = _ajaxRefreshPending.preserveScroll && effectivePreserveScroll;
             }
             return;
         }
         _ajaxRefreshInFlight = true;
         try {
             const state = this.snapshotViewerState();
-            state.preserveScroll = preserveScroll;
+            state.preserveScroll = effectivePreserveScroll;
 
-            // If we have a navigation state from back-navigation, use its scrollY and activeTab
+            // If we have a navigation state from back-navigation, override activeTab
             if (navState && navState.activeTab) {
                 state.activeTab = navState.activeTab;
-                state.preserveScroll = true;
+                // Also write to localStorage so renderViewerFromData picks it up
+                storage.setRaw(TAB_STORAGE_KEY, navState.activeTab);
             }
 
             const response = await fetch('/api/news');
@@ -1123,8 +1126,8 @@ export const data = {
                 const y = Number(consumedNav.scrollY || 0);
                 if (y > 0) {
                     window.scrollTo({ top: y, behavior: 'auto' });
-                    TR.scroll.restoreNavigationScrollY(consumedNav);
                 }
+                TR.scroll.restoreNavigationScrollY(consumedNav);
                 TR.scroll.restoreActiveTabPlatformGridScroll({
                     preserveScroll: true,
                     activeTab: consumedNav.activeTab || state.activeTab,
