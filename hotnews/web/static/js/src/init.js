@@ -216,7 +216,9 @@ ready(function () {
     if (hasCustomConfig || hasDefaultHiddenCategories) {
         // 触发数据刷新来应用配置
         // renderViewerFromData 完成后会添加 .categories-ready 类
-        TR.data.refreshViewerData({ preserveScroll: false });
+        // If returning from navigation (WeChat back), preserve scroll position
+        const hasNavState = !!(TR.scroll?.peekNavigationState?.());
+        TR.data.refreshViewerData({ preserveScroll: hasNavState });
 
         try {
             window.setTimeout(() => {
@@ -261,5 +263,24 @@ ready(function () {
     } else {
         // 无自定义配置，直接显示服务端渲染的默认栏目
         document.body.classList.add('categories-ready');
+
+        // Check for saved navigation state (back-navigation from WeChat etc.)
+        // When there's no custom config, refreshViewerData won't be called,
+        // so we need to restore scroll position here.
+        try {
+            const navState = TR.scroll?.consumeNavigationState?.() || null;
+            if (navState) {
+                if (navState.activeTab) {
+                    TR.tabs.switchTab(navState.activeTab);
+                }
+                TR.scroll.restoreNavigationScrollY(navState);
+                TR.scroll.restoreActiveTabPlatformGridScroll({
+                    preserveScroll: true,
+                    activeTab: navState.activeTab,
+                });
+            }
+        } catch (e) {
+            // ignore
+        }
     }
 });

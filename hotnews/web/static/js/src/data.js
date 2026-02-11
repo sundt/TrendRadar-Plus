@@ -1081,6 +1081,9 @@ export const data = {
     async refreshViewerData(opts = {}) {
         const preserveScroll = opts.preserveScroll !== false;
 
+        // Check for saved navigation state (back-navigation from WeChat etc.)
+        const navState = TR.scroll?.peekNavigationState?.() || null;
+
         if (_ajaxRefreshInFlight) {
             if (!_ajaxRefreshPending) {
                 _ajaxRefreshPending = { preserveScroll };
@@ -1093,6 +1096,13 @@ export const data = {
         try {
             const state = this.snapshotViewerState();
             state.preserveScroll = preserveScroll;
+
+            // If we have a navigation state from back-navigation, use its scrollY and activeTab
+            if (navState && navState.activeTab) {
+                state.activeTab = navState.activeTab;
+                state.preserveScroll = true;
+            }
+
             const response = await fetch('/api/news');
             const baseData = await response.json();
 
@@ -1106,7 +1116,20 @@ export const data = {
             }
 
             this.renderViewerFromData(baseData, state);
-            if (state.preserveScroll) {
+
+            // Restore scroll position: prefer navigation state (back-nav) over snapshot
+            const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
+            if (consumedNav) {
+                const y = Number(consumedNav.scrollY || 0);
+                if (y > 0) {
+                    window.scrollTo({ top: y, behavior: 'auto' });
+                    TR.scroll.restoreNavigationScrollY(consumedNav);
+                }
+                TR.scroll.restoreActiveTabPlatformGridScroll({
+                    preserveScroll: true,
+                    activeTab: consumedNav.activeTab || state.activeTab,
+                });
+            } else if (state.preserveScroll) {
                 window.scrollTo({ top: state.scrollY, behavior: 'auto' });
                 TR.scroll.restoreActiveTabPlatformGridScroll(state);
             }

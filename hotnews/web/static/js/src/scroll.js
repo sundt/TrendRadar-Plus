@@ -7,6 +7,7 @@ import { TR, ready } from './core.js';
 import { storage } from './storage.js';
 
 const PLATFORM_GRID_SCROLL_STORAGE_KEY = 'hotnews_platform_grid_scroll_v1';
+const NAV_STATE_SESSION_KEY = 'hotnews_nav_state_v1';
 
 export const scroll = {
     getPlatformGridScrollState() {
@@ -120,6 +121,94 @@ export const scroll = {
     },
 
     /**
+     * Save full page state to sessionStorage before navigating away.
+     * This is critical for WeChat browser which doesn't support bfcache
+     * and does a full page reload on back navigation.
+     */
+    saveNavigationState() {
+        try {
+            const activeTab = storage.getRaw('hotnews_active_tab') ||
+                (document.querySelector('.category-tab.active')?.dataset?.category) || null;
+            const state = {
+                scrollY: window.scrollY || 0,
+                activeTab,
+                timestamp: Date.now(),
+            };
+            // Also snapshot the current tab's platform grid scroll
+            if (activeTab) {
+                const grid = document.querySelector(`#tab-${activeTab} .platform-grid`);
+                if (grid) {
+                    this.recordPlatformGridScrollForTab(activeTab, grid);
+                }
+            }
+            sessionStorage.setItem(NAV_STATE_SESSION_KEY, JSON.stringify(state));
+        } catch (e) {
+            // ignore - sessionStorage may be unavailable
+        }
+    },
+
+    /**
+     * Retrieve and consume saved navigation state from sessionStorage.
+     * Returns the state object or null if none/expired.
+     */
+    consumeNavigationState() {
+        try {
+            const raw = sessionStorage.getItem(NAV_STATE_SESSION_KEY);
+            if (!raw) return null;
+            sessionStorage.removeItem(NAV_STATE_SESSION_KEY);
+            const state = JSON.parse(raw);
+            // Expire after 10 minutes to avoid stale restores
+            if (state && (Date.now() - (state.timestamp || 0)) < 600000) {
+                return state;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    },
+
+    /**
+     * Peek at saved navigation state without consuming it.
+     */
+    peekNavigationState() {
+        try {
+            const raw = sessionStorage.getItem(NAV_STATE_SESSION_KEY);
+            if (!raw) return null;
+            const state = JSON.parse(raw);
+            if (state && (Date.now() - (state.timestamp || 0)) < 600000) {
+                return state;
+            }
+        } catch (e) {
+            // ignore
+        }
+        return null;
+    },
+
+    /**
+     * Restore scrollY and platform grid scroll from saved navigation state.
+     * Called after data rendering is complete.
+     */
+    restoreNavigationScrollY(navState) {
+        if (!navState) return;
+        const y = Number(navState.scrollY || 0);
+        if (y <= 0) return;
+
+        const doRestore = () => {
+            try {
+                window.scrollTo({ top: y, behavior: 'auto' });
+            } catch (e) {
+                // ignore
+            }
+        };
+
+        // Multiple attempts to handle async rendering
+        requestAnimationFrame(doRestore);
+        setTimeout(doRestore, 50);
+        setTimeout(doRestore, 200);
+        setTimeout(doRestore, 500);
+    },
+
+    /**
      * Pause scroll-snap to prevent jump when returning from external link
      */
     pauseScrollSnap() {
@@ -145,6 +234,8 @@ export const scroll = {
                 // Page is being hidden (user clicked a link, switched tab, etc.)
                 document.body.classList.add('tr-page-hidden');
                 this.pauseScrollSnap();
+                // Save full state for WeChat browser back-navigation
+                this.saveNavigationState();
             } else if (document.visibilityState === 'visible') {
                 // Page is becoming visible again
                 document.body.classList.remove('tr-page-hidden');
@@ -156,6 +247,16 @@ export const scroll = {
         // Also handle beforeunload for immediate link clicks
         window.addEventListener('beforeunload', () => {
             this.pauseScrollSnap();
+            this.saveNavigationState();
+        });
+
+        // Handle pageshow for bfcache restores (some browsers)
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) {
+                // Page was restored from bfcache
+                document.body.classList.remove('tr-page-hidden');
+                this.resumeScrollSnap();
+            }
         });
     }
 };

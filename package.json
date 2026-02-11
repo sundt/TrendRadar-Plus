@@ -19,7 +19,7 @@
   "devDependencies": {
     "@playwright/test": "^1.40.0",
     "@types/node": "^20.10.0",
-    "esbuild": "^0.20.0",
+    "esbuild": "^0.20.2",
     "vite": "^5.0.0"
   },
   "dependencies": {
