@@ -262,6 +262,7 @@ function _attachObserver() {
  * Infinite scroll step
  */
 async function _loadNextBatch() {
+    console.log(`[MorningBrief] _loadNextBatch called: offset=${_mbOffset}, inFlight=${_mbInFlight}, finished=${_mbFinished}`);
     if (_mbInFlight || _mbFinished) return;
 
     // Check if we've reached max cards
@@ -297,6 +298,7 @@ async function _loadNextBatch() {
         if (grid) {
             // Calculate which card number this is (0-based)
             const cardIndex = Math.floor(_mbOffset / getItemsPerCard());
+            console.log(`[MorningBrief] _loadNextBatch: creating card ${cardIndex}, offset=${_mbOffset}, items=${items.length}, displayRange=${cardIndex * getItemsPerCard() + 1}-${cardIndex * getItemsPerCard() + items.length}`);
             _appendCard(items, cardIndex, grid);
             
             // Restore read state for newly loaded items
@@ -388,6 +390,7 @@ async function _loadTimeline() {
 
         _mbOffset = items.length;
         _mbInitialized = true;
+        console.log(`[MorningBrief] Initial load complete: ${items.length} items, ${Math.ceil(items.length / limit)} cards, _mbOffset=${_mbOffset}`);
 
         if (items.length < initialLimit) {
             // No more data
@@ -542,27 +545,41 @@ function _patchRenderHook() {
     TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
         orig.call(TR.data, data, state);
         try {
-            // Reset morning brief state when DOM is rebuilt
-            _mbInFlight = false;
-            _mbFinished = false;
-            _mbOffset = 0;
-            _mbInitialized = false;
-            _mbRetryCount = 0;
-            
-            // Disconnect old observer since DOM is rebuilt
-            if (_mbObserver) {
-                try {
-                    _mbObserver.disconnect();
-                } catch (e) { /* ignore */ }
-                _mbObserver = null;
+            // Check if the grid already has morning brief cards with real content
+            // (data.js preserves _knowledgeGridHtml when cards exist)
+            const grid = _getGrid();
+            const existingCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-item').length : 0;
+
+            if (existingCards > 0 && _mbInitialized) {
+                // Content was preserved by data.js — keep current state, just re-attach observer
+                console.log(`[MorningBrief] Preserved ${existingCards} items, re-attaching observer`);
+                _mbInFlight = false;
+                if (_mbObserver) {
+                    try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
+                    _mbObserver = null;
+                }
+                if (!_mbFinished) {
+                    _attachObserver();
+                }
+            } else {
+                // No existing content — full reset and reload
+                _mbInFlight = false;
+                _mbFinished = false;
+                _mbOffset = 0;
+                _mbInitialized = false;
+                _mbRetryCount = 0;
+
+                if (_mbObserver) {
+                    try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
+                    _mbObserver = null;
+                }
+
+                setTimeout(() => {
+                    _initialLoad().catch((e) => {
+                        console.error('[MorningBrief] Initial load failed after render:', e);
+                    });
+                }, 50);
             }
-            
-            // Small delay to ensure DOM is fully rendered
-            setTimeout(() => {
-                _initialLoad().catch((e) => {
-                    console.error('[MorningBrief] Initial load failed after render:', e);
-                });
-            }, 50);
         } catch (e) {
             console.error('[MorningBrief] Error in render hook:', e);
         }
