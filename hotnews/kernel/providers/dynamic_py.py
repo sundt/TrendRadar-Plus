@@ -85,7 +85,8 @@ class DynamicPyProvider:
         ALLOWED_MODULES = {
             'requests', 'bs4', 'json', 're', 'datetime', 'time', 
             'math', 'random', 'hashlib', 'base64', 'urllib', 
-            'collections', 'typing', 'lxml', 'html', 'encodings', '__future__'
+            'collections', 'typing', 'lxml', 'html', 'encodings', '__future__',
+            'concurrent', 'string', 'functools', 'itertools', 'operator',
         }
 
         def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
