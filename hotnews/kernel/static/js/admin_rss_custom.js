@@ -1181,7 +1181,8 @@ async function testCustomSource() {
         provider_type: provider,
         config_json: configStr,
         script_content: document.getElementById('edit-custom-script-content').value,
-        use_scraperapi: document.getElementById('edit-custom-use-scraperapi').checked ? 1 : 0
+        use_scraperapi: document.getElementById('edit-custom-use-scraperapi').checked ? 1 : 0,
+        use_socks_proxy: document.getElementById('edit-custom-use-socks-proxy').checked ? 1 : 0
       })
     });
     const data = await res.json();

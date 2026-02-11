@@ -34,6 +34,7 @@ class TestSourceRequest(BaseModel):
     config_json: str
     script_content: Optional[str] = None
     use_scraperapi: Optional[bool] = False
+    use_socks_proxy: Optional[bool] = False
 
 class DetectRequest(BaseModel):
     url: str
@@ -548,6 +549,7 @@ async def test_custom_source(payload: TestSourceRequest, request: Request, _=Dep
              config["script_content"] = payload.script_content
         # Add use_scraperapi to config for test
         config["use_scraperapi"] = payload.use_scraperapi or False
+        config["use_socks_proxy"] = payload.use_socks_proxy or False
     except Exception as e:
         print(f"DEBUG: JSON load failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON config")
