@@ -553,7 +553,8 @@ async function refreshPanelComments(panel, url, title) {
 // ---------------------------------------------------------------------------
 
 function updateCommentBtnBadge(url, count) {
-  document.querySelectorAll(`.news-comment-btn[data-url="${CSS.escape(url)}"]`).forEach(btn => {
+  document.querySelectorAll('.news-comment-btn[data-url]').forEach(btn => {
+    if (btn.dataset.url !== url) return;
     if (count > 0) {
       btn.classList.add('has-comments');
       btn.dataset.count = String(count);
