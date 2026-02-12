@@ -406,6 +406,24 @@ async function _loadTimeline() {
         try {
             TR.readState?.restoreReadState?.();
         } catch (e) { /* ignore */ }
+
+        // Restore scroll position from back-navigation state (WeChat browser)
+        try {
+            const navState = TR.scroll?.peekNavigationState?.() || null;
+            if (navState && navState.activeTab === MORNING_BRIEF_CATEGORY_ID) {
+                console.log('[MorningBrief] Restoring scroll from nav state');
+                TR.scroll.consumeNavigationState();
+                requestAnimationFrame(() => {
+                    TR.scroll.restoreNavigationScrollY(navState);
+                    TR.scroll.restoreActiveTabPlatformGridScroll({
+                        preserveScroll: true,
+                        activeTab: MORNING_BRIEF_CATEGORY_ID,
+                    });
+                });
+            }
+        } catch (e) {
+            console.error('[MorningBrief] Failed to restore scroll:', e);
+        }
     } catch (e) {
         console.error('[MorningBrief] Failed to load timeline:', e);
         // Verify grid still exists
@@ -568,6 +586,7 @@ function _patchRenderHook() {
                 _mbOffset = 0;
                 _mbInitialized = false;
                 _mbRetryCount = 0;
+                _mbLastRefreshAt = 0;
 
                 if (_mbObserver) {
                     try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }

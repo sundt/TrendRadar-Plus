@@ -1125,6 +1125,22 @@ export const data = {
                 state.activeTab = navState.activeTab;
                 // Also write to localStorage so renderViewerFromData picks it up
                 storage.setRaw(TAB_STORAGE_KEY, navState.activeTab);
+
+                // Read saved platform grid scroll from localStorage so Smart Scroll-Aware Loading
+                // hydrates the correct cards near the user's last scroll position.
+                // On full page reload (WeChat back), snapshotViewerState() has no anchor info
+                // because the DOM is fresh. But saveNavigationState() saved it to localStorage.
+                try {
+                    const savedGridScroll = TR.scroll?.getPlatformGridScrollState?.() || {};
+                    const tabScroll = savedGridScroll[navState.activeTab];
+                    if (tabScroll && tabScroll.anchorPlatformId) {
+                        state.activeTabPlatformAnchorPlatformId = tabScroll.anchorPlatformId;
+                        state.activeTabPlatformAnchorOffsetX = tabScroll.anchorOffsetX || 0;
+                        state.activeTabPlatformGridScrollLeft = tabScroll.left || 0;
+                    }
+                } catch (e) {
+                    // ignore
+                }
             }
 
             const response = await fetch('/api/news');
@@ -1146,7 +1162,7 @@ export const data = {
             // - these modules will handle scroll restoration after their content loads
             const navActiveTab = TR.scroll?.peekNavigationState?.()?.activeTab || '';
             const isTopicTab = String(navActiveTab).startsWith('topic-');
-            const isDynamicTab = ['my-tags', 'discovery', 'featured-mps'].includes(navActiveTab);
+            const isDynamicTab = ['my-tags', 'discovery', 'featured-mps', 'knowledge'].includes(navActiveTab);
             
             if (isTopicTab || isDynamicTab) {
                 // Dynamic tab content not yet loaded - leave nav state for the module to consume
@@ -1154,6 +1170,30 @@ export const data = {
             } else {
                 const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
                 if (consumedNav) {
+                    // Force-hydrate lazy cards near the anchor so scroll restoration works
+                    try {
+                        const savedGridScroll = TR.scroll?.getPlatformGridScrollState?.() || {};
+                        const tabScroll = savedGridScroll[consumedNav.activeTab || state.activeTab];
+                        if (tabScroll?.anchorPlatformId) {
+                            const grid = document.querySelector(`#tab-${consumedNav.activeTab || state.activeTab} .platform-grid`);
+                            if (grid) {
+                                const cards = Array.from(grid.querySelectorAll('.platform-card'));
+                                const anchorIdx = cards.findIndex(c => c.dataset.platform === tabScroll.anchorPlatformId);
+                                if (anchorIdx >= 0) {
+                                    const start = Math.max(0, anchorIdx - 1);
+                                    const end = Math.min(cards.length, anchorIdx + 3);
+                                    for (let i = start; i < end; i++) {
+                                        if (cards[i]?.dataset?.lazy === '1') {
+                                            _hydrateLazyPlatformCard(cards[i]).catch(() => {});
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+
                     const y = Number(consumedNav.scrollY || 0);
                     if (y > 0) {
                         window.scrollTo({ top: y, behavior: 'auto' });
