@@ -1,10 +1,10 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
+import { events } from './events.js';
 
 const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
 const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
-const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const AUTO_REFRESH_INTERVAL_MS = 300000;
 const INITIAL_CARDS = 10; // Load 10 cards initially (500 items) - dynamic like explore
 const MAX_CARDS = 20; // Maximum cards to load (1000 items) to enable caching
@@ -566,94 +566,83 @@ async function _initialLoad() {
 }
 
 function _ensurePolling() {
+    events.on('tab:switched', (detail) => {
+        const cid = String(detail?.categoryId || '').trim();
+        if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
+        // When switching to this tab, attach observer again if needed (observers sometimes disconnect if hidden)
+        if (!_mbFinished) _attachObserver();
+
+        clearTimeout(_tabSwitchDebounceTimer);
+        _tabSwitchDebounceTimer = setTimeout(() => {
+            _refreshTimelineIfNeeded({ force: false }).catch(() => { });
+        }, 120);
+    });
+}
+
+// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+events.on('viewer:rendered', () => {
+    // Cancel any in-flight observer before DOM rebuild
+    if (_mbObserver) {
+        try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
+        _mbObserver = null;
+    }
+
     try {
-        window.addEventListener(TAB_SWITCHED_EVENT, (ev) => {
-            const cid = String(ev?.detail?.categoryId || '').trim();
-            if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
-            // When switching to this tab, attach observer again if needed (observers sometimes disconnect if hidden)
-            if (!_mbFinished) _attachObserver();
+        // Check if the grid already has morning brief cards with real content
+        // (data.js preserves _knowledgeGridHtml when cards exist)
+        const grid = _getGrid();
+        const existingCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-item').length : 0;
 
-            clearTimeout(_tabSwitchDebounceTimer);
-            _tabSwitchDebounceTimer = setTimeout(() => {
-                _refreshTimelineIfNeeded({ force: false }).catch(() => { });
-            }, 120);
-        });
-    } catch (e) { }
-}
-
-function _patchRenderHook() {
-    if (TR.morningBrief && TR.morningBrief._patched === true) return;
-    const orig = TR.data?.renderViewerFromData;
-    if (typeof orig !== 'function') return;
-
-    TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
-        // Cancel any in-flight observer before DOM rebuild
-        if (_mbObserver) {
-            try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
-            _mbObserver = null;
-        }
-
-        orig.call(TR.data, data, state);
-
-        try {
-            // Check if the grid already has morning brief cards with real content
-            // (data.js preserves _knowledgeGridHtml when cards exist)
-            const grid = _getGrid();
-            const existingCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-item').length : 0;
-
-            if (existingCards > 0 && _mbInitialized) {
-                // Content was preserved by data.js — keep current state, just re-attach observer
-                console.log(`[MorningBrief] Preserved ${existingCards} items, re-attaching observer`);
-                _mbInFlight = false;
-                if (!_mbFinished) {
-                    _attachObserver();
-                }
-            } else {
-                // No existing content — full reset and reload
-                console.log('[MorningBrief] No preserved content, scheduling full reload');
-                _mbInFlight = false;
-                _mbFinished = false;
-                _mbOffset = 0;
-                _mbInitialized = false;
-                _mbRetryCount = 0;
-                _mbLastRefreshAt = 0;
-
-                // Use a generation counter to cancel stale loads
-                _mbGeneration = (_mbGeneration || 0) + 1;
-                const gen = _mbGeneration;
-
-                setTimeout(() => {
-                    // Only proceed if no newer generation has been started
-                    if (gen !== _mbGeneration) return;
-                    _initialLoad().catch((e) => {
-                        console.error('[MorningBrief] Initial load failed after render:', e);
-                    });
-                }, 50);
+        if (existingCards > 0 && _mbInitialized) {
+            // Content was preserved by data.js — keep current state, just re-attach observer
+            console.log(`[MorningBrief] Preserved ${existingCards} items, re-attaching observer`);
+            _mbInFlight = false;
+            if (!_mbFinished) {
+                _attachObserver();
             }
-        } catch (e) {
-            console.error('[MorningBrief] Error in render hook:', e);
-        }
-    };
+        } else {
+            // No existing content — full reset and reload
+            console.log('[MorningBrief] No preserved content, scheduling full reload');
+            _mbInFlight = false;
+            _mbFinished = false;
+            _mbOffset = 0;
+            _mbInitialized = false;
+            _mbRetryCount = 0;
+            _mbLastRefreshAt = 0;
 
-    TR.morningBrief = {
-        ...(TR.morningBrief || {}),
-        _patched: true,
-        // Expose refresh method for manual retry
-        refresh: () => _refreshTimelineIfNeeded({ force: true }),
-        // Expose status for debugging
-        getStatus: () => ({
-            inFlight: _mbInFlight,
-            finished: _mbFinished,
-            offset: _mbOffset,
-            initialized: _mbInitialized,
-            retryCount: _mbRetryCount,
-            lastRefreshAt: _mbLastRefreshAt,
-        }),
-    };
-}
+            // Use a generation counter to cancel stale loads
+            _mbGeneration = (_mbGeneration || 0) + 1;
+            const gen = _mbGeneration;
+
+            setTimeout(() => {
+                // Only proceed if no newer generation has been started
+                if (gen !== _mbGeneration) return;
+                _initialLoad().catch((e) => {
+                    console.error('[MorningBrief] Initial load failed after render:', e);
+                });
+            }, 50);
+        }
+    } catch (e) {
+        console.error('[MorningBrief] Error in render hook:', e);
+    }
+});
+
+TR.morningBrief = {
+    ...(TR.morningBrief || {}),
+    // Expose refresh method for manual retry
+    refresh: () => _refreshTimelineIfNeeded({ force: true }),
+    // Expose status for debugging
+    getStatus: () => ({
+        inFlight: _mbInFlight,
+        finished: _mbFinished,
+        offset: _mbOffset,
+        initialized: _mbInitialized,
+        retryCount: _mbRetryCount,
+        lastRefreshAt: _mbLastRefreshAt,
+    }),
+};
 
 ready(function () {
-    _patchRenderHook();
     _initialLoad().catch(() => { });
     _ensurePolling();
 });

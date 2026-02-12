@@ -7,6 +7,7 @@
 
 import { formatNewsDate } from './core.js';
 import { authState } from './auth-state.js';
+import { events } from './events.js';
 
 const MY_TAGS_CATEGORY_ID = 'my-tags';
 const MY_TAGS_CACHE_KEY = 'hotnews_my_tags_cache';
@@ -518,47 +519,26 @@ function handleTabSwitch(categoryId) {
     }
 }
 
-/**
- * Patch TR.data.renderViewerFromData to reset my-tags state after DOM re-render
- * and bump generation counter so scroll restore only happens after rebuild.
- */
-function _patchRenderHook() {
-    if (window._myTagsRenderPatched) return;
-    
-    const tryPatch = () => {
-        const orig = window.TR?.data?.renderViewerFromData;
-        if (typeof orig !== 'function') {
-            setTimeout(tryPatch, 100);
-            return;
-        }
-        
-        window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
-            orig.call(window.TR.data, data, state);
-            try {
-                console.log('[MyTags] renderViewerFromData called, resetting state, bumping gen');
-                _myTagsGeneration++;
-                myTagsLoaded = false;
-                myTagsLoading = false;
-                
-                // If my-tags tab is active, reload
-                setTimeout(() => {
-                    const activePane = document.querySelector('#tab-my-tags.active');
-                    if (activePane) {
-                        console.log('[MyTags] Tab is active after re-render, loading...');
-                        loadMyTags();
-                    }
-                }, 100);
-            } catch (e) {
-                console.error('[MyTags] renderViewerFromData patch error:', e);
+// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+events.on('viewer:rendered', () => {
+    try {
+        console.log('[MyTags] viewer:rendered event, resetting state, bumping gen');
+        _myTagsGeneration++;
+        myTagsLoaded = false;
+        myTagsLoading = false;
+
+        // If my-tags tab is active, reload
+        setTimeout(() => {
+            const activePane = document.querySelector('#tab-my-tags.active');
+            if (activePane) {
+                console.log('[MyTags] Tab is active after re-render, loading...');
+                loadMyTags();
             }
-        };
-        
-        window._myTagsRenderPatched = true;
-        console.log('[MyTags] renderViewerFromData patched');
-    };
-    
-    tryPatch();
-}
+        }, 100);
+    } catch (e) {
+        console.error('[MyTags] viewer:rendered handler error:', e);
+    }
+});
 
 /**
  * Initialize the module
@@ -596,9 +576,9 @@ function init() {
     });
 
     // Listen for tab switch events
-    window.addEventListener('tr_tab_switched', (event) => {
-        const categoryId = event?.detail?.categoryId;
-        console.log('[MyTags] tr_tab_switched event received, categoryId:', categoryId);
+    events.on('tab:switched', (detail) => {
+        const categoryId = detail?.categoryId;
+        console.log('[MyTags] tab:switched event received, categoryId:', categoryId);
         if (categoryId) {
             handleTabSwitch(categoryId);
         }
@@ -684,9 +664,6 @@ function init() {
 
     // Attach observer after a short delay to ensure DOM is ready
     setTimeout(observeTabActivation, 100);
-
-    // Patch renderViewerFromData to reset state and bump generation when DOM is rebuilt
-    _patchRenderHook();
 
     // Check if my-tags is the default active tab and load after authState is ready
     const loadIfActiveTab = async () => {

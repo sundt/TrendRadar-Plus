@@ -1,5 +1,6 @@
 import { TR, ready, formatNewsDate, escapeHtml } from './core.js';
 import { storage } from './storage.js';
+import { events } from './events.js';
 
 const STEP = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
 const ROOT_MARGIN = '240px 0px 240px 0px';
@@ -629,8 +630,8 @@ ready(function () {
     }, 3000);
 
     // Listen for tab switches to mark new categories as viewed
-    window.addEventListener('tr_tab_switched', (ev) => {
-        const categoryId = String(ev?.detail?.categoryId || '').trim();
+    events.on('tab:switched', (detail) => {
+        const categoryId = String(detail?.categoryId || '').trim();
         if (categoryId) {
             setTimeout(() => markCategoryViewed(categoryId), 2000);
         }

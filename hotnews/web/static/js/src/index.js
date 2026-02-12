@@ -6,6 +6,7 @@
 // 核心模块（必须最先导入）
 import './core.js';
 import './storage.js';
+import './events.js';
 
 // 基础功能模块
 import './counts.js';
@@ -47,6 +48,7 @@ import('./platform-reorder.js');
 import('./subscription.js');
 import('./rss-catalog-preview-parity.js');
 import('./explore-embedded-rss.js');
+import('./topic-tracker.js');
 
 // 初始化模块（必须最后导入）
 import './init.js';

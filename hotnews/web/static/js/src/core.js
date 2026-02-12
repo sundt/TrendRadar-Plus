@@ -10,6 +10,11 @@ export const TR = window.Hotnews = window.Hotnews || {};
 const readyHandlers = [];
 let isReady = false;
 
+/**
+ * Register a callback to run when the DOM is ready.
+ * If the DOM is already ready, the handler runs immediately.
+ * @param {() => void} handler
+ */
 export function ready(handler) {
     if (isReady) {
         handler();
@@ -25,7 +30,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// 工具函数
+/**
+ * Escape HTML special characters to prevent XSS.
+ * @param {*} str - Value to escape (coerced to string)
+ * @returns {string}
+ */
 export function escapeHtml(str) {
     return String(str || '')
         .replaceAll('&', '&amp;')
@@ -35,6 +44,12 @@ export function escapeHtml(str) {
         .replaceAll("'", '&#39;');
 }
 
+/**
+ * Format an "updated at" timestamp for display.
+ * Converts "YYYY-MM-DD HH:MM:SS" to "MM-DD HH:MM".
+ * @param {*} value - Raw timestamp string
+ * @returns {string}
+ */
 export function formatUpdatedAt(value) {
     const raw = (value == null) ? '' : String(value).trim();
     if (!raw) return raw;
@@ -260,7 +275,20 @@ function _renderToast(el, message, variant) {
     el.innerHTML = `${prefix}<div class="tr-toast-msg">${escapeHtml(message || '')}</div>`;
 }
 
+/**
+ * @typedef {Object} ToastOptions
+ * @property {'info'|'loading'|'success'|'error'} [variant='info']
+ * @property {number} [durationMs=0] - Auto-hide after ms (0 = manual hide)
+ */
+
+/** Toast notification system */
 TR.toast = {
+    /**
+     * Show a toast notification.
+     * @param {string} message
+     * @param {ToastOptions} [opts]
+     * @returns {string} Toast ID for update/hide
+     */
     show(message, opts = {}) {
         const id = `toast-${_toastState.nextId++}`;
         const container = _getToastContainer();
@@ -286,6 +314,12 @@ TR.toast = {
         }
         return id;
     },
+    /**
+     * Update an existing toast's message and variant.
+     * @param {string} id - Toast ID from show()
+     * @param {string} message
+     * @param {ToastOptions} [opts]
+     */
     update(id, message, opts = {}) {
         const item = _toastState.items.get(String(id || ''));
         if (!item) return;
@@ -301,6 +335,10 @@ TR.toast = {
             }, durationMs);
         }
     },
+    /**
+     * Hide and remove a toast.
+     * @param {string} id - Toast ID from show()
+     */
     hide(id) {
         const item = _toastState.items.get(String(id || ''));
         if (!item) return;

@@ -5,6 +5,7 @@
  */
 
 import { formatNewsDate } from './core.js';
+import { events } from './events.js';
 
 const FEATURED_MPS_CATEGORY_ID = 'featured-mps';
 const FEATURED_MPS_CACHE_KEY = 'hotnews_featured_mps_cache';
@@ -332,45 +333,24 @@ function handleTabSwitch(categoryId) {
     }
 }
 
-/**
- * Patch TR.data.renderViewerFromData to reset featured-mps state after DOM re-render
- * and bump generation counter so scroll restore only happens after rebuild.
- */
-function _patchRenderHook() {
-    if (window._featuredMpsRenderPatched) return;
-    
-    const tryPatch = () => {
-        const orig = window.TR?.data?.renderViewerFromData;
-        if (typeof orig !== 'function') {
-            setTimeout(tryPatch, 100);
-            return;
-        }
-        
-        window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
-            orig.call(window.TR.data, data, state);
-            try {
-                console.log('[FeaturedMPs] renderViewerFromData called, resetting state, bumping gen');
-                resetLoadedState();
-                
-                // If featured-mps tab is active, reload
-                setTimeout(() => {
-                    const activePane = document.querySelector('#tab-featured-mps.active');
-                    if (activePane) {
-                        console.log('[FeaturedMPs] Tab is active after re-render, loading...');
-                        loadFeaturedMps();
-                    }
-                }, 100);
-            } catch (e) {
-                console.error('[FeaturedMPs] renderViewerFromData patch error:', e);
+// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+events.on('viewer:rendered', () => {
+    try {
+        console.log('[FeaturedMPs] viewer:rendered event, resetting state, bumping gen');
+        resetLoadedState();
+
+        // If featured-mps tab is active, reload
+        setTimeout(() => {
+            const activePane = document.querySelector('#tab-featured-mps.active');
+            if (activePane) {
+                console.log('[FeaturedMPs] Tab is active after re-render, loading...');
+                loadFeaturedMps();
             }
-        };
-        
-        window._featuredMpsRenderPatched = true;
-        console.log('[FeaturedMPs] renderViewerFromData patched');
-    };
-    
-    tryPatch();
-}
+        }, 100);
+    } catch (e) {
+        console.error('[FeaturedMPs] viewer:rendered handler error:', e);
+    }
+});
 
 /**
  * Initialize the module
@@ -379,8 +359,8 @@ function init() {
     console.log('[FeaturedMPs] Initializing module...');
 
     // Listen for tab switch events
-    window.addEventListener('tr_tab_switched', (event) => {
-        const categoryId = event?.detail?.categoryId;
+    events.on('tab:switched', (detail) => {
+        const categoryId = detail?.categoryId;
         if (categoryId) {
             handleTabSwitch(categoryId);
         }
@@ -446,9 +426,6 @@ function init() {
     };
 
     setTimeout(observeTabActivation, 100);
-
-    // Patch renderViewerFromData to reset state and reload when DOM is rebuilt
-    _patchRenderHook();
 
     console.log('[FeaturedMPs] Module initialized');
 }

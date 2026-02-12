@@ -6,6 +6,7 @@
 import { TR, ready } from './core.js';
 import { storage } from './storage.js';
 import { authState } from './auth-state.js';
+import { events } from './events.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const VIEWER_POS_STORAGE_KEY = 'hotnews_viewer_pos_v1';
@@ -195,6 +196,7 @@ export const tabs = {
     TAB_STORAGE_KEY,
 
     switchTab(categoryId) {
+        const prevCategoryId = this.getActiveTabId();
         TR.badges.dismissNewCategoryBadge(categoryId);
         document.body.classList.toggle('tr-rss-reading', String(categoryId) === 'rsscol-rss');
         const escapedCategoryId = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(String(categoryId)) : String(categoryId);
@@ -236,10 +238,7 @@ export const tabs = {
         // Memory optimization: clean up inactive tabs after a short delay
         setTimeout(() => _cleanupInactiveTabs(categoryId), 500);
 
-        try {
-            window.dispatchEvent(new CustomEvent(TAB_SWITCHED_EVENT, { detail: { categoryId, hasUpdate } }));
-        } catch (e) {
-        }
+        events.emit('tab:switched', { categoryId, prevCategoryId, hasUpdate });
 
         _persistViewerPos(categoryId, window.scrollY || 0);
 

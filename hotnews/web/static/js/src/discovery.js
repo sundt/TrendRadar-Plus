@@ -6,6 +6,7 @@
  */
 
 import { formatNewsDate } from './core.js';
+import { events } from './events.js';
 
 const DISCOVERY_CATEGORY_ID = 'discovery';
 const DISCOVERY_CACHE_KEY = 'hotnews_discovery_cache';
@@ -371,9 +372,9 @@ function init() {
     console.log('[Discovery] Initializing module...');
 
     // Listen for tab switch events
-    window.addEventListener('tr_tab_switched', (event) => {
-        const categoryId = event?.detail?.categoryId;
-        console.log('[Discovery] tr_tab_switched event received, categoryId:', categoryId);
+    events.on('tab:switched', (detail) => {
+        const categoryId = detail?.categoryId;
+        console.log('[Discovery] tab:switched event received, categoryId:', categoryId);
         if (categoryId) {
             handleTabSwitch(categoryId);
         }
@@ -468,54 +469,29 @@ function init() {
 
     setTimeout(observeTabActivation, 100);
 
-    // Patch renderViewerFromData to reset state when DOM is re-rendered
-    _patchRenderHook();
-
     console.log('[Discovery] Module initialized');
 }
 
-/**
- * Patch TR.data.renderViewerFromData to reset discovery state after DOM re-render
- */
-function _patchRenderHook() {
-    if (window._discoveryRenderPatched) return;
-    
-    // Wait for TR.data to be available
-    const tryPatch = () => {
-        const orig = window.TR?.data?.renderViewerFromData;
-        if (typeof orig !== 'function') {
-            setTimeout(tryPatch, 100);
-            return;
-        }
-        
-        window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
-            orig.call(window.TR.data, data, state);
-            try {
-                // Reset discovery state and bump generation after DOM re-render
-                console.log('[Discovery] renderViewerFromData called, resetting state, bumping gen');
-                _discoveryGeneration++;
-                discoveryLoaded = false;
-                discoveryLoading = false;
-                
-                // If discovery tab is active, reload
-                setTimeout(() => {
-                    const activePane = document.querySelector('#tab-discovery.active');
-                    if (activePane) {
-                        console.log('[Discovery] Tab is active after re-render, loading...');
-                        loadDiscovery();
-                    }
-                }, 100);
-            } catch (e) {
-                console.error('[Discovery] renderViewerFromData patch error:', e);
+// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+events.on('viewer:rendered', () => {
+    try {
+        console.log('[Discovery] viewer:rendered event, resetting state, bumping gen');
+        _discoveryGeneration++;
+        discoveryLoaded = false;
+        discoveryLoading = false;
+
+        // If discovery tab is active, reload
+        setTimeout(() => {
+            const activePane = document.querySelector('#tab-discovery.active');
+            if (activePane) {
+                console.log('[Discovery] Tab is active after re-render, loading...');
+                loadDiscovery();
             }
-        };
-        
-        window._discoveryRenderPatched = true;
-        console.log('[Discovery] renderViewerFromData patched');
-    };
-    
-    tryPatch();
-}
+        }, 100);
+    } catch (e) {
+        console.error('[Discovery] viewer:rendered handler error:', e);
+    }
+});
 
 // Export for global access
 if (typeof window !== 'undefined') {

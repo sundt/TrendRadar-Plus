@@ -2,10 +2,13 @@
  * Topic Tracker - Frontend logic for topic tracking feature
  */
 
-(function() {
-    'use strict';
+import { escapeHtml, ready, TR } from './core.js';
+import { authState } from './auth-state.js';
+import { events } from './events.js';
+import { tabs } from './tabs.js';
+import { scroll } from './scroll.js';
 
-    // State
+// State
     let topics = [];
     let currentEditTopic = null;
     let generatedData = null; // { icon, keywords, recommended_sources }
@@ -47,7 +50,7 @@
      */
     function validateTopicTabsOwnership() {
         // Get current user ID from auth state
-        const currentUser = window.authState?.getUser?.();
+        const currentUser = authState.getUser?.();
         const currentUserId = currentUser?.id;
         
         // Find ALL topic tabs (both server-rendered and dynamically created)
@@ -125,10 +128,10 @@
         loadAndRenderTopicTabs();
         addNewTopicButton();
         
-        // Listen for tab switch events (like my-tags.js does)
-        window.addEventListener('tr_tab_switched', (event) => {
-            const categoryId = event?.detail?.categoryId;
-            console.log('[TopicTracker] tr_tab_switched event received, categoryId:', categoryId);
+        // Listen for tab switch events
+        events.on('tab:switched', (detail) => {
+            const categoryId = detail?.categoryId;
+            console.log('[TopicTracker] tab:switched event received, categoryId:', categoryId);
             if (categoryId && String(categoryId).startsWith('topic-')) {
                 const topicId = String(categoryId).replace('topic-', '');
                 console.log('[TopicTracker] Topic tab switched, loading:', topicId);
@@ -137,8 +140,8 @@
         });
         
         // Listen for viewer data rendered event to setup topic tab listeners
-        document.addEventListener('viewerDataRendered', () => {
-            console.log('[TopicTracker] viewerDataRendered event received, resetting states and setting up listeners...');
+        events.on('viewer:rendered', () => {
+            console.log('[TopicTracker] viewer:rendered event received, resetting states and setting up listeners...');
             // Bump generation so scroll restore works after DOM rebuild
             _topicGeneration++;
             console.log('[TopicTracker] Generation bumped to:', _topicGeneration);
@@ -200,9 +203,9 @@
     async function loadAndRenderTopicTabs() {
         // Wait for authState to be available and initialized (may be async)
         try {
-            if (window.authState && typeof window.authState.init === 'function' && !window.authState.initialized) {
+            if (!authState.initialized) {
                 console.log('[TopicTracker] Waiting for authState to initialize...');
-                await window.authState.init();
+                await authState.init();
             }
         } catch (e) {
             console.warn('[TopicTracker] authState init failed:', e);
@@ -273,9 +276,7 @@
                     console.log(`[TopicTracker] Restoring to topic tab: ${savedTab}`);
                     
                     // 切换到该 tab
-                    if (typeof window.switchTab === 'function') {
-                        window.switchTab(savedTab);
-                    }
+                    tabs.switchTab(savedTab);
                     
                     // Scroll restoration will happen after topic news loads
                     // (see loadTopicNews completion handler)
@@ -286,13 +287,11 @@
                     
                     // Also consume any pending navigation state to prevent stale restores
                     try {
-                        window.TR?.scroll?.consumeNavigationState?.();
+                        scroll.consumeNavigationState?.();
                     } catch (e) {}
                     
                     // 切换到我的关注或第一个可用的 tab
-                    if (typeof window.switchTab === 'function') {
-                        window.switchTab('my-tags');
-                    }
+                    tabs.switchTab('my-tags');
                 }
             }
         } catch (e) {
@@ -367,9 +366,7 @@
             tab.dataset.category = categoryId;
             tab.draggable = false;
             tab.onclick = () => {
-                if (typeof window.switchTab === 'function') {
-                    window.switchTab(categoryId);
-                }
+                tabs.switchTab(categoryId);
             };
             tab.innerHTML = `
                 <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
@@ -746,9 +743,7 @@
                     } catch (e) {}
                     
                     // 切换到我的关注
-                    if (typeof window.switchTab === 'function') {
-                        window.switchTab('my-tags');
-                    }
+                    tabs.switchTab('my-tags');
                     
                     state.loading = false;
                     return;
@@ -768,17 +763,15 @@
                 // (generation > 0), not the initial page load which may be stale.
                 if (_topicGeneration > 0 || window._trNoRebuildExpected) {
                     try {
-                        if (window.TR?.scroll) {
-                            const navState = window.TR.scroll.peekNavigationState?.() || null;
-                            const categoryId = `topic-${topicId}`;
-                            if (navState && navState.activeTab === categoryId) {
-                                console.log(`[TopicTracker] Restoring navigation scroll after topic news loaded (gen: ${_topicGeneration}): ${categoryId}`);
-                                const consumed = window.TR.scroll.consumeNavigationState();
-                                requestAnimationFrame(() => {
-                                    window.TR.scroll.restoreNavigationScrollY(consumed || navState);
-                                    window.TR.scroll.restoreNavGridScroll(consumed || navState);
-                                });
-                            }
+                        const navState = scroll.peekNavigationState?.() || null;
+                        const categoryId = `topic-${topicId}`;
+                        if (navState && navState.activeTab === categoryId) {
+                            console.log(`[TopicTracker] Restoring navigation scroll after topic news loaded (gen: ${_topicGeneration}): ${categoryId}`);
+                            const consumed = scroll.consumeNavigationState();
+                            requestAnimationFrame(() => {
+                                scroll.restoreNavigationScrollY(consumed || navState);
+                                scroll.restoreNavGridScroll(consumed || navState);
+                            });
                         }
                     } catch (e) {
                         console.error('[TopicTracker] Failed to restore scroll after news load:', e);
@@ -1040,11 +1033,7 @@
      */
     function isUserLoggedIn() {
         // Check if authState is available (from auth-state.js module)
-        if (window.authState && typeof window.authState.getUser === 'function') {
-            return !!window.authState.getUser();
-        }
-        // Fallback: check for session cookie
-        return document.cookie.includes('hotnews_session=');
+        return !!authState.getUser();
     }
     
     /**
@@ -3096,16 +3085,14 @@
                 } catch (e) {}
                 
                 // 切换到我的关注 tab
-                if (typeof window.switchTab === 'function') {
-                    window.switchTab('my-tags');
-                }
+                tabs.switchTab('my-tags');
                 
                 // 更新本地主题列表
                 topics = topics.filter(t => t.id !== topicId);
                 
                 // 显示成功提示
-                if (window.TR?.toast?.show) {
-                    window.TR.toast.show(`已删除主题「${topic.name}」`, { variant: 'success' });
+                if (TR.toast?.show) {
+                    TR.toast.show(`已删除主题「${topic.name}」`, { variant: 'success' });
                 }
             } else {
                 alert(data.error || '删除失败');
@@ -3116,14 +3103,7 @@
         }
     }
 
-    // Utility functions
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;')
-                  .replace(/</g, '&lt;')
-                  .replace(/>/g, '&gt;')
-                  .replace(/"/g, '&quot;');
-    }
+    // escapeHtml is imported from core.js
 
     function formatDate(timestamp) {
         if (!timestamp) return '';
@@ -3177,9 +3157,4 @@
     };
 
     // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-})();
+    ready(init);

@@ -1,7 +1,6 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 
 const EXPLORE_TAB_ID = 'explore';
-const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
 const MAX_CARDS = 20; // Maximum number of cards to load (prevent infinite loading)
 
@@ -375,50 +374,34 @@ async function _initialLoad() {
 }
 
 function _ensurePolling() {
-    try {
-        window.addEventListener(TAB_SWITCHED_EVENT, (ev) => {
-            const cid = String(ev?.detail?.categoryId || '').trim();
-            const hasUpdate = !!ev?.detail?.hasUpdate;
-            if (cid !== EXPLORE_TAB_ID) return;
-            if (!_exploreFinished) _attachObserver();
-            _refreshTimelineIfNeeded(hasUpdate).catch(() => { });
-        });
-    } catch (e) { }
+    events.on('tab:switched', (detail) => {
+        const cid = String(detail?.categoryId || '').trim();
+        const hasUpdate = !!detail?.hasUpdate;
+        if (cid !== EXPLORE_TAB_ID) return;
+        if (!_exploreFinished) _attachObserver();
+        _refreshTimelineIfNeeded(hasUpdate).catch(() => { });
+    });
 }
 
-function _patchRenderHook() {
-    if (TR.exploreTimeline && TR.exploreTimeline._patched === true) return;
-    const orig = TR.data?.renderViewerFromData;
-    if (typeof orig !== 'function') return;
+import { events } from './events.js';
 
-    TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
-        // Cancel any in-flight observer before DOM rebuild
-        if (_exploreObserver) {
-            try { _exploreObserver.disconnect(); } catch (e) { /* ignore */ }
-            _exploreObserver = null;
-        }
-
-        orig.call(TR.data, data, state);
-
-        try {
-            // Bump generation so scroll restore knows this is a post-rebuild load
-            _exploreGeneration++;
-            _initialized = false;
-            _exploreInFlight = false;
-            _exploreFinished = false;
-            _exploreOffset = 0;
-            _initialLoad().catch(() => { });
-        } catch (e) { }
-    };
-
-    TR.exploreTimeline = {
-        ...(TR.exploreTimeline || {}),
-        _patched: true,
-    };
-}
+// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+events.on('viewer:rendered', () => {
+    // Cancel any in-flight observer before DOM rebuild
+    if (_exploreObserver) {
+        try { _exploreObserver.disconnect(); } catch (e) { /* ignore */ }
+        _exploreObserver = null;
+    }
+    // Bump generation so scroll restore knows this is a post-rebuild load
+    _exploreGeneration++;
+    _initialized = false;
+    _exploreInFlight = false;
+    _exploreFinished = false;
+    _exploreOffset = 0;
+    _initialLoad().catch(() => { });
+});
 
 ready(function () {
-    _patchRenderHook();
     _initialLoad().catch(() => { });
     _ensurePolling();
 });

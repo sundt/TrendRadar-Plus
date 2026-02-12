@@ -5,6 +5,8 @@
 
 import { TR, ready, escapeHtml, formatUpdatedAt, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
+import { renderPlatformCardHtml } from './templates/platform-card.js';
+import { renderRssColPane, renderExplorePane, renderMyTagsPane, renderTopicDynamicPane, renderFeaturedMpsPane, renderDiscoveryPane, renderKnowledgePane } from './templates/tab-panes.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const CATEGORY_PAGE_SIZE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
@@ -34,23 +36,8 @@ function _isCustomCategoryId(catId) {
     }
 }
 
-function _renderPlatformHeaderButtonsHtml(catId, platformId) {
-    const pid = String(platformId || '').trim();
-    const isRss = pid.startsWith('rss-');
-    const canDelete = isRss;
-    const delBtn = canDelete ? '<button type="button" class="tr-platform-card-delete" data-action="delete-platform">−</button>' : '';
-    const hideBtn = !isRss ? '<button type="button" class="tr-platform-card-hide" data-action="hide-platform">🙈</button>' : '';
-    return `${delBtn}${hideBtn}`;
-}
-
-function _renderSkeletonNewsItemsHtml(count) {
-    const n = Math.max(0, Number(count || 0) || 0);
-    let html = '';
-    for (let i = 0; i < n; i++) {
-        html += '<li class="tr-news-skeleton" aria-hidden="true"><div class="tr-news-skeleton-line"></div></li>';
-    }
-    return html;
-}
+// Template functions used via ./templates/platform-card.js (renderPlatformCardHtml)
+// and ./templates/tab-panes.js (renderRssColPane, renderExplorePane, etc.)
 
 function _createNewsLi(n, idx, platformId, platformName) {
     const li = document.createElement('li');
@@ -382,77 +369,14 @@ function _showCenteredConfirmModal(message, okText, cancelText) {
 function _buildPlatformCardElement(categoryId, platformId, platform, state, opts = {}) {
     const catId = String(categoryId || '').trim();
     const pid = String(platformId || '').trim();
-    const p = platform || {};
-
-    const platformName = escapeHtml(p?.name || pid);
-    const platformBadge = p?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(pid)}">NEW</span>` : '';
-    const news = Array.isArray(p?.news) ? p.news : [];
-    const totalCount = news.length;
-    const initialCount = Math.min(totalCount, CATEGORY_PAGE_SIZE);
     const pagingOffset = (pid && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[pid])) ? state.pagingOffsets[pid] : 0;
-    const filteredNews = news.slice(0, initialCount);
 
-    const newsItemsHtml = filteredNews.map((n, idx) => {
-        const stableId = escapeHtml(n?.stable_id || '');
-        const title = escapeHtml(n?.display_title || n?.title || '');
-        const url = escapeHtml(n?.url || '');
-        const meta = escapeHtml(n?.meta || '');
-        const isRssPlatform = String(pid || '').startsWith('rss-');
-        const isCross = !!n?.is_cross_platform;
-        const crossPlatforms = Array.isArray(n?.cross_platforms) ? n.cross_platforms : [];
-        const crossTitle = escapeHtml(crossPlatforms.join(', '));
-        const crossCount = escapeHtml(n?.cross_platform_count ?? '');
-        const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
-        const crossClass = isCross ? 'cross-platform' : '';
-        // 移除内联事件处理器，使用事件委托
-        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" />';
-        const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
-        const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
-        const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
-        const safeHref = url || '#';
-        const dateStr = formatNewsDate(n?.timestamp);
-        
-        // AI indicator dot (breathing purple)
-        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
-        
-        // Actions container (date + summary button + comment button)
-        const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
-        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(pid)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(pid)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
-        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
-        const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
-        
-        // 使用简化的 data 属性，移除内联事件处理器
-        return `
-            <li class="news-item${pagedHidden}" data-id="${stableId}" data-url="${url}">
-                <div class="news-item-content">
-                    ${checkboxHtml}
-                    ${indexHtml}
-                    <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer">
-                        ${title}
-                        ${crossBadge}
-                    </a>
-                    ${aiDotHtml}
-                    ${actionsHtml}
-                </div>
-                ${metaHtml}
-            </li>`;
-    }).join('') || '<li class="news-placeholder" aria-hidden="true">待加载...</li>';
-
-    const headerButtons = _renderPlatformHeaderButtonsHtml(catId, pid);
-    const dragHandle = `<span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>`;
-    const animateIn = opts && opts.animateIn ? ' tr-explore-flip-in' : '';
-
-    const html = `
-        <div class="platform-card${animateIn}" data-platform="${escapeHtml(pid)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" draggable="false">
-            <div class="platform-header">
-                ${dragHandle}
-                <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;" onclick="dismissNewPlatformBadge('${escapeHtml(pid)}')">📱 ${platformName}${platformBadge}</div>
-                <div class="platform-header-actions">${headerButtons}</div>
-            </div>
-            <ul class="news-list">${newsItemsHtml}
-            </ul>
-            <div class="news-load-sentinel" aria-hidden="true"></div>
-        </div>`;
+    const html = renderPlatformCardHtml(catId, pid, platform, {
+        isLazy: false,
+        pageSize: CATEGORY_PAGE_SIZE,
+        pagingOffset,
+        animateIn: !!(opts && opts.animateIn),
+    });
 
     const wrap = document.createElement('div');
     wrap.innerHTML = html.trim();
@@ -755,137 +679,22 @@ export const data = {
 
         const contentHtml = Object.entries(categories).map(([catId, cat]) => {
             const isActiveCategory = !!activeTabId && String(catId) === String(activeTabId);
-            const paneActiveClass = isActiveCategory ? ' active' : '';
 
-            if (String(catId) === 'rsscol-rss') {
-                const btnRow = `
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <div id="rssCategoryCarouselStatus" style="color:#6b7280;font-size:0.85rem;flex:1;min-width:200px;"></div>
-                    </div>`;
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" style="display:flex;flex-direction:column;gap:10px;min-height:0;">
-                        ${btnRow}
-                        <div id="rssCategoryCarouselGrid" style="display:flex;flex-direction:column;gap:10px;min-height:0;"></div>
-                    </div>
-                    <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
-                </div>`;
-            }
+            if (String(catId) === 'rsscol-rss') return renderRssColPane(catId, isActiveCategory);
+            if (String(catId) === 'explore') return renderExplorePane(catId, isActiveCategory);
+            if (String(catId) === 'my-tags') return renderMyTagsPane(catId, isActiveCategory);
 
-            if (String(catId) === 'explore') {
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" id="trExploreGrid"></div>
-                </div>`;
-            }
-
-            // Special handling for my-tags (dynamically loaded)
-            if (String(catId) === 'my-tags') {
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" id="myTagsGrid">
-                        <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                            <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
-                            <div style="font-size:16px;">加载中...</div>
-                        </div>
-                    </div>
-                </div>`;
-            }
-
-            // Special handling for topic categories
-            // If is_dynamic is false, data is pre-loaded, render like normal category
-            // If is_dynamic is true, show loading placeholder
             if (String(catId).startsWith('topic-')) {
-                const topicId = String(catId).replace('topic-', '');
                 const isDynamic = cat?.is_dynamic !== false;
-                
                 if (isDynamic) {
-                    // Dynamic loading mode (legacy)
-                    const keywords = Array.isArray(cat?.keywords) ? cat.keywords : [];
-                    const keywordsHtml = keywords.map(kw => `
-                        <div class="platform-card" data-keyword="${escapeHtml(kw)}">
-                            <div class="platform-header">
-                                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🔍 ${escapeHtml(kw)}</div>
-                            </div>
-                            <ul class="news-list">
-                                <li class="news-placeholder">加载中...</li>
-                            </ul>
-                        </div>
-                    `).join('');
-                    return `
-                    <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                        <div class="platform-grid" id="topicCards-${escapeHtml(topicId)}" data-topic-id="${escapeHtml(topicId)}">
-                            ${keywordsHtml || '<div style="text-align:center;padding:60px 20px;color:#6b7280;">加载中...</div>'}
-                        </div>
-                    </div>`;
+                    return renderTopicDynamicPane(catId, isActiveCategory, Array.isArray(cat?.keywords) ? cat.keywords : []);
                 }
                 // else: fall through to normal rendering with pre-loaded data
             }
 
-            // Special handling for featured-mps (dynamically loaded)
-            if (String(catId) === 'featured-mps') {
-                const wechatSvg = `<svg viewBox="0 0 24 24" fill="#07c160" width="48" height="48"><path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z"/></svg>`;
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" id="featuredMpsGrid">
-                        <div class="featured-mps-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                            <div style="margin-bottom:16px;">${wechatSvg}</div>
-                            <div style="font-size:16px;">加载中...</div>
-                        </div>
-                    </div>
-                </div>`;
-            }
-
-            // Special handling for discovery (dynamically loaded)
-            if (String(catId) === 'discovery') {
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" id="discoveryGrid">
-                        <div class="discovery-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                            <div style="font-size:48px;margin-bottom:16px;">✨</div>
-                            <div style="font-size:16px;">发现中...</div>
-                        </div>
-                    </div>
-                </div>`;
-            }
-
-            if (String(catId) === 'knowledge') {
-                const gridInner = _knowledgeGridHtml || `
-                    <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">
-                        <div class="platform-header">
-                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🕒 最新 1-50</div>
-                            <div class="platform-header-actions"></div>
-                        </div>
-                        <ul class="news-list" data-mb-list="slice1">
-                            <li class="news-placeholder" aria-hidden="true">加载中...</li>
-                        </ul>
-                    </div>
-
-                    <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-2" data-page-size="50" draggable="false">
-                        <div class="platform-header">
-                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">⭐ 最新 51-100</div>
-                            <div class="platform-header-actions"></div>
-                        </div>
-                        <ul class="news-list" data-mb-list="slice2">
-                            <li class="news-placeholder" aria-hidden="true">加载中...</li>
-                        </ul>
-                    </div>
-
-                    <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-3" data-page-size="50" draggable="false">
-                        <div class="platform-header">
-                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🧾 最新 101-150</div>
-                            <div class="platform-header-actions"></div>
-                        </div>
-                        <ul class="news-list" data-mb-list="slice3">
-                            <li class="news-placeholder" aria-hidden="true">加载中...</li>
-                        </ul>
-                    </div>
-                `;
-                return `
-                <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
-                    <div class="platform-grid" data-mb-injected="1">${gridInner}</div>
-                </div>`;
-            }
+            if (String(catId) === 'featured-mps') return renderFeaturedMpsPane(catId, isActiveCategory);
+            if (String(catId) === 'discovery') return renderDiscoveryPane(catId, isActiveCategory);
+            if (String(catId) === 'knowledge') return renderKnowledgePane(catId, isActiveCategory, _knowledgeGridHtml);
 
             const platforms = cat?.platforms || {};
             const orderedIds = Object.keys(platforms || {});
@@ -893,90 +702,25 @@ export const data = {
             // Smart Scroll-Aware Loading: Only hydrate cards near saved position
             const anchorPid = (isActiveCategory && state?.activeTabPlatformAnchorPlatformId) || null;
             const anchorIdx = anchorPid ? orderedIds.indexOf(anchorPid) : -1;
-            const BUFFER_RANGE = 3; // Load anchor ± 3 cards
+            const BUFFER_RANGE = 3;
 
             const platformCards = orderedIds.map((platformId, idx0) => {
                 const platform = platforms?.[platformId];
                 if (!platform) return '';
-                const platformName = escapeHtml(platform?.name || platformId);
-                const platformBadge = platform?.is_new ? `<span class="new-badge new-badge-platform" data-platform="${escapeHtml(platformId)}">NEW</span>` : '';
-                const news = Array.isArray(platform?.news) ? platform.news : [];
-                const totalCount = news.length;
 
-                // Only hydrate cards within range of anchor (or first 3 if no anchor)
                 const shouldHydrate = isActiveCategory && (
                     anchorIdx < 0 ? idx0 < 3 : (idx0 >= anchorIdx - BUFFER_RANGE && idx0 <= anchorIdx + BUFFER_RANGE)
                 );
-
-                const isLazy = !shouldHydrate;
-                const initialCount = shouldHydrate ? Math.min(totalCount, CATEGORY_PAGE_SIZE) : 0;
                 const pagingOffset = (platformId && state?.pagingOffsets && Number.isFinite(state.pagingOffsets[platformId])) ? state.pagingOffsets[platformId] : 0;
-                const filteredNews = news.slice(0, initialCount);
 
-                const newsItemsHtml = isLazy
-                    ? _renderSkeletonNewsItemsHtml(8)
-                    : (filteredNews.map((n, idx) => {
-                        const stableId = escapeHtml(n?.stable_id || '');
-                        const title = escapeHtml(n?.display_title || n?.title || '');
-                        const url = escapeHtml(n?.url || '');
-                        const meta = escapeHtml(n?.meta || '');
-                        const isRssPlatform = String(platformId || '').startsWith('rss-');
-                        const isCross = !!n?.is_cross_platform;
-                        const crossPlatforms = Array.isArray(n?.cross_platforms) ? n.cross_platforms : [];
-                        const crossTitle = escapeHtml(crossPlatforms.join(', '));
-                        const crossCount = escapeHtml(n?.cross_platform_count ?? '');
-                        const crossBadge = isCross ? `<span class="cross-platform-badge" title="同时出现在: ${crossTitle}">🔥 ${crossCount}</span>` : '';
-                        const crossClass = isCross ? 'cross-platform' : '';
-                        // 移除内联事件处理器，使用事件委托
-                        const checkboxHtml = '<input type="checkbox" class="news-checkbox" title="标记已读" />';
-                        const indexHtml = `<span class="news-index">${String(idx + 1)}</span>`;
-                        const pagedHidden = (idx < pagingOffset || idx >= (pagingOffset + CATEGORY_PAGE_SIZE)) ? ' paged-hidden' : '';
-                        const metaHtml = (meta && !isRssPlatform) ? `<div class="news-subtitle">${meta}</div>` : '';
-                        const safeHref = url || '#';
-                        const dateStr = formatNewsDate(n?.timestamp);
-                        
-                        // AI indicator dot
-                        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')"></span>`;
-                        
-                        // Actions container
-                        const dateHtml = dateStr ? `<span class="tr-news-date">${escapeHtml(dateStr)}</span>` : '';
-                        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${escapeHtml(platformId)}" data-source-name="${platformName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${escapeHtml(platformId)}', '${platformName.replace(/'/g, "\\'")}')" ></button>`;
-                        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
-                        const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
-                        
-                        // 使用简化的 data 属性
-                        return `
-                        <li class="news-item${pagedHidden}" data-id="${stableId}" data-url="${url}">
-                            <div class="news-item-content">
-                                ${checkboxHtml}
-                                ${indexHtml}
-                                <a class="news-title ${crossClass}" href="${safeHref}" target="_blank" rel="noopener noreferrer">
-                                    ${title}
-                                    ${crossBadge}
-                                </a>
-                                ${aiDotHtml}
-                                ${actionsHtml}
-                            </div>
-                            ${metaHtml}
-                        </li>`;
-                    }).join(''));
-
-                const headerButtons = _renderPlatformHeaderButtonsHtml(catId, platformId);
-                const dragHandle = `<span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>`;
-
-                return `
-                <div class="platform-card" data-platform="${escapeHtml(platformId)}" data-total-count="${String(totalCount)}" data-loaded-count="${String(initialCount)}" data-lazy="${isLazy ? '1' : '0'}" data-loaded-done="${isLazy ? '0' : '1'}" draggable="false">
-                    <div class="platform-header">
-                        ${dragHandle}
-                        <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; cursor: pointer;" onclick="dismissNewPlatformBadge('${escapeHtml(platformId)}')">📱 ${platformName}${platformBadge}</div>
-                        <div class="platform-header-actions">${headerButtons}</div>
-                    </div>
-                    <ul class="news-list">${newsItemsHtml}
-                    </ul>
-                    <div class="news-load-sentinel" aria-hidden="true"></div>
-                </div>`;
+                return renderPlatformCardHtml(catId, platformId, platform, {
+                    isLazy: !shouldHydrate,
+                    pageSize: CATEGORY_PAGE_SIZE,
+                    pagingOffset,
+                });
             }).filter(Boolean).join('');
 
+            const paneActiveClass = isActiveCategory ? ' active' : '';
             return `
             <div class="tab-pane${paneActiveClass}" id="tab-${escapeHtml(catId)}">
                 <div class="platform-grid">${platformCards}
@@ -1087,13 +831,15 @@ export const data = {
             // ignore
         }
 
-        // Dispatch event for topic-tracker to setup listeners
+        // Dispatch events for modules to respond to render completion
         try {
             // Reset settings cache so topic categories are included
             if (TR.settings && typeof TR.settings.resetDefaultCategoriesCache === 'function') {
                 TR.settings.resetDefaultCategoriesCache();
             }
-            document.dispatchEvent(new CustomEvent('viewerDataRendered'));
+            // Event bus: notify all subscribers that viewer DOM has been rebuilt
+            TR.events.emit('viewer:rendered', data, state);
+            TR.events.emit('viewer:ready');
         } catch (e) {
             // ignore
         }
@@ -1161,6 +907,8 @@ export const data = {
             }
 
             this.renderViewerFromData(baseData, state);
+
+            try { TR.events.emit('data:refreshed', baseData); } catch (_) { }
 
             // Restore scroll position: prefer navigation state (back-nav) over snapshot
             // For dynamic tabs (topic, my-tags, discovery, featured-mps, knowledge):

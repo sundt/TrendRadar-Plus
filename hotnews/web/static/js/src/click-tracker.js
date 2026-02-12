@@ -6,6 +6,7 @@
  * - Reports clicks to backend for analytics
  */
 import { TR, ready, escapeHtml } from './core.js';
+import { events } from './events.js';
 
 // Session start timestamp (in seconds) - set once when page loads
 // This is NOT stored in localStorage, so it resets on refresh
@@ -116,8 +117,8 @@ function attachClickListeners() {
  * Mark category as viewed when switching tabs
  */
 function attachTabSwitchListener() {
-    window.addEventListener('tr_tab_switched', (ev) => {
-        const categoryId = String(ev?.detail?.categoryId || '').trim();
+    events.on('tab:switched', (detail) => {
+        const categoryId = String(detail?.categoryId || '').trim();
         if (categoryId) {
             // Mark as viewed after a short delay (after initial render completes)
             setTimeout(() => {

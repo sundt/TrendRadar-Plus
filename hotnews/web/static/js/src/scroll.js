@@ -12,15 +12,46 @@ const PLATFORM_GRID_SCROLL_STORAGE_KEY = 'hotnews_platform_grid_scroll_v1';
 // causing sessionStorage to be lost on back-navigation.
 const NAV_STATE_KEY = 'hotnews_nav_state_v2';
 
+/**
+ * @typedef {Object} PlatformGridScrollEntry
+ * @property {number} left - scrollLeft value
+ * @property {string|null} anchorPlatformId - Platform ID of the anchor card
+ * @property {number} anchorOffsetX - Offset from anchor card's left edge
+ * @property {number} updatedAt - Timestamp when saved
+ */
+
+/**
+ * @typedef {Object} NavigationState
+ * @property {number} scrollY - Window scroll position
+ * @property {string|null} activeTab - Active tab ID
+ * @property {number} timestamp - When the state was saved
+ * @property {number} [gridScrollLeft] - Platform grid scrollLeft
+ * @property {string} [anchorPlatformId] - Anchor platform card ID
+ * @property {number} [anchorOffsetX] - Offset from anchor card
+ */
+
 export const scroll = {
+    /**
+     * Get all saved platform grid scroll positions.
+     * @returns {Record<string, PlatformGridScrollEntry>}
+     */
     getPlatformGridScrollState() {
         return storage.get(PLATFORM_GRID_SCROLL_STORAGE_KEY, {});
     },
 
+    /**
+     * Save platform grid scroll positions.
+     * @param {Record<string, PlatformGridScrollEntry>} state
+     */
     setPlatformGridScrollState(state) {
         storage.set(PLATFORM_GRID_SCROLL_STORAGE_KEY, state || {});
     },
 
+    /**
+     * Record the current scroll position of a tab's platform grid.
+     * @param {string} tabId
+     * @param {HTMLElement} grid
+     */
     recordPlatformGridScrollForTab(tabId, grid) {
         if (!tabId || !grid) return;
 
@@ -52,6 +83,7 @@ export const scroll = {
         this.setPlatformGridScrollState(state);
     },
 
+    /** Bind scroll event listeners to all platform grids for persistence. */
     attachPlatformGridScrollPersistence() {
         document.querySelectorAll('.tab-pane .platform-grid').forEach((grid) => {
             if (grid.dataset.scrollPersistBound === '1') return;
@@ -76,6 +108,10 @@ export const scroll = {
         });
     },
 
+    /**
+     * Restore platform grid scroll from snapshot state (normal refresh).
+     * @param {{ activeTab?: string, preserveScroll?: boolean, activeTabPlatformGridScrollLeft?: number, activeTabPlatformAnchorPlatformId?: string, activeTabPlatformAnchorOffsetX?: number }} state
+     */
     restoreActiveTabPlatformGridScroll(state) {
         const tabId = state?.activeTab;
         if (!state?.preserveScroll || !tabId) return;
@@ -91,6 +127,7 @@ export const scroll = {
     /**
      * Restore platform grid scroll from navigation state (back-navigation).
      * Force mode: ignores trUserScrolled, uses anchor from nav state.
+     * @param {NavigationState} navState
      */
     restoreNavGridScroll(navState) {
         if (!navState || !navState.activeTab) return;
@@ -113,6 +150,10 @@ export const scroll = {
 
     /**
      * Internal: apply grid scroll with retry logic.
+     * @param {string} tabId
+     * @param {string|null} anchorId
+     * @param {number} offsetX
+     * @param {number} left
      * @param {boolean} force - if true, ignores trUserScrolled flag
      */
     _applyGridScroll(tabId, anchorId, offsetX, left, force) {
@@ -213,7 +254,8 @@ export const scroll = {
 
     /**
      * Retrieve and consume saved navigation state.
-     * Returns the state object or null if none/expired.
+     * Returns the state object or null if none/expired (5 min TTL).
+     * @returns {NavigationState|null}
      */
     consumeNavigationState() {
         try {
@@ -233,6 +275,7 @@ export const scroll = {
 
     /**
      * Peek at saved navigation state without consuming it.
+     * @returns {NavigationState|null}
      */
     peekNavigationState() {
         try {
@@ -250,6 +293,7 @@ export const scroll = {
 
     /**
      * Restore scrollY from saved navigation state.
+     * @param {NavigationState} navState
      */
     restoreNavigationScrollY(navState) {
         if (!navState) return;
@@ -268,16 +312,19 @@ export const scroll = {
         setTimeout(doRestore, 500);
     },
 
+    /** Temporarily disable scroll-snap on body. */
     pauseScrollSnap() {
         document.body.classList.add('tr-snap-paused');
     },
 
+    /** Re-enable scroll-snap on body after a short delay. */
     resumeScrollSnap() {
         setTimeout(() => {
             document.body.classList.remove('tr-snap-paused');
         }, 100);
     },
 
+    /** Set up visibility/beforeunload/pageshow handlers for scroll state persistence. */
     setupVisibilityScrollFix() {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
