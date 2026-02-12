@@ -108,6 +108,22 @@ async function _fetchTimelineBatch(limit, offset) {
 function _appendCard(items, cardIndex, container) {
     if (!items || !items.length) return;
 
+    const card = _buildCard(items, cardIndex);
+
+    const sentinel = container.querySelector('#explore-load-sentinel');
+    if (sentinel) {
+        container.insertBefore(card, sentinel);
+    } else {
+        container.appendChild(card);
+    }
+}
+
+function _appendCardToFragment(items, cardIndex, fragment) {
+    if (!items || !items.length) return;
+    fragment.appendChild(_buildCard(items, cardIndex));
+}
+
+function _buildCard(items, cardIndex) {
     const card = document.createElement('div');
     card.className = 'platform-card tr-explore-card';
     card.style.minWidth = '360px';
@@ -135,12 +151,7 @@ function _appendCard(items, cardIndex, container) {
         el.textContent = String(displayStart + i);
     });
 
-    const sentinel = container.querySelector('#explore-load-sentinel');
-    if (sentinel) {
-        container.insertBefore(card, sentinel);
-    } else {
-        container.appendChild(card);
-    }
+    return card;
 }
 
 function _createSentinel(container) {
@@ -284,10 +295,21 @@ async function _loadTimeline() {
         return;
     }
 
+    // Batch insert initial cards using DocumentFragment to minimize reflow.
+    // This is important for scroll restore accuracy — individual insertBefore
+    // calls trigger reflow per card, causing offsetLeft to be unstable during
+    // the retry window of _applyGridScroll.
+    const fragment = document.createDocumentFragment();
     for (let i = 0; i < items.length; i += limit) {
         const chunk = items.slice(i, i + limit);
         const cardIndex = Math.floor(i / limit);
-        _appendCard(chunk, cardIndex, grid);
+        _appendCardToFragment(chunk, cardIndex, fragment);
+    }
+    const sentinel = grid.querySelector('#explore-load-sentinel');
+    if (sentinel) {
+        grid.insertBefore(fragment, sentinel);
+    } else {
+        grid.appendChild(fragment);
     }
 
     _exploreOffset = items.length;

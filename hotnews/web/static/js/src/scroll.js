@@ -120,34 +120,48 @@ export const scroll = {
 
         const applyOnce = () => {
             const grid = document.querySelector(`#tab-${tabId} .platform-grid`);
-            if (!grid) return;
+            if (!grid) return false;
 
-            if (!force && grid.dataset.trUserScrolled === '1') return;
+            if (!force && grid.dataset.trUserScrolled === '1') return false;
+
+            // Temporarily disable scroll-snap and smooth behavior
+            // so programmatic scrollLeft assignment takes effect immediately
+            // without being overridden by snap alignment or animated smoothly.
+            const origSnapType = grid.style.scrollSnapType;
+            const origBehavior = grid.style.scrollBehavior;
+            grid.style.scrollSnapType = 'none';
+            grid.style.scrollBehavior = 'auto';
+
+            let applied = false;
 
             if (anchorId) {
-                let anchorCard = null;
-                grid.querySelectorAll('.platform-card').forEach((card) => {
-                    if (!anchorCard && card.dataset.platform === anchorId) {
-                        anchorCard = card;
-                    }
-                });
+                const anchorCard = grid.querySelector(`.platform-card[data-platform="${anchorId}"]`);
                 if (anchorCard && anchorCard.offsetParent !== null) {
                     grid.dataset.trRestoring = '1';
                     grid.scrollLeft = (anchorCard.offsetLeft || 0) + offsetX;
-                    requestAnimationFrame(() => {
-                        try { delete grid.dataset.trRestoring; } catch (_) { }
-                    });
-                    return;
+                    applied = true;
                 }
             }
 
-            if (left > 0) {
+            if (!applied && left > 0) {
                 grid.dataset.trRestoring = '1';
                 grid.scrollLeft = left;
+                applied = true;
+            }
+
+            if (applied) {
+                // Delay restoring scroll-snap to ensure scrollLeft has taken effect
                 requestAnimationFrame(() => {
+                    grid.style.scrollSnapType = origSnapType;
+                    grid.style.scrollBehavior = origBehavior;
                     try { delete grid.dataset.trRestoring; } catch (_) { }
                 });
+            } else {
+                grid.style.scrollSnapType = origSnapType;
+                grid.style.scrollBehavior = origBehavior;
             }
+
+            return applied;
         };
 
         requestAnimationFrame(() => {
@@ -156,6 +170,8 @@ export const scroll = {
                 setTimeout(applyOnce, 50);
                 setTimeout(applyOnce, 200);
                 setTimeout(applyOnce, 600);
+                setTimeout(applyOnce, 1200);
+                setTimeout(applyOnce, 2000);
             });
         });
     },
