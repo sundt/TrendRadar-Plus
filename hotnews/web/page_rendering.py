@@ -484,6 +484,8 @@ def _get_asset_rev(project_root) -> str:
         static_dir / "js" / "index.js",
         static_dir / "css" / "topic-tracker.css",
         static_dir / "js" / "topic-tracker.js",
+        static_dir / "css" / "mobile-enhance.css",
+        static_dir / "js" / "src" / "mobile-enhance.js",
     ]
 
     h = hashlib.md5()

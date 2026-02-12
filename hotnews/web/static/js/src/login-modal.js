@@ -25,8 +25,9 @@ function isWeChatBrowser() {
  * Open the login modal
  */
 function openLoginModal() {
-    // If in WeChat browser, redirect to WeChat OAuth directly
-    if (isWeChatBrowser()) {
+    // If in WeChat browser AND on a proper domain (not IP), redirect to WeChat OAuth directly
+    const isProperDomain = !/^(\d{1,3}\.){3}\d{1,3}/.test(window.location.hostname) && window.location.hostname !== 'localhost';
+    if (isWeChatBrowser() && isProperDomain) {
         window.location.href = '/api/auth/oauth/wechat-mp';
         return;
     }

@@ -4444,6 +4444,37 @@
     background: #f8fafc;
 }
 
+/* Tab Bar */
+.favorites-tab-bar {
+    display: flex;
+    padding: 0 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #fff;
+}
+
+.favorites-tab-btn {
+    flex: 1;
+    padding: 10px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #94a3b8;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+    text-align: center;
+}
+
+.favorites-tab-btn:hover {
+    color: #64748b;
+}
+
+.favorites-tab-btn.active {
+    color: var(--primary-color, #4f46e5);
+    border-bottom-color: var(--primary-color, #4f46e5);
+}
+
 .favorites-loading,
 .favorites-empty,
 .favorites-login-required {
@@ -4612,25 +4643,49 @@
 
 /* News item favorite button */
 .news-favorite-btn {
-    background: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    color: white;
     border: none;
-    color: #9ca3af;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
     cursor: pointer;
-    padding: 2px 4px;
-    font-size: 14px;
-    line-height: 1;
-    opacity: 0.6;
-    transition: opacity 0.2s, color 0.2s, transform 0.2s;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
 }
 
-.news-favorite-btn:hover {
-    opacity: 1;
-    transform: scale(1.1);
+.news-favorite-btn::before {
+    content: "☆";
 }
 
 .news-favorite-btn.favorited {
-    color: #fbbf24;
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
     opacity: 1;
+    pointer-events: auto;
+}
+
+.news-favorite-btn.favorited::before {
+    content: "★";
+}
+
+/* Desktop: hover to show */
+@media (hover: hover) {
+    .news-item:hover .news-favorite-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Mobile: tap to expand */
+.news-item.expanded .news-favorite-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 /* Mobile responsive for favorites panel */

@@ -17,6 +17,7 @@ const MAX_PANEL_WIDTH = 800;
 let favoritesCache = null;
 let isPanelOpen = false;
 let isResizing = false;
+let activeTab = 'summary'; // 'summary' | 'bookmarks'
 
 /**
  * Get favorites from local storage (for non-logged-in users or as cache)
@@ -162,7 +163,6 @@ async function toggleFavorite(newsItem, button) {
     // Optimistic UI update
     if (button) {
         button.classList.toggle('favorited', !wasFavorited);
-        button.textContent = wasFavorited ? '☆' : '★';
     }
     
     let result;
@@ -176,7 +176,6 @@ async function toggleFavorite(newsItem, button) {
         // Revert on failure
         if (button) {
             button.classList.toggle('favorited', wasFavorited);
-            button.textContent = wasFavorited ? '★' : '☆';
         }
     }
     
@@ -249,6 +248,51 @@ function renderFavoritesList(favorites) {
                                 </button>
                             </div>
                         ` : ''}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    body.innerHTML = html;
+}
+
+/**
+ * Render bookmarks list (收藏 Tab) — links only, no summaries
+ */
+function renderBookmarksList(favorites) {
+    const body = document.getElementById('favoritesPanelBody');
+    if (!body) return;
+
+    if (!favorites || favorites.length === 0) {
+        body.innerHTML = `
+            <div class="favorites-empty">
+                <div class="favorites-empty-icon">☆</div>
+                <div>暂无收藏</div>
+                <div style="font-size:12px;margin-top:8px;color:#64748b;">
+                    点击新闻标题旁的 ☆ 添加收藏
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const html = `
+        <div class="favorites-list">
+            ${favorites.map(f => `
+                <div class="favorite-item" data-news-id="${f.news_id}">
+                    <a class="favorite-item-title" href="${f.url || '#'}" target="_blank" rel="noopener noreferrer">
+                        ${f.title || '无标题'}
+                    </a>
+                    <div class="favorite-item-meta">
+                        <span class="favorite-item-source">
+                            ${f.source_name ? `<span>${f.source_name}</span>` : ''}
+                            ${f.created_at ? `<span>收藏于 ${formatFavoriteDate(f.created_at)}</span>` : ''}
+                        </span>
+                        <div class="favorite-item-actions">
+                            <button class="favorite-remove-btn" onclick="removeFavoriteFromPanel('${f.news_id}')" title="取消收藏">
+                                删除
+                            </button>
+                        </div>
                     </div>
                 </div>
             `).join('')}
@@ -345,7 +389,32 @@ async function loadFavoritesPanel() {
         return;
     }
     
-    renderFavoritesList(result.favorites);
+    if (activeTab === 'bookmarks') {
+        renderBookmarksList(result.favorites);
+    } else {
+        // "总结" Tab: only show items that have a summary
+        const withSummary = (result.favorites || []).filter(f => f.summary);
+        renderFavoritesList(withSummary);
+    }
+}
+
+/**
+ * Initialize tab switching in favorites panel
+ */
+function initTabSwitching() {
+    const tabBar = document.querySelector('.favorites-tab-bar');
+    if (!tabBar) return;
+    tabBar.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-tab]');
+        if (!btn) return;
+        const tab = btn.dataset.tab;
+        if (tab === activeTab) return;
+        activeTab = tab;
+        tabBar.querySelectorAll('.favorites-tab-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.tab === activeTab)
+        );
+        loadFavoritesPanel();
+    });
 }
 
 /**
@@ -414,7 +483,6 @@ async function removeFavoriteFromPanel(newsId) {
         const btn = document.querySelector(`.news-favorite-btn[data-news-id="${newsId}"]`);
         if (btn) {
             btn.classList.remove('favorited');
-            btn.textContent = '☆';
         }
         // Check if list is now empty
         const list = document.querySelector('.favorites-list');
@@ -629,15 +697,73 @@ function initFavoriteButtonDelegation() {
     });
 }
 
+/**
+ * Inject favorite buttons (☆/★) into all news items
+ * Uses MutationObserver to handle dynamically added items
+ */
+function injectFavoriteButtons() {
+    // Inject into existing items
+    _injectButtonsIntoContainer(document);
+
+    // Watch for dynamically added news items
+    const observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                // If the added node is a news-item or contains news-items
+                if (node.classList?.contains('news-item')) {
+                    _injectButtonIntoItem(node);
+                } else if (node.querySelectorAll) {
+                    _injectButtonsIntoContainer(node);
+                }
+            }
+        }
+    });
+
+    // Observe the main content area
+    const contentArea = document.querySelector('.tab-content-area') || document.body;
+    observer.observe(contentArea, { childList: true, subtree: true });
+}
+
+function _injectButtonsIntoContainer(container) {
+    const items = container.querySelectorAll('.news-item');
+    items.forEach(item => _injectButtonIntoItem(item));
+}
+
+function _injectButtonIntoItem(item) {
+    // Skip if already has a favorite button
+    if (item.querySelector('.news-favorite-btn')) return;
+
+    const hoverBtns = item.querySelector('.news-hover-btns');
+    if (!hoverBtns) return;
+
+    const newsId = item.dataset.newsId || item.dataset.id || '';
+    if (!newsId) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'news-favorite-btn';
+    btn.dataset.newsId = newsId;
+
+    const favorited = isFavorited(newsId);
+    if (favorited) btn.classList.add('favorited');
+
+    // Insert at the beginning of hover buttons
+    hoverBtns.insertBefore(btn, hoverBtns.firstChild);
+}
+
 // Initialize resize on DOM ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         initPanelResize();
         initFavoriteButtonDelegation();
+        initTabSwitching();
+        injectFavoriteButtons();
     });
 } else {
     initPanelResize();
     initFavoriteButtonDelegation();
+    initTabSwitching();
+    injectFavoriteButtons();
 }
 
 /**

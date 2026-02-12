@@ -1,0 +1,663 @@
+/**
+ * Mobile Enhancement Styles
+ * All rules scoped to mobile viewport (≤640px)
+ * Prefix: .me- (mobile-enhance)
+ *
+ * Provides: BottomNav, header hiding, ActionSheet, SearchOverlay,
+ * CategoryPanel, BackToTop, PullToRefresh, touch feedback, settings menu
+ */
+
+@media (max-width: 640px) {
+
+  /* ==========================================================================
+     1. Header / CategoryTabs Hiding & Space Reclaim
+     ========================================================================== */
+
+  .header-card {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .category-tabs {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Override collapsed-header toggle — header is always hidden */
+  body.tr-mobile-top-collapsed .header-card,
+  body:not(.tr-mobile-top-collapsed) .header-card {
+    display: none !important;
+  }
+
+  /* 隐藏页脚信息（移动端不需要） */
+  .tr-footer-info {
+    display: none !important;
+  }
+
+  /* 登录弹窗移动端适配：确保内容可滚动 */
+  .login-modal-overlay {
+    padding: 16px !important;
+    align-items: flex-start !important;
+    padding-top: env(safe-area-inset-top, 24px) !important;
+  }
+  .login-modal-container {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: auto 0;
+  }
+
+  /* ==========================================================================
+     2. Body Padding & Background
+     ========================================================================== */
+
+  /* ==========================================================================
+     3. Content Area Top Positioning
+     ========================================================================== */
+
+  .tab-content-area {
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    margin: 0 !important;
+  }
+
+  .tab-pane {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 移动端容器和卡片间距压缩 */
+  .main-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    gap: 0 !important;
+    min-height: 100vh !important;
+  }
+
+  body {
+    padding-top: 0 !important;
+    padding-bottom: calc(50px + env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  .platform-grid {
+    gap: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scroll-snap-type: x mandatory !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .platform-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-content-area .platform-grid > .platform-card,
+  .platform-card {
+    border-radius: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    scroll-snap-align: start !important;
+    scroll-snap-stop: always !important;
+    border: none !important;
+    border-bottom: none !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow-y: visible !important;
+    transform: none !important;
+  }
+
+  /* ==========================================================================
+     4. BottomNav
+     ========================================================================== */
+
+  .me-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    height: 50px;
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    padding-bottom: env(safe-area-inset-bottom);
+    box-sizing: content-box;
+  }
+
+  .me-nav-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 50px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+  }
+
+  .me-nav-btn svg {
+    width: 24px;
+    height: 24px;
+    color: #6b7280;
+    transition: color 0.15s ease;
+  }
+
+  .me-nav-btn.active svg {
+    color: var(--primary-color, #4f46e5);
+  }
+
+  /* Small dot indicator for bookmark cycle state */
+  .me-nav-btn .me-dot {
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 16px);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary-color, #4f46e5);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .me-nav-btn.active .me-dot {
+    opacity: 1;
+  }
+
+  /* ==========================================================================
+     5. Back-to-Top Button (placeholder — JS creates DOM later)
+     ========================================================================== */
+
+  .me-back-to-top {
+    position: fixed;
+    right: 16px;
+    bottom: calc(50px + env(safe-area-inset-bottom) + 16px);
+    z-index: 9998;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(0.8);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-back-to-top.visible {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
+
+  .me-back-to-top svg {
+    width: 20px;
+    height: 20px;
+    color: #6b7280;
+  }
+
+  /* ==========================================================================
+     6. Pull-to-Refresh Indicator (placeholder)
+     ========================================================================== */
+
+  .me-pull-indicator {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(-60px);
+    z-index: 9997;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+    pointer-events: none;
+  }
+
+  .me-pull-indicator svg {
+    width: 20px;
+    height: 20px;
+    color: #6b7280;
+    transition: transform 0.2s ease;
+  }
+
+  .me-pull-indicator.refreshing svg {
+    animation: me-spin 0.8s linear infinite;
+  }
+
+  @keyframes me-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ==========================================================================
+     7. ActionSheet (placeholder)
+     ========================================================================== */
+
+  .me-action-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+  }
+
+  .me-action-sheet-overlay.open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .me-action-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10001;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 8px 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .me-action-sheet-overlay.open .me-action-sheet,
+  .me-action-sheet.open {
+    transform: translateY(0);
+  }
+
+  .me-action-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    font-size: 15px;
+    color: #1f2937;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-action-sheet-item:active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .me-action-sheet-item svg {
+    width: 20px;
+    height: 20px;
+    color: #6b7280;
+    flex-shrink: 0;
+  }
+
+  .me-action-sheet-divider {
+    height: 1px;
+    background: #f3f4f6;
+    margin: 4px 20px;
+  }
+
+  .me-action-sheet-cancel {
+    display: block;
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 15px;
+    color: #6b7280;
+    text-align: center;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-action-sheet-cancel:active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  /* ==========================================================================
+     8. SearchOverlay (placeholder)
+     ========================================================================== */
+
+  .me-search-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    padding-top: env(safe-area-inset-top, 0);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+  }
+
+  .me-search-overlay.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .me-search-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .me-search-input {
+    flex: 1;
+    height: 38px;
+    padding: 0 12px;
+    font-size: 15px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .me-search-input:focus {
+    border-color: var(--primary-color, #4f46e5);
+    background: #fff;
+  }
+
+  .me-search-cancel {
+    flex-shrink: 0;
+    padding: 6px 4px;
+    font-size: 15px;
+    color: var(--primary-color, #4f46e5);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ==========================================================================
+     9. CategoryPanel (placeholder)
+     ========================================================================== */
+
+  .me-category-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+  }
+
+  .me-category-overlay.open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .me-category-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10001;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .me-category-overlay.open .me-category-panel,
+  .me-category-panel.open {
+    transform: translateY(0);
+  }
+
+  .me-category-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 8px;
+    font-size: 14px;
+    color: #6b7280;
+    position: sticky;
+    top: 0;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .me-category-header-title {
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 15px;
+  }
+
+  .me-category-close {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: #f3f4f6;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #6b7280;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-category-section-title {
+    padding: 12px 20px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .me-category-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 20px 12px;
+  }
+
+  .me-category-item {
+    padding: 8px 14px;
+    font-size: 14px;
+    color: #374151;
+    background: #f3f4f6;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .me-category-item:active {
+    background: #e5e7eb;
+  }
+
+  .me-category-item.active {
+    color: var(--primary-color, #4f46e5);
+    background: rgba(79, 70, 229, 0.08);
+    border-color: var(--primary-color, #4f46e5);
+  }
+
+  .me-category-new-topic {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 14px;
+    font-size: 14px;
+    color: var(--primary-color, #4f46e5);
+    background: transparent;
+    border: 1px dashed var(--primary-color, #4f46e5);
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-category-empty {
+    padding: 12px 20px;
+    font-size: 13px;
+    color: #9ca3af;
+  }
+
+  /* ==========================================================================
+     10. Touch Feedback
+     ========================================================================== */
+
+  .news-item {
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.1s ease;
+  }
+
+  .news-item:active {
+    background-color: rgba(0, 0, 0, 0.04);
+  }
+
+  /* ==========================================================================
+     11. Settings Menu (reuses ActionSheet structure)
+     ========================================================================== */
+
+  .me-settings-menu {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10001;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
+    padding: 8px 0;
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  .me-settings-menu.open {
+    transform: translateY(0);
+  }
+
+  .me-settings-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    font-size: 15px;
+    color: #1f2937;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-settings-item:active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .me-settings-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .me-settings-item-left svg {
+    width: 20px;
+    height: 20px;
+    color: #6b7280;
+    flex-shrink: 0;
+  }
+
+  .me-settings-toggle {
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    background: #d1d5db;
+    border: none;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .me-settings-toggle.on {
+    background: var(--primary-color, #4f46e5);
+  }
+
+  .me-settings-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s ease;
+  }
+
+  .me-settings-toggle.on::after {
+    transform: translateX(20px);
+  }
+
+  .me-settings-divider {
+    height: 1px;
+    background: #f3f4f6;
+    margin: 4px 20px;
+  }
+
+  .me-settings-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    padding: 10px 20px;
+  }
+
+  .me-settings-links a {
+    font-size: 13px;
+    color: #6b7280;
+    text-decoration: none;
+  }
+
+  .me-settings-links a:active {
+    color: var(--primary-color, #4f46e5);
+  }
+
+} /* end @media (max-width: 640px) */
