@@ -59,11 +59,13 @@ export const scroll = {
         let anchorPlatformId = null;
         let anchorOffsetX = 0;
 
+        /** @type {HTMLElement|null} */
         let anchor = null;
         const cards = grid.querySelectorAll('.platform-card');
         for (const card of cards) {
-            if ((card.offsetLeft || 0) <= left + 1) {
-                anchor = card;
+            const el = /** @type {HTMLElement} */ (card);
+            if ((el.offsetLeft || 0) <= left + 1) {
+                anchor = el;
             } else {
                 break;
             }
@@ -85,7 +87,8 @@ export const scroll = {
 
     /** Bind scroll event listeners to all platform grids for persistence. */
     attachPlatformGridScrollPersistence() {
-        document.querySelectorAll('.tab-pane .platform-grid').forEach((grid) => {
+        document.querySelectorAll('.tab-pane .platform-grid').forEach((el) => {
+            const grid = /** @type {HTMLElement} */ (el);
             if (grid.dataset.scrollPersistBound === '1') return;
             grid.dataset.scrollPersistBound = '1';
 
@@ -160,7 +163,7 @@ export const scroll = {
         if (!tabId) return;
 
         const applyOnce = () => {
-            const grid = document.querySelector(`#tab-${tabId} .platform-grid`);
+            const grid = /** @type {HTMLElement|null} */ (document.querySelector(`#tab-${tabId} .platform-grid`));
             if (!grid) return false;
 
             if (!force && grid.dataset.trUserScrolled === '1') return false;
@@ -176,7 +179,7 @@ export const scroll = {
             let applied = false;
 
             if (anchorId) {
-                const anchorCard = grid.querySelector(`.platform-card[data-platform="${anchorId}"]`);
+                const anchorCard = /** @type {HTMLElement|null} */ (grid.querySelector(`.platform-card[data-platform="${anchorId}"]`));
                 if (anchorCard && anchorCard.offsetParent !== null) {
                     grid.dataset.trRestoring = '1';
                     grid.scrollLeft = (anchorCard.offsetLeft || 0) + offsetX;
@@ -225,7 +228,7 @@ export const scroll = {
     saveNavigationState() {
         try {
             const activeTab = storage.getRaw('hotnews_active_tab') ||
-                (document.querySelector('.category-tab.active')?.dataset?.category) || null;
+                (/** @type {HTMLElement|null} */ (document.querySelector('.category-tab.active'))?.dataset?.category) || null;
             const state = {
                 scrollY: window.scrollY || 0,
                 activeTab,
@@ -233,7 +236,7 @@ export const scroll = {
             };
             // Snapshot the current tab's platform grid scroll and embed in nav state
             if (activeTab) {
-                const grid = document.querySelector(`#tab-${activeTab} .platform-grid`);
+                const grid = /** @type {HTMLElement|null} */ (document.querySelector(`#tab-${activeTab} .platform-grid`));
                 if (grid) {
                     this.recordPlatformGridScrollForTab(activeTab, grid);
                     try {
@@ -351,6 +354,7 @@ export const scroll = {
     }
 };
 
+// @ts-ignore — TR is a dynamic namespace
 TR.scroll = scroll;
 
 ready(function () {
