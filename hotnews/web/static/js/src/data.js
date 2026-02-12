@@ -717,7 +717,7 @@ export const data = {
             firstTabId = tabIds.find((id) => id !== 'rsscol-rss') || firstTabId;
         }
         let activeTabId = preferredActiveTab || firstTabId;
-        if (activeTabId === 'explore') {
+        if (activeTabId === 'explore' && activeTabId !== preferredActiveTab) {
             activeTabId = tabIds.find((id) => id !== 'explore') || activeTabId;
         }
         if (isE2E && activeTabId === 'rsscol-rss') {
@@ -1168,7 +1168,7 @@ export const data = {
             // after their content loads asynchronously.
             const navActiveTab = TR.scroll?.peekNavigationState?.()?.activeTab || '';
             const isTopicTab = String(navActiveTab).startsWith('topic-');
-            const isDynamicTab = ['my-tags', 'discovery', 'featured-mps', 'knowledge'].includes(navActiveTab);
+            const isDynamicTab = ['my-tags', 'discovery', 'featured-mps', 'knowledge', 'explore'].includes(navActiveTab);
             
             console.log(`[Data] After render: navActiveTab=${navActiveTab}, isTopicTab=${isTopicTab}, isDynamicTab=${isDynamicTab}`);
             

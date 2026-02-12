@@ -13,6 +13,7 @@ let _exploreInFlight = false;
 let _exploreOffset = 0;
 let _exploreObserver = null;
 let _exploreFinished = false;
+let _exploreGeneration = 0;
 
 function _getActiveTabId() {
     try {
@@ -279,6 +280,25 @@ async function _loadTimeline() {
     } else {
         _attachObserver();
     }
+
+    // Restore scroll position from back-navigation state (WeChat browser)
+    // Only restore if this load was triggered after renderViewerFromData
+    // (generation > 0), not the initial ready() load which may be stale.
+    if (_exploreGeneration > 0 || window._trNoRebuildExpected) {
+        try {
+            const navState = TR.scroll?.peekNavigationState?.() || null;
+            if (navState && navState.activeTab === EXPLORE_TAB_ID) {
+                console.log('[Explore] Restoring scroll from nav state');
+                const consumed = TR.scroll.consumeNavigationState();
+                requestAnimationFrame(() => {
+                    TR.scroll.restoreNavigationScrollY(consumed || navState);
+                    TR.scroll.restoreNavGridScroll(consumed || navState);
+                });
+            }
+        } catch (e) {
+            console.error('[Explore] Failed to restore scroll:', e);
+        }
+    }
 }
 
 async function _refreshTimelineIfNeeded(force = false) {
@@ -331,8 +351,21 @@ function _patchRenderHook() {
     if (typeof orig !== 'function') return;
 
     TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
+        // Cancel any in-flight observer before DOM rebuild
+        if (_exploreObserver) {
+            try { _exploreObserver.disconnect(); } catch (e) { /* ignore */ }
+            _exploreObserver = null;
+        }
+
         orig.call(TR.data, data, state);
+
         try {
+            // Bump generation so scroll restore knows this is a post-rebuild load
+            _exploreGeneration++;
+            _initialized = false;
+            _exploreInFlight = false;
+            _exploreFinished = false;
+            _exploreOffset = 0;
             _initialLoad().catch(() => { });
         } catch (e) { }
     };

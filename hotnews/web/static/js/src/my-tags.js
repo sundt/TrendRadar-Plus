@@ -353,6 +353,25 @@ async function loadMyTags(force = false) {
                 myTagsLoaded = true;
                 myTagsLoading = false;
 
+                // Restore scroll position from navigation state (cached path)
+                if (myGeneration > 0 || window._trNoRebuildExpected) {
+                    try {
+                        if (window.TR?.scroll) {
+                            const navState = window.TR.scroll.peekNavigationState?.() || null;
+                            if (navState && navState.activeTab === MY_TAGS_CATEGORY_ID) {
+                                console.log('[MyTags] Restoring navigation scroll after cached load (gen:', myGeneration, ')');
+                                const consumed = window.TR.scroll.consumeNavigationState();
+                                requestAnimationFrame(() => {
+                                    window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                                    window.TR.scroll.restoreNavGridScroll(consumed || navState);
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[MyTags] Failed to restore scroll (cached):', e);
+                    }
+                }
+
                 // Fetch fresh data in background to update cache
                 fetchAndUpdateCache().catch(e => {
                     console.error('[MyTags] Background update failed:', e);
