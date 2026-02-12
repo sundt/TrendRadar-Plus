@@ -413,6 +413,26 @@ async function loadMyTags(force = false) {
         myTagsLoaded = true;
         console.log('[MyTags] Load complete!');
         
+        // Restore scroll position from navigation state if this is the active tab
+        try {
+            if (window.TR?.scroll) {
+                const navState = window.TR.scroll.peekNavigationState?.() || null;
+                if (navState && navState.activeTab === MY_TAGS_CATEGORY_ID) {
+                    console.log('[MyTags] Restoring navigation scroll after content loaded');
+                    window.TR.scroll.consumeNavigationState();
+                    requestAnimationFrame(() => {
+                        window.TR.scroll.restoreNavigationScrollY(navState);
+                        window.TR.scroll.restoreActiveTabPlatformGridScroll({
+                            preserveScroll: true,
+                            activeTab: MY_TAGS_CATEGORY_ID,
+                        });
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('[MyTags] Failed to restore scroll:', e);
+        }
+        
         // Check WeChat auth expiration and show warning if needed
         const wechatWarning = await checkWechatAuthExpiration();
         if (wechatWarning) {

@@ -1142,14 +1142,15 @@ export const data = {
             this.renderViewerFromData(baseData, state);
 
             // Restore scroll position: prefer navigation state (back-nav) over snapshot
-            // For topic tabs: don't consume nav state here - topic-tracker will handle it
-            // after it loads and renders the topic tabs from API
+            // For dynamic tabs (topic, my-tags, discovery, featured-mps): don't consume nav state here
+            // - these modules will handle scroll restoration after their content loads
             const navActiveTab = TR.scroll?.peekNavigationState?.()?.activeTab || '';
             const isTopicTab = String(navActiveTab).startsWith('topic-');
+            const isDynamicTab = ['my-tags', 'discovery', 'featured-mps'].includes(navActiveTab);
             
-            if (isTopicTab) {
-                // Topic tab not yet in DOM - leave nav state for topic-tracker to consume
-                console.log('[Data] Active tab is topic tab, deferring scroll restore to topic-tracker');
+            if (isTopicTab || isDynamicTab) {
+                // Dynamic tab content not yet loaded - leave nav state for the module to consume
+                console.log(`[Data] Active tab is dynamic (${navActiveTab}), deferring scroll restore to module`);
             } else {
                 const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
                 if (consumedNav) {

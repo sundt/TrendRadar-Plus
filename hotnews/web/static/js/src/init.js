@@ -271,14 +271,16 @@ ready(function () {
             const navState = TR.scroll?.peekNavigationState?.() || null;
             if (navState) {
                 const isTopicTab = String(navState.activeTab || '').startsWith('topic-');
-                if (isTopicTab) {
-                    // Topic tab not yet in DOM - leave nav state for topic-tracker to consume
+                const isDynamicTab = ['my-tags', 'discovery', 'featured-mps'].includes(navState.activeTab);
+                
+                if (isTopicTab || isDynamicTab) {
+                    // Dynamic tab content not yet loaded - leave nav state for the module to consume
                     // Just preserve the active tab in localStorage so switchTab doesn't overwrite it
                     if (navState.activeTab) {
                         TR.tabs.switchTab(navState.activeTab);
                     }
                 } else {
-                    // Consume and restore for non-topic tabs
+                    // Consume and restore for non-dynamic tabs
                     TR.scroll.consumeNavigationState();
                     if (navState.activeTab) {
                         TR.tabs.switchTab(navState.activeTab);

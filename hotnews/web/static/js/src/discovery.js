@@ -304,6 +304,26 @@ async function loadDiscovery(force = false) {
         renderDiscoveryNews(container, tags);
         discoveryLoaded = true;
         console.log('[Discovery] Load complete!');
+        
+        // Restore scroll position from navigation state if this is the active tab
+        try {
+            if (window.TR?.scroll) {
+                const navState = window.TR.scroll.peekNavigationState?.() || null;
+                if (navState && navState.activeTab === DISCOVERY_CATEGORY_ID) {
+                    console.log('[Discovery] Restoring navigation scroll after content loaded');
+                    window.TR.scroll.consumeNavigationState();
+                    requestAnimationFrame(() => {
+                        window.TR.scroll.restoreNavigationScrollY(navState);
+                        window.TR.scroll.restoreActiveTabPlatformGridScroll({
+                            preserveScroll: true,
+                            activeTab: DISCOVERY_CATEGORY_ID,
+                        });
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('[Discovery] Failed to restore scroll:', e);
+        }
 
     } catch (e) {
         console.error('[Discovery] Load error:', e);
