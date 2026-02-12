@@ -268,16 +268,27 @@ ready(function () {
         // When there's no custom config, refreshViewerData won't be called,
         // so we need to restore scroll position here.
         try {
-            const navState = TR.scroll?.consumeNavigationState?.() || null;
+            const navState = TR.scroll?.peekNavigationState?.() || null;
             if (navState) {
-                if (navState.activeTab) {
-                    TR.tabs.switchTab(navState.activeTab);
+                const isTopicTab = String(navState.activeTab || '').startsWith('topic-');
+                if (isTopicTab) {
+                    // Topic tab not yet in DOM - leave nav state for topic-tracker to consume
+                    // Just preserve the active tab in localStorage so switchTab doesn't overwrite it
+                    if (navState.activeTab) {
+                        TR.tabs.switchTab(navState.activeTab);
+                    }
+                } else {
+                    // Consume and restore for non-topic tabs
+                    TR.scroll.consumeNavigationState();
+                    if (navState.activeTab) {
+                        TR.tabs.switchTab(navState.activeTab);
+                    }
+                    TR.scroll.restoreNavigationScrollY(navState);
+                    TR.scroll.restoreActiveTabPlatformGridScroll({
+                        preserveScroll: true,
+                        activeTab: navState.activeTab,
+                    });
                 }
-                TR.scroll.restoreNavigationScrollY(navState);
-                TR.scroll.restoreActiveTabPlatformGridScroll({
-                    preserveScroll: true,
-                    activeTab: navState.activeTab,
-                });
             }
         } catch (e) {
             // ignore

@@ -723,6 +723,13 @@ export const data = {
         if (isE2E && activeTabId === 'rsscol-rss') {
             activeTabId = tabIds.find((id) => id !== 'rsscol-rss') || activeTabId;
         }
+        // If the preferred tab is a topic tab (not in server categories),
+        // use the first available tab for initial render. Topic-tracker will
+        // switch to the correct tab after it loads topics from API.
+        const isPreferredTopicTab = preferredActiveTab && String(preferredActiveTab).startsWith('topic-') && !tabIds.includes(preferredActiveTab);
+        if (isPreferredTopicTab) {
+            activeTabId = firstTabId;
+        }
 
         const tabsHtml = Object.entries(categories).map(([catId, cat]) => {
             const icon = escapeHtml(cat?.icon || '');
@@ -1005,6 +1012,20 @@ export const data = {
             const desiredTabEl = document.querySelector(`.category-tab[data-category="${escapedDesired}"]`);
             if (desiredTabEl) {
                 TR.tabs.switchTab(desiredTab);
+            } else if (String(desiredTab).startsWith('topic-')) {
+                // Topic tab not yet loaded by topic-tracker - show first tab visually
+                // but preserve the topic tab ID in localStorage for later restore
+                const firstTab = document.querySelector('.category-tab');
+                if (firstTab?.dataset?.category) {
+                    // Temporarily switch to first tab without overwriting localStorage
+                    document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+                    firstTab.classList.add('active');
+                    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                    const firstPane = document.getElementById(`tab-${firstTab.dataset.category}`);
+                    if (firstPane) firstPane.classList.add('active');
+                }
+                // Keep the topic tab ID in localStorage
+                storage.setRaw(TAB_STORAGE_KEY, desiredTab);
             } else {
                 const firstTab = document.querySelector('.category-tab');
                 if (firstTab?.dataset?.category) {
@@ -1121,20 +1142,30 @@ export const data = {
             this.renderViewerFromData(baseData, state);
 
             // Restore scroll position: prefer navigation state (back-nav) over snapshot
-            const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
-            if (consumedNav) {
-                const y = Number(consumedNav.scrollY || 0);
-                if (y > 0) {
-                    window.scrollTo({ top: y, behavior: 'auto' });
+            // For topic tabs: don't consume nav state here - topic-tracker will handle it
+            // after it loads and renders the topic tabs from API
+            const navActiveTab = TR.scroll?.peekNavigationState?.()?.activeTab || '';
+            const isTopicTab = String(navActiveTab).startsWith('topic-');
+            
+            if (isTopicTab) {
+                // Topic tab not yet in DOM - leave nav state for topic-tracker to consume
+                console.log('[Data] Active tab is topic tab, deferring scroll restore to topic-tracker');
+            } else {
+                const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
+                if (consumedNav) {
+                    const y = Number(consumedNav.scrollY || 0);
+                    if (y > 0) {
+                        window.scrollTo({ top: y, behavior: 'auto' });
+                    }
+                    TR.scroll.restoreNavigationScrollY(consumedNav);
+                    TR.scroll.restoreActiveTabPlatformGridScroll({
+                        preserveScroll: true,
+                        activeTab: consumedNav.activeTab || state.activeTab,
+                    });
+                } else if (state.preserveScroll) {
+                    window.scrollTo({ top: state.scrollY, behavior: 'auto' });
+                    TR.scroll.restoreActiveTabPlatformGridScroll(state);
                 }
-                TR.scroll.restoreNavigationScrollY(consumedNav);
-                TR.scroll.restoreActiveTabPlatformGridScroll({
-                    preserveScroll: true,
-                    activeTab: consumedNav.activeTab || state.activeTab,
-                });
-            } else if (state.preserveScroll) {
-                window.scrollTo({ top: state.scrollY, behavior: 'auto' });
-                TR.scroll.restoreActiveTabPlatformGridScroll(state);
             }
             _ajaxLastRefreshAt = Date.now();
         } catch (e) {

@@ -245,7 +245,12 @@
      */
     function tryRestoreTopicTab() {
         try {
-            const savedTab = localStorage.getItem('tr_active_tab');
+            // Check both storage keys: main tab system uses 'hotnews_active_tab',
+            // topic-tracker legacy uses 'tr_active_tab'
+            const mainSavedTab = localStorage.getItem('hotnews_active_tab');
+            const legacySavedTab = localStorage.getItem('tr_active_tab');
+            const savedTab = (mainSavedTab && mainSavedTab.startsWith('topic-')) ? mainSavedTab : legacySavedTab;
+            
             if (savedTab && savedTab.startsWith('topic-')) {
                 const tabEl = document.querySelector(`.category-tab[data-category="${savedTab}"]`);
                 const paneEl = document.getElementById(`tab-${savedTab}`);
@@ -257,10 +262,18 @@
                     if (typeof window.switchTab === 'function') {
                         window.switchTab(savedTab);
                     }
+                    
+                    // Scroll restoration will happen after topic news loads
+                    // (see loadTopicNews completion handler)
                 } else {
                     // 主题 tab 不存在（可能已被删除），清除保存的 tab 并切换到默认 tab
                     console.log(`[TopicTracker] Topic tab not found, clearing saved tab: ${savedTab}`);
                     localStorage.removeItem('tr_active_tab');
+                    
+                    // Also consume any pending navigation state to prevent stale restores
+                    try {
+                        window.TR?.scroll?.consumeNavigationState?.();
+                    } catch (e) {}
                     
                     // 切换到我的关注或第一个可用的 tab
                     if (typeof window.switchTab === 'function') {
@@ -735,6 +748,27 @@
             if (data.ok) {
                 renderTopicNews(topicId, data.keywords_news, data.sources_news);
                 state.loaded = true;
+                
+                // Restore scroll position from navigation state (back-navigation from WeChat etc.)
+                try {
+                    if (window.TR?.scroll) {
+                        const navState = window.TR.scroll.consumeNavigationState?.() || null;
+                        const categoryId = `topic-${topicId}`;
+                        if (navState && navState.activeTab === categoryId) {
+                            console.log(`[TopicTracker] Restoring navigation scroll after topic news loaded: ${categoryId}`);
+                            // Delay to let DOM settle after rendering
+                            requestAnimationFrame(() => {
+                                window.TR.scroll.restoreNavigationScrollY(navState);
+                                window.TR.scroll.restoreActiveTabPlatformGridScroll({
+                                    preserveScroll: true,
+                                    activeTab: categoryId,
+                                });
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('[TopicTracker] Failed to restore scroll after news load:', e);
+                }
                 
                 // Log cache status
                 if (data.cached) {

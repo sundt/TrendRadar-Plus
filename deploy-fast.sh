@@ -55,17 +55,18 @@ EOF
 
 # Step 3: Health Check
 echo ">>> Step 3: Health Check..."
-sleep 8
-for i in 1 2 3; do
+sleep 15
+for i in 1 2 3 4 5; do
     if ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "curl -fsS http://127.0.0.1:8090/health > /dev/null 2>&1"; then
-        echo "   ✅ Health check passed."
+        echo "   ✅ Health check passed (attempt $i/5)."
         break
     else
-        if [ $i -lt 3 ]; then
-            echo "   ⏳ Waiting for service... (attempt $i/3)"
-            sleep 5
+        if [ $i -lt 5 ]; then
+            echo "   ⏳ Waiting for service... (attempt $i/5)"
+            sleep 8
         else
-            echo "   ❌ Health check FAILED!"
+            echo "   ❌ Health check FAILED after 5 attempts!"
+            echo "   💡 Service may still be starting. Check: ssh -p ${SERVER_PORT} ${SERVER_USER}@${SERVER_HOST} 'curl http://127.0.0.1:8090/health'"
             exit 1
         fi
     fi

@@ -201,6 +201,14 @@ export const tabs = {
         const tabEl = document.querySelector(`.category-tab[data-category="${escapedCategoryId}"]`);
         const paneEl = document.getElementById(`tab-${categoryId}`);
         if (!tabEl || !paneEl) {
+            // If this is a topic tab that hasn't been loaded yet by topic-tracker,
+            // keep the saved tab ID so topic-tracker can restore it later.
+            // Don't fall back to the first tab - this preserves back-navigation state.
+            if (String(categoryId).startsWith('topic-')) {
+                console.log(`[Tabs] Topic tab ${categoryId} not yet loaded, preserving for later restore`);
+                storage.setRaw(TAB_STORAGE_KEY, categoryId);
+                return;
+            }
             const firstTab = document.querySelector('.category-tab');
             if (firstTab?.dataset?.category && firstTab.dataset.category !== String(categoryId)) {
                 this.switchTab(firstTab.dataset.category);
@@ -413,6 +421,10 @@ export const tabs = {
             const tabEl = document.querySelector(`.category-tab[data-category="${savedTab}"]`);
             if (tabEl) {
                 this.switchTab(savedTab);
+                return;
+            }
+            // If saved tab is a topic tab not yet loaded, preserve it for topic-tracker
+            if (String(savedTab).startsWith('topic-')) {
                 return;
             }
         }
