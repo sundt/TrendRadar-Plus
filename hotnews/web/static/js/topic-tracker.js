@@ -198,6 +198,16 @@
      * This replaces server-side injection to prevent cache leakage
      */
     async function loadAndRenderTopicTabs() {
+        // Wait for authState to be available and initialized (may be async)
+        try {
+            if (window.authState && typeof window.authState.init === 'function' && !window.authState.initialized) {
+                console.log('[TopicTracker] Waiting for authState to initialize...');
+                await window.authState.init();
+            }
+        } catch (e) {
+            console.warn('[TopicTracker] authState init failed:', e);
+        }
+
         // Check if user is logged in
         if (!isUserLoggedIn()) {
             console.log('[TopicTracker] User not logged in, skipping topic tabs loading');
