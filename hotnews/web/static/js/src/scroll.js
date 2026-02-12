@@ -63,6 +63,8 @@ export const scroll = {
                 ticking = true;
                 requestAnimationFrame(() => {
                     ticking = false;
+                    // Don't overwrite saved scroll state during programmatic restore
+                    if (grid.dataset.trRestoring === '1') return;
                     const pane = grid.closest('.tab-pane');
                     const tabId = pane?.id?.startsWith('tab-') ? pane.id.slice(4) : null;
                     this.recordPlatformGridScrollForTab(tabId, grid);
@@ -80,11 +82,47 @@ export const scroll = {
         const anchorId = (typeof saved?.anchorPlatformId === 'string' && saved.anchorPlatformId) ? saved.anchorPlatformId : state.activeTabPlatformAnchorPlatformId;
         const offsetX = Number.isFinite(saved?.anchorOffsetX) ? saved.anchorOffsetX : (Number.isFinite(state.activeTabPlatformAnchorOffsetX) ? state.activeTabPlatformAnchorOffsetX : 0);
 
+        this._applyGridScroll(tabId, anchorId, offsetX, left, false);
+    },
+
+    /**
+     * Restore platform grid scroll from navigation state (back-navigation).
+     * This is a stronger restore that ignores trUserScrolled and uses
+     * anchor info embedded in the nav state (sessionStorage), which is
+     * immune to localStorage overwrites during page reload.
+     */
+    restoreNavGridScroll(navState) {
+        if (!navState || !navState.activeTab) return;
+        const tabId = navState.activeTab;
+        const anchorId = navState.anchorPlatformId || null;
+        const offsetX = Number.isFinite(navState.anchorOffsetX) ? navState.anchorOffsetX : 0;
+        const left = Number.isFinite(navState.gridScrollLeft) ? navState.gridScrollLeft : 0;
+
+        // If nav state doesn't have anchor info, fall back to localStorage
+        if (!anchorId && left <= 0) {
+            const saved = this.getPlatformGridScrollState()?.[tabId];
+            if (saved) {
+                this._applyGridScroll(tabId, saved.anchorPlatformId, saved.anchorOffsetX || 0, saved.left || 0, true);
+                return;
+            }
+        }
+
+        this._applyGridScroll(tabId, anchorId, offsetX, left, true);
+    },
+
+    /**
+     * Internal: apply grid scroll with retry logic.
+     * @param {boolean} force - if true, ignores trUserScrolled flag
+     */
+    _applyGridScroll(tabId, anchorId, offsetX, left, force) {
+        if (!tabId) return;
+
         const applyOnce = () => {
             const grid = document.querySelector(`#tab-${tabId} .platform-grid`);
             if (!grid) return;
 
-            if (grid.dataset.trUserScrolled === '1') return;
+            // In force mode (nav restore), ignore trUserScrolled
+            if (!force && grid.dataset.trUserScrolled === '1') return;
 
             if (anchorId) {
                 let anchorCard = null;
@@ -103,11 +141,13 @@ export const scroll = {
                 }
             }
 
-            grid.dataset.trRestoring = '1';
-            grid.scrollLeft = left;
-            requestAnimationFrame(() => {
-                try { delete grid.dataset.trRestoring; } catch (_) { }
-            });
+            if (left > 0) {
+                grid.dataset.trRestoring = '1';
+                grid.scrollLeft = left;
+                requestAnimationFrame(() => {
+                    try { delete grid.dataset.trRestoring; } catch (_) { }
+                });
+            }
         };
 
         requestAnimationFrame(() => {
@@ -134,11 +174,21 @@ export const scroll = {
                 activeTab,
                 timestamp: Date.now(),
             };
-            // Also snapshot the current tab's platform grid scroll
+            // Snapshot the current tab's platform grid scroll and embed in nav state
             if (activeTab) {
                 const grid = document.querySelector(`#tab-${activeTab} .platform-grid`);
                 if (grid) {
                     this.recordPlatformGridScrollForTab(activeTab, grid);
+                    // Read back the just-saved anchor info and embed in sessionStorage
+                    // so it survives even if localStorage gets overwritten during reload
+                    try {
+                        const gridState = this.getPlatformGridScrollState()?.[activeTab];
+                        if (gridState) {
+                            state.gridScrollLeft = gridState.left || 0;
+                            state.anchorPlatformId = gridState.anchorPlatformId || null;
+                            state.anchorOffsetX = gridState.anchorOffsetX || 0;
+                        }
+                    } catch (_) { }
                 }
             }
             sessionStorage.setItem(NAV_STATE_SESSION_KEY, JSON.stringify(state));

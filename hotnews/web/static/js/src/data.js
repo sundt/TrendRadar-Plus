@@ -1126,20 +1126,25 @@ export const data = {
                 // Also write to localStorage so renderViewerFromData picks it up
                 storage.setRaw(TAB_STORAGE_KEY, navState.activeTab);
 
-                // Read saved platform grid scroll from localStorage so Smart Scroll-Aware Loading
-                // hydrates the correct cards near the user's last scroll position.
-                // On full page reload (WeChat back), snapshotViewerState() has no anchor info
-                // because the DOM is fresh. But saveNavigationState() saved it to localStorage.
-                try {
-                    const savedGridScroll = TR.scroll?.getPlatformGridScrollState?.() || {};
-                    const tabScroll = savedGridScroll[navState.activeTab];
-                    if (tabScroll && tabScroll.anchorPlatformId) {
-                        state.activeTabPlatformAnchorPlatformId = tabScroll.anchorPlatformId;
-                        state.activeTabPlatformAnchorOffsetX = tabScroll.anchorOffsetX || 0;
-                        state.activeTabPlatformGridScrollLeft = tabScroll.left || 0;
-                    }
-                } catch (e) {
-                    // ignore
+                // Inject anchor info from nav state (sessionStorage) into the render state
+                // so Smart Scroll-Aware Loading hydrates the correct cards.
+                // Nav state anchor is authoritative — it was saved at click time and
+                // stored in sessionStorage, immune to localStorage overwrites during reload.
+                if (navState.anchorPlatformId) {
+                    state.activeTabPlatformAnchorPlatformId = navState.anchorPlatformId;
+                    state.activeTabPlatformAnchorOffsetX = navState.anchorOffsetX || 0;
+                    state.activeTabPlatformGridScrollLeft = navState.gridScrollLeft || 0;
+                } else {
+                    // Fallback: try localStorage (may have been saved by saveNavigationState)
+                    try {
+                        const savedGridScroll = TR.scroll?.getPlatformGridScrollState?.() || {};
+                        const tabScroll = savedGridScroll[navState.activeTab];
+                        if (tabScroll && tabScroll.anchorPlatformId) {
+                            state.activeTabPlatformAnchorPlatformId = tabScroll.anchorPlatformId;
+                            state.activeTabPlatformAnchorOffsetX = tabScroll.anchorOffsetX || 0;
+                            state.activeTabPlatformGridScrollLeft = tabScroll.left || 0;
+                        }
+                    } catch (e) { /* ignore */ }
                 }
             }
 
@@ -1170,39 +1175,10 @@ export const data = {
             } else {
                 const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
                 if (consumedNav) {
-                    // Force-hydrate lazy cards near the anchor so scroll restoration works
-                    try {
-                        const savedGridScroll = TR.scroll?.getPlatformGridScrollState?.() || {};
-                        const tabScroll = savedGridScroll[consumedNav.activeTab || state.activeTab];
-                        if (tabScroll?.anchorPlatformId) {
-                            const grid = document.querySelector(`#tab-${consumedNav.activeTab || state.activeTab} .platform-grid`);
-                            if (grid) {
-                                const cards = Array.from(grid.querySelectorAll('.platform-card'));
-                                const anchorIdx = cards.findIndex(c => c.dataset.platform === tabScroll.anchorPlatformId);
-                                if (anchorIdx >= 0) {
-                                    const start = Math.max(0, anchorIdx - 1);
-                                    const end = Math.min(cards.length, anchorIdx + 3);
-                                    for (let i = start; i < end; i++) {
-                                        if (cards[i]?.dataset?.lazy === '1') {
-                                            _hydrateLazyPlatformCard(cards[i]).catch(() => {});
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        // ignore
-                    }
-
-                    const y = Number(consumedNav.scrollY || 0);
-                    if (y > 0) {
-                        window.scrollTo({ top: y, behavior: 'auto' });
-                    }
+                    // Use restoreNavGridScroll which bypasses trUserScrolled and uses
+                    // anchor info from sessionStorage (immune to localStorage overwrites)
+                    TR.scroll.restoreNavGridScroll(consumedNav);
                     TR.scroll.restoreNavigationScrollY(consumedNav);
-                    TR.scroll.restoreActiveTabPlatformGridScroll({
-                        preserveScroll: true,
-                        activeTab: consumedNav.activeTab || state.activeTab,
-                    });
                 } else if (state.preserveScroll) {
                     window.scrollTo({ top: state.scrollY, behavior: 'auto' });
                     TR.scroll.restoreActiveTabPlatformGridScroll(state);

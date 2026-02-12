@@ -281,15 +281,12 @@ ready(function () {
                     }
                 } else {
                     // Consume and restore for non-dynamic tabs
-                    TR.scroll.consumeNavigationState();
-                    if (navState.activeTab) {
-                        TR.tabs.switchTab(navState.activeTab);
+                    const consumed = TR.scroll.consumeNavigationState();
+                    if (consumed && consumed.activeTab) {
+                        TR.tabs.switchTab(consumed.activeTab);
                     }
-                    TR.scroll.restoreNavigationScrollY(navState);
-                    TR.scroll.restoreActiveTabPlatformGridScroll({
-                        preserveScroll: true,
-                        activeTab: navState.activeTab,
-                    });
+                    TR.scroll.restoreNavigationScrollY(consumed || navState);
+                    TR.scroll.restoreNavGridScroll(consumed || navState);
                 }
             }
         } catch (e) {

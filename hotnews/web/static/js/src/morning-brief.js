@@ -412,13 +412,10 @@ async function _loadTimeline() {
             const navState = TR.scroll?.peekNavigationState?.() || null;
             if (navState && navState.activeTab === MORNING_BRIEF_CATEGORY_ID) {
                 console.log('[MorningBrief] Restoring scroll from nav state');
-                TR.scroll.consumeNavigationState();
+                const consumed = TR.scroll.consumeNavigationState();
                 requestAnimationFrame(() => {
-                    TR.scroll.restoreNavigationScrollY(navState);
-                    TR.scroll.restoreActiveTabPlatformGridScroll({
-                        preserveScroll: true,
-                        activeTab: MORNING_BRIEF_CATEGORY_ID,
-                    });
+                    TR.scroll.restoreNavigationScrollY(consumed || navState);
+                    TR.scroll.restoreNavGridScroll(consumed || navState);
                 });
             }
         } catch (e) {

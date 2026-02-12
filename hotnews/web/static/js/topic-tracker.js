@@ -759,10 +759,8 @@
                             // Delay to let DOM settle after rendering
                             requestAnimationFrame(() => {
                                 window.TR.scroll.restoreNavigationScrollY(navState);
-                                window.TR.scroll.restoreActiveTabPlatformGridScroll({
-                                    preserveScroll: true,
-                                    activeTab: categoryId,
-                                });
+                                window.TR.scroll.restoreNavGridScroll(navState);
+                            });
                             });
                         }
                     }

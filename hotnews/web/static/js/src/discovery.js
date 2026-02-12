@@ -311,13 +311,10 @@ async function loadDiscovery(force = false) {
                 const navState = window.TR.scroll.peekNavigationState?.() || null;
                 if (navState && navState.activeTab === DISCOVERY_CATEGORY_ID) {
                     console.log('[Discovery] Restoring navigation scroll after content loaded');
-                    window.TR.scroll.consumeNavigationState();
+                    const consumed = window.TR.scroll.consumeNavigationState();
                     requestAnimationFrame(() => {
-                        window.TR.scroll.restoreNavigationScrollY(navState);
-                        window.TR.scroll.restoreActiveTabPlatformGridScroll({
-                            preserveScroll: true,
-                            activeTab: DISCOVERY_CATEGORY_ID,
-                        });
+                        window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                        window.TR.scroll.restoreNavGridScroll(consumed || navState);
                     });
                 }
             }
