@@ -157,7 +157,7 @@ function createMPCard(mpData) {
         : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无文章</li>';
 
     return `
-        <div class="platform-card" data-mp-fakeid="${fakeid}" draggable="false">
+        <div class="platform-card" data-platform="${fakeid}" data-mp-fakeid="${fakeid}" draggable="false">
             <div class="platform-header">
                 <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
                     ${avatarHtml}${nickname}

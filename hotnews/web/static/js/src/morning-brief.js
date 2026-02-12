@@ -361,9 +361,24 @@ async function _loadTimeline() {
     }
 
     try {
-        // Fetch Initial Batch (10 cards = 500 items)
+        // Determine how many cards to load initially.
+        // If restoring from nav state, load enough cards to cover the anchor position.
         const limit = getItemsPerCard();
-        const initialLimit = limit * INITIAL_CARDS;
+        let neededCards = INITIAL_CARDS;
+        if (myGeneration > 0 || window._trNoRebuildExpected) {
+            try {
+                const navState = TR.scroll?.peekNavigationState?.() || null;
+                if (navState && navState.activeTab === MORNING_BRIEF_CATEGORY_ID && navState.anchorPlatformId) {
+                    const m = String(navState.anchorPlatformId).match(/mb-slice-(\d+)/);
+                    if (m) {
+                        const anchorIdx = parseInt(m[1], 10);
+                        neededCards = Math.max(neededCards, anchorIdx + 2);
+                        neededCards = Math.min(neededCards, MAX_CARDS);
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+        const initialLimit = limit * neededCards;
         const items = await _fetchTimelineBatch(initialLimit, 0);
 
         // Abort if a newer generation has started (DOM was rebuilt)

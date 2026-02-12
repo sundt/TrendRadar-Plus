@@ -138,7 +138,7 @@ function createDiscoveryCard(tagData) {
         : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
 
     return `
-        <div class="platform-card discovery-card" data-tag-id="${tag.id}" data-candidate="true" draggable="false">
+        <div class="platform-card discovery-card" data-platform="${tag.id}" data-tag-id="${tag.id}" data-candidate="true" draggable="false">
             <div class="platform-header">
                 <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
                     ${tagIcon} ${tagName}

@@ -257,7 +257,26 @@ async function _loadTimeline() {
     _createSentinel(grid);
 
     const limit = getItemsPerCard();
-    const initialLimit = limit * INITIAL_CARDS;
+
+    // Determine how many cards to load initially.
+    // If restoring from nav state, load enough cards to cover the anchor position.
+    let neededCards = INITIAL_CARDS;
+    if (_exploreGeneration > 0 || window._trNoRebuildExpected) {
+        try {
+            const navState = TR.scroll?.peekNavigationState?.() || null;
+            if (navState && navState.activeTab === EXPLORE_TAB_ID && navState.anchorPlatformId) {
+                const m = String(navState.anchorPlatformId).match(/explore-slice-(\d+)/);
+                if (m) {
+                    const anchorIdx = parseInt(m[1], 10);
+                    // Load at least anchorIdx + 2 cards (anchor card + 1 extra)
+                    neededCards = Math.max(neededCards, anchorIdx + 2);
+                    neededCards = Math.min(neededCards, MAX_CARDS);
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    const initialLimit = limit * neededCards;
     const items = await _fetchTimelineBatch(initialLimit, 0);
 
     if (!items.length) {
