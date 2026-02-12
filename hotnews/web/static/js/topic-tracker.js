@@ -761,7 +761,6 @@
                                 window.TR.scroll.restoreNavigationScrollY(navState);
                                 window.TR.scroll.restoreNavGridScroll(navState);
                             });
-                            });
                         }
                     }
                 } catch (e) {
