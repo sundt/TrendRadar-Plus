@@ -218,6 +218,7 @@ ready(function () {
         // renderViewerFromData 完成后会添加 .categories-ready 类
         // If returning from navigation (WeChat back), preserve scroll position
         const hasNavState = !!(TR.scroll?.peekNavigationState?.());
+        console.log('[Init] hasCustomConfig:', hasCustomConfig, 'hasNavState:', hasNavState, 'navState:', TR.scroll?.peekNavigationState?.());
         TR.data.refreshViewerData({ preserveScroll: hasNavState });
 
         try {
@@ -263,6 +264,10 @@ ready(function () {
     } else {
         // 无自定义配置，直接显示服务端渲染的默认栏目
         document.body.classList.add('categories-ready');
+
+        // Signal to dynamic modules that no renderViewerFromData will be called,
+        // so they can safely consume nav state on their first load.
+        window._trNoRebuildExpected = true;
 
         // Check for saved navigation state (back-navigation from WeChat etc.)
         // When there's no custom config, refreshViewerData won't be called,

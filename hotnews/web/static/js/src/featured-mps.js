@@ -18,6 +18,7 @@ const WECHAT_ICON_SMALL = `<svg viewBox="0 0 24 24" fill="#07c160" width="18" he
 
 let featuredMpsLoaded = false;
 let featuredMpsLoading = false;
+let _featuredMpsGeneration = 0;
 
 /**
  * Reset loaded state (called when viewer data is refreshed)
@@ -25,7 +26,8 @@ let featuredMpsLoading = false;
 function resetLoadedState() {
     featuredMpsLoaded = false;
     featuredMpsLoading = false;
-    console.log('[FeaturedMPs] State reset');
+    _featuredMpsGeneration++;
+    console.log('[FeaturedMPs] State reset, gen:', _featuredMpsGeneration);
 }
 
 /**
@@ -199,7 +201,7 @@ function renderFeaturedMps(container, mpsData) {
  * Main load function for Featured MPs
  */
 async function loadFeaturedMps(force = false) {
-    console.log('[FeaturedMPs] loadFeaturedMps called, force:', force, 'loading:', featuredMpsLoading, 'loaded:', featuredMpsLoaded);
+    console.log('[FeaturedMPs] loadFeaturedMps called, force:', force, 'loading:', featuredMpsLoading, 'loaded:', featuredMpsLoaded, 'gen:', _featuredMpsGeneration);
 
     if (featuredMpsLoading) {
         console.log('[FeaturedMPs] Already loading, skipping');
@@ -215,6 +217,9 @@ async function loadFeaturedMps(force = false) {
         console.error('[FeaturedMPs] Container #featuredMpsGrid not found!');
         return;
     }
+
+    // Capture generation to detect stale loads
+    const myGeneration = _featuredMpsGeneration;
 
     featuredMpsLoading = true;
 
@@ -271,20 +276,26 @@ async function loadFeaturedMps(force = false) {
         featuredMpsLoaded = true;
         
         // Restore scroll position from navigation state if this is the active tab
-        try {
-            if (window.TR?.scroll) {
-                const navState = window.TR.scroll.peekNavigationState?.() || null;
-                if (navState && navState.activeTab === FEATURED_MPS_CATEGORY_ID) {
-                    console.log('[FeaturedMPs] Restoring navigation scroll after content loaded');
-                    const consumed = window.TR.scroll.consumeNavigationState();
-                    requestAnimationFrame(() => {
-                        window.TR.scroll.restoreNavigationScrollY(consumed || navState);
-                        window.TR.scroll.restoreNavGridScroll(consumed || navState);
-                    });
+        // Only restore if this load was triggered after renderViewerFromData
+        // (generation > 0), not the initial ready() load which may be stale.
+        if (myGeneration > 0 || window._trNoRebuildExpected) {
+            try {
+                if (window.TR?.scroll) {
+                    const navState = window.TR.scroll.peekNavigationState?.() || null;
+                    if (navState && navState.activeTab === FEATURED_MPS_CATEGORY_ID) {
+                        console.log('[FeaturedMPs] Restoring navigation scroll after content loaded (gen:', myGeneration, ')');
+                        const consumed = window.TR.scroll.consumeNavigationState();
+                        requestAnimationFrame(() => {
+                            window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                            window.TR.scroll.restoreNavGridScroll(consumed || navState);
+                        });
+                    }
                 }
+            } catch (e) {
+                console.error('[FeaturedMPs] Failed to restore scroll:', e);
             }
-        } catch (e) {
-            console.error('[FeaturedMPs] Failed to restore scroll:', e);
+        } else {
+            console.log('[FeaturedMPs] Skipping scroll restore on initial load (gen:', myGeneration, ')');
         }
 
     } catch (e) {
@@ -319,6 +330,46 @@ function handleTabSwitch(categoryId) {
     if (categoryId === FEATURED_MPS_CATEGORY_ID) {
         loadFeaturedMps();
     }
+}
+
+/**
+ * Patch TR.data.renderViewerFromData to reset featured-mps state after DOM re-render
+ * and bump generation counter so scroll restore only happens after rebuild.
+ */
+function _patchRenderHook() {
+    if (window._featuredMpsRenderPatched) return;
+    
+    const tryPatch = () => {
+        const orig = window.TR?.data?.renderViewerFromData;
+        if (typeof orig !== 'function') {
+            setTimeout(tryPatch, 100);
+            return;
+        }
+        
+        window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
+            orig.call(window.TR.data, data, state);
+            try {
+                console.log('[FeaturedMPs] renderViewerFromData called, resetting state, bumping gen');
+                resetLoadedState();
+                
+                // If featured-mps tab is active, reload
+                setTimeout(() => {
+                    const activePane = document.querySelector('#tab-featured-mps.active');
+                    if (activePane) {
+                        console.log('[FeaturedMPs] Tab is active after re-render, loading...');
+                        loadFeaturedMps();
+                    }
+                }, 100);
+            } catch (e) {
+                console.error('[FeaturedMPs] renderViewerFromData patch error:', e);
+            }
+        };
+        
+        window._featuredMpsRenderPatched = true;
+        console.log('[FeaturedMPs] renderViewerFromData patched');
+    };
+    
+    tryPatch();
 }
 
 /**
@@ -395,6 +446,9 @@ function init() {
     };
 
     setTimeout(observeTabActivation, 100);
+
+    // Patch renderViewerFromData to reset state and reload when DOM is rebuilt
+    _patchRenderHook();
 
     console.log('[FeaturedMPs] Module initialized');
 }

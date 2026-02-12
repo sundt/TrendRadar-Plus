@@ -23,6 +23,7 @@ let _mbObserver = null;
 let _mbFinished = false;
 let _mbInitialized = false;
 let _mbRetryCount = 0;
+let _mbGeneration = 0;
 const MAX_RETRY_COUNT = 3;
 const RETRY_DELAY_MS = 500;
 
@@ -343,6 +344,9 @@ async function _loadTimeline() {
     // Reset retry count on successful grid find
     _mbRetryCount = 0;
 
+    // Capture current generation to detect stale loads
+    const myGeneration = _mbGeneration;
+
     // Save existing content in case of error
     const previousContent = grid.innerHTML;
     const hadContent = grid.querySelectorAll('.tr-morning-brief-card .news-item').length > 0;
@@ -361,6 +365,12 @@ async function _loadTimeline() {
         const limit = getItemsPerCard();
         const initialLimit = limit * INITIAL_CARDS;
         const items = await _fetchTimelineBatch(initialLimit, 0);
+
+        // Abort if a newer generation has started (DOM was rebuilt)
+        if (myGeneration !== _mbGeneration) {
+            console.log('[MorningBrief] Stale load detected, aborting');
+            return;
+        }
 
         // Verify grid still exists after async operation
         const currentGrid = _getGrid();
@@ -408,18 +418,22 @@ async function _loadTimeline() {
         } catch (e) { /* ignore */ }
 
         // Restore scroll position from back-navigation state (WeChat browser)
-        try {
-            const navState = TR.scroll?.peekNavigationState?.() || null;
-            if (navState && navState.activeTab === MORNING_BRIEF_CATEGORY_ID) {
-                console.log('[MorningBrief] Restoring scroll from nav state');
-                const consumed = TR.scroll.consumeNavigationState();
-                requestAnimationFrame(() => {
-                    TR.scroll.restoreNavigationScrollY(consumed || navState);
-                    TR.scroll.restoreNavGridScroll(consumed || navState);
-                });
+        // Only restore if this load was triggered after renderViewerFromData
+        // (generation > 0), not the initial ready() load which may be stale.
+        if (myGeneration > 0 || window._trNoRebuildExpected) {
+            try {
+                const navState = TR.scroll?.peekNavigationState?.() || null;
+                if (navState && navState.activeTab === MORNING_BRIEF_CATEGORY_ID) {
+                    console.log('[MorningBrief] Restoring scroll from nav state');
+                    const consumed = TR.scroll.consumeNavigationState();
+                    requestAnimationFrame(() => {
+                        TR.scroll.restoreNavigationScrollY(consumed || navState);
+                        TR.scroll.restoreNavGridScroll(consumed || navState);
+                    });
+                }
+            } catch (e) {
+                console.error('[MorningBrief] Failed to restore scroll:', e);
             }
-        } catch (e) {
-            console.error('[MorningBrief] Failed to restore scroll:', e);
         }
     } catch (e) {
         console.error('[MorningBrief] Failed to load timeline:', e);
@@ -558,7 +572,14 @@ function _patchRenderHook() {
     if (typeof orig !== 'function') return;
 
     TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
+        // Cancel any in-flight observer before DOM rebuild
+        if (_mbObserver) {
+            try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
+            _mbObserver = null;
+        }
+
         orig.call(TR.data, data, state);
+
         try {
             // Check if the grid already has morning brief cards with real content
             // (data.js preserves _knowledgeGridHtml when cards exist)
@@ -569,15 +590,12 @@ function _patchRenderHook() {
                 // Content was preserved by data.js — keep current state, just re-attach observer
                 console.log(`[MorningBrief] Preserved ${existingCards} items, re-attaching observer`);
                 _mbInFlight = false;
-                if (_mbObserver) {
-                    try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
-                    _mbObserver = null;
-                }
                 if (!_mbFinished) {
                     _attachObserver();
                 }
             } else {
                 // No existing content — full reset and reload
+                console.log('[MorningBrief] No preserved content, scheduling full reload');
                 _mbInFlight = false;
                 _mbFinished = false;
                 _mbOffset = 0;
@@ -585,12 +603,13 @@ function _patchRenderHook() {
                 _mbRetryCount = 0;
                 _mbLastRefreshAt = 0;
 
-                if (_mbObserver) {
-                    try { _mbObserver.disconnect(); } catch (e) { /* ignore */ }
-                    _mbObserver = null;
-                }
+                // Use a generation counter to cancel stale loads
+                _mbGeneration = (_mbGeneration || 0) + 1;
+                const gen = _mbGeneration;
 
                 setTimeout(() => {
+                    // Only proceed if no newer generation has been started
+                    if (gen !== _mbGeneration) return;
                     _initialLoad().catch((e) => {
                         console.error('[MorningBrief] Initial load failed after render:', e);
                     });

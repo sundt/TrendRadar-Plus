@@ -1,13 +1,16 @@
 /**
  * Hotnews Scroll Module
- * 平台滚动持久化
+ * 平台滚动持久化 + 微信返回导航恢复
  */
 
 import { TR, ready } from './core.js';
 import { storage } from './storage.js';
 
 const PLATFORM_GRID_SCROLL_STORAGE_KEY = 'hotnews_platform_grid_scroll_v1';
-const NAV_STATE_SESSION_KEY = 'hotnews_nav_state_v1';
+// Use localStorage instead of sessionStorage for nav state
+// because WeChat browser may open links in a new webview,
+// causing sessionStorage to be lost on back-navigation.
+const NAV_STATE_KEY = 'hotnews_nav_state_v2';
 
 export const scroll = {
     getPlatformGridScrollState() {
@@ -87,9 +90,7 @@ export const scroll = {
 
     /**
      * Restore platform grid scroll from navigation state (back-navigation).
-     * This is a stronger restore that ignores trUserScrolled and uses
-     * anchor info embedded in the nav state (sessionStorage), which is
-     * immune to localStorage overwrites during page reload.
+     * Force mode: ignores trUserScrolled, uses anchor from nav state.
      */
     restoreNavGridScroll(navState) {
         if (!navState || !navState.activeTab) return;
@@ -121,7 +122,6 @@ export const scroll = {
             const grid = document.querySelector(`#tab-${tabId} .platform-grid`);
             if (!grid) return;
 
-            // In force mode (nav restore), ignore trUserScrolled
             if (!force && grid.dataset.trUserScrolled === '1') return;
 
             if (anchorId) {
@@ -161,9 +161,9 @@ export const scroll = {
     },
 
     /**
-     * Save full page state to sessionStorage before navigating away.
-     * This is critical for WeChat browser which doesn't support bfcache
-     * and does a full page reload on back navigation.
+     * Save full page state to localStorage before navigating away.
+     * Uses localStorage (not sessionStorage) because WeChat browser
+     * may open links in a new webview, losing sessionStorage.
      */
     saveNavigationState() {
         try {
@@ -179,8 +179,6 @@ export const scroll = {
                 const grid = document.querySelector(`#tab-${activeTab} .platform-grid`);
                 if (grid) {
                     this.recordPlatformGridScrollForTab(activeTab, grid);
-                    // Read back the just-saved anchor info and embed in sessionStorage
-                    // so it survives even if localStorage gets overwritten during reload
                     try {
                         const gridState = this.getPlatformGridScrollState()?.[activeTab];
                         if (gridState) {
@@ -191,24 +189,24 @@ export const scroll = {
                     } catch (_) { }
                 }
             }
-            sessionStorage.setItem(NAV_STATE_SESSION_KEY, JSON.stringify(state));
+            storage.setRaw(NAV_STATE_KEY, JSON.stringify(state));
         } catch (e) {
-            // ignore - sessionStorage may be unavailable
+            // ignore
         }
     },
 
     /**
-     * Retrieve and consume saved navigation state from sessionStorage.
+     * Retrieve and consume saved navigation state.
      * Returns the state object or null if none/expired.
      */
     consumeNavigationState() {
         try {
-            const raw = sessionStorage.getItem(NAV_STATE_SESSION_KEY);
+            const raw = storage.getRaw(NAV_STATE_KEY);
             if (!raw) return null;
-            sessionStorage.removeItem(NAV_STATE_SESSION_KEY);
+            storage.remove(NAV_STATE_KEY);
             const state = JSON.parse(raw);
-            // Expire after 10 minutes to avoid stale restores
-            if (state && (Date.now() - (state.timestamp || 0)) < 600000) {
+            // Expire after 5 minutes
+            if (state && (Date.now() - (state.timestamp || 0)) < 300000) {
                 return state;
             }
         } catch (e) {
@@ -222,10 +220,10 @@ export const scroll = {
      */
     peekNavigationState() {
         try {
-            const raw = sessionStorage.getItem(NAV_STATE_SESSION_KEY);
+            const raw = storage.getRaw(NAV_STATE_KEY);
             if (!raw) return null;
             const state = JSON.parse(raw);
-            if (state && (Date.now() - (state.timestamp || 0)) < 600000) {
+            if (state && (Date.now() - (state.timestamp || 0)) < 300000) {
                 return state;
             }
         } catch (e) {
@@ -235,8 +233,7 @@ export const scroll = {
     },
 
     /**
-     * Restore scrollY and platform grid scroll from saved navigation state.
-     * Called after data rendering is complete.
+     * Restore scrollY from saved navigation state.
      */
     restoreNavigationScrollY(navState) {
         if (!navState) return;
@@ -246,64 +243,44 @@ export const scroll = {
         const doRestore = () => {
             try {
                 window.scrollTo({ top: y, behavior: 'auto' });
-            } catch (e) {
-                // ignore
-            }
+            } catch (e) { /* ignore */ }
         };
 
-        // Multiple attempts to handle async rendering
         requestAnimationFrame(doRestore);
         setTimeout(doRestore, 50);
         setTimeout(doRestore, 200);
         setTimeout(doRestore, 500);
     },
 
-    /**
-     * Pause scroll-snap to prevent jump when returning from external link
-     */
     pauseScrollSnap() {
         document.body.classList.add('tr-snap-paused');
     },
 
-    /**
-     * Resume scroll-snap after a short delay
-     */
     resumeScrollSnap() {
-        // Use a small delay to let the browser settle before re-enabling snap
         setTimeout(() => {
             document.body.classList.remove('tr-snap-paused');
         }, 100);
     },
 
-    /**
-     * Setup visibility change handlers to prevent scroll jump
-     */
     setupVisibilityScrollFix() {
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
-                // Page is being hidden (user clicked a link, switched tab, etc.)
                 document.body.classList.add('tr-page-hidden');
                 this.pauseScrollSnap();
-                // Save full state for WeChat browser back-navigation
                 this.saveNavigationState();
             } else if (document.visibilityState === 'visible') {
-                // Page is becoming visible again
                 document.body.classList.remove('tr-page-hidden');
-                // Resume scroll-snap after a short delay to prevent jump
                 this.resumeScrollSnap();
             }
         });
 
-        // Also handle beforeunload for immediate link clicks
         window.addEventListener('beforeunload', () => {
             this.pauseScrollSnap();
             this.saveNavigationState();
         });
 
-        // Handle pageshow for bfcache restores (some browsers)
         window.addEventListener('pageshow', (e) => {
             if (e.persisted) {
-                // Page was restored from bfcache
                 document.body.classList.remove('tr-page-hidden');
                 this.resumeScrollSnap();
             }
@@ -313,8 +290,6 @@ export const scroll = {
 
 TR.scroll = scroll;
 
-// Initialize visibility scroll fix
 ready(function () {
     scroll.setupVisibilityScrollFix();
 });
-

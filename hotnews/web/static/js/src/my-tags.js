@@ -14,6 +14,7 @@ const MY_TAGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
 let myTagsLoaded = false;
 let myTagsLoading = false;
+let _myTagsGeneration = 0;
 
 /**
  * Check if user is authenticated using authState
@@ -307,7 +308,7 @@ async function waitForAuthWithTimeout(timeoutMs = 3000) {
  * Main load function for My Tags
  */
 async function loadMyTags(force = false) {
-    console.log('[MyTags] loadMyTags called, force:', force, 'loading:', myTagsLoading, 'loaded:', myTagsLoaded);
+    console.log('[MyTags] loadMyTags called, force:', force, 'loading:', myTagsLoading, 'loaded:', myTagsLoaded, 'gen:', _myTagsGeneration);
 
     if (myTagsLoading) {
         console.log('[MyTags] Already loading, skipping');
@@ -323,6 +324,9 @@ async function loadMyTags(force = false) {
         console.error('[MyTags] Container #myTagsGrid not found!');
         return;
     }
+
+    // Capture generation to detect stale loads
+    const myGeneration = _myTagsGeneration;
 
     console.log('[MyTags] Container found, starting load...');
     myTagsLoading = true;
@@ -414,20 +418,26 @@ async function loadMyTags(force = false) {
         console.log('[MyTags] Load complete!');
         
         // Restore scroll position from navigation state if this is the active tab
-        try {
-            if (window.TR?.scroll) {
-                const navState = window.TR.scroll.peekNavigationState?.() || null;
-                if (navState && navState.activeTab === MY_TAGS_CATEGORY_ID) {
-                    console.log('[MyTags] Restoring navigation scroll after content loaded');
-                    const consumed = window.TR.scroll.consumeNavigationState();
-                    requestAnimationFrame(() => {
-                        window.TR.scroll.restoreNavigationScrollY(consumed || navState);
-                        window.TR.scroll.restoreNavGridScroll(consumed || navState);
-                    });
+        // Only restore if this load was triggered after renderViewerFromData
+        // (generation > 0), not the initial ready() load which may be stale.
+        if (myGeneration > 0 || window._trNoRebuildExpected) {
+            try {
+                if (window.TR?.scroll) {
+                    const navState = window.TR.scroll.peekNavigationState?.() || null;
+                    if (navState && navState.activeTab === MY_TAGS_CATEGORY_ID) {
+                        console.log('[MyTags] Restoring navigation scroll after content loaded (gen:', myGeneration, ')');
+                        const consumed = window.TR.scroll.consumeNavigationState();
+                        requestAnimationFrame(() => {
+                            window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                            window.TR.scroll.restoreNavGridScroll(consumed || navState);
+                        });
+                    }
                 }
+            } catch (e) {
+                console.error('[MyTags] Failed to restore scroll:', e);
             }
-        } catch (e) {
-            console.error('[MyTags] Failed to restore scroll:', e);
+        } else {
+            console.log('[MyTags] Skipping scroll restore on initial load (gen:', myGeneration, ', noRebuild:', !!window._trNoRebuildExpected, ')');
         }
         
         // Check WeChat auth expiration and show warning if needed
@@ -487,6 +497,48 @@ function handleTabSwitch(categoryId) {
     if (categoryId === MY_TAGS_CATEGORY_ID) {
         loadMyTags();
     }
+}
+
+/**
+ * Patch TR.data.renderViewerFromData to reset my-tags state after DOM re-render
+ * and bump generation counter so scroll restore only happens after rebuild.
+ */
+function _patchRenderHook() {
+    if (window._myTagsRenderPatched) return;
+    
+    const tryPatch = () => {
+        const orig = window.TR?.data?.renderViewerFromData;
+        if (typeof orig !== 'function') {
+            setTimeout(tryPatch, 100);
+            return;
+        }
+        
+        window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
+            orig.call(window.TR.data, data, state);
+            try {
+                console.log('[MyTags] renderViewerFromData called, resetting state, bumping gen');
+                _myTagsGeneration++;
+                myTagsLoaded = false;
+                myTagsLoading = false;
+                
+                // If my-tags tab is active, reload
+                setTimeout(() => {
+                    const activePane = document.querySelector('#tab-my-tags.active');
+                    if (activePane) {
+                        console.log('[MyTags] Tab is active after re-render, loading...');
+                        loadMyTags();
+                    }
+                }, 100);
+            } catch (e) {
+                console.error('[MyTags] renderViewerFromData patch error:', e);
+            }
+        };
+        
+        window._myTagsRenderPatched = true;
+        console.log('[MyTags] renderViewerFromData patched');
+    };
+    
+    tryPatch();
 }
 
 /**
@@ -613,6 +665,9 @@ function init() {
 
     // Attach observer after a short delay to ensure DOM is ready
     setTimeout(observeTabActivation, 100);
+
+    // Patch renderViewerFromData to reset state and bump generation when DOM is rebuilt
+    _patchRenderHook();
 
     // Check if my-tags is the default active tab and load after authState is ready
     const loadIfActiveTab = async () => {

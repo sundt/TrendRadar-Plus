@@ -12,6 +12,7 @@
     
     // Loading state management (per topic)
     const topicLoadingState = new Map(); // topicId -> { loading: boolean, loaded: boolean }
+    let _topicGeneration = 0;
     
     function getTopicState(topicId) {
         if (!topicLoadingState.has(topicId)) {
@@ -138,6 +139,9 @@
         // Listen for viewer data rendered event to setup topic tab listeners
         document.addEventListener('viewerDataRendered', () => {
             console.log('[TopicTracker] viewerDataRendered event received, resetting states and setting up listeners...');
+            // Bump generation so scroll restore works after DOM rebuild
+            _topicGeneration++;
+            console.log('[TopicTracker] Generation bumped to:', _topicGeneration);
             // Security: Re-validate after re-render
             validateTopicTabsOwnership();
             // 重置所有主题的加载状态，因为 DOM 已经被重新渲染
@@ -750,21 +754,27 @@
                 state.loaded = true;
                 
                 // Restore scroll position from navigation state (back-navigation from WeChat etc.)
-                try {
-                    if (window.TR?.scroll) {
-                        const navState = window.TR.scroll.consumeNavigationState?.() || null;
-                        const categoryId = `topic-${topicId}`;
-                        if (navState && navState.activeTab === categoryId) {
-                            console.log(`[TopicTracker] Restoring navigation scroll after topic news loaded: ${categoryId}`);
-                            // Delay to let DOM settle after rendering
-                            requestAnimationFrame(() => {
-                                window.TR.scroll.restoreNavigationScrollY(navState);
-                                window.TR.scroll.restoreNavGridScroll(navState);
-                            });
+                // Only restore if this load was triggered after renderViewerFromData
+                // (generation > 0), not the initial page load which may be stale.
+                if (_topicGeneration > 0 || window._trNoRebuildExpected) {
+                    try {
+                        if (window.TR?.scroll) {
+                            const navState = window.TR.scroll.peekNavigationState?.() || null;
+                            const categoryId = `topic-${topicId}`;
+                            if (navState && navState.activeTab === categoryId) {
+                                console.log(`[TopicTracker] Restoring navigation scroll after topic news loaded (gen: ${_topicGeneration}): ${categoryId}`);
+                                const consumed = window.TR.scroll.consumeNavigationState();
+                                requestAnimationFrame(() => {
+                                    window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                                    window.TR.scroll.restoreNavGridScroll(consumed || navState);
+                                });
+                            }
                         }
+                    } catch (e) {
+                        console.error('[TopicTracker] Failed to restore scroll after news load:', e);
                     }
-                } catch (e) {
-                    console.error('[TopicTracker] Failed to restore scroll after news load:', e);
+                } else {
+                    console.log(`[TopicTracker] Skipping scroll restore on initial load (gen: ${_topicGeneration})`);
                 }
                 
                 // Log cache status

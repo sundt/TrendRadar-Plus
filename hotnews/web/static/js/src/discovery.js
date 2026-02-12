@@ -13,6 +13,7 @@ const DISCOVERY_CACHE_TTL = 10 * 60 * 1000; // 10 minutes in milliseconds
 
 let discoveryLoaded = false;
 let discoveryLoading = false;
+let _discoveryGeneration = 0;
 
 /**
  * Get cached data from localStorage
@@ -306,20 +307,26 @@ async function loadDiscovery(force = false) {
         console.log('[Discovery] Load complete!');
         
         // Restore scroll position from navigation state if this is the active tab
-        try {
-            if (window.TR?.scroll) {
-                const navState = window.TR.scroll.peekNavigationState?.() || null;
-                if (navState && navState.activeTab === DISCOVERY_CATEGORY_ID) {
-                    console.log('[Discovery] Restoring navigation scroll after content loaded');
-                    const consumed = window.TR.scroll.consumeNavigationState();
-                    requestAnimationFrame(() => {
-                        window.TR.scroll.restoreNavigationScrollY(consumed || navState);
-                        window.TR.scroll.restoreNavGridScroll(consumed || navState);
-                    });
+        // Only restore if this load was triggered after renderViewerFromData
+        // (generation > 0), not the initial ready() load which may be stale.
+        if (_discoveryGeneration > 0 || window._trNoRebuildExpected) {
+            try {
+                if (window.TR?.scroll) {
+                    const navState = window.TR.scroll.peekNavigationState?.() || null;
+                    if (navState && navState.activeTab === DISCOVERY_CATEGORY_ID) {
+                        console.log('[Discovery] Restoring navigation scroll after content loaded (gen:', _discoveryGeneration, ')');
+                        const consumed = window.TR.scroll.consumeNavigationState();
+                        requestAnimationFrame(() => {
+                            window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                            window.TR.scroll.restoreNavGridScroll(consumed || navState);
+                        });
+                    }
                 }
+            } catch (e) {
+                console.error('[Discovery] Failed to restore scroll:', e);
             }
-        } catch (e) {
-            console.error('[Discovery] Failed to restore scroll:', e);
+        } else {
+            console.log('[Discovery] Skipping scroll restore on initial load (gen:', _discoveryGeneration, ')');
         }
 
     } catch (e) {
@@ -484,8 +491,9 @@ function _patchRenderHook() {
         window.TR.data.renderViewerFromData = function patchedRenderViewerFromData(data, state) {
             orig.call(window.TR.data, data, state);
             try {
-                // Reset discovery state after DOM re-render
-                console.log('[Discovery] renderViewerFromData called, resetting state');
+                // Reset discovery state and bump generation after DOM re-render
+                console.log('[Discovery] renderViewerFromData called, resetting state, bumping gen');
+                _discoveryGeneration++;
                 discoveryLoaded = false;
                 discoveryLoading = false;
                 

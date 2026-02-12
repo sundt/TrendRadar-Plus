@@ -1163,20 +1163,21 @@ export const data = {
             this.renderViewerFromData(baseData, state);
 
             // Restore scroll position: prefer navigation state (back-nav) over snapshot
-            // For dynamic tabs (topic, my-tags, discovery, featured-mps): don't consume nav state here
-            // - these modules will handle scroll restoration after their content loads
+            // For dynamic tabs (topic, my-tags, discovery, featured-mps, knowledge):
+            // don't consume nav state here — these modules handle scroll restoration
+            // after their content loads asynchronously.
             const navActiveTab = TR.scroll?.peekNavigationState?.()?.activeTab || '';
             const isTopicTab = String(navActiveTab).startsWith('topic-');
             const isDynamicTab = ['my-tags', 'discovery', 'featured-mps', 'knowledge'].includes(navActiveTab);
             
+            console.log(`[Data] After render: navActiveTab=${navActiveTab}, isTopicTab=${isTopicTab}, isDynamicTab=${isDynamicTab}`);
+            
             if (isTopicTab || isDynamicTab) {
-                // Dynamic tab content not yet loaded - leave nav state for the module to consume
-                console.log(`[Data] Active tab is dynamic (${navActiveTab}), deferring scroll restore to module`);
+                console.log(`[Data] Deferring scroll restore for dynamic tab: ${navActiveTab}`);
             } else {
                 const consumedNav = TR.scroll?.consumeNavigationState?.() || null;
+                console.log(`[Data] Consuming nav state for normal tab:`, consumedNav);
                 if (consumedNav) {
-                    // Use restoreNavGridScroll which bypasses trUserScrolled and uses
-                    // anchor info from sessionStorage (immune to localStorage overwrites)
                     TR.scroll.restoreNavGridScroll(consumedNav);
                     TR.scroll.restoreNavigationScrollY(consumedNav);
                 } else if (state.preserveScroll) {
