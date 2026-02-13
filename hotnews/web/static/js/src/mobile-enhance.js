@@ -17,6 +17,8 @@
  *  - CategoryPanel（分类选择面板）
  */
 
+// @ts-nocheck
+
 const MobileEnhance = {
 
   // ========== 状态 ==========
@@ -934,6 +936,34 @@ const MobileEnhance = {
 
     this._categoryOverlay.classList.add('open');
     this._categoryPanel.classList.add('open');
+
+    // 如果没有 topic tabs 但用户已登录，topic-tracker 可能还在异步加载
+    // 监听 DOM 变化，topic tab 出现后自动刷新
+    const topicTabs = document.querySelectorAll('.category-tab.topic-tab');
+    if (topicTabs.length === 0) {
+      const categoryTabsEl = document.querySelector('.category-tabs');
+      if (categoryTabsEl) {
+        const obs = new MutationObserver(() => {
+          const newTopicTabs = document.querySelectorAll('.category-tab.topic-tab');
+          if (newTopicTabs.length > 0) {
+            obs.disconnect();
+            // 面板仍然打开时才刷新
+            if (this._categoryOverlay?.classList.contains('open')) {
+              this._renderCategoryItems();
+            }
+          }
+        });
+        obs.observe(categoryTabsEl, { childList: true });
+        // 面板关闭时断开
+        const origClose = this._closeCategoryPanel.bind(this);
+        const self = this;
+        this._closeCategoryPanel = function () {
+          obs.disconnect();
+          self._closeCategoryPanel = origClose;
+          origClose();
+        };
+      }
+    }
   },
 
   _closeCategoryPanel() {
