@@ -550,6 +550,33 @@
     background-color: rgba(0, 0, 0, 0.04);
   }
 
+  /* 移动端：点击标题展开后显示操作按钮 */
+  .news-item.expanded {
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 8px;
+  }
+
+  .news-item.expanded .news-summary-btn,
+  .news-item.expanded .news-comment-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .news-item.expanded .tr-news-date {
+    opacity: 0;
+  }
+
+  /* 兼容 .preview class（news-link.js 原始逻辑） */
+  .news-item.preview .news-summary-btn,
+  .news-item.preview .news-comment-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .news-item.preview .tr-news-date {
+    opacity: 0;
+  }
+
   /* ==========================================================================
      11. Settings Menu (reuses ActionSheet structure)
      ========================================================================== */

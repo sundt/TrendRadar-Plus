@@ -355,6 +355,29 @@ const MobileEnhance = {
 
     const self = this;
 
+    /** 关闭所有已展开的 news-item（除了 exceptItem） */
+    function closeAllExpanded(exceptItem) {
+      document.querySelectorAll('.news-item.expanded').forEach(it => {
+        if (exceptItem && it === exceptItem) return;
+        it.classList.remove('expanded');
+      });
+    }
+
+    // 点击空白区域时收起展开的卡片
+    document.addEventListener('click', (e) => {
+      if (!self._isMobileNarrowScreen()) return;
+      if (!e.target.closest('.news-item')) {
+        closeAllExpanded(null);
+      }
+    });
+
+    document.addEventListener('touchstart', (e) => {
+      if (!self._isMobileNarrowScreen()) return;
+      if (!e.target.closest('.news-item')) {
+        closeAllExpanded(null);
+      }
+    }, { passive: true });
+
     window.handleTitleClickV2 = function (el, evt) {
       // 桌面端（hover 设备）：走原有逻辑
       if (self._isHoverDevice()) {
@@ -364,39 +387,52 @@ const MobileEnhance = {
         return;
       }
 
-      // 移动端：直接跳转，不 expand
+      // 移动端：第一次点击展开按钮，第二次点击跳转
       evt.stopPropagation();
+      evt.preventDefault();
 
       const item = el.closest('.news-item');
       if (!item) return;
 
-      // 标记已读
-      try {
-        const checkbox = item.querySelector('.news-checkbox');
-        if (checkbox && !checkbox.checked) {
-          checkbox.checked = true;
-          if (typeof window.markAsRead === 'function') {
-            window.markAsRead(checkbox);
-          } else if (window.TR?.readState?.markAsRead) {
-            window.TR.readState.markAsRead(checkbox);
+      const isExpanded = item.classList.contains('expanded');
+
+      if (isExpanded) {
+        // 第二次点击 → 跳转
+        item.classList.remove('expanded');
+
+        // 标记已读
+        try {
+          const checkbox = item.querySelector('.news-checkbox');
+          if (checkbox && !checkbox.checked) {
+            checkbox.checked = true;
+            if (typeof window.markAsRead === 'function') {
+              window.markAsRead(checkbox);
+            } else if (window.TR?.readState?.markAsRead) {
+              window.TR.readState.markAsRead(checkbox);
+            }
+          } else if (window.TR?.readState?.markItemAsRead) {
+            window.TR.readState.markItemAsRead(item);
           }
-        } else if (window.TR?.readState?.markItemAsRead) {
-          window.TR.readState.markItemAsRead(item);
+        } catch (e) { /* ignore */ }
+
+        // 保存导航状态
+        try {
+          if (window.TR?.scroll?.saveNavigationState) {
+            window.TR.scroll.saveNavigationState();
+          }
+        } catch (e) { /* ignore */ }
+
+        // 打开链接
+        const url = el.href || el.dataset?.url;
+        if (url) {
+          window.open(url, '_blank', 'noopener,noreferrer');
         }
-      } catch (e) {
-        // ignore
+        return;
       }
 
-      // 保存导航状态（微信浏览器返回时恢复位置）
-      try {
-        if (window.TR?.scroll?.saveNavigationState) {
-          window.TR.scroll.saveNavigationState();
-        }
-      } catch (e) {
-        // ignore
-      }
-
-      // 不调用 evt.preventDefault()，允许默认链接跳转
+      // 第一次点击 → 展开，显示操作按钮
+      closeAllExpanded(item);
+      item.classList.add('expanded');
     };
   },
 
