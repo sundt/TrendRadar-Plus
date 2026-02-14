@@ -455,6 +455,10 @@ async function _loadTimeline() {
         _mbOffset = items.length;
         _mbInitialized = true;
         _dbg(`[MorningBrief] _loadTimeline DONE id=${_ltId}: ${items.length} items, ${Math.ceil(items.length / limit)} cards, offset=${_mbOffset}, gridChildren=${currentGrid.children.length}`);
+        // Debug: count total mb cards in entire document
+        const allMbCards = document.querySelectorAll('.tr-morning-brief-card').length;
+        const allGrids = document.querySelectorAll('.platform-grid[data-mb-injected]').length;
+        _dbg(`[MorningBrief] GLOBAL: ${allMbCards} mb-cards, ${allGrids} mb-grids in DOM`);
 
         if (items.length < initialLimit) {
             // No more data
@@ -639,7 +643,9 @@ events.on('viewer:rendered', () => {
         // Always do a full reset and reload after DOM rebuild.
         // data.js no longer preserves _knowledgeGridHtml, so the grid
         // will only contain placeholder cards at this point.
-        console.log('[MorningBrief] viewer:rendered — scheduling full reload');
+        const preMbCards = document.querySelectorAll('.tr-morning-brief-card').length;
+        const preGrids = document.querySelectorAll('.platform-grid[data-mb-injected]').length;
+        console.log(`[MorningBrief] viewer:rendered — preMbCards=${preMbCards} preGrids=${preGrids}, scheduling full reload`);
         _mbFinished = false;
         _mbOffset = 0;
         _mbInitialized = false;
