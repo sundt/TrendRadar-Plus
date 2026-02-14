@@ -355,10 +355,11 @@ async function _loadTimeline() {
     _mbOffset = 0;
     _mbFinished = false;
     
-    // Show loading state instead of clearing immediately
-    if (!hadContent) {
-        grid.innerHTML = '<div class="mb-loading-state" style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⏳</div>加载中...</div>';
-    }
+    // Always clear grid immediately to prevent duplicate cards.
+    // The old code only cleared on !hadContent, which could leave stale
+    // placeholder cards (mb-slice-1/2/3 from SSR template) in the DOM
+    // when the dynamic load appends 0-based cards (mb-slice-0/1/2...).
+    grid.innerHTML = '<div class="mb-loading-state" style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⏳</div>加载中...</div>';
 
     try {
         // Determine how many cards to load initially.
@@ -394,10 +395,8 @@ async function _loadTimeline() {
             return;
         }
 
-        // Clear grid only after successful fetch
-        // Remove all existing cards including placeholders
+        // Clear grid completely before appending new cards
         currentGrid.innerHTML = '';
-        console.log('[MorningBrief] Grid cleared, ready to append new cards');
 
         if (!items.length) {
             currentGrid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
@@ -536,8 +535,13 @@ function _attachHandlersOnce() {
 async function _initialLoad() {
     console.log('[MorningBrief] Starting initial load');
     
-    // Reset state for fresh load (important when called from renderViewerFromData patch)
-    _mbInFlight = false;
+    // If a load is already in flight, skip to avoid concurrent loads
+    // that can cause duplicate cards
+    if (_mbInFlight) {
+        console.log('[MorningBrief] Skipping initial load — already in flight');
+        return;
+    }
+    
     _mbFinished = false;
     _mbOffset = 0;
     
