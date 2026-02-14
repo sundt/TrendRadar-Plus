@@ -67,7 +67,10 @@ function clearCache() {
  */
 async function fetchFeaturedMps() {
     try {
-        const res = await fetch('/api/featured-mps', {
+        // Mobile: fewer articles per MP for faster loading
+        const isMobile = window.innerWidth <= 640;
+        const articleLimit = isMobile ? 20 : 50;
+        const res = await fetch(`/api/featured-mps?article_limit=${articleLimit}`, {
             credentials: 'include'
         });
         if (!res.ok) {

@@ -1,8 +1,13 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 
 const EXPLORE_TAB_ID = 'explore';
-const INITIAL_CARDS = 3; // Load 3 cards initially (150 items)
-const MAX_CARDS = 20; // Maximum number of cards to load (prevent infinite loading)
+const INITIAL_CARDS_DESKTOP = 3;
+const INITIAL_CARDS_MOBILE = 1;
+const MAX_CARDS = 20;
+
+function _getInitialCards() {
+    return window.innerWidth <= 640 ? INITIAL_CARDS_MOBILE : INITIAL_CARDS_DESKTOP;
+}
 
 function getItemsPerCard() {
     return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.items_per_card) || 50;
@@ -270,7 +275,7 @@ async function _loadTimeline() {
 
     // Determine how many cards to load initially.
     // If restoring from nav state, load enough cards to cover the anchor position.
-    let neededCards = INITIAL_CARDS;
+    let neededCards = _getInitialCards();
     if (_exploreGeneration > 0 || window._trNoRebuildExpected) {
         try {
             const navState = TR.scroll?.peekNavigationState?.() || null;
@@ -378,6 +383,16 @@ function _ensurePolling() {
         const cid = String(detail?.categoryId || '').trim();
         const hasUpdate = !!detail?.hasUpdate;
         if (cid !== EXPLORE_TAB_ID) return;
+
+        // Skip if not initialized — a full load is pending from viewer:rendered.
+        // renderViewerFromData calls switchTab() BEFORE emitting viewer:rendered,
+        // so _initialized may still be true from the previous cycle.
+        // Check the grid for actual cards to avoid a duplicate load.
+        if (!_initialized) return;
+        const grid = _getGrid();
+        const hasCards = grid && grid.querySelectorAll('.tr-explore-card').length > 0;
+        if (!hasCards) return;
+
         if (!_exploreFinished) _attachObserver();
         _refreshTimelineIfNeeded(hasUpdate).catch(() => { });
     });
@@ -385,14 +400,14 @@ function _ensurePolling() {
 
 import { events } from './events.js';
 
-// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+// viewer:rendered is the SOLE trigger for loading explore data.
+// ready() no longer calls _initialLoad() because viewer:rendered always fires
+// (hasDefaultHiddenCategories is always true).
 events.on('viewer:rendered', () => {
-    // Cancel any in-flight observer before DOM rebuild
     if (_exploreObserver) {
         try { _exploreObserver.disconnect(); } catch (e) { /* ignore */ }
         _exploreObserver = null;
     }
-    // Bump generation so scroll restore knows this is a post-rebuild load
     _exploreGeneration++;
     _initialized = false;
     _exploreInFlight = false;
@@ -401,7 +416,13 @@ events.on('viewer:rendered', () => {
     _initialLoad().catch(() => { });
 });
 
+// Only register polling on ready. Do NOT call _initialLoad() here.
+// Fallback: if viewer:rendered never fires (_trNoRebuildExpected), load here.
 ready(function () {
-    _initialLoad().catch(() => { });
     _ensurePolling();
+    setTimeout(() => {
+        if (window._trNoRebuildExpected && !_initialized) {
+            _initialLoad().catch(() => {});
+        }
+    }, 100);
 });

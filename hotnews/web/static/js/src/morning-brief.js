@@ -6,8 +6,13 @@ const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
 const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const AUTO_REFRESH_INTERVAL_MS = 300000;
-const INITIAL_CARDS = 10; // Load 10 cards initially (500 items) - dynamic like explore
-const MAX_CARDS = 20; // Maximum cards to load (1000 items) to enable caching
+const INITIAL_CARDS_DESKTOP = 10;
+const INITIAL_CARDS_MOBILE = 1;
+const MAX_CARDS = 20;
+
+function _getInitialCards() {
+    return window.innerWidth <= 640 ? INITIAL_CARDS_MOBILE : INITIAL_CARDS_DESKTOP;
+}
 const LAST_VISIT_KEY = 'tr_category_last_visit_v1';
 const NEW_CONTENT_WINDOW_SEC = 24 * 3600;
 
@@ -351,7 +356,7 @@ async function _loadTimeline() {
 
     try {
         const limit = getItemsPerCard();
-        let neededCards = INITIAL_CARDS;
+        let neededCards = _getInitialCards();
         if (myGeneration > 0 || window._trNoRebuildExpected) {
             try {
                 const navState = TR.scroll?.peekNavigationState?.() || null;

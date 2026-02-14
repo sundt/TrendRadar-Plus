@@ -51,7 +51,11 @@ function clearCache() {
  */
 async function fetchDiscoveryNews() {
     try {
-        const res = await fetch('/api/user/preferences/discovery-news?news_limit=50&tag_limit=30', {
+        // Mobile: fewer tags and news per tag for faster loading
+        const isMobile = window.innerWidth <= 640;
+        const newsLimit = isMobile ? 20 : 50;
+        const tagLimit = isMobile ? 10 : 30;
+        const res = await fetch(`/api/user/preferences/discovery-news?news_limit=${newsLimit}&tag_limit=${tagLimit}`, {
             credentials: 'include'
         });
         if (!res.ok) {
