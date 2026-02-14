@@ -342,6 +342,22 @@ async function _loadNextBatch() {
  * Initial Full Reload
  */
 async function _loadTimeline() {
+    const _ltId = Date.now();
+    const _dbg = (msg) => {
+        console.log(msg);
+        try {
+            let el = document.getElementById('mb-debug-log');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'mb-debug-log';
+                el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;font:11px/1.4 monospace;padding:6px 10px;max-height:40vh;overflow:auto;pointer-events:auto;';
+                document.body.prepend(el);
+            }
+            el.innerHTML += msg.replace('[MorningBrief] ', '') + '<br>';
+            el.scrollTop = el.scrollHeight;
+        } catch (e) { /* ignore */ }
+    };
+    _dbg(`[MorningBrief] _loadTimeline START id=${_ltId} gen=${_mbGeneration} inFlight=${_mbInFlight}`);
     const grid = _getGrid();
     if (!grid) {
         console.warn('[MorningBrief] Grid not found, skipping load');
@@ -399,7 +415,7 @@ async function _loadTimeline() {
 
         // Abort if a newer generation has started (DOM was rebuilt)
         if (myGeneration !== _mbGeneration) {
-            console.log('[MorningBrief] Stale load detected, aborting');
+            _dbg(`[MorningBrief] _loadTimeline id=${_ltId}: STALE ABORT myGen=${myGeneration} curGen=${_mbGeneration}`);
             return;
         }
 
@@ -411,6 +427,7 @@ async function _loadTimeline() {
         }
 
         // Clear grid completely before appending new cards
+        _dbg(`[MorningBrief] _loadTimeline id=${_ltId}: clearing grid, children=${currentGrid.children.length}`);
         currentGrid.innerHTML = '';
 
         if (!items.length) {
@@ -437,7 +454,7 @@ async function _loadTimeline() {
 
         _mbOffset = items.length;
         _mbInitialized = true;
-        console.log(`[MorningBrief] Initial load complete: ${items.length} items, ${Math.ceil(items.length / limit)} cards, _mbOffset=${_mbOffset}`);
+        _dbg(`[MorningBrief] _loadTimeline DONE id=${_ltId}: ${items.length} items, ${Math.ceil(items.length / limit)} cards, offset=${_mbOffset}, gridChildren=${currentGrid.children.length}`);
 
         if (items.length < initialLimit) {
             // No more data
