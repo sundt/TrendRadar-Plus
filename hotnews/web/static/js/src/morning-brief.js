@@ -594,44 +594,28 @@ events.on('viewer:rendered', () => {
     }
 
     try {
-        // Check if the grid already has morning brief cards with real content
-        // (data.js preserves _knowledgeGridHtml when cards exist)
-        const grid = _getGrid();
-        const existingCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-item').length : 0;
-        
-        // Also check for placeholder cards (cards with only loading state, no real items)
-        const placeholderCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-placeholder').length : 0;
-        const hasOnlyPlaceholders = placeholderCards > 0 && existingCards === 0;
+        // Always do a full reset and reload after DOM rebuild.
+        // data.js no longer preserves _knowledgeGridHtml, so the grid
+        // will only contain placeholder cards at this point.
+        console.log('[MorningBrief] viewer:rendered — scheduling full reload');
+        _mbInFlight = false;
+        _mbFinished = false;
+        _mbOffset = 0;
+        _mbInitialized = false;
+        _mbRetryCount = 0;
+        _mbLastRefreshAt = 0;
 
-        if (existingCards > 0 && _mbInitialized) {
-            // Content was preserved by data.js — keep current state, just re-attach observer
-            console.log(`[MorningBrief] Preserved ${existingCards} items, re-attaching observer`);
-            _mbInFlight = false;
-            if (!_mbFinished) {
-                _attachObserver();
-            }
-        } else {
-            // No existing content or only placeholders — full reset and reload
-            console.log(`[MorningBrief] No preserved content (existingCards=${existingCards}, placeholders=${placeholderCards}), scheduling full reload`);
-            _mbInFlight = false;
-            _mbFinished = false;
-            _mbOffset = 0;
-            _mbInitialized = false;
-            _mbRetryCount = 0;
-            _mbLastRefreshAt = 0;
+        // Use a generation counter to cancel stale loads
+        _mbGeneration = (_mbGeneration || 0) + 1;
+        const gen = _mbGeneration;
 
-            // Use a generation counter to cancel stale loads
-            _mbGeneration = (_mbGeneration || 0) + 1;
-            const gen = _mbGeneration;
-
-            setTimeout(() => {
-                // Only proceed if no newer generation has been started
-                if (gen !== _mbGeneration) return;
-                _initialLoad().catch((e) => {
-                    console.error('[MorningBrief] Initial load failed after render:', e);
-                });
-            }, 50);
-        }
+        setTimeout(() => {
+            // Only proceed if no newer generation has been started
+            if (gen !== _mbGeneration) return;
+            _initialLoad().catch((e) => {
+                console.error('[MorningBrief] Initial load failed after render:', e);
+            });
+        }, 50);
     } catch (e) {
         console.error('[MorningBrief] Error in render hook:', e);
     }

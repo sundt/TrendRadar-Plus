@@ -609,18 +609,11 @@ export const data = {
             // ignore
         }
 
+        // Do NOT preserve knowledge grid HTML — morning-brief.js manages its own
+        // state (_mbOffset, _mbFinished, etc.) and will do a clean reload on
+        // viewer:rendered. Preserving stale HTML causes duplicate cards in WeChat
+        // because the preserved cards don't match the reset JS state.
         let _knowledgeGridHtml = '';
-        try {
-            const existingPane = document.getElementById('tab-knowledge');
-            const existingGrid = existingPane ? existingPane.querySelector('.platform-grid') : null;
-            const hasMb = !!(existingGrid && existingGrid.querySelector('.tr-morning-brief-card'));
-            const hasItems = !!(existingGrid && existingGrid.querySelector('.news-item'));
-            if (hasMb && hasItems) {
-                _knowledgeGridHtml = String(existingGrid.innerHTML || '');
-            }
-        } catch (e) {
-            _knowledgeGridHtml = '';
-        }
 
         const categories = TR.settings.applyCategoryConfigToData(data?.categories || {});
         _latestCategories = categories;
