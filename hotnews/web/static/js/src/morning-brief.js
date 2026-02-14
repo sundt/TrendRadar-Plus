@@ -130,21 +130,17 @@ function _ensureLayout() {
     if (!grid) {
         grid = document.createElement('div');
         grid.className = 'platform-grid';
-        // Force horizontal scroll if not already applied by CSS
         grid.style.display = 'flex';
         grid.style.flexDirection = 'row';
         grid.style.overflowX = 'auto';
         grid.style.overflowY = 'hidden';
-        grid.style.alignItems = 'flex-start'; // Align items to top
-        // Prevent scroll from bubbling to page when at container boundaries
+        grid.style.alignItems = 'flex-start';
         grid.style.overscrollBehavior = 'contain';
         pane.appendChild(grid);
     } else {
-        // Ensure overscroll behavior is set even if grid already exists
         grid.style.overscrollBehavior = 'contain';
     }
 
-    // Mark as injected
     try {
         if (grid.dataset) grid.dataset.mbInjected = '1';
     } catch (e) { }
@@ -170,20 +166,16 @@ async function _fetchTimelineBatch(limit, offset) {
 
 /**
  * Add a card to the grid
- * @param {Array} items - The items to display in this card
- * @param {number} cardIndex - The 0-based card index (0 = first card, 1 = second card, etc.)
- * @param {HTMLElement} container - The grid container
  */
 function _appendCard(items, cardIndex, container) {
     if (!items || !items.length) return;
 
     const card = document.createElement('div');
     card.className = 'platform-card tr-morning-brief-card';
-    card.style.minWidth = '360px'; // Ensure cards have width
+    card.style.minWidth = '360px';
     card.dataset.platform = `mb-slice-${cardIndex}`;
     card.draggable = false;
 
-    // Calculate display range: cardIndex 0 = 1-50, cardIndex 1 = 51-100, etc.
     const limit = getItemsPerCard();
     const displayStart = cardIndex * limit + 1;
     const displayEnd = cardIndex * limit + items.length;
@@ -200,13 +192,11 @@ function _appendCard(items, cardIndex, container) {
         </ul>
     `;
 
-    // Update indices to reflect global position (not local 1, 2, 3... but global 1, 2... 51, 52...)
     const indices = card.querySelectorAll('.news-index');
     indices.forEach((el, i) => {
         el.textContent = String(displayStart + i);
     });
 
-    // Always append to end (before sentinel if it exists)
     const sentinel = container.querySelector('#mb-load-sentinel');
     if (sentinel) {
         container.insertBefore(card, sentinel);
@@ -218,13 +208,12 @@ function _appendCard(items, cardIndex, container) {
 }
 
 function _createSentinel(container) {
-    // Remove existing if any
     const existing = container.querySelector('#mb-load-sentinel');
     if (existing) existing.remove();
 
     const sentinel = document.createElement('div');
     sentinel.id = 'mb-load-sentinel';
-    sentinel.style.minWidth = '20px'; // Small width
+    sentinel.style.minWidth = '20px';
     sentinel.style.height = '100%';
     sentinel.style.flexShrink = '0';
     sentinel.innerHTML = '<div style="width:20px;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">⏳</div>';
@@ -248,8 +237,8 @@ function _attachObserver() {
             }
         }
     }, {
-        root: pane.querySelector('.platform-grid'), // The scrolling container
-        rootMargin: '200px', // Preload when close
+        root: pane.querySelector('.platform-grid'),
+        rootMargin: '200px',
         threshold: 0.01
     });
 
@@ -263,13 +252,10 @@ function _attachObserver() {
  * Infinite scroll step
  */
 async function _loadNextBatch() {
-    console.log(`[MorningBrief] _loadNextBatch called: offset=${_mbOffset}, inFlight=${_mbInFlight}, finished=${_mbFinished}`);
     if (_mbInFlight || _mbFinished) return;
 
-    // Capture generation to detect stale observer callbacks
     const myGeneration = _mbGeneration;
 
-    // Check if we've reached max cards
     const currentCardCount = Math.floor(_mbOffset / getItemsPerCard());
     if (currentCardCount >= MAX_CARDS) {
         _mbFinished = true;
@@ -283,13 +269,11 @@ async function _loadNextBatch() {
 
     _mbInFlight = true;
     try {
-        // Fetch next page
         const limit = getItemsPerCard();
         const items = await _fetchTimelineBatch(limit, _mbOffset);
 
         if (!items.length) {
             _mbFinished = true;
-            // Remove sentinel
             const s = document.getElementById('mb-load-sentinel');
             if (s) {
                 s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已显示全部内容</div>';
@@ -305,19 +289,16 @@ async function _loadNextBatch() {
                 console.log('[MorningBrief] _loadNextBatch: stale generation, aborting');
                 return;
             }
-            // Calculate which card number this is (0-based)
             const cardIndex = Math.floor(_mbOffset / getItemsPerCard());
-            // Defensive: check if a card with this platform ID already exists
+            // Defensive: skip if card already exists
             const existingCard = grid.querySelector(`.tr-morning-brief-card[data-platform="mb-slice-${cardIndex}"]`);
             if (existingCard) {
                 console.warn(`[MorningBrief] _loadNextBatch: card mb-slice-${cardIndex} already exists, skipping`);
                 _mbOffset += items.length;
                 return;
             }
-            console.log(`[MorningBrief] _loadNextBatch: creating card ${cardIndex}, offset=${_mbOffset}, items=${items.length}, displayRange=${cardIndex * getItemsPerCard() + 1}-${cardIndex * getItemsPerCard() + items.length}`);
             _appendCard(items, cardIndex, grid);
-            
-            // Restore read state for newly loaded items
+
             try {
                 TR.readState?.restoreReadState?.();
             } catch (e) { /* ignore */ }
@@ -342,26 +323,9 @@ async function _loadNextBatch() {
  * Initial Full Reload
  */
 async function _loadTimeline() {
-    const _ltId = Date.now();
-    const _dbg = (msg) => {
-        console.log(msg);
-        try {
-            let el = document.getElementById('mb-debug-log');
-            if (!el) {
-                el = document.createElement('div');
-                el.id = 'mb-debug-log';
-                el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:rgba(0,0,0,0.85);color:#0f0;font:11px/1.4 monospace;padding:6px 10px;max-height:40vh;overflow:auto;pointer-events:auto;';
-                document.body.prepend(el);
-            }
-            el.innerHTML += msg.replace('[MorningBrief] ', '') + '<br>';
-            el.scrollTop = el.scrollHeight;
-        } catch (e) { /* ignore */ }
-    };
-    _dbg(`[MorningBrief] _loadTimeline START id=${_ltId} gen=${_mbGeneration} inFlight=${_mbInFlight}`);
     const grid = _getGrid();
     if (!grid) {
         console.warn('[MorningBrief] Grid not found, skipping load');
-        // Schedule retry if not too many attempts
         if (_mbRetryCount < MAX_RETRY_COUNT) {
             _mbRetryCount++;
             console.log(`[MorningBrief] Scheduling retry ${_mbRetryCount}/${MAX_RETRY_COUNT}`);
@@ -372,13 +336,10 @@ async function _loadTimeline() {
         return;
     }
 
-    // Reset retry count on successful grid find
     _mbRetryCount = 0;
 
-    // Capture current generation to detect stale loads
     const myGeneration = _mbGeneration;
 
-    // Save existing content in case of error
     const previousContent = grid.innerHTML;
     const hadContent = grid.querySelectorAll('.tr-morning-brief-card .news-item').length > 0;
 
@@ -386,15 +347,9 @@ async function _loadTimeline() {
     _mbOffset = 0;
     _mbFinished = false;
     
-    // Always clear grid immediately to prevent duplicate cards.
-    // The old code only cleared on !hadContent, which could leave stale
-    // placeholder cards (mb-slice-1/2/3 from SSR template) in the DOM
-    // when the dynamic load appends 0-based cards (mb-slice-0/1/2...).
     grid.innerHTML = '<div class="mb-loading-state" style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⏳</div>加载中...</div>';
 
     try {
-        // Determine how many cards to load initially.
-        // If restoring from nav state, load enough cards to cover the anchor position.
         const limit = getItemsPerCard();
         let neededCards = INITIAL_CARDS;
         if (myGeneration > 0 || window._trNoRebuildExpected) {
@@ -413,21 +368,18 @@ async function _loadTimeline() {
         const initialLimit = limit * neededCards;
         const items = await _fetchTimelineBatch(initialLimit, 0);
 
-        // Abort if a newer generation has started (DOM was rebuilt)
+        // Abort if a newer generation has started
         if (myGeneration !== _mbGeneration) {
-            _dbg(`[MorningBrief] _loadTimeline id=${_ltId}: STALE ABORT myGen=${myGeneration} curGen=${_mbGeneration}`);
+            console.log('[MorningBrief] _loadTimeline: stale generation, aborting');
             return;
         }
 
-        // Verify grid still exists after async operation
         const currentGrid = _getGrid();
         if (!currentGrid) {
             console.warn('[MorningBrief] Grid disappeared during fetch, aborting');
             return;
         }
 
-        // Clear grid completely before appending new cards
-        _dbg(`[MorningBrief] _loadTimeline id=${_ltId}: clearing grid, children=${currentGrid.children.length}`);
         currentGrid.innerHTML = '';
 
         if (!items.length) {
@@ -436,48 +388,35 @@ async function _loadTimeline() {
             return;
         }
 
-        // Double-check: abort if generation changed during innerHTML clear
         if (myGeneration !== _mbGeneration) {
             console.log('[MorningBrief] Stale load after grid clear, aborting');
             return;
         }
 
-        // Create Sentinel for infinite scroll
         _createSentinel(currentGrid);
 
-        // Chunk into cards
         for (let i = 0; i < items.length; i += limit) {
             const chunk = items.slice(i, i + limit);
-            const cardIndex = Math.floor(i / limit); // 0, 1, 2, ...
+            const cardIndex = Math.floor(i / limit);
             _appendCard(chunk, cardIndex, currentGrid);
         }
 
         _mbOffset = items.length;
         _mbInitialized = true;
-        _dbg(`[MorningBrief] _loadTimeline DONE id=${_ltId}: ${items.length} items, ${Math.ceil(items.length / limit)} cards, offset=${_mbOffset}, gridChildren=${currentGrid.children.length}`);
-        // Debug: count total mb cards in entire document
-        const allMbCards = document.querySelectorAll('.tr-morning-brief-card').length;
-        const allGrids = document.querySelectorAll('.platform-grid[data-mb-injected]').length;
-        _dbg(`[MorningBrief] GLOBAL: ${allMbCards} mb-cards, ${allGrids} mb-grids in DOM`);
 
         if (items.length < initialLimit) {
-            // No more data
             _mbFinished = true;
             const s = document.getElementById('mb-load-sentinel');
             if (s) s.remove();
         } else {
-            // Setup observer for next batches
             _attachObserver();
         }
         
-        // Restore read state for dynamically loaded items
         try {
             TR.readState?.restoreReadState?.();
         } catch (e) { /* ignore */ }
 
-        // Restore scroll position from back-navigation state (WeChat browser)
-        // Only restore if this load was triggered after renderViewerFromData
-        // (generation > 0), not the initial ready() load which may be stale.
+        // Restore scroll position from back-navigation state
         if (myGeneration > 0 || window._trNoRebuildExpected) {
             try {
                 const navState = TR.scroll?.peekNavigationState?.() || null;
@@ -495,11 +434,9 @@ async function _loadTimeline() {
         }
     } catch (e) {
         console.error('[MorningBrief] Failed to load timeline:', e);
-        // Verify grid still exists
         const currentGrid = _getGrid();
         if (!currentGrid) return;
         
-        // Restore previous content if we had any, otherwise show error
         if (hadContent && previousContent) {
             currentGrid.innerHTML = previousContent;
         } else {
@@ -517,16 +454,13 @@ async function _refreshTimelineIfNeeded(opts = {}) {
     const force = opts.force === true;
     const skipTabCheck = opts.skipTabCheck === true;
     
-    // Skip tab check only for initial load
     if (!skipTabCheck && _getActiveTabId() !== MORNING_BRIEF_CATEGORY_ID) return false;
 
-    // Simple cooldown if not forced
     const now = Date.now();
     if (!force && _mbLastRefreshAt > 0 && (now - _mbLastRefreshAt) < (AUTO_REFRESH_INTERVAL_MS - 5000)) {
         return false;
     }
 
-    // If already in flight, queue a refresh for after completion
     if (_mbInFlight) {
         console.log('[MorningBrief] Refresh already in flight, will retry after completion');
         return false;
@@ -562,7 +496,6 @@ function _attachHandlersOnce() {
         const refresh = t.closest('[data-action="mb-refresh"]');
         if (refresh) {
             e.preventDefault();
-            // Just reload timeline
             _refreshTimelineIfNeeded({ force: true }).catch(() => {
                 try { TR.toast?.show('刷新失败', { variant: 'error', durationMs: 2000 }); } catch (_) { }
             });
@@ -577,8 +510,6 @@ function _attachHandlersOnce() {
 async function _initialLoad() {
     console.log('[MorningBrief] Starting initial load');
     
-    // If a load is already in flight, skip to avoid concurrent loads
-    // that can cause duplicate cards
     if (_mbInFlight) {
         console.log('[MorningBrief] Skipping initial load — already in flight');
         return;
@@ -586,20 +517,18 @@ async function _initialLoad() {
     
     _mbFinished = false;
     
-    // Retry up to 3 times if layout is not ready (DOM might not be fully rendered)
     let retries = 3;
     while (retries > 0) {
         if (_ensureLayout()) break;
         retries--;
         if (retries > 0) {
             console.log(`[MorningBrief] Layout not ready, retrying... (${3 - retries}/3)`);
-            await new Promise(r => setTimeout(r, 100)); // Wait 100ms before retry
+            await new Promise(r => setTimeout(r, 100));
         }
     }
     
     if (!_ensureLayout()) {
         console.warn('[MorningBrief] Layout not ready after retries, scheduling delayed retry');
-        // Schedule a delayed retry
         setTimeout(() => {
             _initialLoad().catch(() => {});
         }, 500);
@@ -607,7 +536,6 @@ async function _initialLoad() {
     }
     
     _attachHandlersOnce();
-    // Skip tab check for initial load - always load data
     await _refreshTimelineIfNeeded({ force: false, skipTabCheck: true });
     console.log('[MorningBrief] Initial load complete');
 }
@@ -617,11 +545,8 @@ function _ensurePolling() {
         const cid = String(detail?.categoryId || '').trim();
         if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
 
-        // Don't re-attach observer or trigger refresh if not initialized yet
-        // (a full load is pending from viewer:rendered or ready())
         if (!_mbInitialized) return;
 
-        // When switching to this tab, attach observer again if needed
         if (!_mbFinished) _attachObserver();
 
         clearTimeout(_tabSwitchDebounceTimer);
@@ -631,7 +556,11 @@ function _ensurePolling() {
     });
 }
 
-// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
+// Listen for viewer:rendered event — this is the SOLE trigger for loading.
+// ready() no longer calls _initialLoad() because viewer:rendered always fires
+// (hasDefaultHiddenCategories is always true → refreshViewerData → renderViewerFromData → viewer:rendered).
+// Having two triggers (ready + viewer:rendered) caused _loadTimeline to run twice,
+// leading to observer/state corruption and duplicate cards on mobile.
 events.on('viewer:rendered', () => {
     // Cancel any in-flight observer before DOM rebuild
     if (_mbObserver) {
@@ -640,37 +569,24 @@ events.on('viewer:rendered', () => {
     }
 
     try {
-        // Always do a full reset and reload after DOM rebuild.
-        // data.js no longer preserves _knowledgeGridHtml, so the grid
-        // will only contain placeholder cards at this point.
-        const preMbCards = document.querySelectorAll('.tr-morning-brief-card').length;
-        const preGrids = document.querySelectorAll('.platform-grid[data-mb-injected]').length;
-        console.log(`[MorningBrief] viewer:rendered — preMbCards=${preMbCards} preGrids=${preGrids}, scheduling full reload`);
         _mbFinished = false;
         _mbOffset = 0;
         _mbInitialized = false;
         _mbRetryCount = 0;
         _mbLastRefreshAt = 0;
-
-        // Use a generation counter to cancel stale loads.
-        // Incrementing generation will cause any in-flight _loadTimeline to abort
-        // when its fetch completes (generation mismatch check).
         _mbGeneration = (_mbGeneration || 0) + 1;
         const gen = _mbGeneration;
 
-        // Do NOT reset _mbInFlight here — let the in-flight _refreshTimelineIfNeeded
-        // finish naturally. Its _loadTimeline will abort via generation check,
-        // and its finally{} block will set _mbInFlight = false.
-        // Instead, schedule _initialLoad with enough delay for the old load to finish.
-        const delay = _mbInFlight ? 200 : 50;
+        // Reset _mbInFlight so the new load can proceed.
+        // The old generation's in-flight load (if any) will abort via generation check.
+        _mbInFlight = false;
 
         setTimeout(() => {
-            // Only proceed if no newer generation has been started
             if (gen !== _mbGeneration) return;
             _initialLoad().catch((e) => {
                 console.error('[MorningBrief] Initial load failed after render:', e);
             });
-        }, delay);
+        }, 50);
     } catch (e) {
         console.error('[MorningBrief] Error in render hook:', e);
     }
@@ -678,9 +594,7 @@ events.on('viewer:rendered', () => {
 
 TR.morningBrief = {
     ...(TR.morningBrief || {}),
-    // Expose refresh method for manual retry
     refresh: () => _refreshTimelineIfNeeded({ force: true }),
-    // Expose status for debugging
     getStatus: () => ({
         inFlight: _mbInFlight,
         finished: _mbFinished,
@@ -691,7 +605,22 @@ TR.morningBrief = {
     }),
 };
 
+// Only register polling (tab:switched handler) on ready.
+// Do NOT call _initialLoad() here — viewer:rendered is the sole trigger
+// when renderViewerFromData runs (which is the normal case because
+// hasDefaultHiddenCategories is always true).
+//
+// Fallback: if init.js takes the else branch (no custom config AND no
+// default hidden categories), viewer:rendered never fires and
+// _trNoRebuildExpected is set. In that case we need to load here.
 ready(function () {
-    _initialLoad().catch(() => { });
     _ensurePolling();
+
+    // Delay slightly so init.js ready() handler runs first and sets _trNoRebuildExpected
+    setTimeout(() => {
+        if (window._trNoRebuildExpected && !_mbInitialized && !_mbInFlight) {
+            console.log('[MorningBrief] No viewer:rendered expected, loading from ready fallback');
+            _initialLoad().catch(() => {});
+        }
+    }, 100);
 });
