@@ -6,7 +6,7 @@ description: 创建自定义新闻源爬虫
 # 创建新闻源爬虫
 
 ## 概述
-本 Skill 指导如何为新的新闻网站创建自定义爬虫 Provider，并提供**12个生产环境验证的成功案例**作为参考。
+本 Skill 指导如何为新的新闻网站创建自定义爬虫 Provider，并提供**16个生产环境验证的成功案例**作为参考。
 
 ## 🔍 API 发现方法论（100% 成功率）
 
@@ -18,6 +18,7 @@ Step 1: 检查 RSS/Atom
 
 Step 2: 检查 SSR 内嵌数据
   └─ 搜索 __NEXT_DATA__（Next.js）或 __NUXT__（Nuxt.js）
+  └─ 搜索 var xxx = [{...}] 形式的内嵌 JSON 数组（如 yicai.com 的 headList）
 
 Step 3: 下载 JS chunk，搜索 API 路径 ⭐ 核心步骤
   └─ 用正则搜索: /api/ 、 /v1/ 、 /v2/ 、 cdn.xxx.com/json 等
@@ -25,6 +26,11 @@ Step 3: 下载 JS chunk，搜索 API 路径 ⭐ 核心步骤
 
 Step 4: 尝试常见 API 模式
   └─ CDN 静态 JSON、官方公开 API、已知域名猜测
+
+Step 4.5: 检查 Rails/传统 SSR 站点
+  └─ 查看 HTML 中是否有 data-remote="true"（Rails UJS AJAX）
+  └─ 查看 "加载更多" 链接的 URL 模式（?last_article=xxx）
+  └─ 有 → 直接解析 SSR HTML，参考 nbd_finance.py
 
 Step 5: 如果有签名，从 JS 逆向破解
   └─ 搜索 "sign" 关键字，追踪 webpack module 依赖链
@@ -36,10 +42,16 @@ Step 5: 如果有签名，从 JS 逆向破解
 - **页面路径 ≠ API 参数**：wallstreetcn `/news/tmt` 对应 API 参数 `category=technology`
 - **CDN JSON 最稳定**：jin10 有 reference-api 但 502，CDN JSON 反而最可靠
 - **签名不一定复杂**：cls.cn 的签名就是 SHA-1 → MD5
-- **大部分财经站 API 完全开放**：gelonghui、jin10、wallstreetcn 都不需要认证
+- **大部分财经站 API 完全开放**：gelonghui、jin10、wallstreetcn、eeo.com.cn 都不需要认证
 - **国内服务器 DNS 污染**：v2ex.com 等被墙网站需走代理
 - **POST JSON API 也可能完全开放**：掘金热榜无需签名无需登录，POST 即可
 - **API 能通不代表脚本能通**：Docker 容器内需确保代理环境变量正确传递
+- **传统 Rails 站点无 JSON API**：nbd.com.cn 等老站用 SSR HTML + Rails UJS AJAX 分页，需正则解析
+- **AJAX 分页返回 JS 片段**：Rails `data-remote="true"` 返回的是 `$(...).append('HTML')` 格式，需设 `X-Requested-With: XMLHttpRequest`
+- **页面 JS 中藏着 API**：eeo.com.cn 首页 JS 中 `$.getJSON(appUrl + '/?app=article&...')` 暴露了完整 JSON API，比解析 HTML 高效得多
+- **同站多套 API 模式**：eeo.com.cn 首页用 `synPage` action，频道页用 `getMoreArticle` + UUID，快讯用 `catid`，需分别处理
+- **SSR 内嵌 JSON 数据量可能很大**：yicai.com 首页 HTML 约 1MB，其中 `var headList=[...]` 内嵌 300 条完整文章 JSON，无需额外 API 请求
+- **内嵌 JSON 变量名不固定**：有的用 `var xxx = [...]`，有的用 `xxx=[...]`（无 var、无空格），正则需兼容两种写法
 
 
 ---
@@ -63,18 +75,25 @@ flowchart TD
     Q6 -->|是| E10[hackernews_stories.py]
     Q6 -->|否| E7
     Q1 -->|POST JSON 热榜| E11[juejin_hot.py]
+    Q1 -->|SSR 内嵌 JSON| E15[yicai_news.py]
     Q2 -->|需要签名| E8[cls_depth_api.py]
     Q2 -->|不需要| Q4{JSON 结构?}
     Q4 -->|简单平铺| E1[sina_tech_roll.py]
     Q4 -->|多频道/分类| E2[wallstreetcn_articles.py]
     Q4 -->|开放 API 多板块| E9[gelonghui_hot.py]
+    Q4 -->|开放 API 多套接口| E14[eeo_news.py]
     Q4 -->|深度嵌套| E3[nba_schedule_recursive.py]
     Q3 -->|静态 HTML| E4[aibase_news.py]
+    Q3 -->|Rails SSR + AJAX 分页| E12[nbd_finance.py]
     Q3 -->|JS 渲染| E5[cls_depth_scraperapi.py ⚠️备选]
+    Q1 -->|SSR HTML + 正则| Q7{有 AJAX 分页?}
+    Q7 -->|Rails UJS| E12
+    Q7 -->|无分页/简单| E4
+    Q7 -->|GitHub 风格| E13[github_trending.py]
 ```
 
 
-### 成功案例库（12个）
+### 成功案例库（16个）
 
 | 案例脚本 | 适用场景 | 关键技术 | 难度 |
 |---------|---------|----------|------|
@@ -82,11 +101,15 @@ flowchart TD
 | [jin10_news.py](examples/jin10_news.py) | CDN 静态 JSON | 无需认证 | ⭐ |
 | [sina_tech_roll.py](examples/sina_tech_roll.py) | 简单 JSON API | 参数请求 | ⭐ |
 | [juejin_hot.py](examples/juejin_hot.py) | POST JSON 热榜 | sort_type + hot_index 排序 | ⭐ |
+| [eeo_news.py](examples/eeo_news.py) | 开放 JSON API 多套接口 | 首页/频道/快讯三套 API | ⭐ |
+| [yicai_news.py](examples/yicai_news.py) | SSR 内嵌 JSON | 首页 HTML 内嵌 300 条 JSON、频道筛选 | ⭐ |
 | [gelonghui_hot.py](examples/gelonghui_hot.py) | 开放 API 多板块 | 多 source 分支 | ⭐⭐ |
 | [wallstreetcn_articles.py](examples/wallstreetcn_articles.py) | 多分类 API | 同域猜测、data_path 差异 | ⭐⭐ |
 | [wallstreetcn_flash.py](examples/wallstreetcn_flash.py) | 多频道轮询 | 去重、排序 | ⭐⭐ |
 | [aibase_news.py](examples/aibase_news.py) | 静态 HTML | BS4 + Regex | ⭐⭐ |
 | [hackernews_stories.py](examples/hackernews_stories.py) | 官方 API + 并发 + 代理 | Firebase API、concurrent.futures | ⭐⭐ |
+| [nbd_finance.py](examples/nbd_finance.py) | SSR HTML + AJAX 分页 | Rails UJS、正则解析、多频道 | ⭐⭐ |
+| [github_trending.py](examples/github_trending.py) | SSR HTML + 正则 | GitHub 静态 HTML、代理 | ⭐⭐ |
 | [nba_schedule_recursive.py](examples/nba_schedule_recursive.py) | 嵌套 JSON | 递归遍历 | ⭐⭐⭐ |
 | [cls_depth_api.py](examples/cls_depth_api.py) | 签名 API | SHA-1 → MD5 签名破解 | ⭐⭐⭐ |
 | [cls_depth_scraperapi.py](examples/cls_depth_scraperapi.py) | ⚠️ JS 渲染（备选） | ScraperAPI | ⭐⭐⭐ |
@@ -222,6 +245,61 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
     raw_items = list(ex.map(get_item, ids))
 ```
 
+### SSR HTML + 多频道分支（每经网）
+```python
+source_map = {
+    "finance":    ("finance",  "119"),
+    "regulation": ("finance",  "415"),
+    "economy":    ("economy",  "129"),
+}
+subdomain, column_id = source_map[source]
+url = f"https://{subdomain}.nbd.com.cn/columns/{column_id}/"
+# 正则提取: <a href="URL" class="f-title">标题</a>
+```
+
+### GitHub 风格 HTML 正则解析
+```python
+articles = re.findall(r'<article class="Box-row">(.*?)</article>', raw, re.DOTALL)
+for art in articles:
+    h2 = re.search(r'<h2[^>]*>.*?<a[^>]*href="([^"]+)"', art, re.DOTALL)
+```
+
+### 同站多套 API（经济观察网）
+```python
+# 首页综合 API
+url = base + "?app=article&controller=synPage&action=index_news"
+params = {"page": 0, "size": 30}
+
+# 频道 API (UUID 模式)
+channel_map = {"finance": "9cdd41e11a114e5d8cbb8be12474aadd", ...}
+url = base + "?app=article&controller=index&action=getMoreArticle"
+params = {"uuid": channel_map[source], "page": 1, "pageSize": 20}
+
+# 快讯 API (catid 模式)
+params = {"catid": 3690, "page": 1, "pageSize": 20}
+```
+
+### SSR 内嵌 JSON 提取（第一财经）
+```python
+import re, json
+
+# 首页 HTML 中内嵌 var headList=[{...}, ...]; 约 300 条
+pattern = r'(?:var\s+)?headList\s*=\s*\['
+m = re.search(pattern, html)
+start = html.index('[', m.start())
+# 括号匹配找到完整数组
+depth = 0
+for i in range(start, start + 800000):
+    if html[i] == '[': depth += 1
+    elif html[i] == ']':
+        depth -= 1
+        if depth == 0:
+            data = json.loads(html[start:i+1])
+            break
+# 按 ChannelName 筛选频道，按 NewsType 过滤视频
+articles = [d for d in data if d["NewsType"] != 12]
+```
+
 ---
 
 ## ⚠️ 常见陷阱
@@ -239,5 +317,5 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
 
 ## 📚 参考信息
 
-- [成功案例详解](examples/README.md) - 12 个生产案例的技术要点
+- [成功案例详解](examples/README.md) - 16 个生产案例的技术要点
 - [DynamicPyProvider 源码](../../hotnews/kernel/providers/dynamic_py.py) - 沙箱实现细节

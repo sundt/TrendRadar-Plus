@@ -1,6 +1,6 @@
 # 成功爬虫案例库
 
-本目录包含**12个生产环境验证的成功爬虫脚本**，作为创建新爬虫时的参考。
+本目录包含**16个生产环境验证的成功爬虫脚本**，作为创建新爬虫时的参考。
 
 ## 📊 案例概览
 
@@ -9,10 +9,14 @@
 | [v2ex_topics.py](./v2ex_topics.py) | 官方公开 API + 代理 | Socks5 代理（DNS 污染） | ⭐ |
 | [jin10_news.py](./jin10_news.py) | CDN 静态 JSON | 无需认证，最轻量 | ⭐ |
 | [sina_tech_roll.py](./sina_tech_roll.py) | JSON API | 带参数请求、时间戳转换 | ⭐ |
+| [eeo_news.py](./eeo_news.py) | 开放 JSON API 多套接口 | 首页/频道/快讯三套 API | ⭐ |
+| [yicai_news.py](./yicai_news.py) | SSR 内嵌 JSON | 首页 HTML 内嵌 JSON、频道筛选 | ⭐ |
 | [gelonghui_hot.py](./gelonghui_hot.py) | 开放 JSON API | 多板块分支、完全开放 | ⭐⭐ |
 | [wallstreetcn_articles.py](./wallstreetcn_articles.py) | JSON API 多分类 | 同域猜测、data_path 差异 | ⭐⭐ |
 | [wallstreetcn_flash.py](./wallstreetcn_flash.py) | JSON API 多频道 | 多频道轮询、去重、排序 | ⭐⭐ |
 | [aibase_news.py](./aibase_news.py) | HTML 解析 | BeautifulSoup + Regex | ⭐⭐ |
+| [nbd_finance.py](./nbd_finance.py) | SSR HTML + AJAX 分页 | Rails UJS、正则解析、多频道 | ⭐⭐ |
+| [github_trending.py](./github_trending.py) | SSR HTML + 正则 | GitHub 静态 HTML、代理 | ⭐⭐ |
 | [nba_schedule_recursive.py](./nba_schedule_recursive.py) | 嵌套 JSON | 递归遍历、日期过滤 | ⭐⭐⭐ |
 | [cls_depth_api.py](./cls_depth_api.py) | 签名 JSON API | SHA-1 → MD5 签名破解 | ⭐⭐⭐ |
 | [hackernews_stories.py](./hackernews_stories.py) | 官方 API + 并发 + 代理 | Firebase API、concurrent.futures | ⭐⭐ |
@@ -40,11 +44,17 @@
 ├─ 简单平铺结构 → sina_tech_roll.py
 ├─ 多个频道/分类 → wallstreetcn_articles.py
 ├─ 开放 API 多板块 → gelonghui_hot.py
+├─ 开放 API 多套接口 → eeo_news.py
 ├─ POST JSON + 热度排序 → juejin_hot.py
 └─ 深度嵌套结构 → nba_schedule_recursive.py
 
+数据内嵌在 HTML 页面的 JS 变量中？
+└─ var xxx=[{...}] 形式 → yicai_news.py
+
 数据来源是 HTML 页面？
-├─ 静态 HTML → aibase_news.py
+├─ 静态 HTML（Nuxt SSR） → aibase_news.py
+├─ Rails SSR + AJAX 分页 → nbd_finance.py
+├─ GitHub 风格静态 HTML → github_trending.py
 └─ JavaScript 动态渲染 → cls_depth_scraperapi.py（最后手段）
 ```
 
@@ -145,6 +155,79 @@ resp = scraperapi_get(url, use_scraperapi, scraperapi_params=scraperapi_params, 
 ```
 
 前提条件：Admin 后台开启 ScraperAPI + 设置 `SCRAPERAPI_KEY` 环境变量。
+
+#### ⭐ 开放 JSON API 多套接口（eeo_news.py）
+
+经济观察网（eeo.com.cn）在页面 JS 中暴露了完整的 JSON API，完全开放无需认证。
+同站有三套 API 模式：首页综合用 `synPage` action，频道用 UUID，快讯用 catid：
+```python
+if source == "latest":
+    url = base + "?app=article&controller=synPage&action=index_news"
+    params = {"page": 0, "size": 30}
+elif source == "flash":
+    url = base + "?app=article&controller=index&action=getMoreArticle"
+    params = {"catid": 3690, "page": 1, "pageSize": 20}
+elif source in channel_map:
+    url = base + "?app=article&controller=index&action=getMoreArticle"
+    params = {"uuid": channel_map[source], "page": 1, "pageSize": 20}
+```
+API 发现方法：在首页 JS 中搜索 `$.getJSON`，找到 `app.eeo.com.cn/?app=article&...` 模式。
+
+#### ⭐ SSR 内嵌 JSON（yicai_news.py）
+
+第一财经（yicai.com）首页 HTML 约 1MB，其中内嵌了 `var headList=[...]` 包含约 300 条完整文章 JSON。
+无需额外 API 请求，直接从 HTML 中正则提取 JSON 数组，按 ChannelName 筛选频道：
+```python
+# 正则匹配内嵌 JSON 变量（兼容 var xxx=[] 和 xxx=[] 两种写法）
+pattern = r'(?:var\s+)?headList\s*=\s*\['
+m = re.search(pattern, html)
+start = html.index('[', m.start())
+# 括号匹配提取完整数组
+depth = 0
+for i in range(start, start + 800000):
+    if html[i] == '[': depth += 1
+    elif html[i] == ']':
+        depth -= 1
+        if depth == 0:
+            data = json.loads(html[start:i+1])
+            break
+# 过滤视频 (NewsType=12)，按频道筛选
+items = [d for d in data if d["NewsType"] != 12]
+if source in channel_map:
+    items = [d for d in items if d["ChannelName"] == channel_map[source]]
+```
+频道映射：A股(54)、产经(57)、科技(58)、金融(53)、大政(49)、全球(52)、海外市场(56)、区域(51)、地产(59)、汽车(201)、此刻(451)、评论(200)、一财号(100000801)。
+
+#### ⭐⭐ SSR HTML + AJAX 分页（nbd_finance.py）
+
+每经网（nbd.com.cn）是传统 Rails 站点，无 JSON API，需直接解析服务端渲染的 HTML。
+多频道通过子域名 + column_id 区分，用正则提取 `f-title` 链接和 `f-source` 中的时间/阅读数：
+```python
+source_map = {
+    "finance":    ("finance",  "119"),
+    "regulation": ("finance",  "415"),
+    "economy":    ("economy",  "129"),
+}
+subdomain, column_id = source_map[source]
+url = f"https://{subdomain}.nbd.com.cn/columns/{column_id}/"
+
+# 正则提取文章
+title_pattern = re.compile(
+    r'<a\s+href="(https://www\.nbd\.com\.cn/articles/[^"]+)"'
+    r'\s+class="f-title"[^>]*>(.*?)</a>', re.DOTALL
+)
+```
+AJAX 分页使用 Rails UJS 模式：`?last_article={id}&version_column=v5`，需设 `X-Requested-With: XMLHttpRequest`。
+
+#### ⭐⭐ SSR HTML + 正则（github_trending.py）
+
+GitHub Trending 页面是纯静态 HTML，无 API。按 `<article class="Box-row">` 分割，
+正则提取仓库路径、描述、stars、语言等信息。国内需走代理：
+```python
+articles = re.findall(r'<article class="Box-row">(.*?)</article>', raw, re.DOTALL)
+for art in articles:
+    h2 = re.search(r'<h2[^>]*>.*?<a[^>]*href="([^"]+)"', art, re.DOTALL)
+```
 
 ## 📝 DynamicPyProvider 接口规范
 

@@ -395,7 +395,9 @@ async function _loadTimeline() {
         }
 
         // Clear grid only after successful fetch
+        // Remove all existing cards including placeholders
         currentGrid.innerHTML = '';
+        console.log('[MorningBrief] Grid cleared, ready to append new cards');
 
         if (!items.length) {
             currentGrid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
@@ -592,6 +594,10 @@ events.on('viewer:rendered', () => {
         // (data.js preserves _knowledgeGridHtml when cards exist)
         const grid = _getGrid();
         const existingCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-item').length : 0;
+        
+        // Also check for placeholder cards (cards with only loading state, no real items)
+        const placeholderCards = grid ? grid.querySelectorAll('.tr-morning-brief-card .news-placeholder').length : 0;
+        const hasOnlyPlaceholders = placeholderCards > 0 && existingCards === 0;
 
         if (existingCards > 0 && _mbInitialized) {
             // Content was preserved by data.js — keep current state, just re-attach observer
@@ -601,8 +607,8 @@ events.on('viewer:rendered', () => {
                 _attachObserver();
             }
         } else {
-            // No existing content — full reset and reload
-            console.log('[MorningBrief] No preserved content, scheduling full reload');
+            // No existing content or only placeholders — full reset and reload
+            console.log(`[MorningBrief] No preserved content (existingCards=${existingCards}, placeholders=${placeholderCards}), scheduling full reload`);
             _mbInFlight = false;
             _mbFinished = false;
             _mbOffset = 0;
