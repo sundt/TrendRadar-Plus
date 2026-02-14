@@ -95,36 +95,11 @@ export function renderDiscoveryPane(catId, isActive) {
 
 export function renderKnowledgePane(catId, isActive, existingGridHtml) {
     const cls = isActive ? ' active' : '';
-    const gridInner = existingGridHtml || `
-        <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-1" data-page-size="50" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🕒 最新 1-50</div>
-                <div class="platform-header-actions"></div>
-            </div>
-            <ul class="news-list" data-mb-list="slice1">
-                <li class="news-placeholder" aria-hidden="true">加载中...</li>
-            </ul>
-        </div>
-        <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-2" data-page-size="50" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">⭐ 最新 51-100</div>
-                <div class="platform-header-actions"></div>
-            </div>
-            <ul class="news-list" data-mb-list="slice2">
-                <li class="news-placeholder" aria-hidden="true">加载中...</li>
-            </ul>
-        </div>
-        <div class="platform-card tr-morning-brief-card" data-platform="mb-slice-3" data-page-size="50" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">🧾 最新 101-150</div>
-                <div class="platform-header-actions"></div>
-            </div>
-            <ul class="news-list" data-mb-list="slice3">
-                <li class="news-placeholder" aria-hidden="true">加载中...</li>
-            </ul>
-        </div>`;
+    // No placeholder cards — morning-brief.js handles all card creation.
+    // Placeholder cards caused duplicates because switchTab/bulkLoadCategory
+    // would also try to load data into them (a second loading system).
     return `
         <div class="tab-pane${cls}" id="tab-${escapeHtml(catId)}">
-            <div class="platform-grid" data-mb-injected="1">${gridInner}</div>
+            <div class="platform-grid" data-mb-injected="1"></div>
         </div>`;
 }
