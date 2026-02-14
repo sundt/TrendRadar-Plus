@@ -550,22 +550,25 @@ function _ensurePolling() {
         const cid = String(detail?.categoryId || '').trim();
         if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
 
-        // Skip if not initialized — a full load is pending from viewer:rendered.
-        // IMPORTANT: renderViewerFromData calls switchTab() BEFORE emitting
-        // viewer:rendered, so _mbInitialized may still be true from the
-        // previous render cycle. Check the grid for actual cards to avoid
-        // triggering a duplicate load that races with viewer:rendered.
-        if (!_mbInitialized) return;
+        // If a load is already in flight (from viewer:rendered), skip.
+        if (_mbInFlight) return;
+
         const grid = _getGrid();
         const hasCards = grid && grid.querySelectorAll('.tr-morning-brief-card').length > 0;
-        if (!hasCards) return; // Grid was just rebuilt by renderViewerFromData, skip
 
-        if (!_mbFinished) _attachObserver();
-
-        clearTimeout(_tabSwitchDebounceTimer);
-        _tabSwitchDebounceTimer = setTimeout(() => {
-            _refreshTimelineIfNeeded({ force: false }).catch(() => { });
-        }, 120);
+        if (hasCards) {
+            // Already has content — reattach observer and optionally refresh
+            if (!_mbFinished) _attachObserver();
+            clearTimeout(_tabSwitchDebounceTimer);
+            _tabSwitchDebounceTimer = setTimeout(() => {
+                _refreshTimelineIfNeeded({ force: false }).catch(() => { });
+            }, 120);
+        } else {
+            // No cards yet — user genuinely switched to knowledge tab, load it
+            _ensureLayout();
+            _attachHandlersOnce();
+            _refreshTimelineIfNeeded({ force: true, skipTabCheck: true }).catch(() => { });
+        }
     });
 }
 

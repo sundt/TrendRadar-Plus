@@ -374,8 +374,13 @@ let _initialized = false;
 async function _initialLoad() {
     if (_initialized) return; // Prevent duplicate initialization
     if (!_ensureLayout()) return;
-    _initialized = true;
-    await _refreshTimelineIfNeeded();
+    const loaded = await _refreshTimelineIfNeeded();
+    // Only mark initialized if we actually loaded data (or the tab had content).
+    // If the tab wasn't active, _refreshTimelineIfNeeded returns false and
+    // we leave _initialized = false so tab:switched can trigger the load later.
+    if (loaded) {
+        _initialized = true;
+    }
 }
 
 function _ensurePolling() {
@@ -384,17 +389,26 @@ function _ensurePolling() {
         const hasUpdate = !!detail?.hasUpdate;
         if (cid !== EXPLORE_TAB_ID) return;
 
-        // Skip if not initialized — a full load is pending from viewer:rendered.
-        // renderViewerFromData calls switchTab() BEFORE emitting viewer:rendered,
-        // so _initialized may still be true from the previous cycle.
-        // Check the grid for actual cards to avoid a duplicate load.
-        if (!_initialized) return;
+        // If not initialized, viewer:rendered hasn't completed its load yet.
+        // But if _initialized is false because the explore tab wasn't active
+        // during _initialLoad, we need to load now.
+        // The key distinction: if _exploreInFlight is true, a load is already
+        // running (from viewer:rendered), so skip. Otherwise, trigger a load.
+        if (_exploreInFlight) return;
+
         const grid = _getGrid();
         const hasCards = grid && grid.querySelectorAll('.tr-explore-card').length > 0;
-        if (!hasCards) return;
 
-        if (!_exploreFinished) _attachObserver();
-        _refreshTimelineIfNeeded(hasUpdate).catch(() => { });
+        if (hasCards) {
+            // Already has content — just reattach observer and optionally refresh
+            if (!_exploreFinished) _attachObserver();
+            _refreshTimelineIfNeeded(hasUpdate).catch(() => { });
+        } else {
+            // No cards yet — user genuinely switched to explore tab, load it
+            _ensureLayout();
+            _initialized = true;
+            _refreshTimelineIfNeeded(true).catch(() => { });
+        }
     });
 }
 
