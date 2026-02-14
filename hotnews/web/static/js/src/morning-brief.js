@@ -545,7 +545,15 @@ function _ensurePolling() {
         const cid = String(detail?.categoryId || '').trim();
         if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
 
+        // Skip if not initialized — a full load is pending from viewer:rendered.
+        // IMPORTANT: renderViewerFromData calls switchTab() BEFORE emitting
+        // viewer:rendered, so _mbInitialized may still be true from the
+        // previous render cycle. Check the grid for actual cards to avoid
+        // triggering a duplicate load that races with viewer:rendered.
         if (!_mbInitialized) return;
+        const grid = _getGrid();
+        const hasCards = grid && grid.querySelectorAll('.tr-morning-brief-card').length > 0;
+        if (!hasCards) return; // Grid was just rebuilt by renderViewerFromData, skip
 
         if (!_mbFinished) _attachObserver();
 
