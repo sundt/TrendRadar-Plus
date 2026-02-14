@@ -266,6 +266,9 @@ async function _loadNextBatch() {
     console.log(`[MorningBrief] _loadNextBatch called: offset=${_mbOffset}, inFlight=${_mbInFlight}, finished=${_mbFinished}`);
     if (_mbInFlight || _mbFinished) return;
 
+    // Capture generation to detect stale observer callbacks
+    const myGeneration = _mbGeneration;
+
     // Check if we've reached max cards
     const currentCardCount = Math.floor(_mbOffset / getItemsPerCard());
     if (currentCardCount >= MAX_CARDS) {
@@ -297,8 +300,20 @@ async function _loadNextBatch() {
 
         const grid = _getGrid();
         if (grid) {
+            // Abort if generation changed (DOM was rebuilt during fetch)
+            if (myGeneration !== _mbGeneration) {
+                console.log('[MorningBrief] _loadNextBatch: stale generation, aborting');
+                return;
+            }
             // Calculate which card number this is (0-based)
             const cardIndex = Math.floor(_mbOffset / getItemsPerCard());
+            // Defensive: check if a card with this platform ID already exists
+            const existingCard = grid.querySelector(`.tr-morning-brief-card[data-platform="mb-slice-${cardIndex}"]`);
+            if (existingCard) {
+                console.warn(`[MorningBrief] _loadNextBatch: card mb-slice-${cardIndex} already exists, skipping`);
+                _mbOffset += items.length;
+                return;
+            }
             console.log(`[MorningBrief] _loadNextBatch: creating card ${cardIndex}, offset=${_mbOffset}, items=${items.length}, displayRange=${cardIndex * getItemsPerCard() + 1}-${cardIndex * getItemsPerCard() + items.length}`);
             _appendCard(items, cardIndex, grid);
             
@@ -401,6 +416,12 @@ async function _loadTimeline() {
         if (!items.length) {
             currentGrid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
             _mbInitialized = true;
+            return;
+        }
+
+        // Double-check: abort if generation changed during innerHTML clear
+        if (myGeneration !== _mbGeneration) {
+            console.log('[MorningBrief] Stale load after grid clear, aborting');
             return;
         }
 
@@ -543,7 +564,6 @@ async function _initialLoad() {
     }
     
     _mbFinished = false;
-    _mbOffset = 0;
     
     // Retry up to 3 times if layout is not ready (DOM might not be fully rendered)
     let retries = 3;
@@ -575,7 +595,12 @@ function _ensurePolling() {
     events.on('tab:switched', (detail) => {
         const cid = String(detail?.categoryId || '').trim();
         if (cid !== MORNING_BRIEF_CATEGORY_ID) return;
-        // When switching to this tab, attach observer again if needed (observers sometimes disconnect if hidden)
+
+        // Don't re-attach observer or trigger refresh if not initialized yet
+        // (a full load is pending from viewer:rendered or ready())
+        if (!_mbInitialized) return;
+
+        // When switching to this tab, attach observer again if needed
         if (!_mbFinished) _attachObserver();
 
         clearTimeout(_tabSwitchDebounceTimer);
@@ -598,16 +623,23 @@ events.on('viewer:rendered', () => {
         // data.js no longer preserves _knowledgeGridHtml, so the grid
         // will only contain placeholder cards at this point.
         console.log('[MorningBrief] viewer:rendered — scheduling full reload');
-        _mbInFlight = false;
         _mbFinished = false;
         _mbOffset = 0;
         _mbInitialized = false;
         _mbRetryCount = 0;
         _mbLastRefreshAt = 0;
 
-        // Use a generation counter to cancel stale loads
+        // Use a generation counter to cancel stale loads.
+        // Incrementing generation will cause any in-flight _loadTimeline to abort
+        // when its fetch completes (generation mismatch check).
         _mbGeneration = (_mbGeneration || 0) + 1;
         const gen = _mbGeneration;
+
+        // Do NOT reset _mbInFlight here — let the in-flight _refreshTimelineIfNeeded
+        // finish naturally. Its _loadTimeline will abort via generation check,
+        // and its finally{} block will set _mbInFlight = false.
+        // Instead, schedule _initialLoad with enough delay for the old load to finish.
+        const delay = _mbInFlight ? 200 : 50;
 
         setTimeout(() => {
             // Only proceed if no newer generation has been started
@@ -615,7 +647,7 @@ events.on('viewer:rendered', () => {
             _initialLoad().catch((e) => {
                 console.error('[MorningBrief] Initial load failed after render:', e);
             });
-        }, 50);
+        }, delay);
     } catch (e) {
         console.error('[MorningBrief] Error in render hook:', e);
     }

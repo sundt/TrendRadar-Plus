@@ -270,7 +270,10 @@ export const tabs = {
             const hasPlaceholder = !!paneEl.querySelector('.news-placeholder');
             const shouldLoad = !hasItems && hasPlaceholder;
 
-            if (shouldLoad) {
+            // Knowledge tab has its own loading logic (morning-brief.js),
+            // skip bulkLoadCategory to avoid duplicate card creation.
+            const SELF_LOADING_TABS = ['knowledge', 'explore'];
+            if (shouldLoad && !SELF_LOADING_TABS.includes(String(categoryId))) {
                 if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleBulkLoadCategory === 'function') {
                     TR.infiniteScroll.scheduleBulkLoadCategory(categoryId);
                 } else if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleEnsureCategoryLoaded === 'function') {
