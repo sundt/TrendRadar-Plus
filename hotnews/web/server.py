@@ -1808,7 +1808,6 @@ async def api_news(
     # Strip platforms data for categories that have dedicated tab APIs.
     # These tabs render empty panes and load data from their own endpoints,
     # so including their platforms in /api/news is wasted bandwidth.
-    # This reduces response size from ~2.1MB to ~400KB.
     _DEDICATED_TAB_IDS = {"explore", "knowledge", "discovery", "featured-mps", "my-tags"}
     try:
         cats = data.get("categories")
@@ -1818,6 +1817,15 @@ async def api_news(
                     cats[tab_id]["platforms"] = {}
                     cats[tab_id]["news_count"] = 0
                     cats[tab_id]["filtered_count"] = 0
+    except Exception:
+        pass
+
+    # Filter out hidden categories (same logic as SSR page rendering).
+    # Without this, hidden categories like tech_news/developer still return
+    # full data (~2.7MB) that the frontend immediately discards.
+    try:
+        from .page_rendering import _filter_default_hidden_categories
+        data = _filter_default_hidden_categories(data, request)
     except Exception:
         pass
 
