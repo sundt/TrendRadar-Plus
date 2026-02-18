@@ -830,13 +830,18 @@ async def export_featured_mps(
 async def get_featured_mps_public(
     request: Request,
     category: Optional[str] = Query(None),
-    article_limit: int = Query(50, ge=1, le=100),  # 每个公众号 50 条，与其他卡片一致
+    article_limit: int = Query(50, ge=1, le=100),
+    limit: int = Query(0, ge=0, le=200),
+    offset: int = Query(0, ge=0),
 ) -> Dict[str, Any]:
     """
     Get featured MPs with their latest articles (public API).
     
     This endpoint is used by the frontend to display the "精选公众号" category.
     Implements caching for performance.
+    
+    When limit > 0, returns a paginated slice of MPs (for infinite scroll).
+    When limit = 0 (default), returns all MPs (backward compatible).
     """
     global _featured_mps_cache
     
@@ -844,12 +849,14 @@ async def get_featured_mps_public(
     now = _now_ts()
     
     # Check cache (only for default params)
-    if not category and article_limit == 50:
+    is_default = not category and article_limit == 50 and limit == 0 and offset == 0
+    if is_default:
         if (_featured_mps_cache["data"] is not None and 
             now - _featured_mps_cache["timestamp"] < _featured_mps_cache["ttl"]):
             return {
                 "ok": True,
                 "mps": _featured_mps_cache["data"],
+                "total": len(_featured_mps_cache["data"]),
                 "cached": True,
                 "cache_age": now - _featured_mps_cache["timestamp"]
             }
@@ -870,6 +877,11 @@ async def get_featured_mps_public(
     
     cur = conn.execute(query, params)
     mp_rows = cur.fetchall() or []
+    total_mps = len(mp_rows)
+    
+    # Apply pagination if limit > 0
+    if limit > 0:
+        mp_rows = mp_rows[offset:offset + limit]
     
     # 使用统一读取模块
     from hotnews.kernel.services.mp_article_reader import get_mp_articles
@@ -890,14 +902,16 @@ async def get_featured_mps_public(
             "articles": articles
         })
     
-    # Update cache (only for default params)
-    if not category and article_limit == 50:
+    # Update cache (only for default params — full list)
+    if is_default:
         _featured_mps_cache["data"] = mps
         _featured_mps_cache["timestamp"] = now
     
     return {
         "ok": True,
         "mps": mps,
+        "total": total_mps,
+        "offset": offset,
         "cached": False
     }
 
