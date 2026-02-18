@@ -411,7 +411,7 @@ def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str
                 # Cookie 值是 URL 编码的 JSON，需要先解码
                 decoded_cookie = unquote(config_cookie)
                 user_hidden = json.loads(decoded_cookie)
-                if isinstance(user_hidden, list) and len(user_hidden) > 0:
+                if isinstance(user_hidden, list):
                     hidden_categories = user_hidden
         except Exception:
             pass
