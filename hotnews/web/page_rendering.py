@@ -413,7 +413,13 @@ def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str
                 user_hidden = json.loads(decoded_cookie)
                 if isinstance(user_hidden, list):
                     hidden_categories = user_hidden
-        except Exception:
+                    print(f"[DEBUG] Using user hidden cats from cookie: {hidden_categories}")
+                else:
+                    print(f"[DEBUG] Cookie parsed but not a list: {type(user_hidden)}")
+            else:
+                print(f"[DEBUG] No hotnews_hidden_cats cookie, using defaults: {hidden_categories}")
+        except Exception as e:
+            print(f"[DEBUG] Cookie parse error: {e}")
             pass
         
         # 过滤隐藏的栏目（但保护特殊栏目不被过滤）
