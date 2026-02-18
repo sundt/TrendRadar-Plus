@@ -251,6 +251,117 @@ def _mb_eval(
 # ---------------------------------------------------------------------------
 
 
+@router.get("/api/rss/brief/timeline")
+async def api_rss_brief_timeline(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    drop_published_at_zero: int = Query(1, ge=0, le=1),
+):
+    """API: Brief timeline - AI-curated RSS entries sorted by published_at DESC."""
+    lim = min(int(limit or 50), 500)
+    off = int(offset or 0)
+
+    # Try cache first
+    cached_items = brief_timeline_cache.get()
+    if cached_items is not None:
+        sliced = cached_items[off:off + lim]
+        return UnicodeJSONResponse(
+            content={
+                "offset": off,
+                "limit": lim,
+                "items": sliced,
+                "total_returned": len(sliced),
+                "cached": True,
+            }
+        )
+
+    # Cache miss - query database directly
+    conn = get_online_db()
+    drop_zero = bool(drop_published_at_zero)
+
+    try:
+        if drop_zero:
+            cur = conn.execute(
+                """
+                SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url,
+                       e.created_at, e.published_at, COALESCE(s.name, '')
+                FROM rss_entries e
+                JOIN rss_entry_ai_labels l
+                  ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+                LEFT JOIN rss_sources s ON s.id = e.source_id
+                WHERE e.published_at > 0
+                  AND l.action = 'include'
+                  AND l.score >= 75
+                  AND l.confidence >= 0.70
+                GROUP BY e.source_id, e.dedup_key
+                ORDER BY e.published_at DESC, e.id DESC
+                LIMIT ?
+                """,
+                (lim + off + 200,),
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url,
+                       e.created_at, e.published_at, COALESCE(s.name, '')
+                FROM rss_entries e
+                JOIN rss_entry_ai_labels l
+                  ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+                LEFT JOIN rss_sources s ON s.id = e.source_id
+                WHERE l.action = 'include'
+                  AND l.score >= 75
+                  AND l.confidence >= 0.70
+                GROUP BY e.source_id, e.dedup_key
+                ORDER BY e.published_at DESC, e.id DESC
+                LIMIT ?
+                """,
+                (lim + off + 200,),
+            )
+        rows = cur.fetchall() or []
+    except Exception:
+        rows = []
+
+    seen_urls: set = set()
+    seen_titles: set = set()
+    items_all = []
+
+    for r in rows:
+        sid = str(r[0] or "").strip()
+        title = str(r[2] or "").strip()
+        url = str(r[3] or "")
+        created_at = int(r[4] or 0)
+        published_at = int(r[5] or 0)
+        sname = str(r[6] or "")
+
+        u = url.strip()
+        if not u or u in seen_urls:
+            continue
+        title_key = title.lower()
+        if title_key and title_key in seen_titles:
+            continue
+        seen_urls.add(u)
+        if title_key:
+            seen_titles.add(title_key)
+
+        pid = f"rss-{sid}" if sid else "rss-unknown"
+        it = rss_row_to_item(
+            platform_id=pid, source_id=sid, source_name=sname,
+            title=title, url=u, created_at=created_at,
+        )
+        it["published_at"] = published_at
+        items_all.append(it)
+
+    sliced = items_all[off:off + lim]
+    return UnicodeJSONResponse(
+        content={
+            "offset": off,
+            "limit": lim,
+            "items": sliced,
+            "total_returned": len(sliced),
+        }
+    )
+
+
 @router.get("/api/rss/brief/latest")
 async def api_rss_brief_latest(
     since: int = Query(0, ge=0),
