@@ -1,132 +1,71 @@
 /**
- * Discovery Module
- * Handles the "✨ 新发现" category tab which displays AI-discovered trending tags.
- * Public endpoint - no authentication required.
- * Implements frontend (localStorage) and backend caching for fast loading.
+ * Discovery Module (✨ 新发现)
+ * Handles the "新发现" category tab with infinite scroll pagination.
  */
 
 import { formatNewsDate } from './core.js';
 import { events } from './events.js';
 
-const DISCOVERY_CATEGORY_ID = 'discovery';
-const DISCOVERY_CACHE_KEY = 'hotnews_discovery_cache';
-const DISCOVERY_CACHE_TTL = 10 * 60 * 1000; // 10 minutes in milliseconds
+const CATEGORY_ID = 'discovery';
+const INITIAL_CARDS_DESKTOP = 3;
+const INITIAL_CARDS_MOBILE = 1;
+const BATCH_SIZE = 3;
 
-let discoveryLoaded = false;
-let discoveryLoading = false;
-let _discoveryGeneration = 0;
+// State
+let _offset = 0;
+let _total = -1;
+let _finished = false;
+let _inFlight = false;
+let _initialized = false;
+let _generation = 0;
+let _observer = null;
 
-/**
- * Get cached data from localStorage
- * DISABLED: Cache causes issues in WeChat browser
- */
-function getCachedData() {
-    // Disable frontend cache to fix WeChat browser issues
-    return null;
+function _isMobile() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
 }
 
-/**
- * Save data to localStorage cache
- * DISABLED: Cache causes issues in WeChat browser
- */
-function setCachedData(tags) {
-    // Disable frontend cache to fix WeChat browser issues
-    return;
+function _getInitialCount() {
+    return _isMobile() ? INITIAL_CARDS_MOBILE : INITIAL_CARDS_DESKTOP;
 }
 
-/**
- * Clear cached data
- */
-function clearCache() {
-    try {
-        localStorage.removeItem(DISCOVERY_CACHE_KEY);
-        console.log('[Discovery] Cache cleared');
-    } catch (e) {
-        console.error('[Discovery] Cache clear error:', e);
-    }
+function _getNewsLimit() {
+    return 50;
 }
 
-/**
- * Fetch discovery news from API
- */
-async function fetchDiscoveryNews() {
-    try {
-        // Mobile: fewer tags and news per tag for faster loading
-        const isMobile = window.innerWidth <= 640;
-        const newsLimit = isMobile ? 20 : 50;
-        const tagLimit = isMobile ? 10 : 30;
-        const res = await fetch(`/api/user/preferences/discovery-news?news_limit=${newsLimit}&tag_limit=${tagLimit}`, {
-            credentials: 'include'
-        });
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-        }
-        return await res.json();
-    } catch (e) {
-        console.error('[Discovery] Fetch failed:', e);
-        return { error: e.message };
-    }
+function _getGrid() {
+    return document.getElementById('discoveryGrid') || null;
 }
 
-
-/**
- * Render the empty state when no discovery tags available
- */
-function renderEmptyState(container) {
-    container.innerHTML = `
-        <div style="text-align:center;padding:60px 20px;width:100%;">
-            <div style="font-size:64px;margin-bottom:20px;">✨</div>
-            <div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">暂无新发现</div>
-            <div style="font-size:14px;color:#6b7280;margin-bottom:24px;line-height:1.6;">
-                AI 正在持续发现热门话题，<br>
-                稍后再来看看吧
-            </div>
-        </div>
-    `;
+function _getPane() {
+    return document.getElementById('tab-discovery') || null;
 }
 
-/**
- * Render error state
- */
-function renderError(container, message) {
-    container.innerHTML = `
-        <div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;">
-            <div style="font-size:48px;margin-bottom:16px;">😕</div>
-            <div style="font-size:16px;">加载失败: ${message || '未知错误'}</div>
-            <button onclick="window.HotNews?.discovery?.load(true)" 
-                    style="margin-top:16px;padding:8px 16px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;">
-                重试
-            </button>
-        </div>
-    `;
+async function _fetchBatch(limit, offset) {
+    const newsLimit = _getNewsLimit();
+    const url = `/api/user/preferences/discovery-news?limit=${limit}&offset=${offset}&news_limit=${newsLimit}&tag_limit=30`;
+    const resp = await fetch(url, { credentials: 'include' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
 }
 
-/**
- * Create a news card HTML for a discovery tag
- */
-function createDiscoveryCard(tagData) {
+function _createDiscoveryCard(tagData) {
     const { tag, news, count } = tagData;
     const tagIcon = tag.icon || '🏷️';
     const tagName = tag.name || tag.id;
     const firstSeenDate = tag.first_seen_date || '';
 
-    const newsListHtml = news.length > 0
+    const newsListHtml = news && news.length > 0
         ? news.map((item, idx) => {
             const dateStr = formatNewsDate(item.published_at);
             const safeTitle = (item.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const escapedTitle = safeTitle.replace(/'/g, "\\'");
             const escapedUrl = (item.url || '').replace(/'/g, "\\'");
             const escapedTagName = (tagName || '').replace(/'/g, "\\'");
-            
-            // AI indicator dot
             const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')"></span>`;
-            
-            // Actions container (date + summary button)
             const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
-            const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" ></button>`;
+            const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')"></button>`;
             const commentBtnHtml = `<button class="news-comment-btn" data-url="${(item.url || '').replace(/"/g, '&quot;')}" data-title="${safeTitle}"></button>`;
             const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
-            
             return `
             <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
                 <div class="news-item-content">
@@ -137,381 +76,187 @@ function createDiscoveryCard(tagData) {
                     ${aiDotHtml}
                     ${actionsHtml}
                 </div>
-            </li>
-            `;
+            </li>`;
         }).join('')
         : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
 
-    return `
-        <div class="platform-card discovery-card" data-platform="${tag.id}" data-tag-id="${tag.id}" data-candidate="true" draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
-                    ${tagIcon} ${tagName}
-                    <span class="discovery-badge">NEW</span>
-                    <span class="discovery-date">发现于 ${firstSeenDate}</span>
-                </div>
-                <div class="platform-header-actions"></div>
+    const card = document.createElement('div');
+    card.className = 'platform-card discovery-card';
+    card.dataset.platform = tag.id;
+    card.dataset.tagId = tag.id;
+    card.dataset.candidate = 'true';
+    card.draggable = false;
+    card.innerHTML = `
+        <div class="platform-header">
+            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                ${tagIcon} ${tagName}
+                <span class="discovery-badge">NEW</span>
+                <span class="discovery-date">发现于 ${firstSeenDate}</span>
             </div>
-            <ul class="news-list">
-                ${newsListHtml}
-            </ul>
+            <div class="platform-header-actions"></div>
         </div>
-    `;
+        <ul class="news-list">${newsListHtml}</ul>`;
+    return card;
 }
 
-/**
- * Render the discovery tags with news
- */
-function renderDiscoveryNews(container, tagsData) {
-    console.log('[Discovery] renderDiscoveryNews called, container:', container, 'tagsData:', tagsData);
-
-    if (!container) {
-        console.error('[Discovery] renderDiscoveryNews: container is null!');
-        return;
-    }
-
-    if (!tagsData || tagsData.length === 0) {
-        console.log('[Discovery] No tags data, showing empty state');
-        renderEmptyState(container);
-        return;
-    }
-
-    console.log('[Discovery] Rendering', tagsData.length, 'tags');
-    const cardsHtml = tagsData.map(tagData => createDiscoveryCard(tagData)).join('');
-    console.log('[Discovery] Generated HTML length:', cardsHtml.length);
-    container.innerHTML = cardsHtml;
-    console.log('[Discovery] HTML inserted into container');
-    
-    // Restore read state for the newly rendered items
-    if (window.TR && window.TR.readState) {
-        window.TR.readState.restoreReadState();
-    }
+function _createSentinel(container) {
+    const existing = container.querySelector('#discovery-load-sentinel');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.id = 'discovery-load-sentinel';
+    el.style.cssText = 'min-width:20px;height:100%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;';
+    el.innerHTML = '⏳';
+    container.appendChild(el);
+    return el;
 }
 
+function _removeSentinel() {
+    const s = document.getElementById('discovery-load-sentinel');
+    if (s) s.remove();
+}
 
-/**
- * Main load function for Discovery
- */
-async function loadDiscovery(force = false) {
-    console.log('[Discovery] loadDiscovery called, force:', force, 'loading:', discoveryLoading, 'loaded:', discoveryLoaded);
-
-    if (discoveryLoading) {
-        console.log('[Discovery] Already loading, skipping');
-        return;
-    }
-
-    // 先检查 tab pane 是否存在且激活
-    const tabPane = document.getElementById('tab-discovery');
-    if (!tabPane) {
-        console.log('[Discovery] Tab pane #tab-discovery not found, will retry...');
-        setTimeout(() => loadDiscovery(force), 200);
-        return;
-    }
-
-    // 如果 tab pane 不是激活状态，不加载
-    if (!tabPane.classList.contains('active')) {
-        console.log('[Discovery] Tab pane is not active, skipping load');
-        return;
-    }
-
-    const container = document.getElementById('discoveryGrid');
-    if (!container) {
-        console.log('[Discovery] Container #discoveryGrid not found, will retry...');
-        // Retry after a short delay (for WeChat browser where DOM might not be ready)
-        // 增加多次重试，延长间隔
-        const retryDelays = [100, 300, 500, 1000, 2000];
-        retryDelays.forEach((delay, idx) => {
-            setTimeout(() => {
-                const retryPane = document.getElementById('tab-discovery');
-                const retryContainer = document.getElementById('discoveryGrid');
-                if (retryPane?.classList.contains('active') && retryContainer && !discoveryLoaded && !discoveryLoading) {
-                    console.log(`[Discovery] Retrying after ${delay}ms (attempt ${idx + 1})`);
-                    loadDiscovery(force);
-                }
-            }, delay);
-        });
-        return;
-    }
-
-    // 关键修复：检查实际 DOM 内容，而不是只看状态标记
-    // 这样即使 DOM 被重新渲染，也能正确重新加载
-    const hasContent = container.querySelector('.platform-card');
-    if (hasContent && !force) {
-        console.log('[Discovery] Already has content in DOM, skipping');
-        discoveryLoaded = true;  // 确保状态同步
-        return;
-    }
-
-    // 如果没有内容，重置状态
-    if (!hasContent) {
-        discoveryLoaded = false;
-    }
-
-    if (discoveryLoaded && !force) {
-        console.log('[Discovery] Already loaded, skipping');
-        return;
-    }
-
-    console.log('[Discovery] Container found, starting load...');
-    discoveryLoading = true;
-    
-    // Safety timeout to reset loading state after 10 seconds
-    const safetyTimeout = setTimeout(() => {
-        if (discoveryLoading) {
-            console.warn('[Discovery] Safety timeout triggered, resetting loading state');
-            discoveryLoading = false;
+function _attachObserver() {
+    if (_observer) { try { _observer.disconnect(); } catch (e) { /* */ } _observer = null; }
+    const pane = _getPane();
+    if (!pane) return;
+    _observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (entry.isIntersecting) _loadNextBatch().catch(() => {});
         }
-    }, 10000);
+    }, { root: pane.querySelector('.platform-grid'), rootMargin: '200px', threshold: 0.01 });
+    const sentinel = document.getElementById('discovery-load-sentinel');
+    if (sentinel) _observer.observe(sentinel);
+}
 
+async function _loadNextBatch() {
+    if (_inFlight || _finished) return;
+    _inFlight = true;
+    const myGen = _generation;
     try {
-        // Show loading state
-        console.log('[Discovery] Showing loading state...');
-        container.innerHTML = `
-            <div class="discovery-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                <div style="font-size:48px;margin-bottom:16px;">✨</div>
-                <div style="font-size:16px;">发现中...</div>
-            </div>
-        `;
-
-        // Fetch discovery news
-        console.log('[Discovery] Fetching discovery news from API...');
-        const result = await fetchDiscoveryNews();
-        console.log('[Discovery] API response:', result);
-
-        if (result.error) {
-            console.error('[Discovery] API returned error:', result.error);
-            renderError(container, result.error);
-            discoveryLoading = false;
-            return;
-        }
-
-        if (!result.ok) {
-            console.error('[Discovery] API returned not ok');
-            renderError(container, '请求失败');
-            discoveryLoading = false;
-            return;
-        }
-
+        const result = await _fetchBatch(BATCH_SIZE, _offset);
+        if (myGen !== _generation) return;
         const tags = result.tags || [];
-        console.log('[Discovery] Got tags from API:', tags.length, 'tags');
-
-        // Log cache status
-        if (result.cached) {
-            console.log(`[Discovery] Loaded from backend cache (age: ${result.cache_age}s)`);
-        } else {
-            console.log('[Discovery] Loaded fresh data from database');
+        _total = result.total != null ? result.total : _total;
+        if (!tags.length) { _finished = true; _removeSentinel(); return; }
+        const grid = _getGrid();
+        if (!grid) return;
+        const sentinel = grid.querySelector('#discovery-load-sentinel');
+        for (const tagData of tags) {
+            const card = _createDiscoveryCard(tagData);
+            if (sentinel) grid.insertBefore(card, sentinel);
+            else grid.appendChild(card);
         }
-
-        // Save to frontend cache
-        setCachedData(tags);
-
-        // Render the tags
-        console.log('[Discovery] Rendering tags...');
-        renderDiscoveryNews(container, tags);
-        discoveryLoaded = true;
-        console.log('[Discovery] Load complete!');
-        
-        // Restore scroll position from navigation state if this is the active tab
-        // Only restore if this load was triggered after renderViewerFromData
-        // (generation > 0), not the initial ready() load which may be stale.
-        if (_discoveryGeneration > 0 || window._trNoRebuildExpected) {
-            try {
-                if (window.TR?.scroll) {
-                    const navState = window.TR.scroll.peekNavigationState?.() || null;
-                    if (navState && navState.activeTab === DISCOVERY_CATEGORY_ID) {
-                        console.log('[Discovery] Restoring navigation scroll after content loaded (gen:', _discoveryGeneration, ')');
-                        const consumed = window.TR.scroll.consumeNavigationState();
-                        requestAnimationFrame(() => {
-                            window.TR.scroll.restoreNavigationScrollY(consumed || navState);
-                            window.TR.scroll.restoreNavGridScroll(consumed || navState);
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error('[Discovery] Failed to restore scroll:', e);
-            }
-        } else {
-            console.log('[Discovery] Skipping scroll restore on initial load (gen:', _discoveryGeneration, ')');
-        }
-
+        _offset += tags.length;
+        if (_total >= 0 && _offset >= _total) { _finished = true; _removeSentinel(); }
+        try { window.TR?.readState?.restoreReadState?.(); } catch (e) { /* */ }
     } catch (e) {
-        console.error('[Discovery] Load error:', e);
-        renderError(container, e.message);
+        console.error('[Discovery] loadNextBatch error:', e);
     } finally {
-        clearTimeout(safetyTimeout);
-        discoveryLoading = false;
+        _inFlight = false;
     }
 }
 
-/**
- * Fetch and update cache in background
- */
-async function fetchAndUpdateCache() {
+async function _initialLoad() {
+    const grid = _getGrid();
+    if (!grid) return;
+    _offset = 0;
+    _finished = false;
+    _initialized = false;
+    const myGen = _generation;
+
+    grid.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;"><div style="font-size:48px;margin-bottom:16px;">✨</div><div>发现中...</div></div>`;
+
     try {
-        const result = await fetchDiscoveryNews();
-        if (result.ok && result.tags) {
-            setCachedData(result.tags);
-            console.log('[Discovery] Background cache update completed');
-            return result.tags;
-        }
-    } catch (e) {
-        console.error('[Discovery] Background cache update error:', e);
-    }
-    return null;
-}
+        const count = _getInitialCount();
+        const result = await _fetchBatch(count, 0);
+        if (myGen !== _generation) return;
+        const tags = result.tags || [];
+        _total = result.total != null ? result.total : 0;
 
-/**
- * Handle tab switch event
- */
-function handleTabSwitch(categoryId) {
-    if (categoryId === DISCOVERY_CATEGORY_ID) {
-        loadDiscovery();
-    }
-}
+        const currentGrid = _getGrid();
+        if (!currentGrid) return;
+        currentGrid.innerHTML = '';
 
-/**
- * Initialize the module
- */
-function init() {
-    console.log('[Discovery] Initializing module...');
-
-    // Listen for tab switch events
-    events.on('tab:switched', (detail) => {
-        const categoryId = detail?.categoryId;
-        console.log('[Discovery] tab:switched event received, categoryId:', categoryId);
-        if (categoryId) {
-            handleTabSwitch(categoryId);
-        }
-    });
-
-    // Check if discovery is already the active tab - with multiple retries
-    const checkAndLoadIfActive = () => {
-        const activePane = document.querySelector('#tab-discovery.active');
-        const container = document.getElementById('discoveryGrid');
-        console.log('[Discovery] Checking if active:', !!activePane, 'container:', !!container, 'loaded:', discoveryLoaded, 'loading:', discoveryLoading);
-        
-        if (activePane && container) {
-            const hasContent = container.querySelector('.platform-card');
-            if (!hasContent && !discoveryLoaded && !discoveryLoading) {
-                console.log('[Discovery] Tab is active and no content, loading...');
-                loadDiscovery();
-            }
-        }
-    };
-    
-    // Check immediately
-    checkAndLoadIfActive();
-    
-    // Also check after short delays (for timing issues)
-    setTimeout(checkAndLoadIfActive, 100);
-    setTimeout(checkAndLoadIfActive, 500);
-    setTimeout(checkAndLoadIfActive, 1000);
-
-    // Add click listener to the discovery tab button as a fallback
-    const tryAttachClickListener = () => {
-        const tabButton = document.querySelector('.category-tab[data-category="discovery"]');
-        if (tabButton) {
-            console.log('[Discovery] Attaching click listener to tab button');
-            tabButton.addEventListener('click', () => {
-                console.log('[Discovery] Tab button clicked');
-                setTimeout(() => {
-                    const pane = document.querySelector('#tab-discovery.active');
-                    if (pane) {
-                        console.log('[Discovery] Tab pane is now active, loading...');
-                        loadDiscovery();
-                    }
-                }, 100);
-            });
-
-            tabButton.addEventListener('touchstart', () => {
-                console.log('[Discovery] Tab button touched (touchstart)');
-                setTimeout(() => {
-                    const pane = document.querySelector('#tab-discovery.active');
-                    if (pane) {
-                        console.log('[Discovery] Tab pane is now active after touch, loading...');
-                        loadDiscovery();
-                    }
-                }, 100);
-            }, { passive: true });
-        } else {
-            console.warn('[Discovery] Tab button not found, will retry...');
-            setTimeout(tryAttachClickListener, 500);
-        }
-    };
-
-    tryAttachClickListener();
-
-    // Add MutationObserver to watch for tab pane becoming active
-    const observeTabActivation = () => {
-        const tabPane = document.getElementById('tab-discovery');
-        if (!tabPane) {
-            console.warn('[Discovery] Tab pane not found for MutationObserver');
+        if (!tags.length) {
+            currentGrid.innerHTML = `<div style="text-align:center;padding:60px 20px;width:100%;"><div style="font-size:64px;margin-bottom:20px;">✨</div><div style="font-size:18px;color:#374151;margin-bottom:12px;font-weight:600;">暂无新发现</div><div style="font-size:14px;color:#6b7280;">AI 正在持续发现热门话题，稍后再来看看吧</div></div>`;
+            _initialized = true;
             return;
         }
 
-        const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                    const target = mutation.target;
-                    if (target.classList.contains('active')) {
-                        console.log('[Discovery] Tab pane became active (MutationObserver)');
-                        if (!discoveryLoaded && !discoveryLoading) {
-                            loadDiscovery();
-                        }
-                    }
+        for (const tagData of tags) {
+            currentGrid.appendChild(_createDiscoveryCard(tagData));
+        }
+        _offset = tags.length;
+        _initialized = true;
+
+        if (_total >= 0 && _offset >= _total) {
+            _finished = true;
+        } else {
+            _createSentinel(currentGrid);
+            _attachObserver();
+        }
+
+        try { window.TR?.readState?.restoreReadState?.(); } catch (e) { /* */ }
+
+        // Restore scroll from navigation state
+        if (myGen > 0 || window._trNoRebuildExpected) {
+            try {
+                const navState = window.TR?.scroll?.peekNavigationState?.() || null;
+                if (navState && navState.activeTab === CATEGORY_ID) {
+                    const consumed = window.TR.scroll.consumeNavigationState();
+                    requestAnimationFrame(() => {
+                        window.TR.scroll.restoreNavigationScrollY(consumed || navState);
+                        window.TR.scroll.restoreNavGridScroll(consumed || navState);
+                    });
                 }
-            }
-        });
-
-        observer.observe(tabPane, {
-            attributes: true,
-            attributeFilter: ['class']
-        });
-
-        console.log('[Discovery] MutationObserver attached to tab pane');
-    };
-
-    setTimeout(observeTabActivation, 100);
-
-    console.log('[Discovery] Module initialized');
+            } catch (e) { /* */ }
+        }
+    } catch (e) {
+        console.error('[Discovery] Initial load failed:', e);
+        const g = _getGrid();
+        if (g) g.innerHTML = `<div style="text-align:center;padding:60px 20px;width:100%;color:#6b7280;"><div style="font-size:48px;margin-bottom:16px;">😕</div><div>加载失败</div><button onclick="window.HotNews?.discovery?.load(true)" style="margin-top:16px;padding:8px 16px;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>`;
+    }
 }
 
-// Listen for viewer:rendered event (replaces monkey-patch on renderViewerFromData)
-events.on('viewer:rendered', () => {
-    try {
-        console.log('[Discovery] viewer:rendered event, resetting state, bumping gen');
-        _discoveryGeneration++;
-        discoveryLoaded = false;
-        discoveryLoading = false;
+function resetState() {
+    _offset = 0;
+    _total = -1;
+    _finished = false;
+    _inFlight = false;
+    _initialized = false;
+    _generation++;
+    if (_observer) { try { _observer.disconnect(); } catch (e) { /* */ } _observer = null; }
+}
 
-        // If discovery tab is active, reload
-        setTimeout(() => {
-            const activePane = document.querySelector('#tab-discovery.active');
-            if (activePane) {
-                console.log('[Discovery] Tab is active after re-render, loading...');
-                loadDiscovery();
-            }
-        }, 100);
-    } catch (e) {
-        console.error('[Discovery] viewer:rendered handler error:', e);
+// --- Event wiring ---
+
+events.on('viewer:rendered', () => {
+    resetState();
+    setTimeout(() => {
+        const pane = document.querySelector('#tab-discovery.active');
+        if (pane) _initialLoad().catch(() => {});
+    }, 100);
+});
+
+events.on('tab:switched', (detail) => {
+    if (String(detail?.categoryId || '') !== CATEGORY_ID) return;
+    if (_inFlight) return;
+    const grid = _getGrid();
+    const hasCards = grid && grid.querySelectorAll('.platform-card').length > 0;
+    if (hasCards) {
+        if (!_finished) _attachObserver();
+    } else {
+        _initialLoad().catch(() => {});
     }
 });
 
-// Export for global access
-if (typeof window !== 'undefined') {
-    window.HotNews = window.HotNews || {};
-    window.HotNews.discovery = {
-        load: loadDiscovery,
-        init: init,
-        clearCache: clearCache,
-    };
-}
+// Public API
+window.HotNews = window.HotNews || {};
+window.HotNews.discovery = {
+    load: (force) => { if (force) resetState(); _initialLoad().catch(() => {}); },
+    resetState,
+    clearCache: () => { try { localStorage.removeItem('hotnews_discovery_cache'); } catch (e) { /* */ } },
+    getStatus: () => ({ offset: _offset, total: _total, finished: _finished, inFlight: _inFlight, initialized: _initialized }),
+};
 
-// Auto-initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
-}
-
-export { loadDiscovery, init, handleTabSwitch, clearCache };
+export const discovery = { resetState };

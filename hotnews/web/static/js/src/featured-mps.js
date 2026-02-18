@@ -33,7 +33,7 @@ function _getInitialCount() {
 }
 
 function _getArticleLimit() {
-    return _isMobile() ? 20 : 50;
+    return 50;
 }
 
 function _getGrid() {

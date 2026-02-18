@@ -950,22 +950,36 @@ async def get_discovery_news(
     request: Request,
     news_limit: int = Query(50, ge=1, le=100),
     tag_limit: int = Query(30, ge=1, le=50),
+    limit: int = Query(0, ge=0, le=50),
+    offset: int = Query(0, ge=0),
 ):
     """Get discovery tags and their news (public endpoint, no auth required).
     
     Returns NEW tags that meet promotion criteria with their related news.
+    
+    When limit > 0, returns a paginated slice of tags (for infinite scroll).
+    When limit = 0 (default), returns all tags (backward compatible).
     """
     online_conn = _get_online_db_conn(request)
     
     # Try to get from global cache first
     from hotnews.web.timeline_cache import discovery_news_cache
     
+    # Cache key is based on the full query (not pagination params)
     cache_key = {"news_limit": news_limit, "tag_limit": tag_limit}
     cached_result = discovery_news_cache.get(config=cache_key)
     if cached_result is not None:
+        all_tags = cached_result
+        total = len(all_tags)
+        if limit > 0:
+            sliced = all_tags[offset:offset + limit]
+        else:
+            sliced = all_tags
         return {
             "ok": True,
-            "tags": cached_result,
+            "tags": sliced,
+            "total": total,
+            "offset": offset,
             "cached": True,
             "cache_age": round(discovery_news_cache.age_seconds, 1),
         }
@@ -1269,7 +1283,12 @@ async def get_discovery_news(
     # Store in cache
     discovery_news_cache.set(result, config=cache_key)
     
-    return {"ok": True, "tags": result, "cached": False}
+    total = len(result)
+    if limit > 0:
+        sliced = result[offset:offset + limit]
+    else:
+        sliced = result
+    return {"ok": True, "tags": sliced, "total": total, "offset": offset, "cached": False}
 
 
 @router.get("/page", include_in_schema=False)
