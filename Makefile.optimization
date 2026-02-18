@@ -1,0 +1,41 @@
+# Makefile for Optimization Features
+
+.PHONY: help test-cache check-cache view-stats deploy-optimization
+
+help:
+	@echo "优化功能命令："
+	@echo "  make test-cache          - 测试缓存头配置"
+	@echo "  make test-cache-prod     - 测试生产环境缓存头"
+	@echo "  make check-cache         - 快速检查缓存头"
+	@echo "  make view-stats          - 查看缓存统计"
+	@echo "  make view-recommendations - 查看优化建议"
+	@echo "  make deploy-optimization - 部署优化功能"
+	@echo "  make check-traffic       - 检查服务器流量（需要 SSH）"
+
+test-cache:
+	python3 scripts/test_cache_headers.py http://localhost:8090
+
+test-cache-prod:
+	@read -p "生产环境域名: " domain; \
+	python3 scripts/test_cache_headers.py $$domain
+
+check-cache:
+	@echo "=== /api/news ==="
+	@curl -sI http://localhost:8090/api/news | grep -i cache-control || echo "无缓存头"
+	@echo "=== /api/me/profile ==="
+	@curl -sI http://localhost:8090/api/me/profile | grep -i cache-control || echo "无缓存头"
+
+view-stats:
+	@curl -s http://localhost:8090/api/cache/stats | python3 -m json.tool
+
+view-recommendations:
+	@curl -s http://localhost:8090/api/cache/recommendations | python3 -m json.tool
+
+deploy-optimization:
+	git add .
+	git commit -m "feat: add DCDN cache optimization"
+	git push
+	bash deploy-fast.sh
+
+check-traffic:
+	ssh root@120.77.222.205 -p 52222 "cd ~/hotnews && bash scripts/check_traffic.sh"

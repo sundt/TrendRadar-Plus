@@ -51,6 +51,6 @@ TR.online = online;
 ready(function() {
     online.ping();
     online.refreshStats();
-    setInterval(() => online.ping(), 15000);
-    setInterval(() => online.refreshStats(), 10000);
+    setInterval(() => online.ping(), 60000);
+    setInterval(() => online.refreshStats(), 60000);
 });

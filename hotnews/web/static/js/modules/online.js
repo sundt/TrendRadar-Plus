@@ -51,8 +51,8 @@
     TR.ready(function() {
         TR.online.ping();
         TR.online.refreshStats();
-        setInterval(() => TR.online.ping(), 15000);
-        setInterval(() => TR.online.refreshStats(), 10000);
+        setInterval(() => TR.online.ping(), 60000);
+        setInterval(() => TR.online.refreshStats(), 60000);
     });
 
 })(window);

@@ -27,6 +27,16 @@
  - Claude Code：`CLAUDE.md`
  - Windsurf：`WINDSURF.md`
  - VSCode Claude：`CURSOR.md`
+
+ ## 📊 性能优化文档
+
+ 查看 **[docs/optimization/](./docs/optimization/)** 了解：
+ - 🚀 DCDN 缓存优化（降低 60-70% 费用）
+ - 🔄 重复新闻智能去重
+ - 📈 流量统计和费用计算
+ - 🛠️ 部署指南和测试工具
+
+ 快速开始：`docs/optimization/README.md`
  
  ## 快速开始（Docker，推荐）
  

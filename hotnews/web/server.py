@@ -579,6 +579,10 @@ from hotnews.web.api.comments_api import stats_router as _article_stats_router
 app.include_router(_comments_router)
 app.include_router(_article_stats_router)
 
+# Cache stats API (缓存统计和监控)
+from hotnews.web.cache_stats_routes import router as _cache_stats_router
+app.include_router(_cache_stats_router)
+
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
 if kernel_static.exists():
@@ -590,23 +594,128 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
-# 静态资源缓存中间件
+# DCDN 缓存中间件 — 减少动态请求数（降低费用）
+# 规则：public = CDN 可缓存（省钱）；private = 必须回源（用户数据）
 @app.middleware("http")
 async def add_cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    
-    # 为静态资源添加缓存头
-    if path.startswith("/static/"):
-        # 检查是否带版本号参数 (?v=...)
+
+    # ── 静态资源 ──
+    if path.startswith("/static/") or path.startswith("/static_kernel/"):
         if "?v=" in str(request.url):
-            # 带版本号的资源：长期缓存（1年）+ immutable
-            # 因为版本号变化时 URL 会变，所以可以安全地长期缓存
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         else:
-            # 不带版本号的资源：短期缓存（1小时）
             response.headers["Cache-Control"] = "public, max-age=3600"
+        return response
+
+    # ── 可安全 CDN 缓存的公共 API（无用户数据）──
+
+    # 时间线 API — 5 分钟
+    if path in ["/api/rss/brief/timeline", "/api/rss/explore/timeline"]:
+        response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+        return response
+
+    # 在线人数统计 — 10 秒（高频轮询，短缓存即可大幅减少回源）
+    if path == "/api/online":
+        response.headers["Cache-Control"] = "public, max-age=10, s-maxage=10"
+        return response
+
+    # 更新检查 — 1 分钟
+    if path == "/api/news/check-updates":
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"
+        return response
+
+    # 分类元数据 — 5 分钟
+    if path == "/api/categories":
+        response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+        return response
+
+    # 分类数据 — 15 分钟
+    if path.startswith("/api/category/"):
+        response.headers["Cache-Control"] = "public, max-age=900, s-maxage=900"
+        return response
+
+    # RSS 代理 — 30 分钟
+    if path.startswith("/api/rss/proxy") or path.startswith("/api/proxy/"):
+        response.headers["Cache-Control"] = "public, max-age=1800, s-maxage=1800"
+        return response
+
+    # RSS 源列表/搜索/预览 — 5 分钟
+    if path.startswith("/api/rss-sources") or path.startswith("/api/rss-source-categories"):
+        response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+        return response
+
+    # 搜索 — 2 分钟
+    if path.startswith("/api/search"):
+        response.headers["Cache-Control"] = "public, max-age=120, s-maxage=120"
+        return response
+
+    # 发现页 / 精选公众号 — 10 分钟
+    if path.startswith("/api/discovery/") or path.startswith("/api/featured-mps"):
+        response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
+        return response
+
+    # 文章标签 — 10 分钟
+    if path.startswith("/api/summary/tags"):
+        response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
+        return response
+
+    # 评论数据 GET — 1 分钟
+    if path.startswith("/api/comments") and request.method == "GET":
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"
+        return response
+
+    # 新闻分页（无用户数据）— 2 分钟
+    if path == "/api/news/page":
+        response.headers["Cache-Control"] = "public, max-age=120, s-maxage=120"
+        return response
+
+    # NBA — 5 分钟
+    if path == "/api/nba-today":
+        response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+        return response
+
+    # ── 包含用户数据的 API — 不可 CDN 缓存 ──
+
+    _no_cache = "private, no-cache, no-store, must-revalidate"
+
+    # /api/news 注入了用户标签/订阅/话题，不能 public 缓存
+    if path == "/api/news":
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    if path.startswith("/api/me/") or path.startswith("/api/auth/"):
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    if path.startswith("/api/user/"):
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    if path.startswith("/api/topics"):
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    if path.startswith("/api/wechat/"):
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    if path.startswith("/api/admin/"):
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    if path.startswith("/api/sources/"):
+        response.headers["Cache-Control"] = _no_cache
+        return response
+
+    # ── HTML 页面 — 1 分钟 ──
+    content_type = response.headers.get("content-type", "")
+    if content_type.startswith("text/html"):
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"
+        return response
     
+    # 默认：不设置缓存头（让 CDN 使用默认策略）
     return response
 
 _FETCH_METRICS_MAX = 5000
@@ -1693,6 +1802,22 @@ async def api_news(
 
     try:
         data = _inject_rss_subscription_news_into_data(request=request, data=data)
+    except Exception:
+        pass
+
+    # Strip platforms data for categories that have dedicated tab APIs.
+    # These tabs render empty panes and load data from their own endpoints,
+    # so including their platforms in /api/news is wasted bandwidth.
+    # This reduces response size from ~2.1MB to ~400KB.
+    _DEDICATED_TAB_IDS = {"explore", "knowledge", "discovery", "featured-mps", "my-tags"}
+    try:
+        cats = data.get("categories")
+        if isinstance(cats, dict):
+            for tab_id in _DEDICATED_TAB_IDS:
+                if tab_id in cats and isinstance(cats[tab_id], dict):
+                    cats[tab_id]["platforms"] = {}
+                    cats[tab_id]["news_count"] = 0
+                    cats[tab_id]["filtered_count"] = 0
     except Exception:
         pass
 
