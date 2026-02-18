@@ -479,7 +479,10 @@ async function _refreshTimelineIfNeeded(opts = {}) {
     _mbInFlight = true;
     try {
         await _loadTimeline();
-        _mbLastRefreshAt = Date.now();
+        // Only mark as refreshed if we actually loaded (not aborted by generation change)
+        if (_mbInitialized) {
+            _mbLastRefreshAt = Date.now();
+        }
         return true;
     } catch (e) {
         console.error('[MorningBrief] Refresh failed:', e);
@@ -541,7 +544,7 @@ async function _initialLoad() {
     }
     
     _attachHandlersOnce();
-    await _refreshTimelineIfNeeded({ force: false, skipTabCheck: true });
+    await _refreshTimelineIfNeeded({ force: true, skipTabCheck: true });
     console.log('[MorningBrief] Initial load complete');
 }
 
