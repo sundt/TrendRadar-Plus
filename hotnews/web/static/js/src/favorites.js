@@ -674,8 +674,8 @@ function initFavoriteButtonDelegation() {
         const newsItem = btn.closest('.news-item');
         if (!newsItem) return;
         
-        const newsId = newsItem.dataset.id || newsItem.dataset.newsId;
-        const url = newsItem.dataset.url;
+        const newsId = newsItem.dataset.newsId || newsItem.dataset.id;
+        const url = newsItem.dataset.newsUrl || newsItem.dataset.url;
         const titleEl = newsItem.querySelector('.news-title');
         const title = titleEl ? titleEl.textContent.trim() : '';
         
