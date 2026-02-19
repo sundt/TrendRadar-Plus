@@ -386,6 +386,7 @@ async def run_custom_source(source_id: str, request: Request, _=Depends(_require
                 # Generate dedup_key from URL
                 url = getattr(item, 'url', '') or ''
                 title = getattr(item, 'title', '') or ''
+                description = getattr(item, 'content', '') or ''
                 if not url:
                     continue
                 dedup_key = hashlib.md5(url.encode()).hexdigest()[:32]
@@ -393,11 +394,11 @@ async def run_custom_source(source_id: str, request: Request, _=Depends(_require
                 published_at = 0
                 published_raw = getattr(item, 'crawl_time', '') or ''
                 rows_to_insert.append(
-                    (source_id, dedup_key[:500], url[:2000], title[:500], published_at, published_raw[:500], now_ts, now_ts)
+                    (source_id, dedup_key[:500], url[:2000], title[:500], published_at, published_raw[:500], now_ts, now_ts, description[:2000])
                 )
             if rows_to_insert:
                 conn.executemany(
-                    "INSERT OR IGNORE INTO rss_entries(source_id, dedup_key, url, title, published_at, published_raw, fetched_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO rss_entries(source_id, dedup_key, url, title, published_at, published_raw, fetched_at, created_at, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     rows_to_insert,
                 )
                 conn.commit()
