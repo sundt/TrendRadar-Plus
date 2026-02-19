@@ -274,35 +274,53 @@ class ArticleEditor {
                     const clipboardData = event.clipboardData
                     if (!clipboardData) return false
                     
-                    const hasHtml = clipboardData.types.includes('text/html')
+                    const types = [...clipboardData.types]
+                    const hasHtml = types.includes('text/html')
+                    const hasText = types.includes('text/plain')
                     const items = clipboardData.items
                     
-                    // 检查是否有纯图片 file（截图场景）
-                    let hasImageFile = false
-                    let imageFile = null
+                    // 收集所有图片 file items
+                    const imageFiles = []
                     if (items) {
                         for (const item of items) {
                             if (item.kind === 'file' && item.type.startsWith('image/')) {
-                                hasImageFile = true
-                                imageFile = item.getAsFile()
-                                break
+                                const f = item.getAsFile()
+                                if (f) imageFiles.push(f)
                             }
                         }
                     }
                     
+                    console.log('[paste]', { types, hasHtml, hasText, imageFiles: imageFiles.length })
+                    
                     // 场景1：有 HTML 内容（从网页/文档复制的图文混合）
-                    // 让 Tiptap 默认处理 HTML 粘贴，然后异步上传其中的外部图片
+                    // 让 Tiptap 默认处理 HTML，然后异步转存外部图片
                     if (hasHtml) {
-                        // return false 让 Tiptap 处理 HTML 粘贴
-                        // 然后在下一个 tick 扫描并上传外部图片
-                        setTimeout(() => self.uploadExternalImages(), 100)
+                        setTimeout(() => self.uploadExternalImages(), 200)
                         return false
                     }
                     
-                    // 场景2：纯图片粘贴（截图、单独复制图片）
-                    if (hasImageFile && imageFile) {
+                    // 场景2：有文本 + 图片（某些应用只给 text/plain + image）
+                    // 先让 Tiptap 处理文本，再手动插入图片
+                    if (hasText && imageFiles.length > 0) {
+                        // 不阻止默认行为，让文本先粘贴进去
+                        // 然后异步上传并插入图片
+                        setTimeout(async () => {
+                            for (const file of imageFiles) {
+                                await self.handleImageUpload(file)
+                            }
+                        }, 100)
+                        return false
+                    }
+                    
+                    // 场景3：纯图片粘贴（截图）
+                    if (imageFiles.length > 0) {
                         event.preventDefault()
-                        self.handleImageUpload(imageFile)
+                        // 上传所有图片
+                        ;(async () => {
+                            for (const file of imageFiles) {
+                                await self.handleImageUpload(file)
+                            }
+                        })()
                         return true
                     }
                     
@@ -343,54 +361,37 @@ class ArticleEditor {
         const editorEl = document.querySelector('#editor .ProseMirror')
         if (!editorEl) return
         
-        const imgs = editorEl.querySelectorAll('img')
-        const externalImgs = []
-        
-        for (const img of imgs) {
-            const src = img.getAttribute('src') || ''
-            // 跳过已经是本站的图片、base64、空 src
-            if (!src || src.startsWith('/api/') || src.startsWith('data:') || src.startsWith('blob:')) {
-                continue
+        // 第一步：收集所有外部图片 src
+        const externalSrcs = new Set()
+        this.editor.state.doc.descendants((node) => {
+            if (node.type.name === 'image') {
+                const src = node.attrs.src || ''
+                if (src && !src.startsWith('/api/') && !src.startsWith('data:') && !src.startsWith('blob:')
+                    && (src.startsWith('http://') || src.startsWith('https://'))) {
+                    externalSrcs.add(src)
+                }
             }
-            // 外部 URL（http/https 开头）
-            if (src.startsWith('http://') || src.startsWith('https://')) {
-                externalImgs.push(img)
-            }
-        }
+        })
         
-        if (externalImgs.length === 0) return
+        if (externalSrcs.size === 0) return
         
-        showToast(`正在上传 ${externalImgs.length} 张图片...`)
+        showToast(`正在上传 ${externalSrcs.size} 张图片...`)
         
-        let uploaded = 0
+        // 第二步：并行上传所有外部图片，建立 oldSrc -> newSrc 映射
+        const srcMap = new Map() // oldSrc -> newSrc
         let failed = 0
         
-        for (const img of externalImgs) {
-            const originalSrc = img.getAttribute('src')
+        const uploadPromises = [...externalSrcs].map(async (originalSrc) => {
             try {
-                // 通过后端代理下载并上传外部图片
                 const response = await fetch('/api/publisher/upload/from-url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify({ url: originalSrc })
                 })
-                
                 const data = await response.json()
-                
                 if (response.ok && data.ok && data.data?.url) {
-                    // 用 Tiptap 的方式更新图片 src
-                    // 遍历文档找到对应的 image node 并替换
-                    this.editor.state.doc.descendants((node, pos) => {
-                        if (node.type.name === 'image' && node.attrs.src === originalSrc) {
-                            this.editor.chain()
-                                .setNodeSelection(pos)
-                                .updateAttributes('image', { src: data.data.url })
-                                .run()
-                            return false // stop traversal for this match
-                        }
-                    })
-                    uploaded++
+                    srcMap.set(originalSrc, data.data.url)
                 } else {
                     failed++
                     console.warn('Failed to upload external image:', originalSrc, data)
@@ -399,13 +400,29 @@ class ArticleEditor {
                 failed++
                 console.warn('Failed to upload external image:', originalSrc, error)
             }
+        })
+        
+        await Promise.all(uploadPromises)
+        
+        if (srcMap.size === 0) {
+            if (failed > 0) showToast(`${failed} 张图片上传失败，保留原始链接`, 'error')
+            return
         }
         
-        if (uploaded > 0) {
-            showToast(`已上传 ${uploaded} 张图片${failed > 0 ? `，${failed} 张失败` : ''}`, 'success')
-        } else if (failed > 0) {
-            showToast(`${failed} 张图片上传失败，保留原始链接`, 'error')
-        }
+        // 第三步：一次 transaction 批量替换所有图片 src
+        const { tr } = this.editor.state
+        this.editor.state.doc.descendants((node, pos) => {
+            if (node.type.name === 'image' && srcMap.has(node.attrs.src)) {
+                tr.setNodeMarkup(pos, undefined, {
+                    ...node.attrs,
+                    src: srcMap.get(node.attrs.src),
+                })
+            }
+        })
+        this.editor.view.dispatch(tr)
+        
+        const uploaded = srcMap.size
+        showToast(`已上传 ${uploaded} 张图片${failed > 0 ? `，${failed} 张失败` : ''}`, 'success')
     }
     
     // 更新目录
