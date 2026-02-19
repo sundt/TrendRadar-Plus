@@ -49,6 +49,25 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${title.replace(/'/g, "\\'")}', '${url.replace(/'/g, "\\'")}', '${sourceId}', '${sourceName.replace(/'/g, "\\'")}')" ></button>`;
         const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
         const actionsHtml = `<div class="news-actions">${timeHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
+        // Show content (full text) or description (summary) snippet below title
+        const rawContent = n?.content || '';
+        let snippetHtml = '';
+        if (rawContent) {
+            // Strip HTML tags for plain-text snippet, keep first 200 chars
+            const tmp = document.createElement('div');
+            tmp.innerHTML = rawContent;
+            const plain = (tmp.textContent || tmp.innerText || '').trim();
+            if (plain) {
+                const snippet = plain.length > 200 ? plain.slice(0, 200) + '…' : plain;
+                snippetHtml = `<p class="news-content-snippet">${escapeHtml(snippet)}</p>`;
+            }
+            // Extract first image from content HTML (use original src directly)
+            const imgMatch = rawContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch && imgMatch[1]) {
+                const imgSrc = escapeHtml(imgMatch[1]);
+                snippetHtml += `<img class="news-content-img" src="${imgSrc}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`;
+            }
+        }
         return `
             <li class="news-item" data-news-id="${stableId}" data-news-title="${title}">
                 <div class="news-item-content">
@@ -56,6 +75,7 @@ function _buildNewsItemsHtml(items, opts = {}) {
                     <a class="news-title" href="${url}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
                         ${title}
                     </a>
+                    ${snippetHtml}
                     ${actionsHtml}
                 </div>
             </li>`;

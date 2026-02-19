@@ -228,7 +228,9 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
                 url = it.get("url") or it.get("external_url")
                 title = it.get("title") or url
                 published = it.get("date_published") or it.get("date_modified")
-                entries.append({"title": title, "link": url, "published": published})
+                summary = (it.get("summary") or "").strip()
+                content = (it.get("content_html") or it.get("content_text") or "").strip()
+                entries.append({"title": title, "link": url, "published": published, "summary": summary, "content": content})
             return {"format": "json", "feed": {"title": feed_title, "language": feed_lang}, "entries": entries}
         return {"format": "json", "payload": payload}
 
@@ -265,6 +267,8 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
             title = ""
             link = ""
             pub = ""
+            summary = ""
+            content = ""
             for c in item:
                 t = _strip_xml_tag(c.tag).lower()
                 if t == "title":
@@ -273,9 +277,16 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
                     link = (c.text or "").strip() or (c.attrib.get("href") or "").strip()
                 elif t in {"pubdate", "published", "updated", "date"}:
                     pub = (c.text or "").strip()
+                elif t == "description":
+                    summary = (c.text or "").strip()
+                elif t in {"encoded", "content"}:
+                    # content:encoded or content element
+                    val = (c.text or "").strip()
+                    if val:
+                        content = val
             if not title:
                 title = link
-            entries.append({"title": title, "link": link, "published": pub})
+            entries.append({"title": title, "link": link, "published": pub, "summary": summary, "content": content})
         return {"format": "rss", "feed": {"title": feed_title, "language": feed_lang}, "entries": entries}
 
     if root_tag == "feed":
@@ -303,6 +314,8 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
             title = ""
             link = ""
             pub = ""
+            summary = ""
+            content = ""
             for c in ent:
                 t = _strip_xml_tag(c.tag).lower()
                 if t == "title":
@@ -314,9 +327,15 @@ def parse_feed_content(content_type: str, body: bytes) -> Dict[str, Any]:
                         link = href
                 elif t in {"published", "updated"}:
                     pub = (c.text or "").strip()
+                elif t == "summary":
+                    summary = (c.text or "").strip()
+                elif t == "content":
+                    val = (c.text or "").strip()
+                    if val:
+                        content = val
             if not title:
                 title = link
-            entries.append({"title": title, "link": link, "published": pub})
+            entries.append({"title": title, "link": link, "published": pub, "summary": summary, "content": content})
         return {"format": "atom", "feed": {"title": feed_title, "language": feed_lang}, "entries": entries}
 
     return {"format": "xml", "feed": {"title": ""}, "entries": []}

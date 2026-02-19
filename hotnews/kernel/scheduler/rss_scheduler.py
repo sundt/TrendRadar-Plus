@@ -1634,6 +1634,7 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
                     link = (ent.get("link") or "").strip()
                     published_raw = (ent.get("published") or "").strip()
                     summary = (ent.get("summary") or ent.get("description") or "").strip()[:2000]
+                    content = (ent.get("content") or "").strip()[:50000]
                     if not title:
                         title = link
                     if not link:
@@ -1643,11 +1644,11 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
                         continue
                     published_at = _rss_parse_published_ts(published_raw)
                     rows_to_insert.append(
-                        (sid, dk[:500], link[:2000], title[:500], int(published_at), published_raw[:500], int(fetched_at), int(created_at), summary)
+                        (sid, dk[:500], link[:2000], title[:500], int(published_at), published_raw[:500], int(fetched_at), int(created_at), summary, content)
                     )
                 if rows_to_insert:
                     conn.executemany(
-                        "INSERT OR IGNORE INTO rss_entries(source_id, dedup_key, url, title, published_at, published_raw, fetched_at, created_at, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT OR IGNORE INTO rss_entries(source_id, dedup_key, url, title, published_at, published_raw, fetched_at, created_at, description, content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         rows_to_insert,
                     )
                 _rss_entries_retention_cleanup(conn, sid, now)

@@ -53,7 +53,8 @@ async def api_rss_explore_timeline(
         fetch_limit = 2000
         cur = conn.execute(
             """
-            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
+                   e.description, e.content
             FROM rss_entries e
             JOIN rss_sources s ON e.source_id = s.id
             WHERE e.published_at > 0
@@ -97,6 +98,8 @@ async def api_rss_explore_timeline(
         url = str(r[2] or "")
         created_at = int(r[3] or 0)
         published_at = int(r[4] or 0)
+        description = str(r[5] or "").strip() if len(r) > 5 else ""
+        content = str(r[6] or "").strip() if len(r) > 6 else ""
         sname = source_names.get(sid, "")
 
         if not url.strip():
@@ -113,6 +116,9 @@ async def api_rss_explore_timeline(
             title=title, url=url, created_at=created_at,
         )
         it["published_at"] = published_at
+        body = content or description
+        if body:
+            it["content"] = body
         items_all.append(it)
 
     explore_timeline_cache.set(items_all)

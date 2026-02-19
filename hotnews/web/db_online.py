@@ -596,6 +596,7 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # ========== RSS Entries 扩展字段（公众号文章统一存储） ==========
     # 为 rss_entries 表添加公众号文章所需的字段
     _ensure_column("rss_entries", "description", "TEXT DEFAULT ''")
+    _ensure_column("rss_entries", "content", "TEXT DEFAULT ''")
     _ensure_column("rss_entries", "cover_url", "TEXT DEFAULT ''")
     _ensure_column("rss_entries", "source_type", "TEXT DEFAULT 'rss'")
     

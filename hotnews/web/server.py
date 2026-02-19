@@ -388,7 +388,7 @@ def _build_rss_categories_from_subscriptions_db(
         try:
             cur = conn.execute(
                 """
-                SELECT title, url, published_at, published_raw, created_at
+                SELECT title, url, published_at, published_raw, created_at, description, content
                 FROM rss_entries
                 WHERE source_id = ?
                 ORDER BY (CASE WHEN published_at > 0 THEN published_at ELSE created_at END) DESC, id DESC
@@ -408,6 +408,8 @@ def _build_rss_categories_from_subscriptions_db(
             published_at = int(r[2] or 0)
             created_at = int(r[4] or 0)
             ts = published_at if published_at > 0 else created_at
+            description = (r[5] or "").strip()
+            content = (r[6] or "").strip()
             if not title:
                 title = link
             if not link:
@@ -420,16 +422,19 @@ def _build_rss_categories_from_subscriptions_db(
             seen_titles.add(title_key)
             
             stable_id = generate_news_id(platform_id, title)
-            platform["news"].append(
-                {
-                    "title": title,
-                    "display_title": title,
-                    "url": link,
-                    "meta": "",
-                    "stable_id": stable_id,
-                    "timestamp": ts,
-                }
-            )
+            item = {
+                "title": title,
+                "display_title": title,
+                "url": link,
+                "meta": "",
+                "stable_id": stable_id,
+                "timestamp": ts,
+            }
+            # Prefer content (full text) over description (summary)
+            body = content or description
+            if body:
+                item["content"] = body
+            platform["news"].append(item)
             
             # Stop after reaching per_feed_limit unique items
             if len(platform["news"]) >= per_feed_limit:
@@ -2330,7 +2335,7 @@ async def api_subscriptions_rss_news(request: Request):
             try:
                 cur = conn.execute(
                     """
-                    SELECT title, url, published_at, published_raw, created_at
+                    SELECT title, url, published_at, published_raw, created_at, description, content
                     FROM rss_entries
                     WHERE source_id = ?
                     ORDER BY (CASE WHEN published_at > 0 THEN published_at ELSE created_at END) DESC, id DESC
@@ -2349,16 +2354,20 @@ async def api_subscriptions_rss_news(request: Request):
                     title = link
                 if not link:
                     continue
+                description = (r[5] or "").strip()
+                content_val = (r[6] or "").strip()
                 stable_id = generate_news_id(platform_id, title)
-                platform["news"].append(
-                    {
-                        "title": title,
-                        "display_title": title,
-                        "url": link,
-                        "meta": "",
-                        "stable_id": stable_id,
-                    }
-                )
+                item = {
+                    "title": title,
+                    "display_title": title,
+                    "url": link,
+                    "meta": "",
+                    "stable_id": stable_id,
+                }
+                body = content_val or description
+                if body:
+                    item["content"] = body
+                platform["news"].append(item)
 
         payload = {
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
