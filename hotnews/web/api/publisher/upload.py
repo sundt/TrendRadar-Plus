@@ -81,6 +81,19 @@ def _validate_image(file: UploadFile, content: bytes) -> str:
     return ext
 
 
+def _detect_ext_from_bytes(content: bytes) -> str:
+    """Detect image extension from file content magic bytes."""
+    if content.startswith(b'\x89PNG'):
+        return 'png'
+    if content.startswith(b'\xff\xd8\xff'):
+        return 'jpg'
+    if content.startswith(b'GIF87a') or content.startswith(b'GIF89a'):
+        return 'gif'
+    if content.startswith(b'RIFF') and len(content) > 12 and content[8:12] == b'WEBP':
+        return 'webp'
+    return ''
+
+
 # ==================== API Endpoints ====================
 
 @router.post("/upload/image")
@@ -201,4 +214,90 @@ async def api_cleanup_images(request: Request):
             "records_deleted": count,
             "files_deleted": deleted_files,
         }
+    }
+
+
+# ==================== URL-based Image Upload ====================
+
+from pydantic import BaseModel, Field
+import logging
+
+logger = logging.getLogger("uvicorn.error")
+
+
+class UploadFromUrlRequest(BaseModel):
+    url: str = Field(..., min_length=1, max_length=4096, description="外部图片 URL")
+
+
+@router.post("/upload/from-url")
+async def api_upload_from_url(request: Request, data: UploadFromUrlRequest):
+    """
+    从外部 URL 下载图片并上传到本地。
+    
+    用于粘贴图文混合内容时，将外部图片转存到自己服务器。
+    """
+    import httpx
+
+    user = await require_member(request)
+
+    url = data.url.strip()
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(400, "无效的图片 URL")
+
+    # 下载外部图片
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; HotNews/1.0)",
+                "Referer": url,
+            })
+            resp.raise_for_status()
+            content = resp.content
+    except Exception as e:
+        logger.warning(f"Failed to download image from {url}: {e}")
+        raise HTTPException(400, f"图片下载失败: {str(e)[:100]}")
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(400, f"图片大小不能超过 {MAX_FILE_SIZE // 1024 // 1024}MB")
+
+    # 通过 magic bytes 检测格式
+    ext = _detect_ext_from_bytes(content)
+    if not ext:
+        raise HTTPException(400, "无法识别的图片格式")
+
+    # 保存文件
+    temp_id = str(uuid.uuid4())
+    safe_filename = f"{temp_id}.{ext}"
+
+    upload_dir = _get_upload_dir(request)
+    file_path = upload_dir / safe_filename
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # 从 URL 提取原始文件名
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    original_name = os.path.basename(parsed.path) or f"image.{ext}"
+
+    conn = _get_online_db_conn(request)
+    image_info = save_temp_image(
+        conn,
+        user_id=user["id"],
+        file_path=str(file_path),
+        original_name=original_name,
+        file_size=len(content),
+        mime_type=f"image/{ext}",
+    )
+
+    image_url = f"/api/publisher/image/{image_info['id']}"
+
+    return {
+        "ok": True,
+        "data": {
+            "temp_id": image_info["id"],
+            "url": image_url,
+            "original_name": original_name,
+            "file_size": len(content),
+        },
     }
