@@ -293,17 +293,36 @@ class ArticleEditor {
                     console.log('[paste]', { types, hasHtml, hasText, imageFiles: imageFiles.length })
                     
                     // 场景1：有 HTML 内容（从网页/文档复制的图文混合）
-                    // 让 Tiptap 默认处理 HTML，然后异步转存外部图片
                     if (hasHtml) {
-                        setTimeout(() => self.uploadExternalImages(), 200)
-                        return false
+                        const html = clipboardData.getData('text/html')
+                        
+                        // 预处理 HTML：修复 data-src（微信等懒加载图片）
+                        const fixedHtml = html
+                            .replace(/<img([^>]*)\sdata-src="([^"]+)"([^>]*)>/gi, (match, before, dataSrc, after) => {
+                                // 如果已有 src 且不是占位图，保留原 src
+                                if (/\ssrc="https?:\/\/[^"]+"/i.test(before + after)) {
+                                    return match
+                                }
+                                // 用 data-src 替换 src
+                                const cleaned = (before + after).replace(/\ssrc="[^"]*"/gi, '')
+                                return `<img${cleaned} src="${dataSrc}">`
+                            })
+                        
+                        console.log('[paste] html length:', html.length, 'fixed:', fixedHtml !== html)
+                        
+                        // 手动插入处理后的 HTML
+                        event.preventDefault()
+                        self.editor.commands.insertContent(fixedHtml, {
+                            parseOptions: { preserveWhitespace: false }
+                        })
+                        
+                        // 异步转存外部图片
+                        setTimeout(() => self.uploadExternalImages(), 300)
+                        return true
                     }
                     
                     // 场景2：有文本 + 图片（某些应用只给 text/plain + image）
-                    // 先让 Tiptap 处理文本，再手动插入图片
                     if (hasText && imageFiles.length > 0) {
-                        // 不阻止默认行为，让文本先粘贴进去
-                        // 然后异步上传并插入图片
                         setTimeout(async () => {
                             for (const file of imageFiles) {
                                 await self.handleImageUpload(file)
@@ -315,7 +334,6 @@ class ArticleEditor {
                     // 场景3：纯图片粘贴（截图）
                     if (imageFiles.length > 0) {
                         event.preventDefault()
-                        // 上传所有图片
                         ;(async () => {
                             for (const file of imageFiles) {
                                 await self.handleImageUpload(file)

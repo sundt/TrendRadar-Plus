@@ -244,17 +244,29 @@ async def api_upload_from_url(request: Request, data: UploadFromUrlRequest):
     if not url.startswith(("http://", "https://")):
         raise HTTPException(400, "无效的图片 URL")
 
+    # 根据域名设置合适的 Referer 和 headers
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    hostname = (parsed.hostname or "").lower()
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    
+    # 微信图片需要微信域名的 Referer
+    if "qpic.cn" in hostname or "mmbiz" in hostname or "weixin" in hostname:
+        headers["Referer"] = "https://mp.weixin.qq.com/"
+    else:
+        headers["Referer"] = f"{parsed.scheme}://{parsed.netloc}/"
+
     # 下载外部图片
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            resp = await client.get(url, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; HotNews/1.0)",
-                "Referer": url,
-            })
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers=headers)
             resp.raise_for_status()
             content = resp.content
     except Exception as e:
-        logger.warning(f"Failed to download image from {url}: {e}")
+        logger.warning(f"Failed to download image from {url[:200]}: {e}")
         raise HTTPException(400, f"图片下载失败: {str(e)[:100]}")
 
     if len(content) > MAX_FILE_SIZE:
