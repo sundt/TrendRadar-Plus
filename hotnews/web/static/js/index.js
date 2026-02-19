@@ -310,7 +310,7 @@ import{a as X,b as Ms,c as Is}from"./chunk-HHB6U5F2.js";import{b as An}from"./ch
                 \u91CD\u8BD5
             </button>
         </div>
-    `}function Li(e){let{tag:t,news:n,count:s}=e,o=t.icon||"\u{1F3F7}\uFE0F",a=t.name||t.id,r=n.length>0?n.map((i,c)=>{let l=z(i.published_at),u=(i.title||"").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),m=u.replace(/'/g,"\\'"),f=(i.url||"").replace(/'/g,"\\'"),g=(a||"").replace(/'/g,"\\'"),h=`<span class="news-ai-indicator" data-news-id="${i.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${i.id}', '${m}', '${f}', '${t.id}', '${g}')"></span>`,y=l?`<span class="tr-news-date">${l}</span>`:"",v=`<button class="news-summary-btn" data-news-id="${i.id}" data-title="${u}" data-url="${i.url||""}" data-source-id="${t.id}" data-source-name="${a||""}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${i.id}', '${m}', '${f}', '${t.id}', '${g}')" ></button>`,C=`<div class="news-actions">${y}${v}</div>`;return`
+    `}function Li(e){let{tag:t,news:n,count:s}=e,o=t.icon||"\u{1F3F7}\uFE0F",a=t.name||t.id,r=n.length>0?n.map((i,c)=>{let l=z(i.published_at),u=(i.title||"").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;"),m=u.replace(/'/g,"\\'"),f=(i.url||"").replace(/'/g,"\\'"),g=(a||"").replace(/'/g,"\\'"),h=`<span class="news-ai-indicator" data-news-id="${i.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${i.id}', '${m}', '${f}', '${t.id}', '${g}')"></span>`,y=l?`<span class="tr-news-date">${l}</span>`:"",v=`<button class="news-summary-btn" data-news-id="${i.id}" data-title="${u}" data-url="${i.url||""}" data-source-id="${t.id}" data-source-name="${a||""}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${i.id}', '${m}', '${f}', '${t.id}', '${g}')" ></button>`,C=`<button class="news-comment-btn" data-url="${(i.url||"").replace(/"/g,"&quot;")}" data-title="${u}"></button>`,w=`<div class="news-actions">${y}<div class="news-hover-btns">${v}${C}</div></div>`;return`
             <li class="news-item" data-news-id="${i.id}" data-news-title="${u}" data-news-url="${i.url||""}">
                 <div class="news-item-content">
                     <span class="news-index">${c+1}</span>
@@ -318,7 +318,7 @@ import{a as X,b as Ms,c as Is}from"./chunk-HHB6U5F2.js";import{b as An}from"./ch
                         ${i.title}
                     </a>
                     ${h}
-                    ${C}
+                    ${w}
                 </div>
             </li>
             `}).join(""):'<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">\u6682\u65E0\u76F8\u5173\u65B0\u95FB</li>';return`
