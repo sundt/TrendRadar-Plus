@@ -28,25 +28,31 @@ async def api_featured_mps_timeline(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
-    """精选公众号时间线 - 所有精选公众号文章按发布时间倒序排列。"""
+    """精选公众号时间线 - 仅 admin 添加的精选公众号文章，按发布时间倒序。
+
+    文章存储在 rss_entries 表中，source_id 格式为 mp-{fakeid}。
+    只包含 featured_wechat_mps 中 source IS NULL OR source = 'admin' 的公众号。
+    """
     conn = get_online_db()
     lim = min(int(limit or 50), 500)
     off = int(offset or 0)
 
-    fetch_limit = off + lim + 200  # fetch extra for dedup
+    fetch_limit = off + lim + 200
 
     try:
         cur = conn.execute(
             """
-            SELECT a.fakeid, a.title, a.url, a.publish_time,
-                   COALESCE(m.nickname, a.fakeid) as nickname
-            FROM wechat_mp_articles a
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
+                   COALESCE(m.nickname, e.source_id) as source_name
+            FROM rss_entries e
             JOIN featured_wechat_mps m
-              ON m.fakeid = a.fakeid AND m.enabled = 1
+              ON e.source_id = 'mp-' || m.fakeid
+              AND m.enabled = 1
               AND (m.source IS NULL OR m.source = 'admin')
-            WHERE a.title IS NOT NULL AND a.title != ''
-              AND a.url IS NOT NULL AND a.url != ''
-            ORDER BY a.publish_time DESC
+            WHERE e.title IS NOT NULL AND e.title != ''
+              AND e.url IS NOT NULL AND e.url != ''
+              AND e.published_at > 0
+            ORDER BY e.published_at DESC
             LIMIT ?
             """,
             (fetch_limit,),
@@ -60,11 +66,12 @@ async def api_featured_mps_timeline(
     items_all: List[Dict[str, Any]] = []
 
     for r in rows:
-        fakeid = str(r[0] or "").strip()
+        sid = str(r[0] or "").strip()
         title = str(r[1] or "").strip()
         url = str(r[2] or "").strip()
-        publish_time = int(r[3] or 0)
-        nickname = str(r[4] or "").strip()
+        created_at = int(r[3] or 0)
+        published_at = int(r[4] or 0)
+        nickname = str(r[5] or "").strip()
 
         if not url or url in seen_urls:
             continue
@@ -77,14 +84,14 @@ async def api_featured_mps_timeline(
             seen_titles.add(title_key)
 
         it = rss_row_to_item(
-            platform_id=f"mp-{fakeid}",
-            source_id=f"mp-{fakeid}",
+            platform_id=sid,
+            source_id=sid,
             source_name=nickname,
             title=title,
             url=url,
-            created_at=publish_time,
+            created_at=created_at,
         )
-        it["published_at"] = publish_time
+        it["published_at"] = published_at
         items_all.append(it)
 
     sliced = items_all[off:off + lim]
