@@ -1173,6 +1173,7 @@ async def refresh_articles(request: Request) -> Dict[str, Any]:
 _image_cache: Dict[str, tuple] = {}  # url -> (content, content_type, timestamp)
 _IMAGE_CACHE_TTL = 3600  # 1 hour
 
+@router.get("/avatar-proxy")
 @router.get("/img-proxy")
 async def proxy_wechat_image(
     url: str = Query(..., description="WeChat image URL to proxy"),

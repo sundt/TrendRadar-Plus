@@ -86,7 +86,6 @@ function generateTagsHtml(tags) {
         });
     }
     
-    console.log('[ArticleTags] generateTagsHtml:', { tags, html });
     return html;
 }
 
@@ -94,16 +93,10 @@ function generateTagsHtml(tags) {
  * Apply tags to a news item element
  */
 function applyTagsToNewsItem(newsItem, tags) {
-    if (!newsItem || !tags) {
-        console.log('[ArticleTags] applyTags: missing newsItem or tags', { newsItem: !!newsItem, tags });
-        return;
-    }
+    if (!newsItem || !tags) return;
     
     const titleLink = newsItem.querySelector('.news-title');
-    if (!titleLink) {
-        console.log('[ArticleTags] applyTags: no .news-title found in newsItem');
-        return;
-    }
+    if (!titleLink) return;
     
     // Remove existing tags
     titleLink.querySelectorAll('.article-tag-suffix').forEach(el => el.remove());
@@ -111,10 +104,7 @@ function applyTagsToNewsItem(newsItem, tags) {
     // Add new tags
     const tagsHtml = generateTagsHtml(tags);
     if (tagsHtml) {
-        console.log('[ArticleTags] Inserting tags HTML:', tagsHtml);
         titleLink.insertAdjacentHTML('beforeend', tagsHtml);
-    } else {
-        console.log('[ArticleTags] No tags HTML generated for:', tags);
     }
 }
 
@@ -127,8 +117,6 @@ async function loadTagsForVisibleItems() {
     const newsItems = document.querySelectorAll('.news-item[data-url], .news-item[data-news-url]');
     const urlsToLoad = [];
     const urlToItems = {};
-    
-    console.log('[ArticleTags] Found', newsItems.length, 'news items with data-url or data-news-url');
     
     newsItems.forEach(item => {
         // Support both attribute names
@@ -151,12 +139,7 @@ async function loadTagsForVisibleItems() {
         urlToItems[url].push(item);
     });
     
-    if (urlsToLoad.length === 0) {
-        console.log('[ArticleTags] No URLs to load (all cached or already loaded)');
-        return;
-    }
-    
-    console.log('[ArticleTags] Loading tags for', urlsToLoad.length, 'URLs');
+    if (urlsToLoad.length === 0) return;
     
     // Batch load tags (max 50 per request)
     const batchSize = 50;
@@ -168,7 +151,6 @@ async function loadTagsForVisibleItems() {
             if (!response.ok) continue;
             
             const data = await response.json();
-            console.log('[ArticleTags] API response:', data);
             if (!data.ok || !data.tags) continue;
             
             // Apply tags to items
@@ -179,7 +161,6 @@ async function loadTagsForVisibleItems() {
                 const items = urlToItems[url] || [];
                 items.forEach(item => {
                     if (tags) {
-                        console.log('[ArticleTags] Applying tags to item:', url, tags);
                         applyTagsToNewsItem(item, tags);
                     }
                     item.dataset.tagsLoaded = 'true';
@@ -197,34 +178,40 @@ async function loadTagsForVisibleItems() {
 function initArticleTags() {
     // Load tags after initial render
     setTimeout(loadTagsForVisibleItems, 500);
-    
+
     // Reload tags when tab changes
     document.addEventListener('tabChanged', () => {
         setTimeout(loadTagsForVisibleItems, 300);
     });
-    
-    // Reload tags when content updates
+
+    // Reload tags when content updates — only for actual new news items/cards
+    let tagDebounce = null;
     const observer = new MutationObserver((mutations) => {
         let hasNewItems = false;
-        mutations.forEach(mutation => {
-            if (mutation.addedNodes.length > 0) {
-                mutation.addedNodes.forEach(node => {
-                    if (node.classList && node.classList.contains('news-item')) {
-                        hasNewItems = true;
-                    }
-                    if (node.querySelectorAll) {
-                        const items = node.querySelectorAll('.news-item');
-                        if (items.length > 0) hasNewItems = true;
-                    }
-                });
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== 1) continue;
+                // Skip tag spans we inserted ourselves
+                if (node.classList && node.classList.contains('article-tag-suffix')) continue;
+                // Only trigger for news-item, news-list, or platform-card additions
+                if (node.classList && (node.classList.contains('news-item') || node.classList.contains('news-list') || node.classList.contains('platform-card'))) {
+                    hasNewItems = true;
+                    break;
+                }
+                if (node.querySelector && node.querySelector('.news-item')) {
+                    hasNewItems = true;
+                    break;
+                }
             }
-        });
-        
+            if (hasNewItems) break;
+        }
+
         if (hasNewItems) {
-            setTimeout(loadTagsForVisibleItems, 100);
+            clearTimeout(tagDebounce);
+            tagDebounce = setTimeout(loadTagsForVisibleItems, 500);
         }
     });
-    
+
     // Observe platform grid for changes
     const grids = document.querySelectorAll('.platform-grid, .tab-content-area');
     grids.forEach(grid => {

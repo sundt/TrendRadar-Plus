@@ -588,10 +588,42 @@ function handleBtnLeave() {
 async function loadVisibleBadges() {
   const btns = document.querySelectorAll('.news-comment-btn[data-url]');
   const urlSet = new Set();
-  btns.forEach(btn => { const u = btn.dataset.url; if (u) urlSet.add(u); });
-  for (const url of urlSet) {
-    const data = await fetchCommentSummary(url);
-    if (data) updateCommentBtnBadge(url, data.count ?? data.total ?? 0);
+  btns.forEach(btn => {
+    const u = btn.dataset.url;
+    // Skip if already loaded from cache
+    if (u && !summaryCache[ck(u)]) urlSet.add(u);
+  });
+  if (urlSet.size === 0) return;
+
+  // Use batch API instead of per-URL requests
+  const urls = Array.from(urlSet);
+  const batchSize = 100;
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const batch = urls.slice(i, i + batchSize);
+    try {
+      const resp = await fetch('/api/comments/batch-counts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ urls: batch })
+      });
+      if (!resp.ok) continue;
+      const result = await resp.json();
+      if (result.success && result.data) {
+        for (const [url, count] of Object.entries(result.data)) {
+          summaryCache[ck(url)] = { count };
+          updateCommentBtnBadge(url, count);
+        }
+        // Mark zero-comment URLs as cached too
+        batch.forEach(url => {
+          if (!(url in result.data)) {
+            summaryCache[ck(url)] = { count: 0 };
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[comment-preview] batch load error:', e);
+    }
   }
 }
 
@@ -655,11 +687,29 @@ function initCommentPreview() {
 
   loadVisibleBadges();
 
-  // Observe DOM changes to load badges for new elements
+  // Observe DOM changes to load badges for new news items only
   let badgeTimer = null;
-  const observer = new MutationObserver(() => {
-    clearTimeout(badgeTimer);
-    badgeTimer = setTimeout(loadVisibleBadges, 500);
+  const observer = new MutationObserver((mutations) => {
+    let hasNewNewsItems = false;
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        // Only trigger if actual news-item or news-list or platform-card was added
+        if (node.classList && (node.classList.contains('news-item') || node.classList.contains('news-list') || node.classList.contains('platform-card'))) {
+          hasNewNewsItems = true;
+          break;
+        }
+        if (node.querySelector && node.querySelector('.news-item')) {
+          hasNewNewsItems = true;
+          break;
+        }
+      }
+      if (hasNewNewsItems) break;
+    }
+    if (hasNewNewsItems) {
+      clearTimeout(badgeTimer);
+      badgeTimer = setTimeout(loadVisibleBadges, 800);
+    }
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
