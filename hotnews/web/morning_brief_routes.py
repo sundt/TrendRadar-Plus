@@ -275,48 +275,43 @@ async def api_rss_brief_timeline(
             }
         )
 
-    # Cache miss - query database directly
+    # Cache miss - query database with AI tag/category filtering
     conn = get_online_db()
     drop_zero = bool(drop_published_at_zero)
 
+    # Load rules for tag/category whitelist (same logic as cache_warmup)
+    rules = _mb_load_rules(conn)
+    tag_whitelist_enabled = bool(rules.get("tag_whitelist_enabled", True))
+    tag_whitelist = set(rules.get("tag_whitelist") or [])
+    category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
+    category_whitelist = set(rules.get("category_whitelist") or [])
+
+    # AI-related categories to always include (legacy fine-grained categories)
+    ai_categories = {"AI_MODEL", "DEV_INFRA", "HARDWARE_PRO"}
+
     try:
-        if drop_zero:
-            cur = conn.execute(
-                """
-                SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url,
-                       e.created_at, e.published_at, COALESCE(s.name, '')
-                FROM rss_entries e
-                JOIN rss_entry_ai_labels l
-                  ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
-                LEFT JOIN rss_sources s ON s.id = e.source_id
-                WHERE e.published_at > 0
-                  AND l.action = 'include'
-                  AND l.score >= 75
-                  AND l.confidence >= 0.70
-                GROUP BY e.source_id, e.dedup_key
-                ORDER BY e.published_at DESC, e.id DESC
-                LIMIT ?
-                """,
-                (lim + off + 200,),
-            )
-        else:
-            cur = conn.execute(
-                """
-                SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url,
-                       e.created_at, e.published_at, COALESCE(s.name, '')
-                FROM rss_entries e
-                JOIN rss_entry_ai_labels l
-                  ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
-                LEFT JOIN rss_sources s ON s.id = e.source_id
-                WHERE l.action = 'include'
-                  AND l.score >= 75
-                  AND l.confidence >= 0.70
-                GROUP BY e.source_id, e.dedup_key
-                ORDER BY e.published_at DESC, e.id DESC
-                LIMIT ?
-                """,
-                (lim + off + 200,),
-            )
+        pub_filter = "AND e.published_at > 0" if drop_zero else ""
+        cur = conn.execute(
+            f"""
+            SELECT DISTINCT e.source_id, e.dedup_key, e.title, e.url,
+                   e.created_at, e.published_at, COALESCE(s.name, ''),
+                   COALESCE(s.category, ''),
+                   GROUP_CONCAT(DISTINCT t.tag_id) as tag_ids
+            FROM rss_entries e
+            JOIN rss_entry_ai_labels l
+              ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+            LEFT JOIN rss_sources s ON s.id = e.source_id
+            LEFT JOIN rss_entry_tags t ON t.source_id = e.source_id AND t.dedup_key = e.dedup_key
+            WHERE l.action = 'include'
+              AND l.score >= 75
+              AND l.confidence >= 0.70
+              {pub_filter}
+            GROUP BY e.source_id, e.dedup_key
+            ORDER BY e.published_at DESC, e.id DESC
+            LIMIT ?
+            """,
+            (lim + off + 800,),
+        )
         rows = cur.fetchall() or []
     except Exception:
         rows = []
@@ -332,6 +327,10 @@ async def api_rss_brief_timeline(
         created_at = int(r[4] or 0)
         published_at = int(r[5] or 0)
         sname = str(r[6] or "")
+        scategory = str(r[7] or "").strip().lower()
+        tag_ids_str = str(r[8] or "").strip()
+
+        tag_ids = set(t.strip().lower() for t in tag_ids_str.split(",") if t.strip()) if tag_ids_str else set()
 
         u = url.strip()
         if not u or u in seen_urls:
@@ -339,6 +338,15 @@ async def api_rss_brief_timeline(
         title_key = title.lower()
         if title_key and title_key in seen_titles:
             continue
+
+        # Tag/category whitelist filtering (same logic as cache_warmup)
+        if tag_whitelist_enabled and tag_whitelist:
+            if not tag_ids.intersection(tag_whitelist) and scategory not in ai_categories:
+                continue
+        elif category_whitelist_enabled and category_whitelist:
+            if scategory not in category_whitelist and scategory not in ai_categories:
+                continue
+
         seen_urls.add(u)
         if title_key:
             seen_titles.add(title_key)
