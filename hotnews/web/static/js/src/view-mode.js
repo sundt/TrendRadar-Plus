@@ -15,12 +15,13 @@ const STORAGE_KEY = 'hotnews_view_mode_v1';
 const FIXED_CATEGORIES = {
     'knowledge': 'timeline',   // 每日AI早报 — 固定时间线
     'discovery': 'card',       // 新发现 — 固定卡片
-    'rsscol-rss': 'card',      // 精选博客 — 固定 RSS 阅读器
+    'rsscol-rss': 'card',      // RSS 阅读器 — 固定
+    'explore': 'timeline',     // 精选博客 — 固定时间线
 };
 
 // 默认时间线模式的栏目
 const DEFAULT_TIMELINE = new Set([
-    'explore', 'featured-mps', 'finance',
+    'featured-mps', 'finance',
 ]);
 
 function _load() {

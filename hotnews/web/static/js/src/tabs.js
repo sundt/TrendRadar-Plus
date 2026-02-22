@@ -301,8 +301,10 @@ export const tabs = {
 
             // Knowledge tab has its own loading logic (morning-brief.js),
             // skip bulkLoadCategory to avoid duplicate card creation.
-            const SELF_LOADING_TABS = ['knowledge', 'explore'];
-            if (shouldLoad && !SELF_LOADING_TABS.includes(String(categoryId))) {
+            // Explore is self-loading only when in timeline mode.
+            const selfLoadingTabs = ['knowledge'];
+            if (viewMode.get('explore') === 'timeline') selfLoadingTabs.push('explore');
+            if (shouldLoad && !selfLoadingTabs.includes(String(categoryId))) {
                 if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleBulkLoadCategory === 'function') {
                     TR.infiniteScroll.scheduleBulkLoadCategory(categoryId);
                 } else if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleEnsureCategoryLoaded === 'function') {
@@ -511,20 +513,42 @@ ready(function () {
     events.on('viewMode:changed', (detail) => {
         const catId = detail?.categoryId;
         if (!catId) return;
-        const activeTab = tabs.getActiveTabId();
-        if (catId !== activeTab) return; // Only reload if it's the active tab
         const mode = detail?.mode;
-        const SELF_MANAGED = ['knowledge', 'explore', 'featured-mps', 'finance'];
+        const activeTab = tabs.getActiveTabId();
+
+        // Self-managed timeline tabs (have their own dedicated modules)
+        const SELF_MANAGED_TIMELINE = ['knowledge', 'explore', 'featured-mps', 'finance'];
+
         if (mode === 'timeline') {
-            if (!SELF_MANAGED.includes(catId)) {
-                categoryTimeline.load(catId, true);
+            if (SELF_MANAGED_TIMELINE.includes(catId)) {
+                // These tabs' own modules handle timeline rendering.
+                // If switching back to timeline, just switch to the tab — their modules will render.
+                if (catId !== activeTab) tabs.switchTab(catId);
+            } else {
+                // Generic timeline — use categoryTimeline renderer
+                if (catId !== activeTab) {
+                    // Switch tab first, then switchTab will detect timeline mode and load
+                    tabs.switchTab(catId);
+                } else {
+                    categoryTimeline.load(catId, true);
+                }
             }
-            // Self-managed tabs: their own modules will handle the switch
-            // For explore/featured-mps/finance switching TO timeline, they're already in timeline
         } else {
             // Switching to card mode
-            if (!SELF_MANAGED.includes(catId)) {
+            if (!SELF_MANAGED_TIMELINE.includes(catId)) {
                 categoryTimeline.restoreCardMode(catId);
+            } else {
+                // Self-managed: clear their timeline content so card mode can take over
+                const grid = document.querySelector(`#tab-${catId} .platform-grid`);
+                if (grid) {
+                    grid.style.display = '';
+                    grid.style.flexDirection = '';
+                    grid.style.overflowX = '';
+                    grid.style.overflowY = '';
+                    grid.style.alignItems = '';
+                    grid.style.overscrollBehavior = '';
+                    grid.innerHTML = '';
+                }
             }
             // Re-trigger switchTab to load card content
             setTimeout(() => tabs.switchTab(catId), 50);

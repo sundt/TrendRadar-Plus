@@ -408,6 +408,7 @@ function _ensurePolling() {
         const cid = String(detail?.categoryId || '').trim();
         const hasUpdate = !!detail?.hasUpdate;
         if (cid !== EXPLORE_TAB_ID) return;
+        if (viewMode.get(EXPLORE_TAB_ID) !== 'timeline') return;
 
         // If not initialized, viewer:rendered hasn't completed its load yet.
         // But if _initialized is false because the explore tab wasn't active
@@ -433,11 +434,13 @@ function _ensurePolling() {
 }
 
 import { events } from './events.js';
+import { viewMode } from './view-mode.js';
 
 // viewer:rendered is the SOLE trigger for loading explore data.
 // ready() no longer calls _initialLoad() because viewer:rendered always fires
 // (hasDefaultHiddenCategories is always true).
 events.on('viewer:rendered', () => {
+    if (viewMode.get(EXPLORE_TAB_ID) !== 'timeline') return;
     if (_exploreObserver) {
         try { _exploreObserver.disconnect(); } catch (e) { /* ignore */ }
         _exploreObserver = null;

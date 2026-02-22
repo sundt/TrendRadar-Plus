@@ -5,6 +5,7 @@
 
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { events } from './events.js';
+import { viewMode } from './view-mode.js';
 
 const CATEGORY_ID = 'featured-mps';
 const INITIAL_CARDS_DESKTOP = 3;
@@ -263,6 +264,7 @@ function resetState() {
 
 // --- Event wiring ---
 events.on('viewer:rendered', () => {
+    if (viewMode.get(CATEGORY_ID) !== 'timeline') return;
     if (_observer) { try { _observer.disconnect(); } catch (e) {} _observer = null; }
     resetState();
     const gen = _generation;
@@ -274,6 +276,7 @@ events.on('viewer:rendered', () => {
 
 events.on('tab:switched', (detail) => {
     if (String(detail?.categoryId || '') !== CATEGORY_ID) return;
+    if (viewMode.get(CATEGORY_ID) !== 'timeline') return;
     if (_inFlight) return;
     const grid = _getGrid();
     const hasCards = grid && grid.querySelectorAll('.tr-fmp-card').length > 0;
