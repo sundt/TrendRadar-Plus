@@ -66,9 +66,18 @@ def _ensure_preferences_table(conn):
             category_config TEXT DEFAULT '{}',
             theme TEXT DEFAULT 'light',
             sidebar_widths TEXT DEFAULT '{}',
+            view_mode TEXT DEFAULT '{}',
             updated_at INTEGER NOT NULL
         )
     """)
+    # Add view_mode column if missing (migration for existing tables)
+    try:
+        conn.execute("SELECT view_mode FROM user_preferences LIMIT 0")
+    except Exception:
+        try:
+            conn.execute("ALTER TABLE user_preferences ADD COLUMN view_mode TEXT DEFAULT '{}'")
+        except Exception:
+            pass
     conn.commit()
 
 
@@ -76,7 +85,7 @@ def _get_user_preferences(conn, user_id: int) -> Optional[Dict[str, Any]]:
     """Get user preferences from database."""
     cur = conn.execute(
         """
-        SELECT user_id, category_config, theme, sidebar_widths, updated_at
+        SELECT user_id, category_config, theme, sidebar_widths, updated_at, view_mode
         FROM user_preferences
         WHERE user_id = ?
         """,
@@ -97,12 +106,18 @@ def _get_user_preferences(conn, user_id: int) -> Optional[Dict[str, Any]]:
         sidebar_widths = json.loads(row[3] or '{}')
     except (json.JSONDecodeError, TypeError):
         sidebar_widths = {}
+
+    try:
+        view_mode = json.loads(row[5] or '{}') if len(row) > 5 else {}
+    except (json.JSONDecodeError, TypeError):
+        view_mode = {}
     
     return {
         "user_id": row[0],
         "category_config": category_config,
         "theme": row[2] or "light",
         "sidebar_widths": sidebar_widths,
+        "view_mode": view_mode,
         "updated_at": row[4]
     }
 
@@ -122,6 +137,7 @@ def _format_response(preferences: Dict[str, Any]) -> Dict[str, Any]:
         "category_config": preferences.get("category_config", {}),
         "theme": preferences.get("theme", "light"),
         "sidebar_widths": preferences.get("sidebar_widths", {}),
+        "view_mode": preferences.get("view_mode", {}),
         "updated_at": preferences.get("updated_at", 0)
     }
 
@@ -155,6 +171,7 @@ async def get_preferences(
             "category_config": {},
             "theme": "light",
             "sidebar_widths": {},
+            "view_mode": {},
             "updated_at": None
         }
     
@@ -198,6 +215,10 @@ async def put_preferences(
     sidebar_widths = body.get("sidebar_widths", {})
     if not isinstance(sidebar_widths, dict):
         sidebar_widths = {}
+
+    view_mode = body.get("view_mode", {})
+    if not isinstance(view_mode, dict):
+        view_mode = {}
     
     now = _now_ts()
     
@@ -205,12 +226,13 @@ async def put_preferences(
         # Upsert preferences
         conn.execute(
             """
-            INSERT INTO user_preferences (user_id, category_config, theme, sidebar_widths, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO user_preferences (user_id, category_config, theme, sidebar_widths, view_mode, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 category_config = excluded.category_config,
                 theme = excluded.theme,
                 sidebar_widths = excluded.sidebar_widths,
+                view_mode = excluded.view_mode,
                 updated_at = excluded.updated_at
             """,
             (
@@ -218,6 +240,7 @@ async def put_preferences(
                 json.dumps(category_config, ensure_ascii=False),
                 theme,
                 json.dumps(sidebar_widths, ensure_ascii=False),
+                json.dumps(view_mode, ensure_ascii=False),
                 now
             )
         )
@@ -230,6 +253,7 @@ async def put_preferences(
         "category_config": category_config,
         "theme": theme,
         "sidebar_widths": sidebar_widths,
+        "view_mode": view_mode,
         "updated_at": now
     }
 
@@ -267,7 +291,8 @@ async def patch_preferences(
         existing = {
             "category_config": {},
             "theme": "light",
-            "sidebar_widths": {}
+            "sidebar_widths": {},
+            "view_mode": {}
         }
     
     # Update only provided fields
@@ -283,6 +308,11 @@ async def patch_preferences(
         sidebar_widths = body["sidebar_widths"]
         if isinstance(sidebar_widths, dict):
             existing["sidebar_widths"] = sidebar_widths
+
+    if "view_mode" in body:
+        vm = body["view_mode"]
+        if isinstance(vm, dict):
+            existing["view_mode"] = vm
     
     now = _now_ts()
     
@@ -290,12 +320,13 @@ async def patch_preferences(
         # Upsert preferences
         conn.execute(
             """
-            INSERT INTO user_preferences (user_id, category_config, theme, sidebar_widths, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO user_preferences (user_id, category_config, theme, sidebar_widths, view_mode, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
                 category_config = excluded.category_config,
                 theme = excluded.theme,
                 sidebar_widths = excluded.sidebar_widths,
+                view_mode = excluded.view_mode,
                 updated_at = excluded.updated_at
             """,
             (
@@ -303,6 +334,7 @@ async def patch_preferences(
                 json.dumps(existing["category_config"], ensure_ascii=False),
                 existing["theme"],
                 json.dumps(existing["sidebar_widths"], ensure_ascii=False),
+                json.dumps(existing.get("view_mode", {}), ensure_ascii=False),
                 now
             )
         )
@@ -315,5 +347,6 @@ async def patch_preferences(
         "category_config": existing["category_config"],
         "theme": existing["theme"],
         "sidebar_widths": existing["sidebar_widths"],
+        "view_mode": existing.get("view_mode", {}),
         "updated_at": now
     }

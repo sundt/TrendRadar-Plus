@@ -81,14 +81,14 @@ function _ensureLayout() {
     if (!grid) {
         grid = document.createElement('div');
         grid.className = 'platform-grid';
-        grid.style.display = 'flex';
-        grid.style.flexDirection = 'row';
-        grid.style.overflowX = 'auto';
-        grid.style.overflowY = 'hidden';
-        grid.style.alignItems = 'flex-start';
-        grid.style.overscrollBehavior = 'contain';
         pane.appendChild(grid);
     }
+    grid.style.display = 'flex';
+    grid.style.flexDirection = 'row';
+    grid.style.overflowX = 'auto';
+    grid.style.overflowY = 'hidden';
+    grid.style.alignItems = 'flex-start';
+    grid.style.overscrollBehavior = 'contain';
     return true;
 }
 

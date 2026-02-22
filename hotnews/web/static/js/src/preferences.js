@@ -16,7 +16,8 @@ const STORAGE_KEYS = {
     CATEGORY_CONFIG: 'hotnews_categories_config',
     THEME: 'hotnews_theme_mode',
     FAVORITES_WIDTH: 'hotnews_favorites_width',
-    TODO_WIDTH: 'todo_sidebar_width'
+    TODO_WIDTH: 'todo_sidebar_width',
+    VIEW_MODE: 'hotnews_view_mode_v1'
 };
 
 // API 端点
@@ -29,7 +30,8 @@ function getFromLocalStorage() {
     const result = {
         category_config: null,
         theme: 'light',
-        sidebar_widths: {}
+        sidebar_widths: {},
+        view_mode: null
     };
 
     try {
@@ -54,6 +56,12 @@ function getFromLocalStorage() {
         const todoWidth = localStorage.getItem(STORAGE_KEYS.TODO_WIDTH);
         if (todoWidth) {
             result.sidebar_widths.todo_width = parseInt(todoWidth, 10);
+        }
+
+        // 视图模式
+        const viewModeRaw = localStorage.getItem(STORAGE_KEYS.VIEW_MODE);
+        if (viewModeRaw) {
+            result.view_mode = JSON.parse(viewModeRaw);
         }
     } catch (e) {
         console.error('[Preferences] Failed to read from localStorage:', e);
@@ -88,6 +96,15 @@ function saveToLocalStorage(data) {
             }
             if (data.sidebar_widths.todo_width !== undefined) {
                 localStorage.setItem(STORAGE_KEYS.TODO_WIDTH, String(data.sidebar_widths.todo_width));
+            }
+        }
+
+        // 视图模式
+        if (data.view_mode !== undefined) {
+            if (data.view_mode === null) {
+                localStorage.removeItem(STORAGE_KEYS.VIEW_MODE);
+            } else {
+                localStorage.setItem(STORAGE_KEYS.VIEW_MODE, JSON.stringify(data.view_mode));
             }
         }
     } catch (e) {
@@ -209,8 +226,12 @@ function hasServerPreferences(serverData) {
     const hasSidebarWidths = serverData.sidebar_widths && 
         typeof serverData.sidebar_widths === 'object' &&
         Object.keys(serverData.sidebar_widths).length > 0;
+
+    const hasViewMode = serverData.view_mode &&
+        typeof serverData.view_mode === 'object' &&
+        Object.keys(serverData.view_mode).length > 0;
     
-    return hasCategoryConfig || hasTheme || hasSidebarWidths;
+    return hasCategoryConfig || hasTheme || hasSidebarWidths || hasViewMode;
 }
 
 /**
@@ -229,8 +250,12 @@ function hasLocalPreferences(localData) {
     const hasSidebarWidths = localData.sidebar_widths && 
         typeof localData.sidebar_widths === 'object' &&
         Object.keys(localData.sidebar_widths).length > 0;
+
+    const hasViewMode = localData.view_mode &&
+        typeof localData.view_mode === 'object' &&
+        Object.keys(localData.view_mode).length > 0;
     
-    return hasCategoryConfig || hasTheme || hasSidebarWidths;
+    return hasCategoryConfig || hasTheme || hasSidebarWidths || hasViewMode;
 }
 
 // ============ 公共 API ============

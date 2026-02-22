@@ -294,6 +294,17 @@ export const tabs = {
             return;
         }
 
+        // featured-mps / finance in card mode: no SSR cards, use loadCardMode
+        const DYNAMIC_CARD_CATS = ['featured-mps', 'finance'];
+        if (DYNAMIC_CARD_CATS.includes(String(categoryId)) && mode === 'card') {
+            const grid = paneEl.querySelector('.platform-grid');
+            const hasCards = grid && grid.querySelector('.platform-card');
+            if (!hasCards) {
+                categoryTimeline.loadCardMode(categoryId);
+            }
+            return;
+        }
+
         try {
             const hasItems = !!paneEl.querySelector('.news-item');
             const hasPlaceholder = !!paneEl.querySelector('.news-placeholder');
@@ -522,12 +533,17 @@ ready(function () {
         if (mode === 'timeline') {
             if (SELF_MANAGED_TIMELINE.includes(catId)) {
                 // These tabs' own modules handle timeline rendering.
-                // If switching back to timeline, just switch to the tab — their modules will render.
-                if (catId !== activeTab) tabs.switchTab(catId);
+                // For featured-mps/finance, reset their module state so they reload.
+                if (catId === 'featured-mps' && window.HotNews?.featuredMps?.load) {
+                    window.HotNews.featuredMps.load(true);
+                } else if (catId === 'finance' && window.HotNews?.financeTimeline?.load) {
+                    window.HotNews.financeTimeline.load(true);
+                } else if (catId !== activeTab) {
+                    tabs.switchTab(catId);
+                }
             } else {
                 // Generic timeline — use categoryTimeline renderer
                 if (catId !== activeTab) {
-                    // Switch tab first, then switchTab will detect timeline mode and load
                     tabs.switchTab(catId);
                 } else {
                     categoryTimeline.load(catId, true);
@@ -535,10 +551,16 @@ ready(function () {
             }
         } else {
             // Switching to card mode
-            if (!SELF_MANAGED_TIMELINE.includes(catId)) {
+            if (catId === 'featured-mps' || catId === 'finance') {
+                // These have no SSR card data — use categoryTimeline.loadCardMode
+                // which fetches from timeline API and groups by source
+                categoryTimeline.loadCardMode(catId);
+            } else if (!SELF_MANAGED_TIMELINE.includes(catId)) {
                 categoryTimeline.restoreCardMode(catId);
+                // Re-trigger switchTab to load card content
+                setTimeout(() => tabs.switchTab(catId), 50);
             } else {
-                // Self-managed: clear their timeline content so card mode can take over
+                // Other self-managed (knowledge, explore) — shouldn't reach here (fixed)
                 const grid = document.querySelector(`#tab-${catId} .platform-grid`);
                 if (grid) {
                     grid.style.display = '';
@@ -549,9 +571,8 @@ ready(function () {
                     grid.style.overscrollBehavior = '';
                     grid.innerHTML = '';
                 }
+                setTimeout(() => tabs.switchTab(catId), 50);
             }
-            // Re-trigger switchTab to load card content
-            setTimeout(() => tabs.switchTab(catId), 50);
         }
     });
 });

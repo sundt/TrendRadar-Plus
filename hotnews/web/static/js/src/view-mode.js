@@ -8,6 +8,7 @@
 import { TR } from './core.js';
 import { storage } from './storage.js';
 import { events } from './events.js';
+import { preferences } from './preferences.js';
 
 const STORAGE_KEY = 'hotnews_view_mode_v1';
 
@@ -59,6 +60,8 @@ export const viewMode = {
         const map = _load();
         map[cid] = m;
         _save(map);
+        // Sync to server for cross-device consistency
+        preferences.updatePreferences({ view_mode: map }).catch(() => {});
         events.emit('viewMode:changed', { categoryId: cid, mode: m });
     },
 

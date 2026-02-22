@@ -295,9 +295,74 @@ function restoreCardMode(catId) {
     grid.innerHTML = '';
 }
 
+// --- Load card mode (per-source grouped cards) ---
+// Used by self-managed timeline categories (featured-mps, finance) when switching to card mode.
+// Fetches from the same timeline API but groups items by source into separate cards.
+async function loadCardMode(catId) {
+    const grid = _getGrid(catId);
+    if (!grid) return;
+
+    // Reset grid styles to standard card layout
+    grid.style.display = '';
+    grid.style.flexDirection = '';
+    grid.style.overflowX = '';
+    grid.style.overflowY = '';
+    grid.style.alignItems = '';
+    grid.style.overscrollBehavior = '';
+    grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+
+    try {
+        // Fetch a large batch to group by source
+        const items = await _fetchBatch(catId, 500, 0);
+        if (!items.length) {
+            grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+            return;
+        }
+
+        // Group by source_name
+        const groups = new Map();
+        for (const item of items) {
+            const key = item.source_name || item.source_id || 'unknown';
+            if (!groups.has(key)) groups.set(key, { sourceId: item.source_id, items: [] });
+            groups.get(key).items.push(item);
+        }
+
+        grid.innerHTML = '';
+        const limit = _getItemsPerCard();
+        for (const [sourceName, group] of groups) {
+            const card = document.createElement('div');
+            card.className = 'platform-card';
+            card.dataset.platform = `rss-${group.sourceId}`;
+            card.draggable = false;
+
+            const displayItems = group.items.slice(0, limit);
+            card.innerHTML = `
+                <div class="platform-header">
+                    <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
+                    <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                        📱 ${escapeHtml(sourceName)}
+                    </div>
+                    <div class="platform-header-actions"></div>
+                </div>
+                <ul class="news-list">
+                    ${_buildNewsItemsHtml(displayItems, catId)}
+                </ul>
+            `;
+            grid.appendChild(card);
+        }
+
+        try { TR.readState?.restoreReadState?.(); } catch {}
+        if (TR.counts?.updateAllCounts) TR.counts.updateAllCounts();
+    } catch (e) {
+        console.error(`[CategoryTimeline] loadCardMode(${catId}) error:`, e);
+        grid.innerHTML = `<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div><div>加载失败</div><button onclick="window.categoryTimeline?.loadCardMode('${catId}')" style="margin-top:12px;padding:8px 16px;background:#07c160;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>`;
+    }
+}
+
 // --- Public API ---
 export const categoryTimeline = {
     load: loadTimeline,
+    loadCardMode,
     resetState: _resetState,
     restoreCardMode,
     getState: _getState,
