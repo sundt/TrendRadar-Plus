@@ -1,12 +1,12 @@
 /**
- * Featured MPs Module (精选公众号) - Timeline Card Mode
- * 所有精选公众号文章按时间倒序排列，每卡片50条，横向滚动无限加载。
+ * Finance Timeline Module (财经投资) - Timeline Card Mode
+ * 所有财经投资数据源文章按时间倒序排列，每卡片50条，横向滚动无限加载。
  */
 
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { events } from './events.js';
 
-const CATEGORY_ID = 'featured-mps';
+const CATEGORY_ID = 'finance';
 const INITIAL_CARDS_DESKTOP = 3;
 const INITIAL_CARDS_MOBILE = 1;
 const MAX_CARDS = 20;
@@ -27,28 +27,22 @@ let _initialized = false;
 let _generation = 0;
 let _lastRefreshAt = 0;
 
-function _getActiveTabId() {
-    try {
-        return document.querySelector('.category-tabs .category-tab.active')?.dataset?.category || null;
-    } catch (e) { return null; }
-}
-
 function _fmtTime(tsSec) { return formatNewsDate(tsSec); }
 
 function _buildNewsItemsHtml(items) {
     const arr = Array.isArray(items) ? items : [];
-    if (!arr.length) return '<li class="tr-fmp-empty" aria-hidden="true">暂无内容</li>';
+    if (!arr.length) return '<li class="tr-fin-empty" aria-hidden="true">暂无内容</li>';
     return arr.map((n, idx) => {
         const stableId = escapeHtml(n?.stable_id || '');
         const title = escapeHtml(n?.display_title || n?.title || '');
         const url = escapeHtml(n?.url || '#');
-        const sourceName = escapeHtml(n?.source_name || '公众号');
+        const sourceName = escapeHtml(n?.source_name || '财经');
         const t = _fmtTime(n?.published_at || n?.created_at);
         const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
         const escapedTitle = title.replace(/'/g, "\\'");
         const escapedUrl = url.replace(/'/g, "\\'");
         const escapedSource = sourceName.replace(/'/g, "\\'");
-        const sourceId = escapeHtml(n?.source_id || 'featured-mps');
+        const sourceId = escapeHtml(n?.source_id || 'finance');
         const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSource}')"></span>`;
         const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSource}')"></button>`;
         const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
@@ -92,7 +86,7 @@ function _ensureLayout() {
 }
 
 async function _fetchTimelineBatch(limit, offset) {
-    const url = `/api/rss/featured-mps/timeline?limit=${limit}&offset=${offset}`;
+    const url = `/api/rss/finance/timeline?limit=${limit}&offset=${offset}`;
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const payload = await resp.json();
@@ -102,9 +96,9 @@ async function _fetchTimelineBatch(limit, offset) {
 function _appendCard(items, cardIndex, container) {
     if (!items || !items.length) return;
     const card = document.createElement('div');
-    card.className = 'platform-card tr-fmp-card';
+    card.className = 'platform-card tr-fin-card';
     card.style.minWidth = '360px';
-    card.dataset.platform = `fmp-slice-${cardIndex}`;
+    card.dataset.platform = `fin-slice-${cardIndex}`;
     card.draggable = false;
 
     const limit = getItemsPerCard();
@@ -114,27 +108,27 @@ function _appendCard(items, cardIndex, container) {
     card.innerHTML = `
         <div class="platform-header">
             <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
-                📱 最新 ${displayStart}-${displayEnd}
+                💰 最新 ${displayStart}-${displayEnd}
             </div>
             <div class="platform-header-actions"></div>
         </div>
-        <ul class="news-list" data-fmp-list="slice-${cardIndex}">
+        <ul class="news-list" data-fin-list="slice-${cardIndex}">
             ${_buildNewsItemsHtml(items)}
         </ul>
     `;
     const indices = card.querySelectorAll('.news-index');
     indices.forEach((el, i) => { el.textContent = String(displayStart + i); });
 
-    const sentinel = container.querySelector('#fmp-load-sentinel');
+    const sentinel = container.querySelector('#fin-load-sentinel');
     if (sentinel) container.insertBefore(card, sentinel);
     else container.appendChild(card);
 }
 
 function _createSentinel(container) {
-    const existing = container.querySelector('#fmp-load-sentinel');
+    const existing = container.querySelector('#fin-load-sentinel');
     if (existing) existing.remove();
     const sentinel = document.createElement('div');
-    sentinel.id = 'fmp-load-sentinel';
+    sentinel.id = 'fin-load-sentinel';
     sentinel.style.cssText = 'min-width:20px;height:100%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;';
     sentinel.innerHTML = '⏳';
     container.appendChild(sentinel);
@@ -150,7 +144,7 @@ function _attachObserver() {
             if (entry.isIntersecting) _loadNextBatch().catch(() => {});
         }
     }, { root: pane.querySelector('.platform-grid'), rootMargin: '200px', threshold: 0.01 });
-    const sentinel = pane.querySelector('#fmp-load-sentinel');
+    const sentinel = pane.querySelector('#fin-load-sentinel');
     if (sentinel) _observer.observe(sentinel);
 }
 
@@ -159,7 +153,7 @@ async function _loadNextBatch() {
     const currentCardCount = Math.floor(_offset / getItemsPerCard());
     if (currentCardCount >= MAX_CARDS) {
         _finished = true;
-        const s = document.getElementById('fmp-load-sentinel');
+        const s = document.getElementById('fin-load-sentinel');
         if (s) { s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已达到最大显示数量</div>'; s.style.width = '40px'; }
         return;
     }
@@ -171,7 +165,7 @@ async function _loadNextBatch() {
         if (myGen !== _generation) return;
         if (!items.length) {
             _finished = true;
-            const s = document.getElementById('fmp-load-sentinel');
+            const s = document.getElementById('fin-load-sentinel');
             if (s) { s.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已显示全部内容</div>'; s.style.width = '40px'; }
             return;
         }
@@ -184,11 +178,11 @@ async function _loadNextBatch() {
         _offset += items.length;
         if (items.length < limit) {
             _finished = true;
-            const s = document.getElementById('fmp-load-sentinel');
+            const s = document.getElementById('fin-load-sentinel');
             if (s) s.remove();
         }
     } catch (e) {
-        console.error('[FeaturedMPs] loadNextBatch error:', e);
+        console.error('[Finance] loadNextBatch error:', e);
     } finally { _inFlight = false; }
 }
 
@@ -224,16 +218,16 @@ async function _loadTimeline() {
         _initialized = true;
         if (items.length < initialLimit) {
             _finished = true;
-            const s = document.getElementById('fmp-load-sentinel');
+            const s = document.getElementById('fin-load-sentinel');
             if (s) s.remove();
         } else {
             _attachObserver();
         }
         try { TR.readState?.restoreReadState?.(); } catch (e) {}
     } catch (e) {
-        console.error('[FeaturedMPs] loadTimeline error:', e);
+        console.error('[Finance] loadTimeline error:', e);
         const g = _getGrid();
-        if (g) g.innerHTML = `<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div><div>加载失败</div><button onclick="window.HotNews?.featuredMps?.load(true)" style="margin-top:12px;padding:8px 16px;background:#07c160;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>`;
+        if (g) g.innerHTML = `<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div><div>加载失败</div><button onclick="window.HotNews?.financeTimeline?.load(true)" style="margin-top:12px;padding:8px 16px;background:#f59e0b;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>`;
     }
 }
 
@@ -269,14 +263,14 @@ events.on('viewer:rendered', () => {
     setTimeout(() => {
         if (gen !== _generation) return;
         _initialLoad().catch(() => {});
-    }, 80);
+    }, 100);
 });
 
 events.on('tab:switched', (detail) => {
     if (String(detail?.categoryId || '') !== CATEGORY_ID) return;
     if (_inFlight) return;
     const grid = _getGrid();
-    const hasCards = grid && grid.querySelectorAll('.tr-fmp-card').length > 0;
+    const hasCards = grid && grid.querySelectorAll('.tr-fin-card').length > 0;
     if (hasCards) {
         if (!_finished) _attachObserver();
     } else {
@@ -285,10 +279,10 @@ events.on('tab:switched', (detail) => {
 });
 
 window.HotNews = window.HotNews || {};
-window.HotNews.featuredMps = {
+window.HotNews.financeTimeline = {
     load: (force) => { if (force) resetState(); _initialLoad().catch(() => {}); },
     resetState,
     getStatus: () => ({ offset: _offset, finished: _finished, inFlight: _inFlight, initialized: _initialized }),
 };
 
-export const featuredMps = { resetState };
+export const financeTimeline = { resetState };

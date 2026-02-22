@@ -162,7 +162,7 @@ function _cleanupInactiveTabs(currentTabId) {
     tabsToClean.forEach(tabId => {
         try {
             // Skip special tabs that shouldn't be cleaned
-            if (['explore', 'knowledge', 'my-tags', 'discovery', 'rsscol-rss', 'featured-mps'].includes(tabId)) return;
+            if (['explore', 'knowledge', 'my-tags', 'discovery', 'rsscol-rss', 'featured-mps', 'finance'].includes(tabId)) return;
             
             const pane = document.getElementById(`tab-${tabId}`);
             if (!pane) return;

@@ -207,7 +207,7 @@
 
         <!-- Content -->
         <div class="tab-content-area">
-            {% set special_cats = ['explore', 'my-tags', 'discovery', 'knowledge', 'source-subscription', 'featured-mps'] %}
+            {% set special_cats = ['explore', 'my-tags', 'discovery', 'knowledge', 'source-subscription', 'featured-mps', 'finance'] %}
             {% for cat_id, category in data.categories.items() %}
             {% set is_active_category = (cat_id == 'my-tags') %}
             {% set is_special = (cat_id in special_cats) or category.is_topic %}
@@ -257,6 +257,8 @@
                 </div>
                 {% elif cat_id == 'knowledge' %}
                 <div class="platform-grid" data-mb-injected="1"></div>
+                {% elif cat_id == 'finance' %}
+                <div class="platform-grid" id="financeGrid"></div>
                 {% elif category.is_topic %}
                 {# 主题栏目 - 使用 API 动态加载，与其他动态栏目保持一致 #}
                 <div class="platform-grid" id="topicCards-{{ category.topic_id }}" data-topic-id="{{ category.topic_id }}">

@@ -385,7 +385,7 @@ def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
 DEFAULT_HIDDEN_CATEGORIES = ['other', 'general', 'social', 'tech_news', 'developer']
 
 # 特殊栏目，不应该被服务端过滤（它们有自己的动态加载逻辑）
-PROTECTED_CATEGORIES = ['my-tags', 'discovery', 'explore', 'knowledge', 'featured-mps', 'source-subscription']
+PROTECTED_CATEGORIES = ['my-tags', 'discovery', 'explore', 'knowledge', 'featured-mps', 'source-subscription', 'finance']
 
 
 def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str, Any]:

@@ -199,6 +199,7 @@ from hotnews.web.misc_routes import router as _misc_router
 from hotnews.web.timeline_cache import clear_all_timeline_caches, get_cache_status
 from hotnews.web.morning_brief_routes import router as _morning_brief_router
 from hotnews.web.explore_timeline_routes import router as _explore_timeline_router
+from hotnews.web.category_timeline_routes import router as _category_timeline_router
 from hotnews.web.admin_ai_routes import router as _admin_ai_router
 from hotnews.web.online_routes import router as _online_router
 from hotnews.web.viewer_controls_routes import router as _viewer_controls_router
@@ -517,6 +518,7 @@ app.include_router(_rss_proxy_router)
 app.include_router(_misc_router)
 app.include_router(_morning_brief_router)
 app.include_router(_explore_timeline_router)
+app.include_router(_category_timeline_router)
 app.include_router(_admin_ai_router)
 app.include_router(_online_router)
 app.include_router(_viewer_controls_router)
@@ -658,6 +660,16 @@ async def add_cache_headers(request: Request, call_next):
 
     # 发现页 / 精选公众号 — 10 分钟
     if path.startswith("/api/discovery/") or path.startswith("/api/featured-mps"):
+        response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
+        return response
+
+    # 财经投资时间线 — 5 分钟
+    if path.startswith("/api/rss/finance/timeline"):
+        response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+        return response
+
+    # 精选公众号时间线 — 10 分钟
+    if path.startswith("/api/rss/featured-mps/timeline"):
         response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
         return response
 
@@ -1813,7 +1825,7 @@ async def api_news(
     # Strip platforms data for categories that have dedicated tab APIs.
     # These tabs render empty panes and load data from their own endpoints,
     # so including their platforms in /api/news is wasted bandwidth.
-    _DEDICATED_TAB_IDS = {"explore", "knowledge", "discovery", "featured-mps", "my-tags"}
+    _DEDICATED_TAB_IDS = {"explore", "knowledge", "discovery", "featured-mps", "my-tags", "finance"}
     try:
         cats = data.get("categories")
         if isinstance(cats, dict):
