@@ -6,7 +6,7 @@ Category Timeline Routes
 """
 
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
 
@@ -21,13 +21,39 @@ from hotnews.web.deps import (
 router = APIRouter()
 
 
+SESSION_COOKIE_NAME = "hotnews_session"
+
+
+def _resolve_user_id(request: Request) -> Optional[int]:
+    """Resolve user ID from session cookie (logged-in) or rss_uid cookie (anon).
+
+    Topic and my-tags timelines require a user identity.  Logged-in users
+    authenticate via ``hotnews_session`` cookie; anonymous users via
+    ``rss_uid``.  Try session first, then fall back to anon cookie.
+    """
+    # 1) Session-based (logged-in user)
+    session_token = (request.cookies.get(SESSION_COOKIE_NAME) or "").strip()
+    if session_token:
+        try:
+            from hotnews.kernel.auth.auth_service import validate_session
+            conn = get_user_db()
+            is_valid, user_info = validate_session(conn, session_token)
+            if is_valid and user_info:
+                return user_info.get("id")
+        except Exception:
+            pass
+
+    # 2) Anon cookie fallback
+    return resolve_anon_user_id(request)
+
+
 # ---------------------------------------------------------------------------
 # 精选公众号 Timeline
 # ---------------------------------------------------------------------------
 
 @router.get("/api/rss/featured-mps/timeline")
 async def api_featured_mps_timeline(
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=5000),
     offset: int = Query(0, ge=0),
 ):
     """精选公众号时间线 - 仅 admin 添加的精选公众号文章，按发布时间倒序。
@@ -36,7 +62,7 @@ async def api_featured_mps_timeline(
     只包含 featured_wechat_mps 中 source IS NULL OR source = 'admin' 的公众号。
     """
     conn = get_online_db()
-    lim = min(int(limit or 50), 500)
+    lim = min(int(limit or 50), 5000)
     off = int(offset or 0)
 
     fetch_limit = off + lim + 200
@@ -113,19 +139,84 @@ async def api_featured_mps_timeline(
 
 @router.get("/api/rss/finance/timeline")
 async def api_finance_timeline(
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=5000),
     offset: int = Query(0, ge=0),
+    nofilter: int = Query(0, ge=0, le=1),
 ):
     """财经投资时间线 - 过滤非财经内容，类似每日AI早报的过滤逻辑。
 
-    过滤策略：
+    过滤策略（nofilter=0，默认）：
     - 有 AI 标注的文章：排除被 AI 标为 exclude 且无财经标签的
     - 未被 AI 标注的文章：保留（来源本身是财经源）
     - 有财经相关标签的文章：优先保留
+
+    nofilter=1 时跳过 AI 过滤，返回所有财经源文章（用于卡片模式）。
     """
     conn = get_online_db()
-    lim = min(int(limit or 50), 500)
+    lim = min(int(limit or 50), 5000)
     off = int(offset or 0)
+    skip_filter = bool(nofilter)
+
+    if skip_filter:
+        # Card mode: no AI filtering, just return all finance source articles
+        fetch_limit = off + lim + 200
+        try:
+            cur = conn.execute(
+                """
+                SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
+                       COALESCE(s.name, e.source_id) as source_name
+                FROM rss_entries e
+                JOIN rss_sources s ON s.id = e.source_id
+                WHERE s.category = 'finance'
+                  AND s.enabled = 1
+                  AND e.published_at > 0
+                  AND e.title IS NOT NULL AND e.title != ''
+                  AND e.url IS NOT NULL AND e.url != ''
+                ORDER BY e.published_at DESC
+                LIMIT ?
+                """,
+                (fetch_limit,),
+            )
+            rows = cur.fetchall() or []
+        except Exception:
+            rows = []
+
+        seen_urls: set = set()
+        seen_titles: set = set()
+        items_nf: List[Dict[str, Any]] = []
+
+        for r in rows:
+            sid = str(r[0] or "").strip()
+            title = str(r[1] or "").strip()
+            url = str(r[2] or "").strip()
+            created_at = int(r[3] or 0)
+            published_at = int(r[4] or 0)
+            sname = str(r[5] or "").strip()
+
+            if not url or url in seen_urls:
+                continue
+            tk = title.lower()
+            if tk and tk in seen_titles:
+                continue
+            seen_urls.add(url)
+            if tk:
+                seen_titles.add(tk)
+
+            it = rss_row_to_item(
+                platform_id=f"rss-{sid}",
+                source_id=sid,
+                source_name=sname,
+                title=title,
+                url=url,
+                created_at=created_at,
+            )
+            it["published_at"] = published_at
+            items_nf.append(it)
+
+        sliced_nf = items_nf[off:off + lim]
+        return UnicodeJSONResponse(
+            content={"offset": off, "limit": lim, "items": sliced_nf, "total_returned": len(sliced_nf)}
+        )
 
     # 财经相关标签白名单
     finance_tags = {
@@ -325,7 +416,7 @@ async def api_my_tags_timeline(
     offset: int = Query(0, ge=0),
 ):
     """我的关注时间线 - 用户关注的标签/源/关键词/公众号的所有文章按时间倒序。"""
-    user_id = resolve_anon_user_id(request)
+    user_id = _resolve_user_id(request)
     if not user_id:
         return UnicodeJSONResponse(content={"offset": 0, "limit": 0, "items": [], "total_returned": 0, "needsAuth": True})
 
@@ -498,7 +589,7 @@ async def api_topic_timeline(
     offset: int = Query(0, ge=0),
 ):
     """主题时间线 - 主题关联的关键词和数据源的所有文章按时间倒序。"""
-    user_id = resolve_anon_user_id(request)
+    user_id = _resolve_user_id(request)
     if not user_id:
         return UnicodeJSONResponse(content={"offset": 0, "limit": 0, "items": [], "total_returned": 0, "needsAuth": True})
 

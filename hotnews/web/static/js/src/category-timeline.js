@@ -312,8 +312,15 @@ async function loadCardMode(catId) {
     grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
 
     try {
-        // Fetch a large batch to group by source
-        const items = await _fetchBatch(catId, 500, 0);
+        // Fetch all articles to group by source — need enough to cover all sources
+        // For finance, skip AI filtering to get all sources
+        const nofilterParam = catId === 'finance' ? '&nofilter=1' : '';
+        const base = _getApiUrl(catId);
+        const sep = base.includes('?') ? '&' : '?';
+        const resp = await fetch(`${base}${sep}limit=5000&offset=0${nofilterParam}`, { credentials: 'include' });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const payload = await resp.json();
+        const items = Array.isArray(payload?.items) ? payload.items : [];
         if (!items.length) {
             grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
             return;
@@ -328,21 +335,25 @@ async function loadCardMode(catId) {
         }
 
         grid.innerHTML = '';
-        const limit = _getItemsPerCard();
+        const perCardLimit = _getItemsPerCard();
         for (const [sourceName, group] of groups) {
             const card = document.createElement('div');
             card.className = 'platform-card';
             card.dataset.platform = `rss-${group.sourceId}`;
             card.draggable = false;
 
-            const displayItems = group.items.slice(0, limit);
+            // Show all items for this source (up to perCardLimit for initial display)
+            const displayItems = group.items;
+            const totalCount = displayItems.length;
             card.innerHTML = `
                 <div class="platform-header">
                     <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
                     <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
                         📱 ${escapeHtml(sourceName)}
                     </div>
-                    <div class="platform-header-actions"></div>
+                    <div class="platform-header-actions">
+                        <span class="platform-count">${totalCount}</span>
+                    </div>
                 </div>
                 <ul class="news-list">
                     ${_buildNewsItemsHtml(displayItems, catId)}
