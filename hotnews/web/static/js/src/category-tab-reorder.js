@@ -1,4 +1,5 @@
 import { TR, ready } from './core.js';
+import { viewMode } from './view-mode.js';
 
 function _getOrderedCategoryIdsFromDom(container) {
     if (!container) return [];
@@ -210,15 +211,26 @@ function _showCategoryContextMenu(e, tab) {
     
     if (isTopicTab && topicId) {
         // Topic tab menu
+        const currentMode = viewMode.get(categoryId);
+        const toggleLabel = currentMode === 'timeline' ? '🗂️ 切换为卡片模式' : '📋 切换为时间线模式';
         _categoryContextMenuEl.innerHTML = `
-            <div class="tr-cat-ctx-item" data-action="refresh-topic">🔄 刷新</div>
+            <div class="tr-cat-ctx-item" data-action="toggle-view">${toggleLabel}</div>
+            <div class="tr-cat-ctx-item" data-action="refresh-topic" style="border-top:1px solid #e5e7eb;">🔄 刷新</div>
             <div class="tr-cat-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">⚙️ 编辑主题</div>
             <div class="tr-cat-ctx-item tr-cat-ctx-danger" data-action="delete-topic" style="border-top:1px solid #e5e7eb;">🗑️ 删除主题</div>
         `;
     } else {
         // Regular category tab menu
+        const canSwitch = viewMode.canSwitch(categoryId);
+        let viewToggleHtml = '';
+        if (canSwitch) {
+            const currentMode = viewMode.get(categoryId);
+            const toggleLabel = currentMode === 'timeline' ? '🗂️ 切换为卡片模式' : '📋 切换为时间线模式';
+            viewToggleHtml = `<div class="tr-cat-ctx-item" data-action="toggle-view">${toggleLabel}</div>`;
+        }
         _categoryContextMenuEl.innerHTML = `
-            <div class="tr-cat-ctx-item" data-action="hide">👁️‍🗨️ 隐藏栏目</div>
+            ${viewToggleHtml}
+            <div class="tr-cat-ctx-item" data-action="hide"${viewToggleHtml ? ' style="border-top:1px solid #e5e7eb;"' : ''}>👁️‍🗨️ 隐藏栏目</div>
             <div class="tr-cat-ctx-item" data-action="settings" style="border-top:1px solid #e5e7eb;">⚙️ 栏目设置</div>
         `;
     }
@@ -256,7 +268,12 @@ function _showCategoryContextMenu(e, tab) {
         
         _hideCategoryContextMenu();
         
-        if (action === 'hide') {
+        if (action === 'toggle-view') {
+            const newMode = viewMode.toggle(categoryId);
+            if (window.TR?.toast?.show) {
+                TR.toast.show(`已切换为${newMode === 'timeline' ? '时间线' : '卡片'}模式`, { variant: 'success', durationMs: 1500 });
+            }
+        } else if (action === 'hide') {
             _hideCategory(categoryId, categoryName, tab);
         } else if (action === 'settings') {
             if (window.openCategorySettings) {

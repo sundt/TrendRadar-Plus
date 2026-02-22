@@ -22,6 +22,8 @@ import './read-state.js';
 import './theme.js';
 import './settings.js';
 import './filter.js';
+import './view-mode.js';
+import './category-timeline.js';
 import './tabs.js';
 import './data.js';
 import './infinite-scroll.js';

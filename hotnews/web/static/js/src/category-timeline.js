@@ -1,0 +1,307 @@
+/**
+ * Category Timeline Module — 通用分类时间线渲染器
+ *
+ * 为任意栏目提供时间线模式渲染：按时间倒序，每卡片 N 条，横向滚动无限加载。
+ * 被 view-mode 切换时调用。
+ */
+
+import { TR, escapeHtml, formatNewsDate } from './core.js';
+import { events } from './events.js';
+import { viewMode } from './view-mode.js';
+
+const INITIAL_CARDS_DESKTOP = 3;
+const INITIAL_CARDS_MOBILE = 1;
+const MAX_CARDS = 20;
+
+function _getInitialCards() {
+    return window.innerWidth <= 640 ? INITIAL_CARDS_MOBILE : INITIAL_CARDS_DESKTOP;
+}
+
+function _getItemsPerCard() {
+    return (window.SYSTEM_SETTINGS?.display?.items_per_card) || 50;
+}
+
+function _fmtTime(ts) { return formatNewsDate(ts); }
+
+// --- Per-category state ---
+const _state = {};  // categoryId -> { inFlight, offset, observer, finished, generation }
+
+function _getState(catId) {
+    if (!_state[catId]) {
+        _state[catId] = { inFlight: false, offset: 0, observer: null, finished: false, generation: 0 };
+    }
+    return _state[catId];
+}
+
+function _resetState(catId) {
+    const s = _getState(catId);
+    s.offset = 0;
+    s.finished = false;
+    s.inFlight = false;
+    s.generation++;
+    if (s.observer) { try { s.observer.disconnect(); } catch {} s.observer = null; }
+}
+
+// --- API URL mapping ---
+function _getApiUrl(catId) {
+    if (catId === 'featured-mps') return '/api/rss/featured-mps/timeline';
+    if (catId === 'finance') return '/api/rss/finance/timeline';
+    if (catId === 'explore') return '/api/explore/timeline';
+    if (catId === 'my-tags') return '/api/rss/my-tags/timeline';
+    if (catId.startsWith('topic-')) {
+        const topicId = catId.replace('topic-', '');
+        return `/api/rss/topic/${topicId}/timeline`;
+    }
+    // Generic category
+    return `/api/rss/category/${encodeURIComponent(catId)}/timeline`;
+}
+
+// --- News item HTML builder ---
+function _buildNewsItemsHtml(items, catId) {
+    const arr = Array.isArray(items) ? items : [];
+    if (!arr.length) return '<li style="padding:20px;color:#9ca3af;">暂无内容</li>';
+    return arr.map((n, idx) => {
+        const stableId = escapeHtml(n?.stable_id || '');
+        const title = escapeHtml(n?.display_title || n?.title || '');
+        const url = escapeHtml(n?.url || '#');
+        const sourceName = escapeHtml(n?.source_name || '');
+        const sourceId = escapeHtml(n?.source_id || catId);
+        const t = _fmtTime(n?.published_at || n?.created_at);
+        const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
+        const escapedTitle = title.replace(/'/g, "\\'");
+        const escapedUrl = url.replace(/'/g, "\\'");
+        const escapedSource = sourceName.replace(/'/g, "\\'");
+        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSource}')"></span>`;
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSource}')"></button>`;
+        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
+        const actionsHtml = `<div class="news-actions">${timeHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
+        return `
+            <li class="news-item" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
+                <div class="news-item-content">
+                    <span class="news-index">${String(idx + 1)}</span>
+                    <a class="news-title" href="${url}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
+                        ${title}
+                    </a>
+                    ${aiDotHtml}
+                    ${actionsHtml}
+                </div>
+            </li>`;
+    }).join('');
+}
+
+// --- Fetch ---
+async function _fetchBatch(catId, limit, offset) {
+    const base = _getApiUrl(catId);
+    const sep = base.includes('?') ? '&' : '?';
+    const resp = await fetch(`${base}${sep}limit=${limit}&offset=${offset}`, { credentials: 'include' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const payload = await resp.json();
+    return Array.isArray(payload?.items) ? payload.items : [];
+}
+
+// --- DOM helpers ---
+function _getPane(catId) { return document.getElementById(`tab-${catId}`); }
+function _getGrid(catId) {
+    const pane = _getPane(catId);
+    return pane ? pane.querySelector('.platform-grid') : null;
+}
+
+function _ensureTimelineLayout(catId) {
+    const pane = _getPane(catId);
+    if (!pane) return false;
+    let grid = pane.querySelector('.platform-grid');
+    if (!grid) {
+        grid = document.createElement('div');
+        grid.className = 'platform-grid';
+        pane.appendChild(grid);
+    }
+    grid.style.display = 'flex';
+    grid.style.flexDirection = 'row';
+    grid.style.overflowX = 'auto';
+    grid.style.overflowY = 'hidden';
+    grid.style.alignItems = 'flex-start';
+    grid.style.overscrollBehavior = 'contain';
+    return true;
+}
+
+function _appendCard(catId, items, cardIndex, container) {
+    if (!items || !items.length) return;
+    const limit = _getItemsPerCard();
+    const displayStart = cardIndex * limit + 1;
+    const displayEnd = cardIndex * limit + items.length;
+
+    const card = document.createElement('div');
+    card.className = 'platform-card tl-card';
+    card.style.minWidth = '360px';
+    card.dataset.platform = `tl-${catId}-${cardIndex}`;
+    card.draggable = false;
+
+    card.innerHTML = `
+        <div class="platform-header">
+            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                📋 最新 ${displayStart}-${displayEnd}
+            </div>
+            <div class="platform-header-actions"></div>
+        </div>
+        <ul class="news-list">
+            ${_buildNewsItemsHtml(items, catId)}
+        </ul>
+    `;
+    // Fix indices
+    card.querySelectorAll('.news-index').forEach((el, i) => { el.textContent = String(displayStart + i); });
+
+    const sentinel = container.querySelector(`#tl-sentinel-${catId}`);
+    if (sentinel) container.insertBefore(card, sentinel);
+    else container.appendChild(card);
+}
+
+function _createSentinel(catId, container) {
+    const existing = container.querySelector(`#tl-sentinel-${catId}`);
+    if (existing) existing.remove();
+    const sentinel = document.createElement('div');
+    sentinel.id = `tl-sentinel-${catId}`;
+    sentinel.style.cssText = 'min-width:20px;height:100%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;';
+    sentinel.innerHTML = '⏳';
+    container.appendChild(sentinel);
+    return sentinel;
+}
+
+function _attachObserver(catId) {
+    const s = _getState(catId);
+    if (s.observer) { try { s.observer.disconnect(); } catch {} s.observer = null; }
+    const grid = _getGrid(catId);
+    if (!grid) return;
+    s.observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            if (entry.isIntersecting) _loadNextBatch(catId).catch(() => {});
+        }
+    }, { root: grid, rootMargin: '200px', threshold: 0.01 });
+    const sentinel = grid.querySelector(`#tl-sentinel-${catId}`);
+    if (sentinel) s.observer.observe(sentinel);
+}
+
+async function _loadNextBatch(catId) {
+    const s = _getState(catId);
+    if (s.inFlight || s.finished) return;
+    const currentCards = Math.floor(s.offset / _getItemsPerCard());
+    if (currentCards >= MAX_CARDS) {
+        s.finished = true;
+        const el = document.getElementById(`tl-sentinel-${catId}`);
+        if (el) { el.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已达到最大显示数量</div>'; }
+        return;
+    }
+    s.inFlight = true;
+    const myGen = s.generation;
+    try {
+        const limit = _getItemsPerCard();
+        const items = await _fetchBatch(catId, limit, s.offset);
+        if (myGen !== s.generation) return;
+        if (!items.length) {
+            s.finished = true;
+            const el = document.getElementById(`tl-sentinel-${catId}`);
+            if (el) { el.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已显示全部内容</div>'; }
+            return;
+        }
+        const grid = _getGrid(catId);
+        if (grid) {
+            const cardIndex = Math.floor(s.offset / limit);
+            _appendCard(catId, items, cardIndex, grid);
+            try { TR.readState?.restoreReadState?.(); } catch {}
+        }
+        s.offset += items.length;
+        if (items.length < limit) {
+            s.finished = true;
+            const el = document.getElementById(`tl-sentinel-${catId}`);
+            if (el) el.remove();
+        }
+    } catch (e) {
+        console.error(`[CategoryTimeline] loadNextBatch(${catId}) error:`, e);
+    } finally { s.inFlight = false; }
+}
+
+// --- Main load function ---
+async function loadTimeline(catId, force = false) {
+    const s = _getState(catId);
+    if (s.inFlight && !force) return;
+    if (force) _resetState(catId);
+
+    if (!_ensureTimelineLayout(catId)) {
+        setTimeout(() => loadTimeline(catId, force).catch(() => {}), 300);
+        return;
+    }
+
+    const grid = _getGrid(catId);
+    if (!grid) return;
+
+    s.inFlight = true;
+    s.offset = 0;
+    s.finished = false;
+    const myGen = s.generation;
+
+    grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+
+    try {
+        const limit = _getItemsPerCard();
+        const neededCards = _getInitialCards();
+        const initialLimit = limit * neededCards;
+        const items = await _fetchBatch(catId, initialLimit, 0);
+        if (myGen !== s.generation) return;
+
+        const currentGrid = _getGrid(catId);
+        if (!currentGrid) return;
+        currentGrid.innerHTML = '';
+
+        if (!items.length) {
+            currentGrid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+            s.inFlight = false;
+            return;
+        }
+
+        _createSentinel(catId, currentGrid);
+        for (let i = 0; i < items.length; i += limit) {
+            const chunk = items.slice(i, i + limit);
+            _appendCard(catId, chunk, Math.floor(i / limit), currentGrid);
+        }
+        s.offset = items.length;
+
+        if (items.length < initialLimit) {
+            s.finished = true;
+            const el = document.getElementById(`tl-sentinel-${catId}`);
+            if (el) el.remove();
+        } else {
+            _attachObserver(catId);
+        }
+        try { TR.readState?.restoreReadState?.(); } catch {}
+    } catch (e) {
+        console.error(`[CategoryTimeline] loadTimeline(${catId}) error:`, e);
+        const g = _getGrid(catId);
+        if (g) g.innerHTML = `<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div><div>加载失败</div><button onclick="window.categoryTimeline?.load('${catId}', true)" style="margin-top:12px;padding:8px 16px;background:#07c160;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>`;
+    } finally { s.inFlight = false; }
+}
+
+// --- Restore card mode ---
+function restoreCardMode(catId) {
+    _resetState(catId);
+    const grid = _getGrid(catId);
+    if (!grid) return;
+    // Reset grid to vertical card layout
+    grid.style.display = '';
+    grid.style.flexDirection = '';
+    grid.style.overflowX = '';
+    grid.style.overflowY = '';
+    grid.style.alignItems = '';
+    grid.style.overscrollBehavior = '';
+    // Clear timeline content — tabs.switchTab will reload card content
+    grid.innerHTML = '';
+}
+
+// --- Public API ---
+export const categoryTimeline = {
+    load: loadTimeline,
+    resetState: _resetState,
+    restoreCardMode,
+    getState: _getState,
+};
+
+window.categoryTimeline = categoryTimeline;
+TR.categoryTimeline = categoryTimeline;

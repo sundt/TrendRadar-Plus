@@ -7,6 +7,8 @@ import { TR, ready } from './core.js';
 import { storage } from './storage.js';
 import { authState } from './auth-state.js';
 import { events } from './events.js';
+import { viewMode } from './view-mode.js';
+import { categoryTimeline } from './category-timeline.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const VIEWER_POS_STORAGE_KEY = 'hotnews_viewer_pos_v1';
@@ -258,7 +260,34 @@ export const tabs = {
         // 检查是否需要懒加载栏目数据
         const isLazyLoad = paneEl.dataset.lazyLoad === '1';
         const lazyPlaceholder = paneEl.querySelector('.category-lazy-placeholder');
-        
+
+        // --- View mode handling ---
+        // Tabs with their own dedicated timeline modules handle themselves
+        const SELF_MANAGED_TIMELINE = ['knowledge', 'explore', 'featured-mps', 'finance'];
+        const mode = viewMode.get(categoryId);
+
+        if (mode === 'timeline' && !SELF_MANAGED_TIMELINE.includes(String(categoryId))) {
+            // Generic timeline mode — use categoryTimeline renderer
+            const grid = paneEl.querySelector('.platform-grid');
+            const hasTlCards = grid && grid.querySelector('.tl-card');
+            if (!hasTlCards) {
+                categoryTimeline.load(categoryId);
+            } else {
+                // Already loaded, just re-attach observer if needed
+                const s = categoryTimeline.getState(categoryId);
+                if (!s.finished) {
+                    // Re-observe sentinel for infinite scroll
+                    setTimeout(() => {
+                        const sentinel = grid?.querySelector(`#tl-sentinel-${categoryId}`);
+                        if (sentinel && s.observer) {
+                            try { s.observer.observe(sentinel); } catch {}
+                        }
+                    }, 100);
+                }
+            }
+            return;
+        }
+
         if (isLazyLoad && lazyPlaceholder) {
             // 懒加载栏目数据
             this._loadCategoryData(categoryId, paneEl, lazyPlaceholder);
@@ -477,4 +506,28 @@ ready(function () {
     if (tabId) {
         tabs.restoreActiveTabPlatformGridScroll({ preserveScroll: true, activeTab: tabId });
     }
+
+    // Listen for view mode changes — reload the active tab
+    events.on('viewMode:changed', (detail) => {
+        const catId = detail?.categoryId;
+        if (!catId) return;
+        const activeTab = tabs.getActiveTabId();
+        if (catId !== activeTab) return; // Only reload if it's the active tab
+        const mode = detail?.mode;
+        const SELF_MANAGED = ['knowledge', 'explore', 'featured-mps', 'finance'];
+        if (mode === 'timeline') {
+            if (!SELF_MANAGED.includes(catId)) {
+                categoryTimeline.load(catId, true);
+            }
+            // Self-managed tabs: their own modules will handle the switch
+            // For explore/featured-mps/finance switching TO timeline, they're already in timeline
+        } else {
+            // Switching to card mode
+            if (!SELF_MANAGED.includes(catId)) {
+                categoryTimeline.restoreCardMode(catId);
+            }
+            // Re-trigger switchTab to load card content
+            setTimeout(() => tabs.switchTab(catId), 50);
+        }
+    });
 });
