@@ -210,6 +210,7 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
     
     # Return updated topic
     topic = storage.get_topic_by_id(topic_id, str(user_id))
+    topic["rss_source_ids"] = topic.get("rss_sources", [])
     return {"ok": True, "topic": topic}
 
 
@@ -2162,6 +2163,23 @@ def _create_wechat_mp_source(
             "status": "unverified",
             "verified": False
         }
+
+
+@router.get("/{topic_id}")
+async def get_single_topic(request: Request, topic_id: str):
+    """Get a single topic by ID."""
+    user = _get_current_user(request)
+    user_id = user["id"]
+    storage = _get_storage(request)
+    
+    topic = storage.get_topic_by_id(topic_id, str(user_id))
+    if not topic:
+        return JSONResponse({"ok": False, "error": "主题不存在或无权限"}, status_code=404)
+    
+    # Normalize: expose rss_sources as rss_source_ids for frontend compatibility
+    topic["rss_source_ids"] = topic.get("rss_sources", [])
+    
+    return {"ok": True, "topic": topic}
 
 
 @router.get("/{topic_id}/news")
