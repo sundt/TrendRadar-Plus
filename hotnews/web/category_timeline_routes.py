@@ -508,11 +508,11 @@ async def api_topic_timeline(
     off = int(offset or 0)
     tid = (topic_id or "").strip()
 
-    # Get topic config
+    # Get topic config from topic_configs table
     try:
         cur = conn.execute(
-            "SELECT config FROM user_topics WHERE user_id = ? AND id = ?",
-            (user_id, tid),
+            "SELECT keywords FROM topic_configs WHERE user_id = ? AND id = ?",
+            (str(user_id), tid),
         )
         row = cur.fetchone()
     except Exception:
@@ -522,13 +522,23 @@ async def api_topic_timeline(
         return UnicodeJSONResponse(content={"offset": 0, "limit": lim, "items": [], "total_returned": 0})
 
     import json as _json
-    try:
-        config = _json.loads(row[0]) if row[0] else {}
-    except Exception:
-        config = {}
 
-    keywords = config.get("keywords") or []
-    rss_source_ids = config.get("rss_source_ids") or config.get("rss_sources") or []
+    # Parse keywords (stored as JSON string array)
+    try:
+        keywords = _json.loads(row[0]) if row[0] else []
+    except Exception:
+        keywords = []
+
+    # Get RSS source IDs from topic_rss_sources table
+    rss_source_ids = []
+    try:
+        src_cur = conn.execute(
+            "SELECT rss_source_id FROM topic_rss_sources WHERE topic_id = ?",
+            (tid,),
+        )
+        rss_source_ids = [r[0] for r in (src_cur.fetchall() or [])]
+    except Exception:
+        pass
 
     if not keywords and not rss_source_ids:
         return UnicodeJSONResponse(content={"offset": 0, "limit": lim, "items": [], "total_returned": 0})
@@ -538,7 +548,7 @@ async def api_topic_timeline(
 
     # Fetch from keywords
     for kw in keywords[:20]:
-        kw_text = kw if isinstance(kw, str) else (kw.get("text") or kw.get("keyword") or "")
+        kw_text = kw if isinstance(kw, str) else ""
         if not kw_text:
             continue
         try:
