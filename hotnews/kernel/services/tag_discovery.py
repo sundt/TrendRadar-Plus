@@ -44,6 +44,86 @@ TAG_NORMALIZATION = {
     },
 }
 
+# Version-to-product stripping patterns
+# Matches version-level tag IDs and extracts the product-level root
+_VERSION_STRIP_PATTERNS = [
+    # claude_opus_4_6, claude_sonnet_3_5 → claude
+    (re.compile(r"^(claude)_(?:opus|sonnet|haiku)_[\d_]+$"), r"\1"),
+    # gpt_5_2, gpt_5_3_codex → gpt
+    (re.compile(r"^(gpt)_[\d_]+(?:_\w+)?$"), r"\1"),
+    # deepseek_v4, deepseek_ocr2 → deepseek
+    (re.compile(r"^(deepseek)_(?:v\d+|ocr\d+)$"), r"\1"),
+    # gemini_3, gemini_3_1_pro → gemini
+    (re.compile(r"^(gemini)_[\d_]+(?:_\w+)?$"), r"\1"),
+    # qwen3, qwen3_5, qwen3_max_thinking → qwen
+    (re.compile(r"^(qwen)\d+(?:_[\w]+)?$"), r"\1"),
+    # glm5, glm_5, glm_ocr → glm
+    (re.compile(r"^(glm)[\d_]+(?:_\w+)?$"), r"\1"),
+    # kimi_k2_5 → kimi
+    (re.compile(r"^(kimi)_k[\d_]+$"), r"\1"),
+    # doubao_2_0 → doubao
+    (re.compile(r"^(doubao)_[\d_]+$"), r"\1"),
+    # seedance_2_0 → seedance
+    (re.compile(r"^(seedance)_[\d_]+$"), r"\1"),
+    # minimax_m2_5 → minimax
+    (re.compile(r"^(minimax)_m[\d_]+$"), r"\1"),
+]
+
+# Product prefix → parent topic mapping for auto-parenting
+PRODUCT_PARENT_MAP = {
+    "claude": "ai_ml", "gpt": "ai_ml", "deepseek": "ai_ml",
+    "gemini": "ai_ml", "qwen": "ai_ml", "glm": "ai_ml",
+    "kimi": "ai_ml", "doubao": "ai_ml", "seedance": "ai_ml",
+    "minimax": "ai_ml", "grok": "ai_ml", "openai": "ai_ml",
+    "anthropic": "ai_ml", "xai": "ai_ml", "zhipu": "ai_ml",
+    "iphone": "mobile", "xiaomi_su": "automotive",
+    "tesla": "autonomous_driving",
+}
+
+
+def strip_version_tag(tag_id: str) -> str:
+    """Strip version suffix from a tag ID, returning the product-level root.
+    
+    Examples:
+        claude_opus_4_6 → claude
+        gpt_5_3_codex → gpt
+        deepseek_v4 → deepseek
+        qwen3_5 → qwen
+        
+    Returns the original tag_id if no pattern matches.
+    """
+    for pattern, replacement in _VERSION_STRIP_PATTERNS:
+        result = pattern.sub(replacement, tag_id)
+        if result != tag_id:
+            return result
+    return tag_id
+
+
+def auto_resolve_parent(tag_id: str, ai_parent_id: str = "") -> str:
+    """Auto-resolve parent_id for a tag based on product prefix mapping.
+    
+    - Version tags (claude_opus_4_6) → parent = product tag (claude)
+    - Product tags (claude) → parent = topic tag (ai_ml)
+    - Unknown tags → use AI-provided parent or default to 'tech'
+    """
+    # Check if this is a version tag
+    product = strip_version_tag(tag_id)
+    if product != tag_id:
+        # This is a version tag, parent should be the product
+        return product
+    
+    # Check if this is a known product tag
+    if tag_id in PRODUCT_PARENT_MAP:
+        return PRODUCT_PARENT_MAP[tag_id]
+    
+    # Check prefix match for products
+    for prefix, parent in PRODUCT_PARENT_MAP.items():
+        if tag_id.startswith(prefix + "_") and tag_id != prefix:
+            return prefix  # version → product
+    
+    # Fall back to AI-provided parent
+    return ai_parent_id or "tech"
+
 # English-Chinese keyword mapping for tag linking
 # Maps English tag names/IDs to their Chinese equivalents for better news matching
 TAG_KEYWORD_MAPPING = {
@@ -163,47 +243,51 @@ class TagDiscoveryService:
     def normalize_tag_id(self, tag_id: str) -> Optional[str]:
         """
         Normalize a tag ID to standard format.
-        
+        Includes version stripping (claude_opus_4_6 → claude).
+
         Args:
             tag_id: Raw tag ID from AI
-            
+
         Returns:
             Normalized tag ID or None if invalid
         """
         if not tag_id:
             return None
-        
+
         # Convert to lowercase
         normalized = tag_id.lower().strip()
-        
+
         # Replace common separators with underscores
         normalized = re.sub(r'[-\s]+', '_', normalized)
-        
+
         # Remove non-alphanumeric characters except underscores
         normalized = re.sub(r'[^a-z0-9_]', '', normalized)
-        
+
         # Apply synonym mapping
         if normalized in TAG_NORMALIZATION["synonyms"]:
             normalized = TAG_NORMALIZATION["synonyms"][normalized]
-        
+
+        # Strip version suffixes (claude_opus_4_6 → claude)
+        normalized = strip_version_tag(normalized)
+
         # Check blacklist
         if normalized in TAG_NORMALIZATION["blacklist"]:
             logger.debug(f"Tag '{tag_id}' is blacklisted")
             return None
-        
+
         # Check length
         if len(normalized) < TAG_NORMALIZATION["min_length"]:
             logger.debug(f"Tag '{tag_id}' is too short")
             return None
-        
+
         if len(normalized) > TAG_NORMALIZATION["max_length"]:
             normalized = normalized[:TAG_NORMALIZATION["max_length"]]
-        
+
         # Validate pattern
         if not TAG_NORMALIZATION["pattern"].match(normalized):
             logger.debug(f"Tag '{tag_id}' does not match pattern")
             return None
-        
+
         return normalized
     
     def tag_exists(self, tag_id: str) -> bool:
@@ -250,6 +334,9 @@ class TagDiscoveryService:
             True if saved/updated, False otherwise
         """
         now = int(time.time())
+        
+        # Auto-resolve parent_id based on product prefix mapping
+        parent_id = auto_resolve_parent(tag_id, parent_id or "")
         
         # Check if already an official tag
         if self.tag_exists(tag_id):

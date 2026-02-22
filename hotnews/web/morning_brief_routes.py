@@ -19,6 +19,7 @@ from hotnews.web.deps import (
     get_online_db,
     rss_created_at_cutoff,
     rss_row_to_item,
+    passes_tag_whitelist,
 )
 from hotnews.web.timeline_cache import brief_timeline_cache
 
@@ -286,9 +287,6 @@ async def api_rss_brief_timeline(
     category_whitelist_enabled = bool(rules.get("category_whitelist_enabled", True))
     category_whitelist = set(rules.get("category_whitelist") or [])
 
-    # AI-related categories to always include (legacy fine-grained categories)
-    ai_categories = {"AI_MODEL", "DEV_INFRA", "HARDWARE_PRO"}
-
     try:
         pub_filter = "AND e.published_at > 0" if drop_zero else ""
         cur = conn.execute(
@@ -339,13 +337,15 @@ async def api_rss_brief_timeline(
         if title_key and title_key in seen_titles:
             continue
 
-        # Tag/category whitelist filtering (same logic as cache_warmup)
-        if tag_whitelist_enabled and tag_whitelist:
-            if not tag_ids.intersection(tag_whitelist) and scategory not in ai_categories:
-                continue
-        elif category_whitelist_enabled and category_whitelist:
-            if scategory not in category_whitelist and scategory not in ai_categories:
-                continue
+        # Tag/category whitelist filtering (shared logic)
+        if not passes_tag_whitelist(
+            tag_ids, scategory,
+            tag_whitelist=tag_whitelist,
+            tag_whitelist_enabled=tag_whitelist_enabled,
+            category_whitelist=category_whitelist,
+            category_whitelist_enabled=category_whitelist_enabled,
+        ):
+            continue
 
         seen_urls.add(u)
         if title_key:

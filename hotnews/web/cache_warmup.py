@@ -252,13 +252,16 @@ class CacheWarmupService:
             if published_at > 0 and (published_at < MIN_TS or published_at > MAX_TS):
                 continue
 
-            # Tag/category whitelist filtering
-            if tag_whitelist_enabled and tag_whitelist:
-                if not tag_ids or not tag_ids.intersection(tag_whitelist):
-                    continue
-            elif category_whitelist_enabled and category_whitelist:
-                if scategory not in category_whitelist:
-                    continue
+            # Tag/category whitelist filtering (shared logic)
+            from hotnews.web.deps import passes_tag_whitelist
+            if not passes_tag_whitelist(
+                tag_ids, scategory,
+                tag_whitelist=tag_whitelist,
+                tag_whitelist_enabled=tag_whitelist_enabled,
+                category_whitelist=category_whitelist,
+                category_whitelist_enabled=category_whitelist_enabled,
+            ):
+                continue
 
             seen_urls.add(u)
             if title_norm:

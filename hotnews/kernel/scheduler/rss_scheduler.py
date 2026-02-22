@@ -132,7 +132,8 @@ def _mb_ai_prompt_text() -> str:
         "• 适用场景：新兴AI产品（如deepseek）、热点事件（如ces_2026）、新技术（如quantum_computing）\n"
         "• 命名规则：英文小写+下划线，2-30字符\n"
         "• 置信度>=0.8时才添加\n"
-        "• keywords字段：提供中英文搜索关键词，用于匹配相关新闻\n\n"
+        "• keywords字段：提供中英文搜索关键词，用于匹配相关新闻\n"
+        "• ⚠️ 产品标签用产品名（如deepseek），不要带版本号（如deepseek_v4）。版本信息放在keywords中\n\n"
         "保留规则：当内容与科技/AI相关且有价值时action=include，否则exclude。\n\n"
         "输出格式（严格JSON数组）：\n"
         '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9,"keywords":["DeepSeek","深度求索"]}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
@@ -375,19 +376,35 @@ def _mb_ai_pass_strict_s(row: Dict[str, Any]) -> bool:
 
 
 def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[str, Any]], *, provider: str, model: str, labeled_at: int) -> None:
+    # Build output map by ID for reliable matching (instead of zip order)
+    output_map: Dict[str, Dict[str, Any]] = {}
+    for out in outputs:
+        oid = str(out.get("id") or "").strip()
+        if oid:
+            output_map[oid] = out
+
     rows = []
     tag_rows = []  # For rss_entry_tags
-    
-    for ent, out in zip(entries, outputs):
+    matched_entries = []  # Track entries that got matched outputs
+
+    for idx, ent in enumerate(entries):
         sid = str(ent.get("source_id") or "").strip()
         dk = str(ent.get("dedup_key") or "").strip()
         url = str(ent.get("url") or "").strip()
         title = str(ent.get("title") or "")
         domain = _mb_ai_extract_domain(url)
+
+        # Try ID-based matching first, fall back to positional
+        key = f"{sid}::{dk}"
+        out = output_map.get(key)
+        if out is None and idx < len(outputs):
+            out = outputs[idx]  # Fallback to positional for backward compat
+        if out is None:
+            out = {"action": "exclude", "score": 0, "confidence": 0, "reason": "ai_skipped"}
+
         norm = _mb_ai_normalize_row(out)
 
         # Relaxed inclusion for v5: include if score >= 60 and confidence >= 0.5
-        # (Previously was strict_s which required specific categories)
         if norm.get("action") == "include":
             if int(norm.get("score") or 0) < 60 or float(norm.get("confidence") or 0) < 0.5:
                 norm["action"] = "exclude"
@@ -411,20 +428,21 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
                 str(norm.get("error") or "")[:500],
             )
         )
-        
+        matched_entries.append((ent, norm))
+
         # Collect tags for rss_entry_tags table
         confidence = float(norm.get("confidence") or 0.0)
-        
+
         # Add category as tag
         category = str(norm.get("category") or "other").strip().lower()
         if category:
             tag_rows.append((sid, dk[:500], category, confidence, "ai", labeled_at))
-        
+
         # Add topics as tags
         for topic in (norm.get("topics") or []):
             if topic:
                 tag_rows.append((sid, dk[:500], topic, confidence, "ai", labeled_at))
-        
+
         # Add attributes as tags
         for attr in (norm.get("attributes") or []):
             if attr:
@@ -432,7 +450,7 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
 
     if not rows:
         return
-    
+
     # Insert into rss_entry_ai_labels (legacy table)
     conn.executemany(
         """
@@ -444,7 +462,7 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
         """,
         rows,
     )
-    
+
     # Insert into rss_entry_tags (new multi-label table)
     if tag_rows:
         conn.executemany(
@@ -455,17 +473,16 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
             """,
             tag_rows,
         )
-    
+
     # Process suggested_tags for dynamic tag discovery
     try:
         discovery_service = TagDiscoveryService(conn)
-        for ent, out in zip(entries, outputs):
-            norm = _mb_ai_normalize_row(out)
+        for ent, norm in matched_entries:
             suggested_tags = norm.get("suggested_tags") or []
             title = str(ent.get("title") or "")
-            
+
             for st in suggested_tags:
-                if st.get("confidence", 0) >= 0.8:  # Only save high-confidence suggestions
+                if st.get("confidence", 0) >= 0.8:
                     discovery_service.save_candidate(
                         tag_id=st.get("id", ""),
                         name=st.get("name", ""),
@@ -473,7 +490,7 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
                         parent_id=st.get("parent_id"),
                         confidence=st.get("confidence", 0.8),
                         sample_title=title,
-                        keywords=st.get("keywords"),  # Pass AI-generated keywords
+                        keywords=st.get("keywords"),
                     )
     except Exception as e:
         logger.warning(f"Failed to process suggested_tags: {e}")

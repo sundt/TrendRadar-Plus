@@ -135,3 +135,35 @@ def rss_row_to_item(*, platform_id: str, source_id: str, source_name: str,
         "created_at": int(created_at or 0),
         "stable_id": generate_news_id(platform_id, t),
     }
+
+
+# ---------------------------------------------------------------------------
+# Tag/category whitelist filtering (shared by morning_brief_routes & cache_warmup)
+# ---------------------------------------------------------------------------
+
+# Legacy AI-model fine-grained categories (always included as fallback)
+AI_LEGACY_CATEGORIES = {"AI_MODEL", "DEV_INFRA", "HARDWARE_PRO"}
+
+
+def passes_tag_whitelist(
+    tag_ids: set,
+    source_category: str,
+    *,
+    tag_whitelist: set,
+    tag_whitelist_enabled: bool,
+    category_whitelist: set,
+    category_whitelist_enabled: bool,
+) -> bool:
+    """Check if an article passes the tag/category whitelist filter.
+
+    This is the single source of truth for brief timeline filtering,
+    used by both morning_brief_routes.py and cache_warmup.py.
+
+    Returns True if the article should be included.
+    """
+    sc = (source_category or "").strip()
+    if tag_whitelist_enabled and tag_whitelist:
+        return bool(tag_ids.intersection(tag_whitelist)) or sc in AI_LEGACY_CATEGORIES
+    if category_whitelist_enabled and category_whitelist:
+        return sc in category_whitelist or sc in AI_LEGACY_CATEGORIES
+    return True
