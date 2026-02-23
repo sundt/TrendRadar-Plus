@@ -22,7 +22,7 @@ let _bulkAbort = null;
 const BULK_DEBOUNCE_MS = 250;
 
 function getActiveCategoryId() {
-    return document.querySelector('.category-tabs .category-tab.active')?.dataset?.category || null;
+    return document.querySelector('.sub-tabs .sub-tab.active')?.dataset?.category || null;
 }
 
 // Session start timestamp for red dot logic
@@ -623,7 +623,7 @@ ready(function () {
     // Mark initial category as viewed after a delay (for red dot logic)
     // This delay ensures first render completes without red dots
     setTimeout(() => {
-        const activeTab = document.querySelector('.category-tabs .category-tab.active');
+        const activeTab = document.querySelector('.sub-tabs .sub-tab.active');
         if (activeTab && activeTab.dataset.category) {
             markCategoryViewed(activeTab.dataset.category);
         }

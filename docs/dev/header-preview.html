@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Header 重构预览 — 毛玻璃方案</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: #f5f5f7;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    padding: 24px;
+    min-height: 200vh;
+    color: #1d1d1f;
+  }
+
+  .main-container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .scheme-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1d1d1f;
+    margin-bottom: 6px;
+  }
+  .scheme-desc {
+    font-size: 12px;
+    color: #86868b;
+    margin-bottom: 14px;
+    line-height: 1.6;
+  }
+  .scheme-section { margin-bottom: 48px; }
+
+  /* ===== 毛玻璃导航卡片 ===== */
+  .nav-card {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    margin-bottom: 12px;
+    overflow: hidden;
+    position: sticky;
+    top: 12px;
+    z-index: 100;
+  }
+
+  .nav-top {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+  }
+
+  .main-nav { display: flex; gap: 2px; }
+  .nav-spacer { flex: 1; }
+
+  .nav-tools {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tool-btn {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    background: rgba(0, 0, 0, 0.04);
+    color: #6b7280;
+  }
+  .tool-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #374151;
+  }
+
+  .main-nav-item {
+    padding: 6px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    user-select: none;
+    letter-spacing: 0.3px;
+    border: none;
+    color: #86868b;
+    background: none;
+  }
+  .main-nav-item:hover {
+    color: #1d1d1f;
+    background: rgba(0, 0, 0, 0.05);
+  }
+  .main-nav-item.active {
+    color: #1d1d1f;
+    background: rgba(0, 0, 0, 0.07);
+  }
+
+  .nav-divider {
+    height: 0.5px;
+    background: rgba(0, 0, 0, 0.08);
+    margin: 0 20px;
+  }
+
+  .sub-tab {
+    padding: 9px 14px 11px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #86868b;
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+    transition: color 0.25s ease;
+    border: none;
+    background: none;
+    flex-shrink: 0;
+  }
+  .sub-tab:hover { color: #1d1d1f; }
+  .sub-tab.active {
+    color: #1d1d1f;
+    font-weight: 600;
+  }
+
+  /* 滑动指示器（用 JS 控制位置） */
+  .sub-tabs {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0 16px;
+    position: relative;
+  }
+  .sub-tabs::-webkit-scrollbar { display: none; }
+
+  .sub-tabs-indicator {
+    position: absolute;
+    bottom: 0;
+    height: 2px;
+    background: #1d1d1f;
+    border-radius: 1px;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+
+  .sub-tab-new {
+    color: #86868b !important;
+    font-weight: 500 !important;
+  }
+
+  /* 内容模拟 */
+  .content-area {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    padding: 20px;
+    min-height: 200px;
+  }
+  .content-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .card-mock {
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 14px;
+    min-height: 160px;
+  }
+  .card-mock-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 10px;
+  }
+  .card-mock-line {
+    height: 12px;
+    background: #e5e7eb;
+    border-radius: 3px;
+    margin-bottom: 8px;
+  }
+  .card-mock-line:nth-child(odd) { width: 88%; }
+  .card-mock-line:nth-child(even) { width: 65%; }
+
+  @media (max-width: 640px) {
+    body { padding: 8px; }
+    .nav-card { top: 4px; border-radius: 12px; }
+    .nav-top { padding: 8px 12px; }
+    .main-nav-item { padding: 5px 12px; font-size: 13px; }
+    .sub-tabs { padding: 0 10px; }
+    .sub-tab { padding: 7px 10px 9px; font-size: 12.5px; }
+    .tool-btn { width: 26px; height: 26px; font-size: 0.85rem; }
+    .content-area { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="main-container">
+
+  <!-- ===== 主页模式 ===== -->
+  <div class="scheme-section">
+    <div class="scheme-label">主页模式</div>
+    <div class="scheme-desc">毛玻璃背景 + sticky 吸顶。滚动页面试试效果 — 导航栏会固定在顶部，背景内容透过来。</div>
+    
+    <div class="nav-card">
+      <div class="nav-top">
+        <div class="main-nav">
+          <button class="main-nav-item active" onclick="switchDemo('home', this)">主页</button>
+          <button class="main-nav-item" onclick="switchDemo('topics', this)">我的主题</button>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-tools">
+          <button class="tool-btn">⭐</button>
+          <button class="tool-btn">🌙</button>
+          <button class="tool-btn">🔍</button>
+          <button class="tool-btn">➕</button>
+          <button class="tool-btn">👤</button>
+        </div>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="sub-tabs" id="demo1-tabs">
+        <button class="sub-tab active" onclick="tabClick(this)">我的关注</button>
+        <button class="sub-tab" onclick="tabClick(this)">新发现</button>
+        <button class="sub-tab" onclick="tabClick(this)">精选博客</button>
+        <button class="sub-tab" onclick="tabClick(this)">每日AI早报</button>
+        <button class="sub-tab" onclick="tabClick(this)">精选公众号</button>
+        <button class="sub-tab" onclick="tabClick(this)">财经投资</button>
+        <button class="sub-tab" onclick="tabClick(this)">科技新闻</button>
+        <button class="sub-tab" onclick="tabClick(this)">开发者</button>
+        <button class="sub-tab" onclick="tabClick(this)">社交媒体</button>
+        <button class="sub-tab" onclick="tabClick(this)">综合资讯</button>
+      </div>
+    </div>
+    <div class="content-area">
+      <div class="content-grid">
+        <div class="card-mock"><div class="card-mock-title">📱 36氪</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+        <div class="card-mock"><div class="card-mock-title">🔥 微博热搜</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+        <div class="card-mock"><div class="card-mock-title">💻 Hacker News</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+        <div class="card-mock"><div class="card-mock-title">📰 澎湃新闻</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 我的主题模式 ===== -->
+  <div class="scheme-section">
+    <div class="scheme-label">我的主题模式</div>
+    
+    <div class="nav-card" style="position:relative; top:auto;">
+      <div class="nav-top">
+        <div class="main-nav">
+          <button class="main-nav-item" onclick="toggle(this)">主页</button>
+          <button class="main-nav-item active" onclick="toggle(this)">我的主题</button>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-tools">
+          <button class="tool-btn">⭐</button>
+          <button class="tool-btn">🌙</button>
+          <button class="tool-btn">🔍</button>
+          <button class="tool-btn">➕</button>
+          <button class="tool-btn">👤</button>
+        </div>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="sub-tabs">
+        <button class="sub-tab sub-tab-new" onclick="tabClick(this)">+ 新建主题</button>
+        <button class="sub-tab active" onclick="tabClick(this)">深圳安居人才房</button>
+        <button class="sub-tab" onclick="tabClick(this)">书籍推荐</button>
+        <button class="sub-tab" onclick="tabClick(this)">google</button>
+        <button class="sub-tab" onclick="tabClick(this)">Anthropic</button>
+        <button class="sub-tab" onclick="tabClick(this)">苹果公司</button>
+      </div>
+    </div>
+    <div class="content-area">
+      <div class="content-grid">
+        <div class="card-mock"><div class="card-mock-title">🏠 深圳安居房资讯</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+        <div class="card-mock"><div class="card-mock-title">🏠 盐田区公告</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+        <div class="card-mock"><div class="card-mock-title">🏠 住房保障动态</div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div><div class="card-mock-line"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 未登录 ===== -->
+  <div class="scheme-section">
+    <div class="scheme-label">未登录状态</div>
+    <div class="scheme-desc">主导航仍显示"我的主题"，点击后弹出登录提示。</div>
+    
+    <div class="nav-card" style="position:relative; top:auto;">
+      <div class="nav-top">
+        <div class="main-nav">
+          <button class="main-nav-item active">主页</button>
+          <button class="main-nav-item" onclick="alert('请先登录后使用「我的主题」功能')">我的主题</button>
+        </div>
+        <div class="nav-spacer"></div>
+        <div class="nav-tools">
+          <button class="tool-btn">⭐</button>
+          <button class="tool-btn">🌙</button>
+          <button class="tool-btn">🔍</button>
+          <button class="tool-btn">➕</button>
+          <button class="tool-btn">👤</button>
+        </div>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="tabClick(this)">我的关注</button>
+        <button class="sub-tab" onclick="tabClick(this)">新发现</button>
+        <button class="sub-tab" onclick="tabClick(this)">精选博客</button>
+        <button class="sub-tab" onclick="tabClick(this)">每日AI早报</button>
+        <button class="sub-tab" onclick="tabClick(this)">精选公众号</button>
+        <button class="sub-tab" onclick="tabClick(this)">财经投资</button>
+      </div>
+    </div>
+    <div class="content-area" style="min-height:120px;">
+      <div style="text-align:center;padding:30px;color:#86868b;font-size:14px;">内容区域...</div>
+    </div>
+  </div>
+
+  <!-- 填充内容让页面可滚动，测试 sticky + 毛玻璃效果 -->
+  <div style="height: 600px;"></div>
+
+</div>
+
+<script>
+function toggle(el) {
+  el.parentElement.querySelectorAll('.main-nav-item').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+function tabClick(el) {
+  el.parentElement.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  moveIndicator(el);
+}
+
+function moveIndicator(tab) {
+  var container = tab.closest('.sub-tabs');
+  if (!container) return;
+  var indicator = container.querySelector('.sub-tabs-indicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'sub-tabs-indicator';
+    container.appendChild(indicator);
+  }
+  var containerRect = container.getBoundingClientRect();
+  var tabRect = tab.getBoundingClientRect();
+  var left = tabRect.left - containerRect.left + container.scrollLeft + 14;
+  var width = tabRect.width - 28;
+  indicator.style.left = left + 'px';
+  indicator.style.width = width + 'px';
+}
+
+// Initialize indicators on load
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.sub-tabs').forEach(function(container) {
+    var active = container.querySelector('.sub-tab.active');
+    if (active) {
+      // Create indicator
+      var indicator = document.createElement('div');
+      indicator.className = 'sub-tabs-indicator';
+      container.style.position = 'relative';
+      container.appendChild(indicator);
+      // Position without animation initially
+      var containerRect = container.getBoundingClientRect();
+      var tabRect = active.getBoundingClientRect();
+      indicator.style.transition = 'none';
+      indicator.style.left = (tabRect.left - containerRect.left + container.scrollLeft + 14) + 'px';
+      indicator.style.width = (tabRect.width - 28) + 'px';
+      // Re-enable animation after paint
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          indicator.style.transition = '';
+        });
+      });
+    }
+  });
+});
+
+function switchDemo(mode, el) {
+  toggle(el);
+  var tabs = document.getElementById('demo1-tabs');
+  if (mode === 'topics') {
+    tabs.innerHTML = '<button class="sub-tab sub-tab-new" onclick="tabClick(this)">+ 新建主题</button>' +
+      '<button class="sub-tab active" onclick="tabClick(this)">深圳安居人才房</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">书籍推荐</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">google</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">Anthropic</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">苹果公司</button>';
+  } else {
+    tabs.innerHTML = '<button class="sub-tab active" onclick="tabClick(this)">我的关注</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">新发现</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">精选博客</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">每日AI早报</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">精选公众号</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">财经投资</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">科技新闻</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">开发者</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">社交媒体</button>' +
+      '<button class="sub-tab" onclick="tabClick(this)">综合资讯</button>';
+  }
+  // Re-init indicator for this container
+  var indicator = tabs.querySelector('.sub-tabs-indicator');
+  if (indicator) indicator.remove();
+  var active = tabs.querySelector('.sub-tab.active');
+  if (active) {
+    requestAnimationFrame(function() { moveIndicator(active); });
+  }
+}
+</script>
+
+</body>
+</html>

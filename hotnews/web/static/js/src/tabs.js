@@ -9,9 +9,11 @@ import { authState } from './auth-state.js';
 import { events } from './events.js';
 import { viewMode } from './view-mode.js';
 import { categoryTimeline } from './category-timeline.js';
+import { openLoginModal } from './login-modal.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const VIEWER_POS_STORAGE_KEY = 'hotnews_viewer_pos_v1';
+const MAIN_NAV_STORAGE_KEY = 'hotnews_main_nav';
 const EXPLORE_TAB_ID = 'explore';
 const TAB_SWITCHED_EVENT = 'tr_tab_switched';
 const EXPLORE_MODAL_OPENED_EVENT = 'tr_explore_modal_opened';
@@ -28,6 +30,12 @@ let _recentTabs = [];
 
 let _explorePrevTabId = null;
 let _explorePrevScrollY = 0;
+
+// 主导航状态
+let _currentMainNav = 'home';
+let _lastHomeSubTab = null;
+let _lastTopicSubTab = null;
+let _topicsLoaded = false;
 
 function _persistViewerPos(tabId, scrollY) {
     try {
@@ -71,7 +79,7 @@ function _restoreViewerPosIfAny() {
         if (!tabId) return;
 
         const escaped = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(String(tabId)) : String(tabId);
-        const tabEl = document.querySelector(`.category-tab[data-category="${escaped}"]`);
+        const tabEl = document.querySelector(`.sub-tab[data-category="${escaped}"]`);
         if (!tabEl) return;
 
         tabs.switchTab(tabId);
@@ -116,7 +124,7 @@ function _restoreFromExploreModal() {
 
     try {
         const escaped = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(String(prevTabId)) : String(prevTabId);
-        const tabEl = document.querySelector(`.category-tab[data-category="${escaped}"]`);
+        const tabEl = document.querySelector(`.sub-tab[data-category="${escaped}"]`);
         const paneEl = document.getElementById(`tab-${prevTabId}`);
         if (!tabEl || !paneEl) return;
     } catch (e) {
@@ -143,6 +151,98 @@ function _restoreFromExploreModal() {
             // ignore
         }
     });
+}
+
+/**
+ * 切换主导航：'home' 或 'topics'
+ */
+function switchMainNav(nav) {
+    if (nav === _currentMainNav) return;
+
+    // 未登录用户点击"我的主题" → 弹登录弹窗，不切换
+    if (nav === 'topics' && !authState.isLoggedIn()) {
+        openLoginModal();
+        return;
+    }
+
+    // 保存当前子栏目选中状态
+    if (_currentMainNav === 'home') {
+        _lastHomeSubTab = tabs.getActiveTabId();
+    } else {
+        _lastTopicSubTab = tabs.getActiveTabId();
+    }
+
+    _currentMainNav = nav;
+
+    // 更新主导航按钮样式
+    document.querySelectorAll('.main-nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.nav === nav);
+    });
+
+    // 切换子栏目容器
+    const homeSubTabs = document.getElementById('homeSubTabs');
+    const topicSubTabs = document.getElementById('topicSubTabs');
+    if (homeSubTabs) homeSubTabs.style.display = nav === 'home' ? 'flex' : 'none';
+    if (topicSubTabs) topicSubTabs.style.display = nav === 'topics' ? 'flex' : 'none';
+
+    // 持久化主导航状态
+    storage.setRaw(MAIN_NAV_STORAGE_KEY, nav);
+
+    if (nav === 'topics') {
+        // 按需加载主题（首次点击时触发）
+        if (!_topicsLoaded) {
+            _topicsLoaded = true;
+            events.emit('mainNav:topicsActivated');
+        }
+        // 恢复上次选中的主题子栏目
+        const targetTab = _lastTopicSubTab || _getFirstTopicSubTab();
+        if (targetTab) {
+            tabs.switchTab(targetTab);
+        }
+    } else {
+        // 恢复上次选中的主页子栏目
+        const targetTab = _lastHomeSubTab || 'my-tags';
+        tabs.switchTab(targetTab);
+    }
+
+    // 更新滑动指示器
+    _updateIndicator(nav === 'home' ? homeSubTabs : topicSubTabs);
+}
+
+function _getFirstTopicSubTab() {
+    const topicSubTabs = document.getElementById('topicSubTabs');
+    if (!topicSubTabs) return null;
+    const first = topicSubTabs.querySelector('.sub-tab[data-category]');
+    return first ? first.dataset.category : null;
+}
+
+/**
+ * 更新指定子栏目容器的滑动指示器位置
+ */
+function _updateIndicator(container, animate = true) {
+    if (!container) return;
+    const activeTab = container.querySelector('.sub-tab.active');
+    const indicator = container.querySelector('.sub-tabs-indicator');
+    if (!activeTab || !indicator) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
+    const left = tabRect.left - containerRect.left + container.scrollLeft + 14;
+    const width = tabRect.width - 28;
+
+    if (!animate) {
+        indicator.style.transition = 'none';
+    }
+    indicator.style.left = left + 'px';
+    indicator.style.width = Math.max(width, 0) + 'px';
+
+    if (!animate) {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                indicator.style.transition = '';
+            });
+        });
+    }
 }
 
 /**
@@ -204,18 +304,26 @@ export const tabs = {
         TR.badges.dismissNewCategoryBadge(categoryId);
         document.body.classList.toggle('tr-rss-reading', String(categoryId) === 'rsscol-rss');
         const escapedCategoryId = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(String(categoryId)) : String(categoryId);
-        const tabEl = document.querySelector(`.category-tab[data-category="${escapedCategoryId}"]`);
+        
+        // 在当前活跃的 sub-tabs 容器内查找标签
+        const subTabsContainer = _currentMainNav === 'home'
+            ? document.getElementById('homeSubTabs')
+            : document.getElementById('topicSubTabs');
+        const tabEl = subTabsContainer
+            ? subTabsContainer.querySelector(`.sub-tab[data-category="${escapedCategoryId}"]`)
+            : document.querySelector(`.sub-tab[data-category="${escapedCategoryId}"]`);
         const paneEl = document.getElementById(`tab-${categoryId}`);
         if (!tabEl || !paneEl) {
             // If this is a topic tab that hasn't been loaded yet by topic-tracker,
             // keep the saved tab ID so topic-tracker can restore it later.
-            // Don't fall back to the first tab - this preserves back-navigation state.
             if (String(categoryId).startsWith('topic-')) {
                 console.log(`[Tabs] Topic tab ${categoryId} not yet loaded, preserving for later restore`);
                 storage.setRaw(TAB_STORAGE_KEY, categoryId);
                 return;
             }
-            const firstTab = document.querySelector('.category-tab');
+            const firstTab = subTabsContainer
+                ? subTabsContainer.querySelector('.sub-tab[data-category]')
+                : document.querySelector('.sub-tab[data-category]');
             if (firstTab?.dataset?.category && firstTab.dataset.category !== String(categoryId)) {
                 this.switchTab(firstTab.dataset.category);
             } else {
@@ -233,11 +341,17 @@ export const tabs = {
             updateDot.classList.remove('show');
         }
 
-        document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+        // 更新子栏目 active 状态
+        if (subTabsContainer) {
+            subTabsContainer.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+        }
         tabEl.classList.add('active');
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         paneEl.classList.add('active');
         storage.setRaw(TAB_STORAGE_KEY, categoryId);
+
+        // 更新滑动指示器
+        _updateIndicator(subTabsContainer);
 
         // Memory optimization: clean up inactive tabs after a short delay
         setTimeout(() => _cleanupInactiveTabs(categoryId), 500);
@@ -453,6 +567,17 @@ export const tabs = {
     },
 
     restoreActiveTab() {
+        // 恢复主导航状态
+        const savedNav = storage.getRaw(MAIN_NAV_STORAGE_KEY) || 'home';
+        if (savedNav === 'topics' && authState.isLoggedIn()) {
+            switchMainNav('topics');
+        } else {
+            _currentMainNav = 'home';
+            // 确保主页子栏目容器显示
+            const homeSubTabs = document.getElementById('homeSubTabs');
+            if (homeSubTabs) homeSubTabs.style.display = 'flex';
+        }
+
         const savedTab = storage.getRaw(TAB_STORAGE_KEY);
         if (savedTab) {
             try {
@@ -464,7 +589,7 @@ export const tabs = {
             } catch (e) {
                 // ignore
             }
-            const tabEl = document.querySelector(`.category-tab[data-category="${savedTab}"]`);
+            const tabEl = document.querySelector(`.sub-tab[data-category="${savedTab}"]`);
             if (tabEl) {
                 this.switchTab(savedTab);
                 return;
@@ -478,15 +603,19 @@ export const tabs = {
         // No saved tab - use default based on login status
         const isLoggedIn = authState.isLoggedIn();
         const defaultTab = isLoggedIn ? DEFAULT_TAB_LOGGED_IN : DEFAULT_TAB_GUEST;
-        const defaultTabEl = document.querySelector(`.category-tab[data-category="${defaultTab}"]`);
+        const defaultTabEl = document.querySelector(`.sub-tab[data-category="${defaultTab}"]`);
         if (defaultTabEl) {
             this.switchTab(defaultTab);
         }
     },
 
     getActiveTabId() {
-        return storage.getRaw(TAB_STORAGE_KEY) || (document.querySelector('.category-tab.active')?.dataset?.category) || null;
+        return storage.getRaw(TAB_STORAGE_KEY) || (document.querySelector('.sub-tab.active')?.dataset?.category) || null;
     },
+
+    switchMainNav,
+    getMainNav() { return _currentMainNav; },
+    updateIndicator: _updateIndicator,
 
     restoreActiveTabPlatformGridScroll(state) {
         TR.scroll.restoreActiveTabPlatformGridScroll(state);
@@ -499,6 +628,7 @@ export const tabs = {
 
 // 全局函数
 window.switchTab = (categoryId) => tabs.switchTab(categoryId);
+window.switchMainNav = switchMainNav;
 
 TR.tabs = tabs;
 
@@ -514,6 +644,12 @@ ready(function () {
     } catch (e) {
         // ignore
     }
+
+    // 主导航按钮点击事件
+    document.querySelectorAll('.main-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => switchMainNav(btn.dataset.nav));
+    });
+
     tabs.restoreActiveTab();
     _restoreViewerPosIfAny();
     tabs.attachPlatformGridScrollPersistence();
@@ -521,6 +657,30 @@ ready(function () {
     if (tabId) {
         tabs.restoreActiveTabPlatformGridScroll({ preserveScroll: true, activeTab: tabId });
     }
+
+    // 首次加载时无动画定位指示器
+    const activeContainer = document.getElementById('homeSubTabs');
+    _updateIndicator(activeContainer, false);
+
+    // resize 时重新计算指示器
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            const container = _currentMainNav === 'home'
+                ? document.getElementById('homeSubTabs')
+                : document.getElementById('topicSubTabs');
+            _updateIndicator(container, false);
+        }, 150);
+    });
+
+    // 子栏目滚动时更新指示器
+    ['homeSubTabs', 'topicSubTabs'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('scroll', () => _updateIndicator(el, false), { passive: true });
+        }
+    });
 
     // Listen for view mode changes — reload the active tab
     events.on('viewMode:changed', (detail) => {

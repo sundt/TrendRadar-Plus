@@ -132,7 +132,7 @@ export const settings = {
             _defaultCategories = {};
             _allPlatforms = {};
             console.log('[Settings] Initializing _defaultCategories from DOM');
-            document.querySelectorAll('.category-tab').forEach(tab => {
+            document.querySelectorAll('.sub-tab[data-category]').forEach(tab => {
                 const catId = tab.dataset.category;
                 // 跳过没有 data-category 属性的元素，避免产生 undefined 键
                 if (!catId) {

@@ -606,7 +606,7 @@ function init() {
     // Add click listener to the my-tags tab button as a fallback
     // This ensures loading even if tr_tab_switched event doesn't fire
     const tryAttachClickListener = () => {
-        const tabButton = document.querySelector('.category-tab[data-category="my-tags"]');
+        const tabButton = document.querySelector('.sub-tab[data-category="my-tags"]');
         if (tabButton) {
             console.log('[MyTags] Attaching click listener to tab button');
             tabButton.addEventListener('click', () => {

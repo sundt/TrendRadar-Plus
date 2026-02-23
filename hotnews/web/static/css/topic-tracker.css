@@ -3,26 +3,8 @@
  * Styles for topic tracking feature in viewer.html
  */
 
-/* Topic Tab in Category Bar */
-.category-tab.topic-tab {
-    background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
-    border: 1px solid #86efac !important;
-}
-
-.category-tab.topic-tab:hover {
-    background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important;
-}
-
-.category-tabs .category-tab.topic-tab.active {
-    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
-    color: white !important;
-    border-color: #16a34a !important;
-}
-
-.category-tabs .category-tab.topic-tab.active .category-tab-icon,
-.category-tabs .category-tab.topic-tab.active .category-tab-name {
-    color: white !important;
-}
+/* Topic Tab in Sub Tabs - 纯文字样式，不再使用特殊背景 */
+/* topic-tab 样式由 .sub-tab 统一管理 */
 
 /* Topic Pane - no header needed, use right-click menu */
 

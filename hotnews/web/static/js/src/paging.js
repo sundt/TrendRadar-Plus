@@ -160,7 +160,7 @@ export const paging = {
     },
 
     autofillActiveTab(opts = {}) {
-        const active = document.querySelector('.category-tabs .category-tab.active');
+        const active = document.querySelector('.sub-tabs .sub-tab.active');
         const catId = active?.dataset?.category;
         if (!catId) return false;
         return this.autofillForCategory(catId, opts);

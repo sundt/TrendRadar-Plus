@@ -631,11 +631,11 @@ const MobileEnhance = {
   /** 查找当前激活 tab 的前/后一个可见 tab */
   _findAdjacentTab(direction) {
     const allTabs = Array.from(
-      document.querySelectorAll('.category-tab:not(.new-topic-tab)')
+      document.querySelectorAll('.sub-tab[data-category]:not(.sub-tab-new)')
     ).filter(tab => !this._isTabHiddenByUser(tab));
 
     const activeId = window.TR?.tabs?.getActiveTabId?.() ||
-      document.querySelector('.category-tab.active')?.dataset?.category;
+      document.querySelector('.sub-tab.active')?.dataset?.category;
 
     const currentIndex = allTabs.findIndex(t => t.dataset.category === activeId);
     if (currentIndex === -1) return null;
@@ -975,12 +975,12 @@ const MobileEnhance = {
 
     // 如果没有 topic tabs 但用户已登录，topic-tracker 可能还在异步加载
     // 监听 DOM 变化，topic tab 出现后自动刷新
-    const topicTabs = document.querySelectorAll('.category-tab.topic-tab');
+    const topicTabs = document.querySelectorAll('.sub-tab.topic-tab');
     if (topicTabs.length === 0) {
-      const categoryTabsEl = document.querySelector('.category-tabs');
+      const categoryTabsEl = document.getElementById('topicSubTabs');
       if (categoryTabsEl) {
         const obs = new MutationObserver(() => {
-          const newTopicTabs = document.querySelectorAll('.category-tab.topic-tab');
+          const newTopicTabs = document.querySelectorAll('.sub-tab.topic-tab');
           if (newTopicTabs.length > 0) {
             obs.disconnect();
             // 面板仍然打开时才刷新
@@ -1013,20 +1013,18 @@ const MobileEnhance = {
 
     // 获取当前激活分类
     const activeId = window.TR?.tabs?.getActiveTabId?.() ||
-      document.querySelector('.category-tab.active')?.dataset?.category || '';
-    const activeTab = document.querySelector(`.category-tab[data-category="${activeId}"]`);
-    const activeName = activeTab?.querySelector('.category-tab-name')?.textContent?.trim() || activeId;
+      document.querySelector('.sub-tab.active')?.dataset?.category || '';
+    const activeTab = document.querySelector(`.sub-tab[data-category="${activeId}"]`);
+    const activeName = activeTab?.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || activeId;
 
-    // 读取系统分类（排除 topic-tab 和 new-topic-tab，排除用户隐藏的）
-    // 注意：移动端 .category-tabs 容器被 display:none 隐藏，getComputedStyle 对子元素也返回 none
-    // 所以改用检查 early-hide-categories 样式表或 inline style 来判断用户是否隐藏了该分类
+    // 读取系统分类（排除 topic-tab 和 sub-tab-new，排除用户隐藏的）
     const systemTabs = Array.from(
-      document.querySelectorAll('.category-tab:not(.topic-tab):not(.new-topic-tab)')
+      document.querySelectorAll('#homeSubTabs .sub-tab[data-category]')
     ).filter(tab => !this._isTabHiddenByUser(tab));
 
     // 读取用户主题
     const topicTabs = Array.from(
-      document.querySelectorAll('.category-tab.topic-tab')
+      document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
     ).filter(tab => !this._isTabHiddenByUser(tab));
 
     let html = '';
@@ -1044,10 +1042,9 @@ const MobileEnhance = {
     html += '<div class="me-category-grid">';
     systemTabs.forEach(tab => {
       const id = tab.dataset.category || '';
-      const icon = tab.querySelector('.category-tab-icon')?.textContent?.trim() || '';
-      const name = tab.querySelector('.category-tab-name')?.textContent?.trim() || id;
+      const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
       const isActive = id === activeId;
-      html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(icon)} ${this._escapeHtml(name)}</div>`;
+      html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
     });
     html += '</div>';
 
@@ -1057,10 +1054,9 @@ const MobileEnhance = {
     if (topicTabs.length > 0) {
       topicTabs.forEach(tab => {
         const id = tab.dataset.category || '';
-        const icon = tab.querySelector('.category-tab-icon')?.textContent?.trim() || '🏷️';
-        const name = tab.querySelector('.category-tab-name')?.textContent?.trim() || id;
+        const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
         const isActive = id === activeId;
-        html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(icon)} ${this._escapeHtml(name)}</div>`;
+        html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
       });
     } else {
       html += '<div class="me-category-empty">暂无自建主题，点击下方按钮创建</div>';

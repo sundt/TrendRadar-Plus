@@ -126,9 +126,9 @@ ready(function () {
                 // ignore
             }
             try {
-                const tabs = document.querySelector('.category-tabs');
-                if (tabs && tabs instanceof HTMLElement) {
-                    tabs.style.display = 'flex';
+                const navCard = document.querySelector('.nav-card');
+                if (navCard && navCard instanceof HTMLElement) {
+                    navCard.style.display = '';
                 }
             } catch (e) {
                 // ignore
@@ -237,9 +237,9 @@ ready(function () {
                     // ignore
                 }
                 try {
-                    const tabs = document.querySelector('.category-tabs');
-                    if (tabs && tabs instanceof HTMLElement) {
-                        tabs.style.display = 'flex';
+                    const navCard = document.querySelector('.nav-card');
+                    if (navCard && navCard instanceof HTMLElement) {
+                        navCard.style.display = '';
                     }
                 } catch (e) {
                     // ignore

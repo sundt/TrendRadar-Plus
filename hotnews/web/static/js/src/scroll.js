@@ -228,7 +228,7 @@ export const scroll = {
     saveNavigationState() {
         try {
             const activeTab = storage.getRaw('hotnews_active_tab') ||
-                (/** @type {HTMLElement|null} */ (document.querySelector('.category-tab.active'))?.dataset?.category) || null;
+                (/** @type {HTMLElement|null} */ (document.querySelector('.sub-tab.active'))?.dataset?.category) || null;
             const state = {
                 scrollY: window.scrollY || 0,
                 activeTab,

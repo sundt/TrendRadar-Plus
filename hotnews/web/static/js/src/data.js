@@ -553,7 +553,7 @@ export const data = {
     formatUpdatedAt,
 
     snapshotViewerState() {
-        const activeTab = storage.getRaw(TAB_STORAGE_KEY) || (document.querySelector('.category-tab.active')?.dataset?.category) || null;
+        const activeTab = storage.getRaw(TAB_STORAGE_KEY) || (document.querySelector('.sub-tab.active')?.dataset?.category) || null;
         const pagingOffsets = {};
         document.querySelectorAll('.platform-card').forEach((card) => {
             const pid = card.dataset.platform;
@@ -597,7 +597,7 @@ export const data = {
 
     renderViewerFromData(data, state) {
         const contentEl = document.querySelector('.tab-content-area');
-        const tabsEl = document.querySelector('.category-tabs');
+        const tabsEl = document.getElementById('homeSubTabs');
         if (!tabsEl || !contentEl) return;
 
         // Reset dynamic module states before re-rendering
@@ -649,26 +649,17 @@ export const data = {
         }
 
         const tabsHtml = Object.entries(categories).map(([catId, cat]) => {
-            const icon = escapeHtml(cat?.icon || '');
+            // 跳过主题栏目（由 topic-tracker.js 动态管理）
+            if (String(catId).startsWith('topic-')) return '';
+            
             const name = escapeHtml(cat?.name || catId);
             const badgeCategory = cat?.is_new ? `<span class="new-badge new-badge-category" data-category="${escapeHtml(catId)}">NEW</span>` : '';
             const badgeSports = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
             const badge = `${badgeCategory}${badgeSports}`;
             const activeClass = (String(catId) === String(activeTabId)) ? ' active' : '';
             
-            // Check if this is a topic tab
-            const isTopicTab = String(catId).startsWith('topic-');
-            const topicId = isTopicTab ? catId.replace('topic-', '') : '';
-            const topicTabClass = isTopicTab ? ' topic-tab' : '';
-            const topicIdAttr = isTopicTab ? ` data-topic-id="${escapeHtml(topicId)}"` : '';
-            
-            return `
-            <div class="category-tab${activeClass}${topicTabClass}" data-category="${escapeHtml(catId)}"${topicIdAttr} draggable="false" onclick="switchTab('${escapeHtml(catId)}')">
-                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
-                <div class="category-tab-icon">${icon}</div>
-                <div class="category-tab-name">${name}${badge}</div>
-            </div>`;
-        }).join('');
+            return `<button class="sub-tab${activeClass}" data-category="${escapeHtml(catId)}" onclick="switchTab('${escapeHtml(catId)}')">${name}${badge}</button>`;
+        }).filter(Boolean).join('');
 
         const contentHtml = Object.entries(categories).map(([catId, cat]) => {
             const isActiveCategory = !!activeTabId && String(catId) === String(activeTabId);
@@ -722,19 +713,12 @@ export const data = {
             </div>`;
         }).join('');
 
-        tabsEl.innerHTML = tabsHtml;
+        tabsEl.innerHTML = tabsHtml + '<div class="sub-tabs-indicator"></div>';
         contentEl.innerHTML = contentHtml;
 
-        try {
-            const isMobile = !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
-            const tabCount = tabsEl.querySelectorAll('.category-tab').length;
-            if (isMobile) {
-                tabsEl.classList.remove('compact');
-            } else {
-                tabsEl.classList.toggle('compact', tabCount > 8);
-            }
-        } catch (e) {
-            // ignore
+        // 更新滑动指示器
+        if (TR.tabs && TR.tabs.updateIndicator) {
+            TR.tabs.updateIndicator(tabsEl, false);
         }
 
         const updatedAtEl = document.getElementById('updatedAt');
@@ -746,16 +730,16 @@ export const data = {
         const desiredTab = currentStoredTab || (state && typeof state.activeTab === 'string' ? state.activeTab : null);
         if (desiredTab) {
             const escapedDesired = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(desiredTab) : desiredTab;
-            const desiredTabEl = document.querySelector(`.category-tab[data-category="${escapedDesired}"]`);
+            const desiredTabEl = document.querySelector(`.sub-tab[data-category="${escapedDesired}"]`);
             if (desiredTabEl) {
                 TR.tabs.switchTab(desiredTab);
             } else if (String(desiredTab).startsWith('topic-')) {
                 // Topic tab not yet loaded by topic-tracker - show first tab visually
                 // but preserve the topic tab ID in localStorage for later restore
-                const firstTab = document.querySelector('.category-tab');
+                const firstTab = document.querySelector('.sub-tab[data-category]');
                 if (firstTab?.dataset?.category) {
                     // Temporarily switch to first tab without overwriting localStorage
-                    document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
                     firstTab.classList.add('active');
                     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
                     const firstPane = document.getElementById(`tab-${firstTab.dataset.category}`);
@@ -764,7 +748,7 @@ export const data = {
                 // Keep the topic tab ID in localStorage
                 storage.setRaw(TAB_STORAGE_KEY, desiredTab);
             } else {
-                const firstTab = document.querySelector('.category-tab');
+                const firstTab = document.querySelector('.sub-tab[data-category]');
                 if (firstTab?.dataset?.category) {
                     TR.tabs.switchTab(firstTab.dataset.category);
                 } else {
@@ -772,7 +756,7 @@ export const data = {
                 }
             }
         } else {
-            const firstTab = document.querySelector('.category-tab');
+            const firstTab = document.querySelector('.sub-tab[data-category]');
             if (firstTab?.dataset?.category) {
                 TR.tabs.switchTab(firstTab.dataset.category);
             } else {
@@ -1025,7 +1009,7 @@ export const data = {
         const NO_UPDATE_DOT_CATEGORIES = ['explore', 'knowledge'];
         if (NO_UPDATE_DOT_CATEGORIES.includes(categoryId)) return;
 
-        const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+        const tab = document.querySelector(`.sub-tab[data-category="${categoryId}"]`);
         if (!tab) return;
 
         let dot = tab.querySelector('.update-dot');
@@ -1039,7 +1023,7 @@ export const data = {
     },
 
     hideCategoryUpdateDot(categoryId) {
-        const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+        const tab = document.querySelector(`.sub-tab[data-category="${categoryId}"]`);
         if (!tab) return;
 
         const dot = tab.querySelector('.update-dot');

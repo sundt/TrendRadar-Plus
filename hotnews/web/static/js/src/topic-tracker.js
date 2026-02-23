@@ -75,7 +75,7 @@ function _confirmDialog(message) {
         const currentUserId = currentUser?.id;
         
         // Find ALL topic tabs (both server-rendered and dynamically created)
-        const topicTabs = document.querySelectorAll('.category-tab.topic-tab');
+        const topicTabs = document.querySelectorAll('.sub-tab.topic-tab');
         
         topicTabs.forEach(tab => {
             const ownerUserId = tab.dataset.ownerUserId;
@@ -106,7 +106,7 @@ function _confirmDialog(message) {
      */
     function removeServerRenderedTopicTabs() {
         // Find all topic tabs that have owner-user-id (server-rendered)
-        const serverTabs = document.querySelectorAll('.category-tab.topic-tab[data-owner-user-id]');
+        const serverTabs = document.querySelectorAll('.sub-tab.topic-tab[data-owner-user-id]');
         
         serverTabs.forEach(tab => {
             const categoryId = tab.dataset.category;
@@ -145,9 +145,15 @@ function _confirmDialog(message) {
         validateTopicTabsOwnership();
         
         createModal();
-        // 前端动态加载主题 tabs（不再依赖服务端注入）
-        loadAndRenderTopicTabs();
-        addNewTopicButton();
+        // 改为事件驱动：监听主导航切换到"我的主题"时加载
+        // loadAndRenderTopicTabs(); — 移除直接调用
+        // addNewTopicButton(); — "新建主题"已在 viewer.html 中静态渲染
+        
+        // 监听主导航切换到"我的主题"
+        events.on('mainNav:topicsActivated', () => {
+            console.log('[TopicTracker] mainNav:topicsActivated event received, loading topics...');
+            loadAndRenderTopicTabs();
+        });
         
         // Listen for tab switch events
         events.on('tab:switched', (detail) => {
@@ -170,8 +176,9 @@ function _confirmDialog(message) {
             validateTopicTabsOwnership();
             // 重置所有主题的加载状态，因为 DOM 已经被重新渲染
             resetAllTopicStates();
+            // 重新确保"新建主题"按钮存在
             addNewTopicButton();
-            // 重新加载主题 tabs
+            // 如果主题已加载过，重新加载主题 tabs
             loadAndRenderTopicTabs();
             
             // 如果当前激活的是主题 tab，重新加载
@@ -208,7 +215,7 @@ function _confirmDialog(message) {
      */
     function removeAllTopicTabs() {
         // Remove all topic tabs
-        document.querySelectorAll('.category-tab.topic-tab').forEach(tab => tab.remove());
+        document.querySelectorAll('.sub-tab.topic-tab').forEach(tab => tab.remove());
         // Remove all topic panes
         document.querySelectorAll('.tab-pane[id^="tab-topic-"]').forEach(pane => pane.remove());
         // Clear loading states
@@ -238,9 +245,9 @@ function _confirmDialog(message) {
             return;
         }
         
-        const categoryTabs = document.querySelector('.category-tabs');
+        const categoryTabs = document.getElementById('topicSubTabs');
         if (!categoryTabs) {
-            console.warn('[TopicTracker] category-tabs not found');
+            console.warn('[TopicTracker] topicSubTabs not found');
             return;
         }
         
@@ -290,7 +297,7 @@ function _confirmDialog(message) {
             const savedTab = (mainSavedTab && mainSavedTab.startsWith('topic-')) ? mainSavedTab : legacySavedTab;
             
             if (savedTab && savedTab.startsWith('topic-')) {
-                const tabEl = document.querySelector(`.category-tab[data-category="${savedTab}"]`);
+                const tabEl = document.querySelector(`.sub-tab[data-category="${savedTab}"]`);
                 const paneEl = document.getElementById(`tab-${savedTab}`);
                 
                 if (tabEl && paneEl) {
@@ -324,36 +331,30 @@ function _confirmDialog(message) {
      * Show skeleton loading state for topic tabs
      */
     function showTopicTabsSkeleton(categoryTabs) {
-        // Find my-tags tab position
-        const myTagsTab = categoryTabs.querySelector('[data-category="my-tags"]');
+        const indicator = categoryTabs.querySelector('.sub-tabs-indicator');
         
         // Create skeleton container
         const skeletonContainer = document.createElement('div');
         skeletonContainer.className = 'topic-tabs-loading';
         skeletonContainer.id = 'topicTabsSkeleton';
+        skeletonContainer.style.cssText = 'display:flex;gap:4px;';
         
-        // Add 2 skeleton tabs (typical user has 1-3 topics)
+        // Add 2 skeleton tabs
         for (let i = 0; i < 2; i++) {
             const skeleton = document.createElement('div');
             skeleton.className = 'topic-tab-skeleton';
-            skeleton.innerHTML = `
-                <div class="skeleton-icon"></div>
-                <div class="skeleton-text"></div>
-            `;
+            skeleton.innerHTML = `<div class="skeleton-text"></div>`;
             skeletonContainer.appendChild(skeleton);
         }
         
-        // Insert before my-tags
-        if (myTagsTab) {
-            categoryTabs.insertBefore(skeletonContainer, myTagsTab);
+        // Insert before the "+ 新建主题" button
+        const newBtn = categoryTabs.querySelector('.sub-tab-new');
+        if (newBtn) {
+            categoryTabs.insertBefore(skeletonContainer, newBtn);
+        } else if (indicator) {
+            categoryTabs.insertBefore(skeletonContainer, indicator);
         } else {
-            // Insert after new topic button
-            const newTopicBtn = document.getElementById('newTopicBtn');
-            if (newTopicBtn && newTopicBtn.nextSibling) {
-                categoryTabs.insertBefore(skeletonContainer, newTopicBtn.nextSibling);
-            } else {
-                categoryTabs.appendChild(skeletonContainer);
-            }
+            categoryTabs.appendChild(skeletonContainer);
         }
         
         return skeletonContainer;
@@ -363,51 +364,38 @@ function _confirmDialog(message) {
      * Render topic tabs from data (frontend dynamic rendering)
      */
     function renderTopicTabsFromData(topicsData) {
-        const categoryTabs = document.querySelector('.category-tabs');
-        if (!categoryTabs) {
-            console.warn('[TopicTracker] category-tabs not found');
+        const topicSubTabs = document.getElementById('topicSubTabs');
+        if (!topicSubTabs) {
+            console.warn('[TopicTracker] topicSubTabs not found');
             return;
         }
         
-        // Find my-tags tab position
-        const myTagsTab = categoryTabs.querySelector('[data-category="my-tags"]');
+        const indicator = topicSubTabs.querySelector('.sub-tabs-indicator');
         
         topicsData.forEach(topic => {
             const categoryId = `topic-${topic.id}`;
             
             // Check if tab already exists
-            if (document.querySelector(`[data-category="${categoryId}"]`)) {
+            if (topicSubTabs.querySelector(`[data-category="${categoryId}"]`)) {
                 console.log(`[TopicTracker] Tab ${categoryId} already exists, skipping`);
                 return;
             }
             
-            // Create tab element
-            const tab = document.createElement('div');
-            tab.className = 'category-tab topic-tab';
+            // Create tab element (纯文字，无 emoji)
+            const tab = document.createElement('button');
+            tab.className = 'sub-tab topic-tab';
             tab.dataset.category = categoryId;
             tab.dataset.topicId = topic.id;
-            tab.draggable = false;
             tab.onclick = () => {
                 tabs.switchTab(categoryId);
             };
             tab.innerHTML = `
-                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
-                <div class="category-tab-icon">${escapeHtml(topic.icon || '🏷️')}</div>
-                <div class="category-tab-name">${escapeHtml(topic.name)}</div>
+                ${escapeHtml(topic.name)}
             `;
             
-            // Insert before my-tags
-            if (myTagsTab) {
-                categoryTabs.insertBefore(tab, myTagsTab);
-            } else {
-                // Insert after new topic button
-                const newTopicBtn = document.getElementById('newTopicBtn');
-                if (newTopicBtn && newTopicBtn.nextSibling) {
-                    categoryTabs.insertBefore(tab, newTopicBtn.nextSibling);
-                } else {
-                    categoryTabs.appendChild(tab);
-                }
-            }
+            // Insert before the "+ 新建主题" button
+            const newBtn = topicSubTabs.querySelector('.sub-tab-new');
+            topicSubTabs.insertBefore(tab, newBtn || null);
             
             // Create corresponding tab-pane
             createTopicTabPane(topic);
@@ -417,6 +405,11 @@ function _confirmDialog(message) {
         
         // Setup event listeners for the new tabs
         setupTopicTabListeners();
+        
+        // 更新指示器位置
+        if (tabs.updateIndicator) {
+            tabs.updateIndicator(topicSubTabs);
+        }
     }
     
     /**
@@ -540,47 +533,29 @@ function _confirmDialog(message) {
      * Add "New Topic" button to category tabs (left of 我的关注)
      */
     function addNewTopicButton() {
-        // Find category tabs container
-        const categoryTabs = document.querySelector('.category-tabs');
-        if (!categoryTabs) {
-            console.warn('[TopicTracker] category-tabs not found, will retry later');
+        // Find topicSubTabs container
+        const topicSubTabs = document.getElementById('topicSubTabs');
+        if (!topicSubTabs) {
+            console.warn('[TopicTracker] topicSubTabs not found, will retry later');
             setTimeout(addNewTopicButton, 1000);
             return;
         }
         
         // Check if button already exists
-        if (document.getElementById('newTopicBtn')) return;
+        if (topicSubTabs.querySelector('.sub-tab-new')) return;
         
         // Create the button element
-        const btn = document.createElement('div');
-        btn.className = 'category-tab new-topic-tab';
-        btn.id = 'newTopicBtn';
-        btn.innerHTML = `
-            <div class="category-tab-icon">➕</div>
-            <div class="category-tab-name">新建主题</div>
-        `;
+        const btn = document.createElement('button');
+        btn.className = 'sub-tab sub-tab-new';
+        btn.textContent = '+ 新建主题';
         btn.onclick = function() {
             TopicTracker.openModal();
         };
         
-        // Insert at the beginning (before 我的关注)
-        categoryTabs.insertBefore(btn, categoryTabs.firstChild);
+        // Insert at the beginning
+        topicSubTabs.insertBefore(btn, topicSubTabs.firstChild);
         
-        console.log('[TopicTracker] New topic button added to tabs');
-        
-        // 监听 DOM 变化，如果按钮被移除则重新添加
-        const observer = new MutationObserver((mutations) => {
-            if (!document.getElementById('newTopicBtn')) {
-                console.log('[TopicTracker] Button removed, re-adding...');
-                observer.disconnect();
-                setTimeout(() => {
-                    addNewTopicButton();
-                    // 重新设置主题 tab 的事件监听
-                    setupTopicTabListeners();
-                }, 100);
-            }
-        });
-        observer.observe(categoryTabs, { childList: true, subtree: false });
+        console.log('[TopicTracker] New topic button added to topicSubTabs');
     }
 
     /**
@@ -597,7 +572,7 @@ function _confirmDialog(message) {
      */
     function setupTopicTabListeners() {
         // 监听 tab 切换，当切换到主题 tab 时加载新闻
-        document.querySelectorAll('.category-tab[data-category^="topic-"]').forEach(tab => {
+        document.querySelectorAll('.sub-tab[data-category^="topic-"]').forEach(tab => {
             const catId = tab.dataset.category;
             const topicId = catId.replace('topic-', '');
             
@@ -749,7 +724,7 @@ function _confirmDialog(message) {
                     const categoryId = `topic-${topicId}`;
                     
                     // 移除 tab
-                    const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+                    const tab = document.querySelector(`.sub-tab[data-category="${categoryId}"]`);
                     if (tab) tab.remove();
                     
                     // 移除 pane
@@ -3119,7 +3094,7 @@ function _confirmDialog(message) {
                 const categoryId = 'topic-' + topicId;
                 
                 // 移除 tab
-                const tab = document.querySelector(`.category-tab[data-category="${categoryId}"]`);
+                const tab = document.querySelector(`.sub-tab[data-category="${categoryId}"]`);
                 if (tab) {
                     tab.remove();
                     console.log(`[TopicTracker] Removed tab for topic ${topicId}`);

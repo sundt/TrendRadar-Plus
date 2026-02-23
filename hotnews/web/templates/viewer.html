@@ -43,7 +43,7 @@
                 // 生成 CSS 选择器隐藏这些栏目
                 if (userHidden.length > 0) {
                     var selectors = userHidden.map(function(id) {
-                        return '.category-tab[data-category="' + id + '"], #tab-' + id;
+                        return '.sub-tab[data-category="' + id + '"], #tab-' + id;
                     }).join(', ');
                     document.write('<style id="early-hide-categories">' + selectors + '{display:none!important}</style>');
                 }
@@ -75,34 +75,17 @@
             box-sizing: border-box;
         }
 
-        .header-card {
-            background: white;
-            border-radius: 12px;
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .category-tabs {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            background: white;
-            border-radius: 12px;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-
-        .category-tab {
-            padding: 8px 16px;
-            border-radius: 8px;
-            background: #f3f4f6;
-            cursor: pointer;
-        }
-
-        .category-tab.active {
-            background: linear-gradient(135deg, #4f46e5, #7c3aed);
-            color: white;
+        .nav-card {
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-radius: 14px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            position: sticky;
+            top: 12px;
+            z-index: 100;
+            margin-bottom: 12px;
+            overflow: visible;
         }
 
         .platform-card {
@@ -138,71 +121,54 @@
 
 <body>
     <div class="main-container">
-        <!-- Header -->
-        <div class="header-card">
-            <div class="header-top" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <a href="https://github.com/sundt/uihash-hotnews" target="_blank" class="header-title"
-                    style="text-decoration: none; color: inherit;"><svg height="24" width="24" viewBox="0 0 16 16"
-                        style="vertical-align: middle;">
-                        <path fill="currentColor"
-                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                    </svg></a>
-                <a href="https://gitee.com/david-sunny/hotnews" target="_blank" class="header-title"
-                    style="text-decoration: none; color: inherit;"><img src="https://gitee.com/favicon.ico" width="24"
-                        height="24" style="vertical-align: middle;" alt="Gitee" loading="lazy" /></a>
-
-                <div style="flex: 1;"></div>
-
-                <div class="header-right" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                    <!-- 收藏按钮 -->
-                    <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()" title="我的收藏">
-                        ⭐
-                    </button>
-
-                    <!-- 护眼模式按钮 -->
-                    <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()"
-                        title="切换护眼模式">
-                        🌙
-                    </button>
-
-                    <!-- 搜索按钮 -->
-                    <button class="icon-btn search-btn" onclick="window.location.href='/search'" title="搜索新闻">
-                        🔍
-                    </button>
-
-                    <!-- 设置按钮 - 需要登录才能进入设置页面 -->
+        <!-- 毛玻璃一体化导航卡片 -->
+        <div class="nav-card">
+            <!-- 上层：主导航 + 工具按钮 -->
+            <div class="nav-top">
+                <div class="main-nav">
+                    <button class="main-nav-item active" data-nav="home">主页</button>
+                    <button class="main-nav-item" data-nav="topics">我的主题</button>
+                </div>
+                <div class="nav-spacer"></div>
+                <div class="nav-tools">
+                    <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()" title="我的收藏">⭐</button>
+                    <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换护眼模式">🌙</button>
+                    <button class="icon-btn search-btn" onclick="window.location.href='/search'" title="搜索新闻">🔍</button>
                     <button class="icon-btn category-settings-btn has-tooltip" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()" data-tooltip="订阅更多内容">
                         ➕ <span class="new-badge-text" id="categorySettingsNewBadge" style="display:block">NEW</span>
                     </button>
-
-                    <!-- 登录/用户按钮 - 由 AuthButton 组件动态渲染 -->
                     <div id="authButtonContainer" class="auth-button-container"></div>
                 </div>
             </div>
 
-            <!-- 过滤面板 -->
+            <!-- 分隔线 -->
+            <div class="nav-divider"></div>
+
+            <!-- 主页子栏目 -->
+            <div class="sub-tabs" id="homeSubTabs">
+                {% for cat_id, category in data.categories.items() %}
+                {% if not category.is_topic %}
+                <button class="sub-tab{% if cat_id == 'my-tags' %} active{% endif %}"
+                        data-category="{{ cat_id }}" onclick="switchTab('{{ cat_id }}')">
+                    {{ category.name }}{% if category.is_new %}<span class="new-badge new-badge-category" data-category="{{ cat_id }}">NEW</span>{% endif %}{% if cat_id == 'sports' %}<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>{% endif %}
+                </button>
+                {% endif %}
+                {% endfor %}
+                <div class="sub-tabs-indicator"></div>
+            </div>
+
+            <!-- 主题子栏目（默认隐藏，按需加载） -->
+            <div class="sub-tabs" id="topicSubTabs" style="display:none;">
+                <div class="sub-tabs-indicator"></div>
+                <button class="sub-tab sub-tab-new" onclick="TopicTracker.openModal()">+ 新建主题</button>
+            </div>
+
+            <!-- 过滤面板和进度条（nav-card 内部） -->
             <div class="filter-panel" id="filterPanel" style="display:none;"></div>
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
             <div class="fetch-status" id="fetchStatus"></div>
-        </div>
-
-        <!-- Tabs -->
-        <div class="category-tabs">
-            {% for cat_id, category in data.categories.items() %}
-            {% set is_active = (cat_id == 'my-tags') %}
-            {% set is_topic = category.is_topic %}
-            <div class="category-tab {% if is_active %}active{% endif %}{% if is_topic %} topic-tab{% endif %}" data-category="{{ cat_id }}"{% if is_topic %} data-owner-user-id="{{ category.owner_user_id }}"{% endif %} draggable="false"
-                onclick="switchTab('{{ cat_id }}')">
-                <span class="category-drag-handle" title="拖拽调整栏目顺序" draggable="true">☰</span>
-                <div class="category-tab-icon">{{ category.icon }}</div>
-                <div class="category-tab-name">{{ category.name }}{% if category.is_new %}<span
-                        class="new-badge new-badge-category" data-category="{{ cat_id }}">NEW</span>{% endif %}{% if
-                    cat_id == 'sports' %}<span class="new-badge" id="newBadgeSportsTab"
-                        style="display:none;">NEW</span>{% endif %}</div>
-            </div>
-            {% endfor %}
         </div>
 
         <!-- Content -->
@@ -642,20 +608,20 @@
             };
             
             // 直接给 discovery tab 按钮添加点击监听（微信浏览器兼容）
-            // 使用事件委托，监听整个 category-tabs 容器
+            // 使用事件委托，监听整个 sub-tabs 容器
             function attachTabClickListeners() {
-                var tabsContainer = document.querySelector('.category-tabs');
+                var tabsContainer = document.getElementById('homeSubTabs');
                 if (!tabsContainer) {
-                    console.log('[Fallback] category-tabs container not found, retrying...');
+                    console.log('[Fallback] homeSubTabs container not found, retrying...');
                     setTimeout(attachTabClickListeners, 500);
                     return;
                 }
                 
-                console.log('[Fallback] Attaching event delegation to category-tabs');
+                console.log('[Fallback] Attaching event delegation to homeSubTabs');
                 
                 // 使用事件委托
                 tabsContainer.addEventListener('click', function(e) {
-                    var tab = e.target.closest('.category-tab');
+                    var tab = e.target.closest('.sub-tab');
                     if (!tab) return;
                     
                     var categoryId = tab.getAttribute('data-category');
@@ -682,7 +648,7 @@
                 
                 // 触摸事件（移动端）
                 tabsContainer.addEventListener('touchend', function(e) {
-                    var tab = e.target.closest('.category-tab');
+                    var tab = e.target.closest('.sub-tab');
                     if (!tab) return;
                     
                     var categoryId = tab.getAttribute('data-category');

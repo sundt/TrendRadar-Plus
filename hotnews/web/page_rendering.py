@@ -272,7 +272,7 @@ def _inject_discovery_category(data: Dict[str, Any]) -> Dict[str, Any]:
 
         discovery = {
             "id": "discovery",
-            "name": "✨ 新发现",
+            "name": "新发现",
             "icon": "✨",
             "platforms": {},
             "news_count": 0,

@@ -13,21 +13,15 @@
      1. Header / CategoryTabs Hiding & Space Reclaim
      ========================================================================== */
 
-  .header-card {
+  .nav-card {
     display: none !important;
     margin: 0 !important;
     padding: 0 !important;
   }
 
-  .category-tabs {
-    display: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* Override collapsed-header toggle — header is always hidden */
-  body.tr-mobile-top-collapsed .header-card,
-  body:not(.tr-mobile-top-collapsed) .header-card {
+  /* Override collapsed-header toggle — nav-card is always hidden */
+  body.tr-mobile-top-collapsed .nav-card,
+  body:not(.tr-mobile-top-collapsed) .nav-card {
     display: none !important;
   }
 

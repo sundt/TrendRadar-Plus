@@ -3,7 +3,7 @@ import { viewMode } from './view-mode.js';
 
 function _getOrderedCategoryIdsFromDom(container) {
     if (!container) return [];
-    return Array.from(container.querySelectorAll('.category-tab'))
+    return Array.from(container.querySelectorAll('.sub-tab[data-category]'))
         .map((el) => String(el?.dataset?.category || '').trim())
         .filter(Boolean);
 }
@@ -65,9 +65,9 @@ function _reorderTabPanes(orderedCategoryIds) {
 }
 
 function _ensureTabHandles() {
-    const tabsEl = document.querySelector('.category-tabs');
+    const tabsEl = document.querySelector('.sub-tabs');
     if (!tabsEl) return;
-    tabsEl.querySelectorAll('.category-tab').forEach((tab) => {
+    tabsEl.querySelectorAll('.sub-tab[data-category]').forEach((tab) => {
         try {
             tab.setAttribute('draggable', 'false');
             let handle = tab.querySelector(':scope > .category-drag-handle');
@@ -88,7 +88,7 @@ function _ensureTabHandles() {
 }
 
 function _observeTabRerenders() {
-    const tabsEl = document.querySelector('.category-tabs');
+    const tabsEl = document.querySelector('.sub-tabs');
     if (!tabsEl) return;
     try {
         const obs = new MutationObserver(() => {
@@ -126,10 +126,10 @@ function _enableLongPressHint() {
     document.addEventListener(
         'touchstart',
         (e) => {
-            const tab = e.target?.closest?.('.category-tab');
+            const tab = e.target?.closest?.('.sub-tab');
             if (!tab) return;
             
-            const tabsEl = tab.closest('.category-tabs');
+            const tabsEl = tab.closest('.sub-tabs');
             if (!tabsEl) return;
             
             // Don't trigger on drag handle
@@ -200,7 +200,7 @@ function _showCategoryContextMenu(e, tab) {
     const categoryId = tab?.dataset?.category;
     if (!categoryId) return;
     
-    const categoryName = tab.querySelector('.category-tab-name')?.textContent?.replace(/NEW$/, '').trim() || categoryId;
+    const categoryName = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || categoryId;
     
     // Check if this is a topic tab
     const isTopicTab = tab.classList.contains('topic-tab');
@@ -344,8 +344,8 @@ function _hideCategory(categoryId, categoryName, tabEl) {
             if (pane) pane.remove();
             
             // If the hidden tab was active, switch to first visible tab
-            const firstTab = document.querySelector('.category-tab');
-            if (firstTab && !document.querySelector('.category-tab.active')) {
+            const firstTab = document.querySelector('.sub-tab[data-category]');
+            if (firstTab && !document.querySelector('.sub-tab.active')) {
                 const firstCatId = firstTab.dataset?.category;
                 if (firstCatId && window.switchTab) {
                     window.switchTab(firstCatId);
@@ -389,11 +389,11 @@ export const categoryTabReorder = {
         document.addEventListener(
             'contextmenu',
             (e) => {
-                const tab = e.target?.closest?.('.category-tab');
+                const tab = e.target?.closest?.('.sub-tab');
                 if (!tab) return;
                 
-                // Make sure we're in the category-tabs container
-                const tabsEl = tab.closest('.category-tabs');
+                // Make sure we're in the sub-tabs container
+                const tabsEl = tab.closest('.sub-tabs');
                 if (!tabsEl) return;
                 
                 e.preventDefault();
@@ -408,8 +408,8 @@ export const categoryTabReorder = {
                 const handle = e.target?.closest?.('.category-drag-handle');
                 if (!handle) return;
 
-                const tab = handle.closest('.category-tab');
-                const tabsEl = handle.closest('.category-tabs');
+                const tab = handle.closest('.sub-tab');
+                const tabsEl = handle.closest('.sub-tabs');
                 const catId = tab?.dataset?.category;
                 if (!tab || !tabsEl || !catId) return;
 
@@ -429,16 +429,16 @@ export const categoryTabReorder = {
         document.addEventListener(
             'dragover',
             (e) => {
-                const tabsEl = e.target?.closest?.('.category-tabs');
+                const tabsEl = e.target?.closest?.('.sub-tabs');
                 if (!tabsEl || !this._draggingTab) return;
                 if (this._originTabsEl && tabsEl !== this._originTabsEl) return;
 
-                const overTab = e.target?.closest?.('.category-tab');
+                const overTab = e.target?.closest?.('.sub-tab');
                 if (!overTab || overTab === this._draggingTab) return;
 
                 e.preventDefault();
 
-                const tabs = Array.from(tabsEl.querySelectorAll('.category-tab'));
+                const tabs = Array.from(tabsEl.querySelectorAll('.sub-tab[data-category]'));
                 const draggingIndex = tabs.indexOf(this._draggingTab);
                 const overIndex = tabs.indexOf(overTab);
                 if (draggingIndex < 0 || overIndex < 0 || draggingIndex === overIndex) return;
@@ -455,7 +455,7 @@ export const categoryTabReorder = {
         document.addEventListener(
             'drop',
             (e) => {
-                const tabsEl = e.target?.closest?.('.category-tabs');
+                const tabsEl = e.target?.closest?.('.sub-tabs');
                 if (!tabsEl || !this._draggingTab) return;
                 if (this._originTabsEl && tabsEl !== this._originTabsEl) return;
                 e.preventDefault();
@@ -469,7 +469,7 @@ export const categoryTabReorder = {
                 const handle = e.target?.closest?.('.category-drag-handle');
                 if (!handle) return;
 
-                const tabsEl = handle.closest('.category-tabs');
+                const tabsEl = handle.closest('.sub-tabs');
                 if (!tabsEl || !this._draggingTab) {
                     if (this._draggingTab) this._draggingTab.classList.remove('dragging');
                     this._draggingTab = null;

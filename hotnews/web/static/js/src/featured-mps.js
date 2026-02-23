@@ -30,7 +30,7 @@ let _lastRefreshAt = 0;
 
 function _getActiveTabId() {
     try {
-        return document.querySelector('.category-tabs .category-tab.active')?.dataset?.category || null;
+        return document.querySelector('.sub-tabs .sub-tab.active')?.dataset?.category || null;
     } catch (e) { return null; }
 }
 
