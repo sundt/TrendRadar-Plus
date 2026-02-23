@@ -947,14 +947,65 @@ export const platformReorder = {
 
                 if (action === 'unfollow' && isMyTags && tagId) {
                     hideContextMenu();
-                    // Call unfollow API
                     const tagName = card.querySelector('.platform-name')?.textContent?.replace(/\(.*\)/, '').trim() || tagId;
-                    fetch('/api/user/preferences/tag-settings', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ tag_id: tagId, preference: 'neutral' })
-                    }).then(resp => {
+                    const itemType = card.dataset?.itemType || 'tag';
+
+                    // Build the correct API call based on item type
+                    let unfollowPromise;
+                    if (itemType === 'source') {
+                        // Source subscription: POST /api/sources/unsubscribe
+                        const sourceType = tagId.startsWith('custom-') || tagId.startsWith('custom_') ? 'custom' : 'rss';
+                        unfollowPromise = fetch('/api/sources/unsubscribe', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ source_id: tagId, source_type: sourceType })
+                        });
+                    } else if (itemType === 'keyword') {
+                        // Keyword: DELETE /api/user/keywords/{keyword_id}
+                        const keywordId = card.dataset?.keywordId;
+                        if (keywordId) {
+                            unfollowPromise = fetch(`/api/user/keywords/${encodeURIComponent(keywordId)}`, {
+                                method: 'DELETE',
+                                credentials: 'include',
+                            });
+                        } else {
+                            // Fallback: extract numeric id from tag_id like "keyword_42"
+                            const kwMatch = tagId.match(/^keyword_(\d+)$/);
+                            if (kwMatch) {
+                                unfollowPromise = fetch(`/api/user/keywords/${kwMatch[1]}`, {
+                                    method: 'DELETE',
+                                    credentials: 'include',
+                                });
+                            }
+                        }
+                    } else if (itemType === 'wechat') {
+                        // WeChat MP: POST /api/wechat/unsubscribe
+                        const fakeid = card.dataset?.fakeid || tagId.replace(/^mp-/, '');
+                        unfollowPromise = fetch('/api/wechat/unsubscribe', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ fakeid })
+                        });
+                    } else {
+                        // Tag: POST /api/user/preferences/tag-settings
+                        unfollowPromise = fetch('/api/user/preferences/tag-settings', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ tag_id: tagId, preference: 'neutral' })
+                        });
+                    }
+
+                    if (!unfollowPromise) {
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show('操作失败，请重试', { variant: 'error', durationMs: 2000 });
+                        }
+                        return;
+                    }
+
+                    unfollowPromise.then(resp => {
                         if (!resp.ok) throw new Error('取消关注失败');
                         // Remove card with animation
                         card.style.transition = 'opacity 0.3s, transform 0.3s';

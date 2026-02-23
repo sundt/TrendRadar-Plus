@@ -279,17 +279,48 @@ async function handleUnfollowTag(tagData) {
     }
     
     try {
-        const resp = await fetch('/api/user/preferences/tag-settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ tag_id: tagData.tagId, preference: 'neutral' })
-        });
+        const card = document.querySelector(`.platform-card[data-tag-id="${tagData.tagId}"]`);
+        const itemType = card?.dataset?.itemType || 'tag';
+
+        let resp;
+        if (itemType === 'source') {
+            const sourceType = tagData.tagId.startsWith('custom-') || tagData.tagId.startsWith('custom_') ? 'custom' : 'rss';
+            resp = await fetch('/api/sources/unsubscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ source_id: tagData.tagId, source_type: sourceType })
+            });
+        } else if (itemType === 'keyword') {
+            const keywordId = card?.dataset?.keywordId;
+            const kwMatch = !keywordId && tagData.tagId.match(/^keyword_(\d+)$/);
+            const kwId = keywordId || (kwMatch && kwMatch[1]);
+            if (kwId) {
+                resp = await fetch(`/api/user/keywords/${encodeURIComponent(kwId)}`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+            }
+        } else if (itemType === 'wechat') {
+            const fakeid = card?.dataset?.fakeid || tagData.tagId.replace(/^mp-/, '');
+            resp = await fetch('/api/wechat/unsubscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ fakeid })
+            });
+        } else {
+            resp = await fetch('/api/user/preferences/tag-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ tag_id: tagData.tagId, preference: 'neutral' })
+            });
+        }
         
-        if (!resp.ok) throw new Error('取消关注失败');
+        if (!resp || !resp.ok) throw new Error('取消关注失败');
         
         // Remove the card from DOM
-        const card = document.querySelector(`.platform-card[data-tag-id="${tagData.tagId}"]`);
         if (card) {
             card.style.transition = 'opacity 0.3s, transform 0.3s';
             card.style.opacity = '0';

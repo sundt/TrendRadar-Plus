@@ -199,6 +199,7 @@ function renderError(container, message) {
  */
 function createTagCard(tagData) {
     const { tag, news, count } = tagData;
+    const itemType = tagData.item_type || tag.type || 'tag';
     const tagIcon = tag.icon || '🏷️';
     const tagName = tag.name || tag.id;
 
@@ -236,8 +237,18 @@ function createTagCard(tagData) {
         }).join('')
         : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
 
+    // Extra data attributes for unfollow handler
+    const extraAttrs = [];
+    extraAttrs.push(`data-item-type="${itemType}"`);
+    if (itemType === 'keyword' && tagData.keyword_id) {
+        extraAttrs.push(`data-keyword-id="${tagData.keyword_id}"`);
+    }
+    if (itemType === 'wechat' && tagData.fakeid) {
+        extraAttrs.push(`data-fakeid="${tagData.fakeid}"`);
+    }
+
     return `
-        <div class="platform-card" data-platform="${tag.id}" data-tag-id="${tag.id}" draggable="false">
+        <div class="platform-card" data-platform="${tag.id}" data-tag-id="${tag.id}" ${extraAttrs.join(' ')} draggable="false">
             <div class="platform-header">
                 <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
                     ${tagIcon} ${tagName}

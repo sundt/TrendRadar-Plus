@@ -986,6 +986,13 @@ async def unsubscribe(request: Request, body: UnsubscribeRequest) -> Dict[str, A
         )
         conn.commit()
         
+        # Invalidate my-tags cache
+        try:
+            from hotnews.web.timeline_cache import my_tags_cache
+            my_tags_cache.invalidate()
+        except Exception:
+            pass
+        
         return {"ok": True, "message": "已取消订阅"}
     except Exception as e:
         logger.error(f"Failed to unsubscribe: {e}")

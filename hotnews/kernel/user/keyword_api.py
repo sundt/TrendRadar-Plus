@@ -151,6 +151,13 @@ async def delete_keyword(request: Request, keyword_id: int):
     if not success:
         raise HTTPException(status_code=400, detail="Delete failed")
     
+    # Invalidate my-tags cache
+    try:
+        from hotnews.web.timeline_cache import my_tags_cache
+        my_tags_cache.invalidate()
+    except Exception:
+        pass
+    
     return {"ok": True}
 
 
