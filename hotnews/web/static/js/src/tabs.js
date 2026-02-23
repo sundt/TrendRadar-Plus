@@ -555,6 +555,13 @@ ready(function () {
                 // These have no SSR card data — use categoryTimeline.loadCardMode
                 // which fetches from timeline API and groups by source
                 categoryTimeline.loadCardMode(catId);
+            } else if (String(catId).startsWith('topic-')) {
+                // Topic tabs: restore card layout, then trigger topic-tracker reload
+                categoryTimeline.restoreCardMode(catId);
+                const topicId = String(catId).replace('topic-', '');
+                if (window.TopicTracker?.refreshTopic) {
+                    window.TopicTracker.refreshTopic(topicId);
+                }
             } else if (!SELF_MANAGED_TIMELINE.includes(catId)) {
                 categoryTimeline.restoreCardMode(catId);
                 // Re-trigger switchTab to load card content

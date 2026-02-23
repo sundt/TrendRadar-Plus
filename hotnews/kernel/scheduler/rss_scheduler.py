@@ -326,21 +326,22 @@ def _mb_ai_select_unlabeled(conn, limit: int) -> List[Dict[str, Any]]:
 
     # Apply Whitelist Filter if enabled
     if whitelist_enabled and allowed_cats:
-        # Use LEFT JOIN to include MP articles (which don't have rss_sources entries)
+        # Use LEFT JOIN to include MP articles and custom source articles
         # Include articles if:
         # 1. source_type = 'mp' (WeChat MP articles), OR
-        # 2. source category is in whitelist
+        # 2. RSS source category is in whitelist, OR
+        # 3. Custom source is enabled (custom_sources table)
         sql = """
             SELECT e.source_id, e.dedup_key, e.url, e.title
             FROM rss_entries e
             LEFT JOIN rss_sources s ON e.source_id = s.id
+            LEFT JOIN custom_sources cs ON e.source_id = cs.id
             LEFT JOIN rss_entry_ai_labels l
               ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
             WHERE l.id IS NULL
         """
-        # Include MP articles OR articles from whitelisted categories
         placeholders = ",".join(["?"] * len(allowed_cats))
-        sql += f" AND (e.source_type = 'mp' OR s.category IN ({placeholders}))"
+        sql += f" AND (e.source_type = 'mp' OR s.category IN ({placeholders}) OR (cs.id IS NOT NULL AND cs.enabled = 1))"
         params.extend(list(allowed_cats))
     
     sql += " ORDER BY e.published_at DESC, e.id DESC LIMIT ?"
@@ -763,6 +764,23 @@ def mb_ai_get_classification_stats(conn=None, last_n_hours: int = 24) -> Dict[st
         )
         model_stats = {row[0]: row[1] for row in cur.fetchall()}
         
+        # 按 source_type 统计标注覆盖
+        source_type_stats = {}
+        try:
+            cur = conn.execute(
+                """
+                SELECT COALESCE(e.source_type, 'unknown') as stype, COUNT(*) as cnt
+                FROM rss_entry_ai_labels l
+                JOIN rss_entries e ON e.source_id = l.source_id AND e.dedup_key = l.dedup_key
+                WHERE l.labeled_at >= ?
+                GROUP BY stype
+                """,
+                (cutoff_ts,)
+            )
+            source_type_stats = {row[0]: row[1] for row in cur.fetchall()}
+        except Exception:
+            pass
+        
         return {
             "time_range_hours": last_n_hours,
             "total_labeled": total_labeled,
@@ -772,6 +790,7 @@ def mb_ai_get_classification_stats(conn=None, last_n_hours: int = 24) -> Dict[st
             "passed_strict_filter": passed_strict_filter,
             "pass_rate": round(passed_strict_filter / total_labeled * 100, 2) if total_labeled > 0 else 0,
             "model_stats": model_stats,
+            "source_type_stats": source_type_stats,
             "prompt_version": _MB_AI_PROMPT_VERSION,
             "filter_config": {
                 "min_score": _MB_AI_SCORE_MIN,

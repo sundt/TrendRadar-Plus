@@ -173,9 +173,9 @@ class DataService:
                     # This reduces 467 queries to 1 query
                     placeholders = ','.join(['?'] * len(source_ids))
                     batch_sql = f"""
-                        SELECT source_id, title, url, published_raw, published_at, created_at
+                        SELECT source_id, title, url, published_raw, published_at, created_at, dedup_key
                         FROM (
-                            SELECT source_id, title, url, published_raw, published_at, created_at,
+                            SELECT source_id, title, url, published_raw, published_at, created_at, dedup_key,
                                    ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) as rn
                             FROM rss_entries
                             WHERE source_id IN ({placeholders})
@@ -188,7 +188,7 @@ class DataService:
                     except Exception:
                         all_entries = []
                     
-                    for source_id, title, url, published_raw, published_at, created_at in all_entries:
+                    for source_id, title, url, published_raw, published_at, created_at, dedup_key in all_entries:
                         ts_str = ""
                         
                         # 1. Try published_at (Unix timestamp)
@@ -228,7 +228,9 @@ class DataService:
                             "platform_name": source_id_to_name.get(source_id, source_id),
                             "rank": 0,
                             "timestamp": ts_str,
-                            "summary": ""
+                            "summary": "",
+                            "source_id": source_id,
+                            "dedup_key": dedup_key,
                         }
                         if include_url:
                             item["url"] = url
@@ -266,9 +268,9 @@ class DataService:
                 # 2. Batch query: fetch top N entries per source using window function
                 placeholders = ','.join(['?'] * len(source_ids))
                 batch_sql = f"""
-                    SELECT source_id, title, url, published_at, created_at
+                    SELECT source_id, title, url, published_at, created_at, dedup_key
                     FROM (
-                        SELECT source_id, title, url, published_at, created_at,
+                        SELECT source_id, title, url, published_at, created_at, dedup_key,
                                ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) as rn
                         FROM rss_entries
                         WHERE source_id IN ({placeholders})
@@ -281,7 +283,7 @@ class DataService:
                 except Exception:
                     all_entries = []
                 
-                for source_id, title, url, published_at, created_at in all_entries:
+                for source_id, title, url, published_at, created_at, dedup_key in all_entries:
                     ts_str = ""
                     
                     # 1. Try to use published_at (Unix timestamp)
@@ -310,7 +312,9 @@ class DataService:
                         "platform": source_id,  # Use source_id directly as platform_id
                         "platform_name": source_id_to_name.get(source_id, "Custom Source"),
                         "rank": 0,  # Custom sources have no rank
-                        "timestamp": ts_str
+                        "timestamp": ts_str,
+                        "source_id": source_id,
+                        "dedup_key": dedup_key,
                     }
                     if include_url:
                         item["url"] = url or ""

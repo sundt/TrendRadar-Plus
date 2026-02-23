@@ -297,7 +297,9 @@ function restoreCardMode(catId) {
 
 // --- Load card mode (per-source grouped cards) ---
 // Used by self-managed timeline categories (featured-mps, finance) when switching to card mode.
-// Fetches from the same timeline API but groups items by source into separate cards.
+// For categories with full platform data (e.g. finance), fetches from /api/category/ to get
+// all platforms (custom scrapers + RSS sources). For others (e.g. featured-mps), fetches from
+// the timeline API and groups items by source.
 async function loadCardMode(catId) {
     const grid = _getGrid(catId);
     if (!grid) return;
@@ -312,8 +314,51 @@ async function loadCardMode(catId) {
     grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
 
     try {
-        // Fetch all articles to group by source — need enough to cover all sources
-        // For finance, skip AI filtering to get all sources
+        // Try /api/category/ first — it returns the full set of platforms
+        // (custom scrapers + RSS sources) which is what the original card mode shows.
+        let usedCategoryApi = false;
+        try {
+            const catResp = await fetch(`/api/category/${encodeURIComponent(catId)}`, { credentials: 'include' });
+            if (catResp.ok) {
+                const catData = await catResp.json();
+                const platforms = catData?.category?.platforms;
+                if (platforms && typeof platforms === 'object' && Object.keys(platforms).length > 0) {
+                    usedCategoryApi = true;
+                    grid.innerHTML = '';
+                    for (const [platformId, platform] of Object.entries(platforms)) {
+                        const news = platform.news || [];
+                        if (!news.length) continue;
+                        const card = document.createElement('div');
+                        card.className = 'platform-card';
+                        card.dataset.platform = escapeHtml(platformId);
+                        card.draggable = false;
+                        const pName = platform.name || platformId;
+                        card.innerHTML = `
+                            <div class="platform-header">
+                                <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
+                                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                                    📱 ${escapeHtml(pName)}
+                                </div>
+                                <div class="platform-header-actions">
+                                    <span class="platform-count">${news.length}</span>
+                                </div>
+                            </div>
+                            <ul class="news-list">
+                                ${_buildCategoryNewsHtml(news, platformId, pName)}
+                            </ul>
+                        `;
+                        grid.appendChild(card);
+                    }
+                    try { TR.readState?.restoreReadState?.(); } catch {}
+                    if (TR.counts?.updateAllCounts) TR.counts.updateAllCounts();
+                    return;
+                }
+            }
+        } catch (e) {
+            // Fall through to timeline API
+        }
+
+        // Fallback: fetch from timeline API and group by source
         const nofilterParam = catId === 'finance' ? '&nofilter=1' : '';
         const base = _getApiUrl(catId);
         const sep = base.includes('?') ? '&' : '?';
@@ -335,14 +380,12 @@ async function loadCardMode(catId) {
         }
 
         grid.innerHTML = '';
-        const perCardLimit = _getItemsPerCard();
         for (const [sourceName, group] of groups) {
             const card = document.createElement('div');
             card.className = 'platform-card';
             card.dataset.platform = `rss-${group.sourceId}`;
             card.draggable = false;
 
-            // Show all items for this source (up to perCardLimit for initial display)
             const displayItems = group.items;
             const totalCount = displayItems.length;
             card.innerHTML = `
@@ -368,6 +411,38 @@ async function loadCardMode(catId) {
         console.error(`[CategoryTimeline] loadCardMode(${catId}) error:`, e);
         grid.innerHTML = `<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;"><div style="font-size:24px;margin-bottom:8px;">⚠️</div><div>加载失败</div><button onclick="window.categoryTimeline?.loadCardMode('${catId}')" style="margin-top:12px;padding:8px 16px;background:#07c160;color:white;border:none;border-radius:6px;cursor:pointer;">重试</button></div>`;
     }
+}
+
+// Build news items HTML from /api/category/ response format (different from timeline API format)
+function _buildCategoryNewsHtml(newsArr, platformId, platformName) {
+    if (!newsArr || !newsArr.length) return '<li style="padding:20px;color:#9ca3af;">暂无内容</li>';
+    return newsArr.map((n, idx) => {
+        const stableId = escapeHtml(n?.stable_id || '');
+        const title = escapeHtml(n?.display_title || n?.title || '');
+        const url = escapeHtml(n?.url || '#');
+        const sourceId = escapeHtml(platformId);
+        const sourceName = escapeHtml(platformName);
+        const t = _fmtTime(n?.timestamp || n?.published_at || n?.created_at);
+        const timeHtml = t ? `<span class="tr-news-date">${escapeHtml(t)}</span>` : '';
+        const escapedTitle = title.replace(/'/g, "\\'");
+        const escapedUrl = url.replace(/'/g, "\\'");
+        const escapedSource = sourceName.replace(/'/g, "\\'");
+        const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${stableId}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSource}')"></span>`;
+        const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${stableId}" data-title="${title.replace(/"/g, '&quot;')}" data-url="${url.replace(/"/g, '&quot;')}" data-source-id="${sourceId}" data-source-name="${sourceName.replace(/"/g, '&quot;')}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${stableId}', '${escapedTitle}', '${escapedUrl}', '${sourceId}', '${escapedSource}')"></button>`;
+        const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
+        const actionsHtml = `<div class="news-actions">${timeHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
+        return `
+            <li class="news-item" data-news-id="${stableId}" data-news-title="${title}" data-news-url="${url}">
+                <div class="news-item-content">
+                    <span class="news-index">${String(idx + 1)}</span>
+                    <a class="news-title" href="${url}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
+                        ${title}
+                    </a>
+                    ${aiDotHtml}
+                    ${actionsHtml}
+                </div>
+            </li>`;
+    }).join('');
 }
 
 // --- Public API ---

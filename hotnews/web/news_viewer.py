@@ -365,7 +365,8 @@ class NewsViewerService:
     def categorize_news(
         self, 
         news_list: List[Dict],
-        apply_filter: bool = True
+        apply_filter: bool = True,
+        apply_ai_filter: bool = True
     ) -> Dict:
         """
         将新闻按平台分类组织
@@ -373,6 +374,7 @@ class NewsViewerService:
         Args:
             news_list: 新闻列表
             apply_filter: 是否应用内容过滤
+            apply_ai_filter: 是否应用 AI 过滤
 
         Returns:
             分类后的新闻数据结构
@@ -394,6 +396,47 @@ class NewsViewerService:
             return best.strftime("%Y-%m-%d %H:%M:%S")
 
         updated_at = _derive_updated_at(news_list)
+
+        # AI 过滤（在关键词过滤之前）
+        ai_filter_stats = {}
+        if apply_ai_filter:
+            try:
+                from .ai_filter import apply_ai_filter as do_ai_filter
+                from .db_online import get_online_db_conn
+                conn = get_online_db_conn(self.project_root)
+
+                from collections import defaultdict
+                ai_filtered_count = 0
+                ai_no_label_count = 0
+                ai_filter_by_category = {}
+
+                by_cat = defaultdict(list)
+                no_ai_items = []
+                for news in news_list:
+                    if news.get("source_id"):
+                        cat_id = self.get_platform_category(news.get("platform", ""))
+                        by_cat[cat_id].append(news)
+                    else:
+                        no_ai_items.append(news)
+
+                kept_items = list(no_ai_items)
+                for cat_id, cat_items in by_cat.items():
+                    filtered, stats = do_ai_filter(cat_items, cat_id, conn)
+                    kept_items.extend(filtered)
+                    cat_filtered = stats.get("ai_filtered_count", 0)
+                    ai_filtered_count += cat_filtered
+                    ai_no_label_count += stats.get("ai_no_label_count", 0)
+                    if cat_filtered > 0:
+                        ai_filter_by_category[cat_id] = cat_filtered
+
+                news_list = kept_items
+                ai_filter_stats = {
+                    "ai_filtered_count": ai_filtered_count,
+                    "ai_no_label_count": ai_no_label_count,
+                    "ai_filter_by_category": ai_filter_by_category,
+                }
+            except Exception:
+                pass
 
         # 应用内容过滤
         if apply_filter:
@@ -611,7 +654,7 @@ class NewsViewerService:
             "cross_platform_count": len(cross_platform_news),
             "total_news": len(filtered_news),
             "total_filtered": len(removed_news),
-            "filter_stats": filter_stats,
+            "filter_stats": {**filter_stats, **ai_filter_stats},
             "updated_at": updated_at
         }
 
@@ -621,7 +664,8 @@ class NewsViewerService:
         limit: int = 25000,
         apply_filter: bool = True,
         filter_mode: Optional[str] = None,
-        per_platform_limit: int = 50
+        per_platform_limit: int = 50,
+        apply_ai_filter: bool = True
     ) -> Dict:
         """
         获取分类后的新闻
@@ -632,6 +676,7 @@ class NewsViewerService:
             apply_filter: 是否应用内容过滤
             filter_mode: 临时覆盖过滤模式
             per_platform_limit: 每个平台的最大新闻数量
+            apply_ai_filter: 是否应用 AI 过滤
 
         Returns:
             分类后的新闻数据
@@ -639,7 +684,7 @@ class NewsViewerService:
         global _categorized_news_cache, _categorized_news_cache_time
         
         # 构建缓存键
-        cache_key = f"{','.join(platforms or [])}:{limit}:{apply_filter}:{filter_mode or ''}:{per_platform_limit}"
+        cache_key = f"{','.join(platforms or [])}:{limit}:{apply_filter}:{filter_mode or ''}:{per_platform_limit}:{apply_ai_filter}"
         
         # 检查缓存是否有效
         now = time.time()
@@ -674,7 +719,7 @@ class NewsViewerService:
                 news_list = []
 
             # 分类新闻
-            result = self.categorize_news(news_list, apply_filter=apply_filter)
+            result = self.categorize_news(news_list, apply_filter=apply_filter, apply_ai_filter=apply_ai_filter)
             result["filter_mode"] = self.content_filter.filter_mode
             
             # 更新缓存
