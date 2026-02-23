@@ -222,61 +222,98 @@ function _confirmDialog(message) {
      * This replaces server-side injection to prevent cache leakage
      */
     async function loadAndRenderTopicTabs() {
-        // Wait for authState to be available and initialized (may be async)
-        try {
-            if (!authState.initialized) {
-                console.log('[TopicTracker] Waiting for authState to initialize...');
-                await authState.init();
+            // 快速检查：如果没有 session cookie，直接跳过（不等 authState）
+            const hasCookie = document.cookie.includes('hotnews_session');
+            if (!hasCookie) {
+                console.log('[TopicTracker] No session cookie, skipping topic tabs');
+                return;
             }
-        } catch (e) {
-            console.warn('[TopicTracker] authState init failed:', e);
+
+            // 不阻塞等待 authState，直接尝试加载主题
+            const categoryTabs = document.querySelector('.category-tabs');
+            if (!categoryTabs) {
+                console.warn('[TopicTracker] category-tabs not found');
+                return;
+            }
+
+            // Show skeleton loading state
+            const skeletonContainer = showTopicTabsSkeleton(categoryTabs);
+
+            try {
+                console.log('[TopicTracker] Loading topics from API...');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+                const response = await fetch('/api/topics', { 
+                    credentials: 'include',
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                // Remove skeleton
+                if (skeletonContainer) {
+                    skeletonContainer.remove();
+                }
+
+                if (response.status === 401) {
+                    console.log('[TopicTracker] Not authenticated, skipping');
+                    topics = [];
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.ok && data.topics?.length > 0) {
+                    topics = data.topics;
+                    console.log(`[TopicTracker] Loaded ${topics.length} topics, rendering tabs...`);
+                    renderTopicTabsFromData(topics);
+
+                    // 检查是否需要切换到某个主题 tab（创建主题后刷新页面的情况）
+                    tryRestoreTopicTab();
+                } else {
+                    console.log('[TopicTracker] No topics found or API error:', data.detail || data.error);
+                    topics = [];
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.warn('[TopicTracker] Topics API timeout, will retry...');
+                } else {
+                    console.error('[TopicTracker] Failed to load topics:', e);
+                }
+                // Remove skeleton on error
+                if (skeletonContainer) {
+                    skeletonContainer.remove();
+                }
+                topics = [];
+
+                // 失败后 3 秒重试一次
+                setTimeout(() => {
+                    console.log('[TopicTracker] Retrying topic tabs load...');
+                    _retryLoadTopicTabs();
+                }, 3000);
+            }
         }
 
-        // Check if user is logged in
-        if (!isUserLoggedIn()) {
-            console.log('[TopicTracker] User not logged in, skipping topic tabs loading');
-            return;
-        }
-        
-        const categoryTabs = document.querySelector('.category-tabs');
-        if (!categoryTabs) {
-            console.warn('[TopicTracker] category-tabs not found');
-            return;
-        }
-        
-        // Show skeleton loading state
-        const skeletonContainer = showTopicTabsSkeleton(categoryTabs);
-        
-        try {
-            console.log('[TopicTracker] Loading topics from API...');
-            const response = await fetch('/api/topics', { credentials: 'include' });
-            const data = await response.json();
-            
-            // Remove skeleton
-            if (skeletonContainer) {
-                skeletonContainer.remove();
+        async function _retryLoadTopicTabs() {
+            const categoryTabs = document.querySelector('.category-tabs');
+            if (!categoryTabs) return;
+            // 如果已经有主题 tab 了，不重试
+            if (document.querySelector('.category-tab.topic-tab')) return;
+
+            try {
+                const response = await fetch('/api/topics', { credentials: 'include' });
+                if (response.status === 401) return;
+                const data = await response.json();
+                if (data.ok && data.topics?.length > 0) {
+                    topics = data.topics;
+                    renderTopicTabsFromData(topics);
+                    tryRestoreTopicTab();
+                    console.log(`[TopicTracker] Retry succeeded, loaded ${topics.length} topics`);
+                }
+            } catch (e) {
+                console.error('[TopicTracker] Retry failed:', e);
             }
-            
-            if (data.ok && data.topics?.length > 0) {
-                topics = data.topics;
-                console.log(`[TopicTracker] Loaded ${topics.length} topics, rendering tabs...`);
-                renderTopicTabsFromData(topics);
-                
-                // 检查是否需要切换到某个主题 tab（创建主题后刷新页面的情况）
-                tryRestoreTopicTab();
-            } else {
-                console.log('[TopicTracker] No topics found or API error:', data.detail || data.error);
-                topics = [];
-            }
-        } catch (e) {
-            console.error('[TopicTracker] Failed to load topics:', e);
-            // Remove skeleton on error
-            if (skeletonContainer) {
-                skeletonContainer.remove();
-            }
-            topics = [];
         }
-    }
     
     /**
      * 尝试恢复到主题 tab（用于创建主题后刷新页面的情况）

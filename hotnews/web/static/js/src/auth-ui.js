@@ -177,6 +177,15 @@ export class AuthButton {
         if (user) {
             this._renderLoggedIn(user);
         } else {
+            // 如果有 session cookie 但 authState 还没初始化完成，不渲染登出状态（防止闪烁）
+            const hasCookie = document.cookie.includes('hotnews_session');
+            if (hasCookie && !authState.initialized) {
+                // 显示占位符，等待 auth 初始化完成后再渲染
+                this.container.innerHTML = `
+                    <div class="auth-placeholder" style="width:32px;height:32px;border-radius:50%;background:#e5e7eb;"></div>
+                `;
+                return;
+            }
             this._renderLoggedOut();
         }
     }
