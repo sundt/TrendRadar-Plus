@@ -134,15 +134,28 @@ def _mb_ai_prompt_text() -> str:
         "• 置信度>=0.8时才添加\n"
         "• keywords字段：提供中英文搜索关键词，用于匹配相关新闻\n"
         "• ⚠️ 产品标签用产品名（如deepseek），不要带版本号（如deepseek_v4）。版本信息放在keywords中\n\n"
-        "保留规则：当内容与科技/AI相关且有价值时action=include，否则exclude。\n\n"
+        "保留规则（action=include/exclude）：根据文章所属分类判断是否有阅读价值。\n"
+        "• tech: AI/开发/技术相关且有深度或实用价值 → include\n"
+        "• finance: 有具体数据、分析或投资参考价值的财经内容 → include；纯行情播报 → exclude\n"
+        "• business: 涉及企业战略、行业趋势、创业深度分析 → include；企业软文/PR稿 → exclude\n"
+        "• science: 有科学依据、前沿研究或科普价值 → include；伪科学/标题党 → exclude\n"
+        "• health: 专业医疗资讯、研究进展、实用健康知识 → include；养生鸡汤/营销 → exclude\n"
+        "• entertainment: 游戏/影视/文娱的实质性内容 → include；纯八卦/水文 → exclude\n"
+        "• education: 有实际学习价值的教程、分析或职业发展内容 → include；广告/招生软文 → exclude\n"
+        "• lifestyle: 有实用价值的生活资讯、消费趋势、文化深度 → include；纯广告/鸡汤 → exclude\n"
+        "• sports: 赛事报道、深度分析 → include；纯比分/水文 → exclude\n"
+        "• other: 不属于以上分类或无实质内容 → exclude\n"
+        "通用排除：标题党、营销软文、无实质信息、重复内容一律 exclude。\n\n"
         "输出格式（严格JSON数组）：\n"
         '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9,"keywords":["DeepSeek","深度求索"]}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
         "⚠️ 关键：输出数组长度必须与输入完全一致，不得跳过任何条目。\n\n"
         "示例：\n"
         '{"title":"免费使用Claude API教程"} → {"category":"tech","topics":["ai_ml"],"attributes":["free_deal","tutorial"],"action":"include","score":90,"confidence":0.95,"reason":"免费AI教程"}\n'
         '{"title":"DeepSeek发布新模型"} → {"category":"tech","topics":["ai_ml","llm"],"attributes":["official"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.95,"keywords":["DeepSeek","深度求索","深求"]}],"action":"include","score":92,"confidence":0.95,"reason":"AI新模型"}\n'
-        '{"title":"具身智能机器人发布"} → {"category":"tech","topics":["robotics","ai_ml"],"attributes":["official"],"suggested_tags":[{"id":"embodied_intelligence","name":"Embodied Intelligence","type":"topic","parent_id":"tech","confidence":0.92,"keywords":["具身智能","Embodied Intelligence","Embodied AI"]}],"action":"include","score":88,"confidence":0.92,"reason":"具身智能"}\n'
-        '{"title":"A股三大指数收涨"} → {"category":"finance","topics":["stock"],"attributes":["breaking"],"action":"exclude","score":20,"confidence":0.95,"reason":"股票行情"}\n'
+        '{"title":"斯坦福团队开发通用鼻喷疫苗"} → {"category":"health","topics":[],"attributes":["breaking"],"action":"include","score":85,"confidence":0.90,"reason":"疫苗研究突破"}\n'
+        '{"title":"日本松下被中国电池企业干趴下"} → {"category":"business","topics":["startup"],"attributes":["deep_dive"],"action":"include","score":82,"confidence":0.88,"reason":"中日电池竞争"}\n'
+        '{"title":"A股三大指数收涨"} → {"category":"finance","topics":["stock"],"attributes":["breaking"],"action":"exclude","score":20,"confidence":0.95,"reason":"纯行情播报"}\n'
+        '{"title":"请反复阅读！全球畅销百万的经典"} → {"category":"education","topics":[],"attributes":[],"action":"exclude","score":10,"confidence":0.92,"reason":"营销软文"}\n'
     )
 
 

@@ -6,7 +6,7 @@ const MORNING_BRIEF_CATEGORY_ID = 'knowledge';
 const SINCE_STORAGE_KEY = 'tr_morning_brief_since_v1';
 const LATEST_BASELINE_WINDOW_SEC = 2 * 3600;
 const AUTO_REFRESH_INTERVAL_MS = 300000;
-const INITIAL_CARDS_DESKTOP = 10;
+const INITIAL_CARDS_DESKTOP = 3;
 const INITIAL_CARDS_MOBILE = 1;
 const MAX_CARDS = 20;
 
