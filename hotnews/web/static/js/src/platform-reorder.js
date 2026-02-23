@@ -1,5 +1,35 @@
 import { TR, ready } from './core.js';
 
+function showConfirmDialog(message) {
+    return new Promise((resolve) => {
+        // 创建遮罩
+        const backdrop = document.createElement('div');
+        backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:10010;display:flex;align-items:center;justify-content:center;';
+        
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);text-align:center;';
+        dialog.innerHTML = `
+            <div style="font-size:15px;color:#1f2937;line-height:1.6;margin-bottom:20px;">${message}</div>
+            <div style="display:flex;gap:12px;justify-content:center;">
+                <button class="confirm-cancel" style="flex:1;padding:8px 0;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#6b7280;font-size:14px;cursor:pointer;">取消</button>
+                <button class="confirm-ok" style="flex:1;padding:8px 0;border:none;border-radius:8px;background:#ef4444;color:#fff;font-size:14px;cursor:pointer;">确认删除</button>
+            </div>
+        `;
+        
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+        
+        const cleanup = (result) => {
+            backdrop.remove();
+            resolve(result);
+        };
+        
+        dialog.querySelector('.confirm-cancel').onclick = () => cleanup(false);
+        dialog.querySelector('.confirm-ok').onclick = () => cleanup(true);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) cleanup(false); });
+    });
+}
+
 function getCategoryIdFromGrid(grid) {
     const pane = grid?.closest?.('.tab-pane');
     const id = pane?.id || '';
@@ -85,44 +115,46 @@ function hidePlatformCard(cardEl, platformId, categoryId) {
  */
 async function removeTopicSource(cardEl, sourceName, topicId) {
     if (!sourceName || !topicId) return;
-    
+
+    // 确认弹窗
+    const confirmed = await showConfirmDialog(`确定要从主题中删除数据源「${sourceName}」吗？`);
+    if (!confirmed) return;
+
     try {
         // First, get the current topic data
         const response = await fetch(`/api/topics/${topicId}`, {
             credentials: 'include'
         });
-        
+
         if (!response.ok) {
             throw new Error('获取主题信息失败');
         }
-        
+
         const data = await response.json();
         if (!data.ok || !data.topic) {
             throw new Error('主题不存在');
         }
-        
+
         const topic = data.topic;
         const currentSourceIds = topic.rss_source_ids || [];
-        
+
         // Get source ID from card's data-source-id attribute (e.g., mp-xxx or rss-xxx)
         const sourceId = cardEl?.dataset?.sourceId;
-        
+
         if (!sourceId) {
-            // Fallback: try to find by source name match
             console.warn('Source ID not found in card, cannot remove');
             if (window.TR?.toast?.show) {
                 window.TR.toast.show('无法删除此数据源，请通过编辑主题移除', { variant: 'warning', durationMs: 3000 });
             }
             return;
         }
-        
+
         // Filter out the source to remove
         const newSourceIds = currentSourceIds.filter(id => id !== sourceId);
-        
+
         // If nothing changed, the source wasn't in the list
         if (newSourceIds.length === currentSourceIds.length) {
             console.warn('Source not found in topic sources:', sourceId);
-            // Still remove the card visually
             if (cardEl) {
                 cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
                 cardEl.style.opacity = '0';
@@ -134,7 +166,7 @@ async function removeTopicSource(cardEl, sourceName, topicId) {
             }
             return;
         }
-        
+
         // Update topic with new source list
         const updateResponse = await fetch(`/api/topics/${topicId}`, {
             method: 'PUT',
@@ -142,16 +174,16 @@ async function removeTopicSource(cardEl, sourceName, topicId) {
             credentials: 'include',
             body: JSON.stringify({ rss_source_ids: newSourceIds })
         });
-        
+
         if (!updateResponse.ok) {
             throw new Error('更新主题失败');
         }
-        
+
         const updateData = await updateResponse.json();
         if (!updateData.ok) {
             throw new Error(updateData.error || '更新主题失败');
         }
-        
+
         // Remove card from DOM with animation
         if (cardEl) {
             cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -159,12 +191,11 @@ async function removeTopicSource(cardEl, sourceName, topicId) {
             cardEl.style.transform = 'scale(0.95)';
             setTimeout(() => cardEl.remove(), 300);
         }
-        
-        // Show success toast
+
         if (window.TR?.toast?.show) {
             window.TR.toast.show(`已从主题中移除「${sourceName}」`, { variant: 'success', durationMs: 2500 });
         }
-        
+
     } catch (e) {
         console.error('Remove topic source failed:', e);
         if (window.TR?.toast?.show) {
@@ -178,28 +209,32 @@ async function removeTopicSource(cardEl, sourceName, topicId) {
  */
 async function removeTopicKeyword(cardEl, keyword, topicId) {
     if (!keyword || !topicId) return;
-    
+
+    // 确认弹窗
+    const confirmed = await showConfirmDialog(`确定要从主题中删除关键词「${keyword}」吗？`);
+    if (!confirmed) return;
+
     try {
         // First, get the current topic data
         const response = await fetch(`/api/topics/${topicId}`, {
             credentials: 'include'
         });
-        
+
         if (!response.ok) {
             throw new Error('获取主题信息失败');
         }
-        
+
         const data = await response.json();
         if (!data.ok || !data.topic) {
             throw new Error('主题不存在');
         }
-        
+
         const topic = data.topic;
         const currentKeywords = topic.keywords || [];
-        
+
         // Filter out the keyword to remove
         const newKeywords = currentKeywords.filter(k => k !== keyword);
-        
+
         // Check if we have at least one keyword left
         if (newKeywords.length === 0) {
             if (window.TR?.toast?.show) {
@@ -207,11 +242,10 @@ async function removeTopicKeyword(cardEl, keyword, topicId) {
             }
             return;
         }
-        
+
         // If nothing changed, the keyword wasn't in the list
         if (newKeywords.length === currentKeywords.length) {
             console.warn('Keyword not found in topic:', keyword);
-            // Still remove the card visually
             if (cardEl) {
                 cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
                 cardEl.style.opacity = '0';
@@ -223,7 +257,7 @@ async function removeTopicKeyword(cardEl, keyword, topicId) {
             }
             return;
         }
-        
+
         // Update topic with new keywords list
         const updateResponse = await fetch(`/api/topics/${topicId}`, {
             method: 'PUT',
@@ -231,16 +265,16 @@ async function removeTopicKeyword(cardEl, keyword, topicId) {
             credentials: 'include',
             body: JSON.stringify({ keywords: newKeywords })
         });
-        
+
         if (!updateResponse.ok) {
             throw new Error('更新主题失败');
         }
-        
+
         const updateData = await updateResponse.json();
         if (!updateData.ok) {
             throw new Error(updateData.error || '更新主题失败');
         }
-        
+
         // Remove card from DOM with animation
         if (cardEl) {
             cardEl.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -248,12 +282,11 @@ async function removeTopicKeyword(cardEl, keyword, topicId) {
             cardEl.style.transform = 'scale(0.95)';
             setTimeout(() => cardEl.remove(), 300);
         }
-        
-        // Show success toast
+
         if (window.TR?.toast?.show) {
             window.TR.toast.show(`已从主题中移除关键词「${keyword}」`, { variant: 'success', durationMs: 2500 });
         }
-        
+
     } catch (e) {
         console.error('Remove topic keyword failed:', e);
         if (window.TR?.toast?.show) {
