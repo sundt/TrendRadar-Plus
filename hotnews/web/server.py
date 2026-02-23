@@ -1825,6 +1825,9 @@ async def api_news(
     # Strip platforms data for categories that have dedicated tab APIs.
     # These tabs render empty panes and load data from their own endpoints,
     # so including their platforms in /api/news is wasted bandwidth.
+    # IMPORTANT: deep-copy to avoid mutating the cached dict in-place.
+    import copy
+    data = copy.deepcopy(data)
     _DEDICATED_TAB_IDS = {"explore", "knowledge", "discovery", "featured-mps", "my-tags", "finance"}
     try:
         cats = data.get("categories")
