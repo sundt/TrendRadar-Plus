@@ -340,7 +340,6 @@ async function loadCardMode(catId) {
                                     📱 ${escapeHtml(pName)}
                                 </div>
                                 <div class="platform-header-actions">
-                                    <span class="platform-count">${news.length}</span>
                                 </div>
                             </div>
                             <ul class="news-list">
@@ -395,7 +394,6 @@ async function loadCardMode(catId) {
                         📱 ${escapeHtml(sourceName)}
                     </div>
                     <div class="platform-header-actions">
-                        <span class="platform-count">${totalCount}</span>
                     </div>
                 </div>
                 <ul class="news-list">

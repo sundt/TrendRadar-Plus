@@ -397,7 +397,8 @@ export const tabs = {
             const news = platform.news || [];
             const isRssPlatform = platformId.startsWith('rss-');
             
-            const newsHtml = news.slice(0, 20).map((n, i) => {
+            const displayNews = news.slice(0, 50);
+            const newsHtml = displayNews.map((n, i) => {
                 const stableId = n.stable_id || '';
                 const title = n.display_title || n.title || '';
                 const url = n.url || '#';
@@ -424,8 +425,8 @@ export const tabs = {
 
             return `
                 <div class="platform-card" data-platform="${this._escapeHtml(platformId)}" 
-                     data-total-count="${news.length}" data-loaded-count="${Math.min(news.length, 20)}" 
-                     data-lazy="0" draggable="false">
+                     data-total-count="${news.length}" data-loaded-count="${displayNews.length}" 
+                     data-lazy="0" data-loaded-done="1" draggable="false">
                     <div class="platform-header">
                         <span class="platform-drag-handle" title="拖拽调整平台顺序" draggable="true">☰</span>
                         <div class="platform-name" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
@@ -434,7 +435,6 @@ export const tabs = {
                         <div class="platform-header-actions"></div>
                     </div>
                     <ul class="news-list">${newsHtml}</ul>
-                    <div class="news-load-sentinel" aria-hidden="true"></div>
                 </div>
             `;
         }).join('');
