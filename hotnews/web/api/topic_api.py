@@ -226,6 +226,7 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
     return {"ok": True, "topic": topic}
 
 
+@router.put("/{topic_id}")
 async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = Body(...)):
     """Update a topic."""
     user = _get_current_user(request)
@@ -294,6 +295,7 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
     return {"ok": True, "topic": topic}
 
 
+@router.delete("/{topic_id}")
 async def delete_topic(request: Request, topic_id: str):
     """Delete a topic."""
     user = _get_current_user(request)
