@@ -38,15 +38,15 @@
             min-height: calc(100vh - 80px);
             display: flex;
             flex-direction: column;
-            gap: 0;
+            gap: 10px;
         }
 
         .header-card {
             background: white;
-            border-radius: 12px 12px 0 0;
-            padding: 10px 15px;
-            margin-bottom: 0;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+            border-radius: 12px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .header-title {
@@ -152,26 +152,16 @@
         /* Tab 导航 - 默认隐藏，防止刷新时闪烁 */
         .category-tabs {
             background: white;
-            border-radius: 0 0 12px 12px;
-            padding: 6px 10px;
-            margin-bottom: 0;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            border-radius: 10px;
+            padding: 6px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             display: none;
             /* 默认隐藏，由 JS 添加 .categories-ready 后显示 */
             gap: 4px;
-            overflow-x: auto;
+            overflow-x: hidden;
             flex-wrap: nowrap;
             justify-content: flex-start;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            border-top: 1px solid #f0f0f0;
-            /* 隐藏滚动条但保留滚动功能 */
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-        .category-tabs::-webkit-scrollbar {
-            display: none;
         }
 
         /* 栏目准备就绪后显示（使用 body.categories-ready 提高优先级） */
@@ -217,18 +207,17 @@
         }
 
         .category-tab {
-            flex: 0 0 auto;
+            flex: 1 1 0;
             min-width: 0;
-            padding: 6px 14px;
-            background: transparent;
-            border-radius: 20px;
+            padding: 6px 8px;
+            background: #f3f4f6;
+            border-radius: 8px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease;
             border: 1px solid transparent;
             position: relative;
             overflow: hidden;
-            white-space: nowrap;
         }
         
         .category-tab-name {
@@ -267,15 +256,15 @@
 
         .category-tabs.compact {
             gap: 4px;
-            padding: 4px 8px;
-            overflow-x: auto;
+            padding: 4px;
+            overflow-x: hidden;
             flex-wrap: nowrap;
         }
 
         .category-tabs.compact .category-tab {
-            flex: 0 0 auto;
+            flex: 1 1 0;
             min-width: 0;
-            padding: 4px 10px;
+            padding: 4px 6px;
         }
 
         .category-tabs.compact .category-tab-icon {
@@ -295,11 +284,11 @@
         }
 
         .category-tab:hover {
-            background: #f3f4f6;
+            background: #e5e7eb;
         }
 
         .category-tab.active {
-            background: #1f2937;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             color: white;
         }
 
@@ -351,15 +340,14 @@
 
         .tab-content-area {
             background: white;
-            border-radius: 12px;
+            border-radius: 10px;
             padding: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             min-height: 520px;
             --tr-platform-card-height: clamp(860px, calc(100vh - 280px), 1240px);
             flex: 1;
             display: none;
             /* 默认隐藏，由 JS 添加 .categories-ready 后显示 */
-            margin-top: 10px;
         }
 
         body.tr-rss-reading .tab-content-area {
@@ -380,32 +368,29 @@
                 width: 100%;
                 max-width: 100%;
                 padding: 0 4px;
-                gap: 0;
+                gap: 8px;
                 overflow-x: hidden;
             }
 
             .header-card {
-                padding: 8px 10px;
+                padding: 10px;
                 margin-bottom: 0;
-                border-radius: 12px 12px 0 0;
+                border-radius: 12px;
             }
 
             .category-tabs {
-                padding: 4px 6px;
-                gap: 4px;
+                padding: 4px;
+                gap: 6px;
                 margin-bottom: 0;
                 overflow-x: auto;
                 flex-wrap: nowrap;
-                border-radius: 0 0 12px 12px;
-                position: sticky;
-                top: 0;
-                z-index: 100;
+                border-radius: 12px;
             }
 
             .category-tab {
                 flex: 0 0 auto;
-                min-width: 0;
-                padding: 5px 12px;
+                min-width: 72px;
+                padding: 6px 8px;
             }
 
             .tab-content-area {
@@ -414,7 +399,6 @@
                 border-radius: 0;
                 padding: 0;
                 min-height: 420px;
-                margin-top: 8px;
             }
 
             #tab-explore {
@@ -2201,7 +2185,7 @@
         }
 
         body.eye-protection-mode .category-tab.active {
-            background: #1f2937;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
             color: white;
         }
 
