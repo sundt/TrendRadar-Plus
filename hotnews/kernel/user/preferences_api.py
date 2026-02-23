@@ -256,22 +256,55 @@ async def set_tag_setting(
     tag_id: str = Body(...),
     preference: str = Body(...),  # 'follow' or 'neutral' to remove
 ):
-    """Set explicit preference for a tag (follow or neutral)."""
+    """Set explicit preference for a tag (follow or neutral).
+    
+    When preference is 'neutral', this also removes matching entries from
+    user_rss_subscriptions, user_keywords, and wechat_mp_subscriptions
+    so it works as a unified unfollow endpoint.
+    """
     user = _get_current_user(request)
     conn = _get_user_db_conn(request)
     
-    tag_id = tag_id.strip().lower()
+    tag_id_raw = tag_id.strip()
+    tag_id = tag_id_raw.lower()
     preference = preference.strip().lower()
     
     if preference not in ("follow", "neutral"):
         raise HTTPException(status_code=400, detail="Invalid preference. Use: follow or neutral")
     
     if preference == "neutral":
-        # Remove setting
+        # Remove from user_tag_settings
         conn.execute(
             "DELETE FROM user_tag_settings WHERE user_id = ? AND tag_id = ?",
             (user["id"], tag_id)
         )
+        
+        # Also try to remove from user_rss_subscriptions (source_id is case-sensitive)
+        conn.execute(
+            "DELETE FROM user_rss_subscriptions WHERE user_id = ? AND source_id = ?",
+            (user["id"], tag_id_raw)
+        )
+        
+        # Also try keyword removal: tag_id format is "keyword_{id}"
+        import re
+        kw_match = re.match(r'^keyword_(\d+)$', tag_id_raw)
+        if kw_match:
+            kw_id = int(kw_match.group(1))
+            conn.execute(
+                "DELETE FROM user_keywords WHERE id = ? AND user_id = ?",
+                (kw_id, user["id"])
+            )
+        
+        # Also try wechat MP removal: tag_id format is "mp-{fakeid}"
+        if tag_id_raw.startswith("mp-"):
+            fakeid = tag_id_raw[3:]
+            try:
+                conn.execute(
+                    "DELETE FROM wechat_mp_subscriptions WHERE user_id = ? AND fakeid = ?",
+                    (user["id"], fakeid)
+                )
+            except Exception:
+                pass  # Table may not exist
     else:
         # Upsert setting
         now = _now_ts()
