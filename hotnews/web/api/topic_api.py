@@ -39,7 +39,7 @@ SESSION_COOKIE_NAME = "hotnews_session"
 async def _trigger_source_fetch(source_ids: List[str], project_root: Path) -> None:
     """
     触发数据源抓取（后台任务）。
-    
+
     Args:
         source_ids: 数据源 ID 列表（如 mp-xxx, rss-xxx）
         project_root: 项目根目录
@@ -47,33 +47,39 @@ async def _trigger_source_fetch(source_ids: List[str], project_root: Path) -> No
     if not source_ids:
         logger.info("No source_ids to fetch")
         return
-    
+
     logger.info(f"Triggering fetch for sources: {source_ids}")
-    
+
     # 分离公众号和 RSS 源
     mp_fakeids = []
     rss_ids = []
-    
+
     for sid in source_ids:
         if sid.startswith("mp-"):
             mp_fakeids.append(sid[3:])  # 去掉 "mp-" 前缀
         else:
             rss_ids.append(sid)
-    
-    logger.info(f"MP fakeids to fetch: {mp_fakeids}")
-    
+
     # 抓取公众号
     if mp_fakeids:
+        logger.info(f"MP fakeids to fetch: {mp_fakeids}")
         try:
             from hotnews.kernel.scheduler.wechat_scheduler import fetch_mps_immediately
             result = await fetch_mps_immediately(mp_fakeids, project_root)
             logger.info(f"Immediate MP fetch result: {result}")
         except Exception as e:
             logger.error(f"Failed to trigger MP fetch: {e}", exc_info=True)
-    
-    # RSS 源通常已经有数据，不需要立即抓取
+
+    # 立即触发 RSS 源抓取
     if rss_ids:
-        logger.info(f"RSS sources will be fetched in next cycle: {rss_ids}")
+        logger.info(f"RSS sources to fetch immediately: {rss_ids}")
+        try:
+            from hotnews.kernel.scheduler.rss_scheduler import rss_enqueue_warmup
+            for sid in rss_ids:
+                await rss_enqueue_warmup(sid, priority=8)
+            logger.info(f"Enqueued {len(rss_ids)} RSS sources for immediate fetch")
+        except Exception as e:
+            logger.error(f"Failed to enqueue RSS fetch: {e}", exc_info=True)
 
 
 def _get_session_token(request: Request) -> str:

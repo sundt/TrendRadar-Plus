@@ -2262,7 +2262,82 @@ function _confirmDialog(message) {
                     // 刷新页面
                     window.location.reload();
                 } else if (topicId) {
-                    // 编辑主题：刷新页面并定位到该主题
+                    // 编辑主题：如果有数据源，也触发抓取+进度
+                    const sourceCount = allSourceIds.length;
+                    
+                    if (sourceCount > 0) {
+                        // 显示进度条
+                        const progressEl = document.getElementById('topicFetchProgress');
+                        const progressText = progressEl?.querySelector('.topic-fetch-progress-text');
+                        const progressFill = progressEl?.querySelector('.topic-fetch-progress-fill');
+                        
+                        if (progressEl) {
+                            progressEl.style.display = 'block';
+                        }
+                        
+                        submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取中...`;
+                        
+                        const fetchSteps = [
+                            { percent: 10, text: `📡 正在更新数据源 (${sourceCount}个)...` },
+                            { percent: 30, text: '🔄 正在抓取最新内容...' },
+                            { percent: 50, text: '📥 正在下载文章数据...' },
+                            { percent: 65, text: '💾 正在保存到数据库...' },
+                            { percent: 78, text: '⏳ 即将完成...' },
+                            { percent: 88, text: '⏳ 快完成了...' },
+                            { percent: 93, text: '⏳ 马上就好...' }
+                        ];
+                        let stepIndex = 0;
+                        
+                        const updateProgress = () => {
+                            const step = fetchSteps[stepIndex];
+                            if (progressFill) progressFill.style.width = step.percent + '%';
+                            if (progressText) progressText.textContent = step.text;
+                        };
+                        updateProgress();
+                        
+                        const getInterval = () => stepIndex < 3 ? 1500 : 3000;
+                        const advanceProgress = () => {
+                            if (stepIndex < fetchSteps.length - 1) {
+                                stepIndex++;
+                                updateProgress();
+                                progressTimer = setTimeout(advanceProgress, getInterval());
+                            }
+                        };
+                        let progressTimer = setTimeout(advanceProgress, getInterval());
+                        
+                        try {
+                            const fetchResponse = await fetch(`/api/topics/${topicId}/fetch-sources`, {
+                                method: 'POST',
+                                credentials: 'include'
+                            });
+                            const fetchData = await fetchResponse.json();
+                            clearTimeout(progressTimer);
+                            
+                            if (fetchData.ok) {
+                                const fetched = fetchData.fetched || 0;
+                                if (progressFill) progressFill.style.width = '100%';
+                                if (progressText) progressText.textContent = `✅ 更新完成 (${fetched}条新闻)`;
+                                
+                                const inactiveSources = fetchData.inactive_sources || [];
+                                if (inactiveSources.length > 0) {
+                                    const shouldRemove = await showInactiveSourcesDialog(inactiveSources, topicId);
+                                    if (shouldRemove) {
+                                        if (progressText) progressText.textContent = '🗑️ 正在移除不活跃账号...';
+                                        await removeInactiveSources(topicId, inactiveSources, allSourceIds);
+                                    }
+                                }
+                            } else {
+                                if (progressFill) progressFill.style.width = '100%';
+                                if (progressText) progressText.textContent = '✅ 保存完成';
+                            }
+                            
+                            await new Promise(r => setTimeout(r, 800));
+                        } catch (fetchError) {
+                            console.error('[TopicTracker] Edit fetch sources failed:', fetchError);
+                            clearTimeout(progressTimer);
+                        }
+                    }
+                    
                     closeModal();
                     const categoryId = `topic-${topicId}`;
                     
