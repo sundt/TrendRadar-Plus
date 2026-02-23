@@ -810,17 +810,14 @@ export const platformReorder = {
                 `;
             } else if (isTopic) {
                 // Topic tab: show different options for keyword vs source cards
+                // 编辑主题和删除主题已在栏目 tab 右键菜单中，这里只放卡片级操作
                 if (keyword) {
-                    // Keyword card: show remove keyword option
                     menuHtml = `
                         <div class="tr-ctx-item" data-action="remove-keyword">🗑️ 删除此关键词</div>
-                        <div class="tr-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">✏️ 编辑主题</div>
                     `;
                 } else if (source) {
-                    // Source card: show remove option
                     menuHtml = `
                         <div class="tr-ctx-item" data-action="remove-source">🗑️ 删除此数据源</div>
-                        <div class="tr-ctx-item" data-action="edit-topic" style="border-top:1px solid #e5e7eb;">✏️ 编辑主题</div>
                     `;
                 }
             } else {

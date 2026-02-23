@@ -364,6 +364,7 @@ import { scroll } from './scroll.js';
             const tab = document.createElement('div');
             tab.className = 'category-tab topic-tab';
             tab.dataset.category = categoryId;
+            tab.dataset.topicId = topic.id;
             tab.draggable = false;
             tab.onclick = () => {
                 tabs.switchTab(categoryId);
