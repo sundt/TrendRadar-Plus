@@ -82,6 +82,65 @@ async def _trigger_source_fetch(source_ids: List[str], project_root: Path) -> No
             logger.error(f"Failed to enqueue RSS fetch: {e}", exc_info=True)
 
 
+async def _cleanup_orphan_mps(fakeids: List[str], project_root: Path) -> None:
+    """
+    清理孤儿公众号：如果一个公众号不再被任何主题、用户订阅或精选列表引用，
+    则从 rss_sources 和 rss_entries 中删除，避免后台继续抓取。
+    """
+    if not fakeids:
+        return
+    
+    logger.info(f"[OrphanMP] Checking {len(fakeids)} removed MPs for cleanup: {fakeids}")
+    
+    try:
+        user_conn = get_user_db_conn(project_root)
+        online_conn = get_online_db_conn(project_root=project_root)
+        
+        for fakeid in fakeids:
+            mp_source_id = f"mp-{fakeid}"
+            
+            # 1. 检查是否还被其他主题引用
+            cur = user_conn.execute(
+                "SELECT COUNT(*) FROM topic_rss_sources WHERE rss_source_id = ?",
+                (mp_source_id,)
+            )
+            topic_refs = cur.fetchone()[0] or 0
+            
+            # 2. 检查是否被用户直接订阅
+            cur = user_conn.execute(
+                "SELECT COUNT(*) FROM wechat_mp_subscriptions WHERE fakeid = ?",
+                (fakeid,)
+            )
+            sub_refs = cur.fetchone()[0] or 0
+            
+            # 3. 检查是否是精选公众号
+            cur = online_conn.execute(
+                "SELECT COUNT(*) FROM featured_wechat_mps WHERE fakeid = ? AND enabled = 1",
+                (fakeid,)
+            )
+            featured_refs = cur.fetchone()[0] or 0
+            
+            total_refs = topic_refs + sub_refs + featured_refs
+            
+            if total_refs > 0:
+                logger.info(f"[OrphanMP] MP {fakeid} still referenced: topics={topic_refs}, subs={sub_refs}, featured={featured_refs}")
+                continue
+            
+            # 没有任何引用，禁用这个源
+            logger.info(f"[OrphanMP] MP {fakeid} is orphan, disabling rss_source {mp_source_id}")
+            try:
+                online_conn.execute(
+                    "UPDATE rss_sources SET enabled = 0 WHERE id = ?",
+                    (mp_source_id,)
+                )
+                online_conn.commit()
+                logger.info(f"[OrphanMP] Disabled orphan MP source: {mp_source_id}")
+            except Exception as e:
+                logger.warning(f"[OrphanMP] Failed to disable {mp_source_id}: {e}")
+    except Exception as e:
+        logger.error(f"[OrphanMP] Cleanup failed: {e}", exc_info=True)
+
+
 def _get_session_token(request: Request) -> str:
     """Get session token from cookie."""
     token = request.cookies.get(SESSION_COOKIE_NAME, "")
@@ -167,13 +226,12 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
     return {"ok": True, "topic": topic}
 
 
-@router.put("/{topic_id}")
 async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = Body(...)):
     """Update a topic."""
     user = _get_current_user(request)
     user_id = user["id"]
     storage = _get_storage(request)
-    
+
     # Validate
     name = body.get("name")
     if name is not None:
@@ -182,14 +240,22 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
             return JSONResponse({"ok": False, "error": "主题名称不能为空"}, status_code=400)
         if len(name) > 50:
             return JSONResponse({"ok": False, "error": "主题名称不能超过50个字符"}, status_code=400)
-    
+
     keywords = body.get("keywords")
     if keywords is not None:
         if not keywords:
             return JSONResponse({"ok": False, "error": "至少需要一个关键词"}, status_code=400)
         if len(keywords) > 20:
             return JSONResponse({"ok": False, "error": "关键词不能超过20个"}, status_code=400)
-    
+
+    # 记录更新前的数据源列表（用于检测被移除的公众号）
+    old_source_ids = set()
+    new_rss_source_ids = body.get("rss_source_ids")
+    if new_rss_source_ids is not None:
+        old_topic = storage.get_topic_by_id(topic_id, str(user_id))
+        if old_topic:
+            old_source_ids = set(old_topic.get("rss_sources", []))
+
     success = storage.update_topic(
         topic_id=topic_id,
         user_id=str(user_id),
@@ -198,45 +264,62 @@ async def update_topic(request: Request, topic_id: str, body: Dict[str, Any] = B
         keywords=keywords,
         enabled=body.get("enabled"),
         sort_order=body.get("sort_order"),
-        rss_source_ids=body.get("rss_source_ids")
+        rss_source_ids=new_rss_source_ids
     )
-    
+
     if not success:
         return JSONResponse({"ok": False, "error": "更新失败，主题不存在或无权限"}, status_code=404)
-    
+
     # Invalidate cache for this topic (use the same key format as get_topic_news)
     cache_key = f"{topic_id}_v2"
     topic_news_cache.invalidate(user_id=user_id, topic_id=cache_key)
     logger.debug(f"[TopicAPI] Cache invalidated for user={user_id}, topic={topic_id}, cache_key={cache_key}")
-    
+
     # 如果更新了数据源，立即触发抓取
-    rss_source_ids = body.get("rss_source_ids")
-    if rss_source_ids:
-        asyncio.create_task(_trigger_source_fetch(rss_source_ids, request.app.state.project_root))
-    
+    if new_rss_source_ids:
+        asyncio.create_task(_trigger_source_fetch(new_rss_source_ids, request.app.state.project_root))
+
+    # 清理被移除的孤儿公众号（没有其他引用的 mp- 源）
+    if new_rss_source_ids is not None and old_source_ids:
+        removed_ids = old_source_ids - set(new_rss_source_ids)
+        removed_mp_fakeids = [sid[3:] for sid in removed_ids if sid.startswith("mp-")]
+        if removed_mp_fakeids:
+            asyncio.create_task(_cleanup_orphan_mps(
+                removed_mp_fakeids, request.app.state.project_root
+            ))
+
     # Return updated topic
     topic = storage.get_topic_by_id(topic_id, str(user_id))
     topic["rss_source_ids"] = topic.get("rss_sources", [])
     return {"ok": True, "topic": topic}
 
 
-@router.delete("/{topic_id}")
 async def delete_topic(request: Request, topic_id: str):
     """Delete a topic."""
     user = _get_current_user(request)
     user_id = user["id"]
     storage = _get_storage(request)
-    
+
+    # 删除前记录数据源列表，用于清理孤儿公众号
+    old_topic = storage.get_topic_by_id(topic_id, str(user_id))
+    old_mp_fakeids = []
+    if old_topic:
+        old_mp_fakeids = [sid[3:] for sid in old_topic.get("rss_sources", []) if sid.startswith("mp-")]
+
     success = storage.delete_topic(topic_id, str(user_id))
-    
+
     if not success:
         return JSONResponse({"ok": False, "error": "删除失败，主题不存在或无权限"}, status_code=404)
-    
+
     # Invalidate cache for this topic (use the same key format as get_topic_news)
     cache_key = f"{topic_id}_v2"
     topic_news_cache.invalidate(user_id=user_id, topic_id=cache_key)
     logger.debug(f"[TopicAPI] Cache invalidated for deleted topic: user={user_id}, topic={topic_id}, cache_key={cache_key}")
-    
+
+    # 清理孤儿公众号
+    if old_mp_fakeids:
+        asyncio.create_task(_cleanup_orphan_mps(old_mp_fakeids, request.app.state.project_root))
+
     return {"ok": True}
 
 
