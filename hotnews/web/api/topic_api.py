@@ -341,7 +341,22 @@ async def fetch_topic_sources(request: Request, topic_id: str):
     if not topic:
         return JSONResponse({"ok": False, "error": "主题不存在或无权限"}, status_code=404)
     
-    source_ids = topic.get("rss_sources", [])
+    all_source_ids = topic.get("rss_sources", [])
+    
+    # 支持只抓取指定的源（编辑主题时只抓新增的）
+    try:
+        body = await request.json()
+        only_source_ids = body.get("source_ids")
+    except Exception:
+        only_source_ids = None
+    
+    if only_source_ids and isinstance(only_source_ids, list):
+        # 只抓取指定的源（必须是主题关联的源）
+        valid_set = set(all_source_ids)
+        source_ids = [sid for sid in only_source_ids if sid in valid_set]
+    else:
+        source_ids = all_source_ids
+    
     if not source_ids:
         return {"ok": True, "fetched": 0, "message": "没有数据源需要抓取"}
     

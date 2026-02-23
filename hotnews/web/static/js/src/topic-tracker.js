@@ -2161,51 +2161,33 @@ function _confirmDialog(message) {
                             progressEl.style.display = 'block';
                         }
                         
-                        // 按钮也显示状态
                         submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取中...`;
                         
-                        // 进度步骤 - 更细粒度，让等待感觉更自然
-                        const fetchSteps = [
-                            { percent: 5, text: `📡 正在连接数据源 (${sourceCount}个)...` },
-                            { percent: 15, text: '🔄 正在初始化抓取任务...' },
-                            { percent: 25, text: '📱 正在抓取公众号文章...' },
-                            { percent: 35, text: '📰 正在获取 RSS 内容...' },
-                            { percent: 45, text: '📥 正在下载文章数据...' },
-                            { percent: 55, text: '🔍 正在解析文章内容...' },
-                            { percent: 65, text: '💾 正在保存到数据库...' },
-                            { percent: 72, text: '📊 正在整理文章列表...' },
-                            { percent: 78, text: '⏳ 即将完成，请稍候...' },
-                            { percent: 83, text: '⏳ 正在做最后处理...' },
-                            { percent: 87, text: '⏳ 马上就好...' },
-                            { percent: 90, text: '⏳ 还差一点点...' },
-                            { percent: 92, text: '⏳ 快完成了...' },
-                            { percent: 94, text: '⏳ 即将完成...' }
+                        // 进度条：匀速渐慢递增，不会卡在某个文案上
+                        let progress = 5;
+                        if (progressFill) progressFill.style.width = '5%';
+                        if (progressText) progressText.textContent = `📡 正在抓取 ${sourceCount} 个数据源...`;
+                        
+                        const progressMilestones = [
+                            { at: 20, text: '📱 正在抓取公众号文章...' },
+                            { at: 40, text: '📰 正在获取 RSS 内容...' },
+                            { at: 60, text: '💾 正在保存到数据库...' },
+                            { at: 75, text: '📊 正在整理文章列表...' },
                         ];
-                        let stepIndex = 0;
+                        let milestoneIdx = 0;
                         
-                        const updateFetchProgress = () => {
-                            const step = fetchSteps[stepIndex];
-                            if (progressFill) progressFill.style.width = step.percent + '%';
-                            if (progressText) progressText.textContent = step.text;
-                        };
-                        updateFetchProgress();
-                        
-                        // 前面步骤快一些，后面步骤慢一些
-                        const getFetchInterval = () => {
-                            if (stepIndex < 4) return 1500;      // 前4步：1.5秒
-                            if (stepIndex < 8) return 2500;      // 中间4步：2.5秒
-                            return 4000;                          // 最后几步：4秒
-                        };
-                        
-                        const advanceFetchProgress = () => {
-                            if (stepIndex < fetchSteps.length - 1) {
-                                stepIndex++;
-                                updateFetchProgress();
-                                fetchProgressTimer = setTimeout(advanceFetchProgress, getFetchInterval());
+                        const fetchProgressTimer = setInterval(() => {
+                            if (progress < 90) {
+                                progress += (90 - progress) * 0.06;
+                                const p = Math.round(progress);
+                                if (progressFill) progressFill.style.width = p + '%';
+                                // 到达里程碑时更新文案
+                                if (milestoneIdx < progressMilestones.length && p >= progressMilestones[milestoneIdx].at) {
+                                    if (progressText) progressText.textContent = progressMilestones[milestoneIdx].text;
+                                    milestoneIdx++;
+                                }
                             }
-                        };
-                        
-                        let fetchProgressTimer = setTimeout(advanceFetchProgress, getFetchInterval());
+                        }, 500);
                         
                         try {
                             // 调用抓取 API
@@ -2216,7 +2198,7 @@ function _confirmDialog(message) {
                             
                             const fetchData = await fetchResponse.json();
                             
-                            clearTimeout(fetchProgressTimer);
+                            clearInterval(fetchProgressTimer);
                             
                             if (fetchData.ok) {
                                 const fetched = fetchData.fetched || 0;
@@ -2246,7 +2228,7 @@ function _confirmDialog(message) {
                             await new Promise(r => setTimeout(r, 800));
                         } catch (fetchError) {
                             console.error('[TopicTracker] Fetch sources failed:', fetchError);
-                            clearTimeout(fetchProgressTimer);
+                            clearInterval(fetchProgressTimer);
                             // 抓取失败不阻止跳转，用户可以稍后刷新
                         }
                     }
@@ -2262,61 +2244,45 @@ function _confirmDialog(message) {
                     // 刷新页面
                     window.location.reload();
                 } else if (topicId) {
-                    // 编辑主题：如果有数据源，也触发抓取+进度
-                    const sourceCount = allSourceIds.length;
+                    // 编辑主题：只对新增的数据源触发抓取
+                    const oldSourceIds = new Set((currentEditTopic.rss_source_ids || currentEditTopic.rss_sources || []));
+                    const newlyAdded = allSourceIds.filter(id => !oldSourceIds.has(id));
                     
-                    if (sourceCount > 0) {
-                        // 显示进度条
+                    if (newlyAdded.length > 0) {
+                        // 有新增数据源，触发抓取
                         const progressEl = document.getElementById('topicFetchProgress');
                         const progressText = progressEl?.querySelector('.topic-fetch-progress-text');
                         const progressFill = progressEl?.querySelector('.topic-fetch-progress-fill');
                         
-                        if (progressEl) {
-                            progressEl.style.display = 'block';
-                        }
+                        if (progressEl) progressEl.style.display = 'block';
+                        submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取新数据源...`;
                         
-                        submitBtn.innerHTML = `<span class="topic-spinner"></span> 抓取中...`;
+                        // 进度条：匀速递增，不会卡在"马上就好"
+                        let progress = 5;
+                        if (progressFill) progressFill.style.width = '5%';
+                        if (progressText) progressText.textContent = `📡 正在抓取 ${newlyAdded.length} 个新数据源...`;
                         
-                        const fetchSteps = [
-                            { percent: 10, text: `📡 正在更新数据源 (${sourceCount}个)...` },
-                            { percent: 30, text: '🔄 正在抓取最新内容...' },
-                            { percent: 50, text: '📥 正在下载文章数据...' },
-                            { percent: 65, text: '💾 正在保存到数据库...' },
-                            { percent: 78, text: '⏳ 即将完成...' },
-                            { percent: 88, text: '⏳ 快完成了...' },
-                            { percent: 93, text: '⏳ 马上就好...' }
-                        ];
-                        let stepIndex = 0;
-                        
-                        const updateProgress = () => {
-                            const step = fetchSteps[stepIndex];
-                            if (progressFill) progressFill.style.width = step.percent + '%';
-                            if (progressText) progressText.textContent = step.text;
-                        };
-                        updateProgress();
-                        
-                        const getInterval = () => stepIndex < 3 ? 1500 : 3000;
-                        const advanceProgress = () => {
-                            if (stepIndex < fetchSteps.length - 1) {
-                                stepIndex++;
-                                updateProgress();
-                                progressTimer = setTimeout(advanceProgress, getInterval());
+                        const progressTimer = setInterval(() => {
+                            if (progress < 90) {
+                                progress += (90 - progress) * 0.08; // 渐慢递增，永远不会到90
+                                if (progressFill) progressFill.style.width = Math.round(progress) + '%';
                             }
-                        };
-                        let progressTimer = setTimeout(advanceProgress, getInterval());
+                        }, 500);
                         
                         try {
                             const fetchResponse = await fetch(`/api/topics/${topicId}/fetch-sources`, {
                                 method: 'POST',
-                                credentials: 'include'
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ source_ids: newlyAdded })
                             });
                             const fetchData = await fetchResponse.json();
-                            clearTimeout(progressTimer);
+                            clearInterval(progressTimer);
                             
                             if (fetchData.ok) {
                                 const fetched = fetchData.fetched || 0;
                                 if (progressFill) progressFill.style.width = '100%';
-                                if (progressText) progressText.textContent = `✅ 更新完成 (${fetched}条新闻)`;
+                                if (progressText) progressText.textContent = `✅ 抓取完成 (${fetched}条新文章)`;
                                 
                                 const inactiveSources = fetchData.inactive_sources || [];
                                 if (inactiveSources.length > 0) {
@@ -2331,20 +2297,16 @@ function _confirmDialog(message) {
                                 if (progressText) progressText.textContent = '✅ 保存完成';
                             }
                             
-                            await new Promise(r => setTimeout(r, 800));
+                            await new Promise(r => setTimeout(r, 600));
                         } catch (fetchError) {
-                            console.error('[TopicTracker] Edit fetch sources failed:', fetchError);
-                            clearTimeout(progressTimer);
+                            console.error('[TopicTracker] Edit fetch failed:', fetchError);
+                            clearInterval(progressTimer);
                         }
                     }
                     
                     closeModal();
                     const categoryId = `topic-${topicId}`;
-                    
-                    try {
-                        localStorage.setItem('tr_active_tab', categoryId);
-                    } catch (e) {}
-                    
+                    try { localStorage.setItem('tr_active_tab', categoryId); } catch (e) {}
                     window.location.reload();
                 }
             } else {
