@@ -539,7 +539,7 @@ async def api_rss_ai_classification_stats(
     hours: int = Query(24, ge=1, le=24 * 30, description="统计最近N小时的数据"),
 ):
     """API: 获取RSS AI分类统计信息"""
-    from hotnews.web.rss_scheduler import mb_ai_get_classification_stats
+    from hotnews.kernel.scheduler.rss_scheduler import mb_ai_get_classification_stats
 
     try:
         stats = mb_ai_get_classification_stats(last_n_hours=hours)
@@ -554,7 +554,7 @@ async def api_rss_ai_classification_stats(
 @router.post("/api/rss/ai-classification/test")
 async def api_rss_ai_classification_test(request: Request):
     """API: 测试AI分类效果（用于prompt调试）"""
-    from hotnews.web.rss_scheduler import mb_ai_test_classification
+    from hotnews.kernel.scheduler.rss_scheduler import mb_ai_test_classification
 
     try:
         body = await request.json()
