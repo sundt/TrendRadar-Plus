@@ -165,6 +165,8 @@ function _cleanupInactiveTabs(currentTabId) {
         try {
             // Skip special tabs that shouldn't be cleaned
             if (['explore', 'knowledge', 'my-tags', 'discovery', 'rsscol-rss', 'featured-mps', 'finance'].includes(tabId)) return;
+            // Skip topic tabs — their content is async-loaded and expensive to re-fetch
+            if (String(tabId).startsWith('topic-')) return;
             
             const pane = document.getElementById(`tab-${tabId}`);
             if (!pane) return;
