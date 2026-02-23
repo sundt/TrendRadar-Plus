@@ -8,6 +8,27 @@ import { events } from './events.js';
 import { tabs } from './tabs.js';
 import { scroll } from './scroll.js';
 
+function _confirmDialog(message) {
+    return new Promise((resolve) => {
+        const backdrop = document.createElement('div');
+        backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:10010;display:flex;align-items:center;justify-content:center;';
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:#fff;border-radius:12px;padding:24px;max-width:320px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);text-align:center;';
+        dialog.innerHTML = `
+            <div style="font-size:15px;color:#1f2937;line-height:1.6;margin-bottom:20px;">${message}</div>
+            <div style="display:flex;gap:12px;justify-content:center;">
+                <button class="confirm-cancel" style="flex:1;padding:8px 0;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#6b7280;font-size:14px;cursor:pointer;">取消</button>
+                <button class="confirm-ok" style="flex:1;padding:8px 0;border:none;border-radius:8px;background:#ef4444;color:#fff;font-size:14px;cursor:pointer;">确认删除</button>
+            </div>`;
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+        const cleanup = (r) => { backdrop.remove(); resolve(r); };
+        dialog.querySelector('.confirm-cancel').onclick = () => cleanup(false);
+        dialog.querySelector('.confirm-ok').onclick = () => cleanup(true);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) cleanup(false); });
+    });
+}
+
 // State
     let topics = [];
     let currentEditTopic = null;
@@ -3045,7 +3066,8 @@ import { scroll } from './scroll.js';
         const topic = topics.find(t => t.id === topicId);
         if (!topic) return;
         
-        if (!confirm(`确定要删除主题「${topic.name}」吗？`)) return;
+        const confirmed = await _confirmDialog(`确定要删除主题「${topic.name}」吗？删除后不可恢复。`);
+        if (!confirmed) return;
         
         try {
             const response = await fetch(`/api/topics/${topicId}`, {
