@@ -111,6 +111,7 @@ services:
       - ../config:/app/config:ro
       - ../output:/app/output
       - ../hotnews:/app/hotnews
+      - ../mcp_server:/app/mcp_server
       - ../key/apiclient_key.pem:/app/apiclient_key.pem:ro
 
     environment:
