@@ -2695,6 +2695,92 @@
     content: "AI ✓";
 }
 
+/* Snippet Preview Button */
+.news-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* Pure CSS book icon — no emoji */
+.news-preview-btn::before {
+    content: "";
+    display: block;
+    width: 14px;
+    height: 12px;
+    border: 1.5px solid #9ca3af;
+    border-radius: 1px 3px 3px 1px;
+    border-left: 3px solid #9ca3af;
+}
+
+.news-preview-btn:hover::before {
+    border-color: #06b6d4;
+}
+
+@media (hover: hover) {
+    .news-item:hover .news-preview-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.news-item.expanded .news-preview-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Snippet Popover */
+.snippet-popover {
+    position: absolute;
+    z-index: 9999;
+    max-width: 320px;
+    padding: 12px 14px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    font-size: 13px;
+    line-height: 1.6;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.snippet-popover.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.snippet-popover-text {
+    word-break: break-word;
+}
+
+.snippet-popover-img {
+    display: block;
+    max-width: 100%;
+    max-height: 120px;
+    margin-top: 8px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+body.eye-protection-mode .snippet-popover {
+    background: #2d3748;
+    color: #d1d5db;
+}
+
 /* Summarized item - green index */
 .news-item.has-summary .news-index {
     color: #22c55e;
