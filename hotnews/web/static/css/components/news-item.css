@@ -519,3 +519,77 @@
         padding: 4px 0;
     }
 }
+
+/* ==========================================================================
+   Snippet Preview Button & Popover
+   ========================================================================== */
+
+.news-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+    color: white;
+    border: none;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.news-preview-btn::before {
+    content: "📖";
+}
+
+@media (hover: hover) {
+    .news-item:hover .news-preview-btn {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.news-item.expanded .news-preview-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Snippet Popover */
+.snippet-popover {
+    position: absolute;
+    z-index: 9999;
+    max-width: 320px;
+    padding: 12px 14px;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    font-size: 13px;
+    line-height: 1.6;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.snippet-popover.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.snippet-popover-text {
+    word-break: break-word;
+}
+
+.snippet-popover-img {
+    display: block;
+    max-width: 100%;
+    max-height: 120px;
+    margin-top: 8px;
+    border-radius: 6px;
+    object-fit: cover;
+}

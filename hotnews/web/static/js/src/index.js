@@ -45,6 +45,7 @@ import './favorites.js';
 import './article-tags.js';
 import './context-menu.js';
 import './comment-preview.js';
+import './snippet-preview.js';
 
 // 异步加载非关键 heavy 模块 (Code Splitting)
 import('./platform-reorder.js');

@@ -7,6 +7,7 @@ import { authState } from './auth-state.js';
 import { events } from './events.js';
 import { tabs } from './tabs.js';
 import { scroll } from './scroll.js';
+import { viewMode } from './view-mode.js';
 
 function _confirmDialog(message) {
     return new Promise((resolve) => {
@@ -612,6 +613,15 @@ function _confirmDialog(message) {
      * Load topic news if not already loaded
      */
     function loadTopicNewsIfNeeded(topicId) {
+        const categoryId = `topic-${topicId}`;
+        
+        // If this topic is in timeline mode, let categoryTimeline handle rendering
+        // (called from tabs.switchTab). Don't render card mode here.
+        if (viewMode.get(categoryId) === 'timeline') {
+            console.log(`[TopicTracker] Topic ${topicId} is in timeline mode, skipping card render`);
+            return;
+        }
+        
         const state = getTopicState(topicId);
         
         // 防止重复加载

@@ -94,10 +94,11 @@ async function addFavorite(newsItem) {
         });
         const data = await res.json();
         if (data.ok) {
-            // Update cache
-            if (favoritesCache) {
-                favoritesCache.unshift(data.favorite);
-            }
+            // Update cache (initialize if needed)
+            if (!favoritesCache) favoritesCache = [];
+            // Avoid duplicates
+            favoritesCache = favoritesCache.filter(f => f.news_id !== newsItem.news_id);
+            favoritesCache.unshift(data.favorite);
         }
         return data;
     } catch (e) {
@@ -125,8 +126,10 @@ async function removeFavorite(newsId) {
             method: 'DELETE'
         });
         const data = await res.json();
-        if (data.ok && favoritesCache) {
-            favoritesCache = favoritesCache.filter(f => f.news_id !== newsId);
+        if (data.ok) {
+            if (favoritesCache) {
+                favoritesCache = favoritesCache.filter(f => f.news_id !== newsId);
+            }
         }
         return data;
     } catch (e) {
@@ -150,6 +153,12 @@ function isFavorited(newsId) {
         return favoritesCache.some(f => f.news_id === newsId);
     }
     
+    // Cache not loaded yet — check DOM button state as fallback
+    const btn = document.querySelector(`.news-favorite-btn[data-news-id="${newsId}"]`);
+    if (btn) {
+        return btn.classList.contains('favorited');
+    }
+    
     return false;
 }
 
@@ -160,8 +169,10 @@ async function toggleFavorite(newsItem, button) {
     const newsId = newsItem.news_id;
     const wasFavorited = isFavorited(newsId);
     
-    // Optimistic UI update
-    if (button) {
+    // Optimistic UI update — sync ALL buttons for this newsId
+    const allBtns = document.querySelectorAll(`.news-favorite-btn[data-news-id="${newsId}"]`);
+    allBtns.forEach(b => b.classList.toggle('favorited', !wasFavorited));
+    if (button && !button.dataset.newsId) {
         button.classList.toggle('favorited', !wasFavorited);
     }
     
@@ -174,7 +185,8 @@ async function toggleFavorite(newsItem, button) {
     
     if (!result.ok) {
         // Revert on failure
-        if (button) {
+        allBtns.forEach(b => b.classList.toggle('favorited', wasFavorited));
+        if (button && !button.dataset.newsId) {
             button.classList.toggle('favorited', wasFavorited);
         }
     }
@@ -758,12 +770,32 @@ if (document.readyState === 'loading') {
         initFavoriteButtonDelegation();
         initTabSwitching();
         injectFavoriteButtons();
+        _warmupFavoritesCache();
     });
 } else {
     initPanelResize();
     initFavoriteButtonDelegation();
     initTabSwitching();
     injectFavoriteButtons();
+    _warmupFavoritesCache();
+}
+
+/**
+ * Preload favorites cache so isFavorited() works before panel is opened.
+ * Also refreshes injected button states once cache is ready.
+ */
+async function _warmupFavoritesCache() {
+    const user = authState.getUser();
+    if (!user || favoritesCache) return;
+    
+    const result = await fetchFavorites();
+    if (result.favorites) {
+        // Refresh all injected button states
+        document.querySelectorAll('.news-favorite-btn[data-news-id]').forEach(btn => {
+            const newsId = btn.dataset.newsId;
+            btn.classList.toggle('favorited', isFavorited(newsId));
+        });
+    }
 }
 
 /**
