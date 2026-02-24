@@ -65,8 +65,9 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     # Force sync with remote
     echo "   [Remote] Force syncing branch \$BRANCH..."
     git fetch origin
-    git checkout \$BRANCH 2>/dev/null || git checkout -b \$BRANCH origin/\$BRANCH
+    git checkout -B \$BRANCH origin/\$BRANCH
     git reset --hard origin/\$BRANCH
+    git clean -fd
     
     echo "   [Remote] Building services ($SERVICES)..."
     cd docker
