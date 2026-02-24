@@ -72,8 +72,25 @@ function _getApiUrl(catId) {
     }
     // Tag-driven 栏目：从 _columnConfig 树中查找 tag_ids
     const node = _findInColumnConfig(catId);
-    if (node && Array.isArray(node.tag_ids) && node.tag_ids.length) {
-        return `/api/timeline?tags=${node.tag_ids.join(',')}`;
+    if (node) {
+        // 自身有 tag_ids → 直接用
+        if (Array.isArray(node.tag_ids) && node.tag_ids.length) {
+            return `/api/timeline?tags=${node.tag_ids.join(',')}`;
+        }
+        // 中间节点（如 ai、ai-llm）：收集所有后代叶子的 tag_ids
+        const allTags = [];
+        function _collectTags(nodes) {
+            for (const n of nodes) {
+                if (Array.isArray(n.tag_ids) && n.tag_ids.length) {
+                    allTags.push(...n.tag_ids);
+                }
+                if (Array.isArray(n.children)) _collectTags(n.children);
+            }
+        }
+        if (Array.isArray(node.children)) _collectTags(node.children);
+        if (allTags.length) {
+            return `/api/timeline?tags=${allTags.join(',')}`;
+        }
     }
     // Generic category
     return `/api/rss/category/${encodeURIComponent(catId)}/timeline`;
@@ -338,9 +355,23 @@ async function loadCardMode(catId) {
     try {
         // Tag-driven 分支：若该栏目在 _columnConfig 中有 tag_ids，每个 tag 渲染一张卡片
         const node = _findInColumnConfig(catId);
-        if (node && Array.isArray(node.tag_ids) && node.tag_ids.length) {
+        const nodeTags = (() => {
+            if (!node) return [];
+            if (Array.isArray(node.tag_ids) && node.tag_ids.length) return node.tag_ids;
+            // 中间节点：收集后代叶子的 tag_ids
+            const tags = [];
+            function _c(nodes) {
+                for (const n of nodes) {
+                    if (Array.isArray(n.tag_ids) && n.tag_ids.length) tags.push(...n.tag_ids);
+                    if (Array.isArray(n.children)) _c(n.children);
+                }
+            }
+            if (Array.isArray(node.children)) _c(node.children);
+            return tags;
+        })();
+        if (nodeTags.length) {
             grid.innerHTML = '';
-            for (const tagId of node.tag_ids) {
+            for (const tagId of nodeTags) {
                 try {
                     const resp = await fetch(`/api/timeline?tags=${encodeURIComponent(tagId)}&limit=20`, { credentials: 'include' });
                     if (!resp.ok) continue;
