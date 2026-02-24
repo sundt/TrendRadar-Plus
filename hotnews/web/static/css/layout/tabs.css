@@ -212,6 +212,11 @@ body.categories-ready.category-tabs-drag-mode .category-drag-handle {
 
 /* ── Tag-driven Columns: Hover Dropdown Megamenu ── */
 
+/* 允许 dropdown 溢出 sub-tabs 容器 */
+#homeSubTabs {
+    overflow: visible;
+}
+
 /* Wrapper for tabs that have sub-columns */
 .sub-tab-wrapper {
     position: relative;
