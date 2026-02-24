@@ -15,7 +15,7 @@ const SIDEBAR_DEFAULT_WIDTH = 420;
 
 // ============ 状态 ============
 let sidebarOpen = false;
-let activeTab = 'recommendations';
+let activeTab = 'tags';
 let preloadPromise = null;  // 预加载 Promise
 
 // Tab 状态
@@ -127,10 +127,10 @@ function ensureSubscribeSidebarExists() {
                 </div>
             </div>
             <div class="subscribe-tabs" id="subscribeTabs">
-                <button class="subscribe-tab active" data-tab="recommendations">🔥热门</button>
+                <button class="subscribe-tab" data-tab="recommendations">🔥热门</button>
                 <button class="subscribe-tab" data-tab="wechat">💬公众号</button>
                 <button class="subscribe-tab" data-tab="sources">📡订阅源</button>
-                <button class="subscribe-tab" data-tab="tags">🏷️标签</button>
+                <button class="subscribe-tab active" data-tab="tags">🏷️标签</button>
                 <button class="subscribe-tab" data-tab="keywords">🔍关键词</button>
             </div>
             <div class="subscribe-sidebar-body" id="subscribeSidebarBody">

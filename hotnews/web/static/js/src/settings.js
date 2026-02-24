@@ -162,8 +162,8 @@ export const settings = {
         return {
             version: CATEGORY_CONFIG_VERSION,
             customCategories: [],
-            // 默认隐藏的栏目：其他平台、综合新闻、社交娱乐、科技资讯、开发者
-            hiddenDefaultCategories: ['other', 'general', 'social', 'tech_news', 'developer'],
+            // 默认隐藏的栏目（服务端已统一管理，无需前端隐藏）
+            hiddenDefaultCategories: [],
             hiddenPlatforms: [],
             categoryOrder: Object.keys(_defaultCategories),
             platformOrder: {},
@@ -195,38 +195,11 @@ export const settings = {
             categoryFilters: userConfig.categoryFilters || {}
         };
         
-        console.log('[Settings] merged.hiddenDefaultCategories before migration:', merged.hiddenDefaultCategories);
-
-        // 迁移：为老用户添加默认隐藏的栏目
-        // 检查是否已经执行过迁移（通过检查 version 或特殊标记）
-        const defaultHiddenCategories = ['other', 'general', 'social', 'tech_news', 'developer'];
-        const migrationKey = '_hiddenCategoriesMigrated_v1';
-        
-        console.log('[Settings] migrationKey exists:', !!userConfig[migrationKey]);
-        
-        // 强制重新迁移：如果 hiddenDefaultCategories 为空但迁移标记存在，重新执行迁移
-        const needsReMigration = userConfig[migrationKey] && 
-            (!merged.hiddenDefaultCategories || merged.hiddenDefaultCategories.length === 0);
-        
-        if (!userConfig[migrationKey] || needsReMigration) {
-            // 将默认隐藏的栏目添加到用户的 hiddenDefaultCategories 中
-            let migrationChanged = false;
-            for (const catId of defaultHiddenCategories) {
-                if (!merged.hiddenDefaultCategories.includes(catId)) {
-                    merged.hiddenDefaultCategories.push(catId);
-                    migrationChanged = true;
-                }
-            }
-            if (migrationChanged) {
-                console.log('[Settings] Migrated hidden categories for existing user');
-            }
-            // 标记迁移已完成
-            userConfig[migrationKey] = true;
-            userConfig.hiddenDefaultCategories = merged.hiddenDefaultCategories;
-            this.saveCategoryConfig(userConfig);
+        // 服务端已统一管理栏目，清理旧的隐藏列表（这些栏目已不存在）
+        const obsoleteCategories = new Set(['other', 'general', 'social', 'tech_news', 'developer']);
+        if (merged.hiddenDefaultCategories.length > 0) {
+            merged.hiddenDefaultCategories = merged.hiddenDefaultCategories.filter(id => !obsoleteCategories.has(id));
         }
-        
-        console.log('[Settings] merged.hiddenDefaultCategories after migration:', merged.hiddenDefaultCategories);
 
         // Get server's category order (already sorted by sort_order from backend)
         // Note: _defaultCategories may be null if not initialized yet, skip cleanup in that case

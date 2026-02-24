@@ -133,10 +133,7 @@
                 <div class="nav-tools">
                     <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()" title="我的收藏">⭐</button>
                     <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换护眼模式">🌙</button>
-                    <button class="icon-btn search-btn" onclick="window.location.href='/search'" title="搜索新闻">🔍</button>
-                    <button class="icon-btn category-settings-btn has-tooltip" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()" data-tooltip="订阅更多内容">
-                        ➕ <span class="new-badge-text" id="categorySettingsNewBadge" style="display:block">NEW</span>
-                    </button>
+                    <button class="icon-btn search-btn" onclick="window.open('/search', '_blank')" title="搜索新闻">🔍</button>
                     <div id="authButtonContainer" class="auth-button-container"></div>
                 </div>
             </div>
@@ -154,6 +151,7 @@
                 </button>
                 {% endif %}
                 {% endfor %}
+                <button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button>
                 <div class="sub-tabs-indicator"></div>
             </div>
 

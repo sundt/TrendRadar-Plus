@@ -967,10 +967,6 @@ function initTodoButton() {
     if (favBtn && favBtn.parentNode) {
         const todoBtn = createTodoButton();
         favBtn.parentNode.insertBefore(todoBtn, favBtn);
-        
-        // Insert category settings button before todo button
-        const categorySettingsBtn = createCategorySettingsButton();
-        favBtn.parentNode.insertBefore(categorySettingsBtn, todoBtn);
     }
     
     // Load todos if logged in

@@ -173,6 +173,23 @@
             opacity: 0.7;
         }
 
+        /* 栏目末尾的 + 订阅按钮 */
+        .sub-tab-add {
+            padding: 9px 14px 11px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #86868b;
+            cursor: pointer;
+            white-space: nowrap;
+            border: none;
+            background: none;
+            flex-shrink: 0;
+            transition: color 0.2s ease;
+        }
+        .sub-tab-add:hover {
+            color: #4f46e5;
+        }
+
         #searchInput {
             flex: 0 0 140px !important;
             width: 140px !important;
@@ -2098,6 +2115,12 @@
         }
         body.eye-protection-mode .sub-tabs-indicator {
             background: #f5f5f7;
+        }
+        body.eye-protection-mode .sub-tab-add {
+            color: #8e8e93;
+        }
+        body.eye-protection-mode .sub-tab-add:hover {
+            color: #a78bfa;
         }
         body.eye-protection-mode .nav-tools .icon-btn {
             background: rgba(255, 255, 255, 0.06);

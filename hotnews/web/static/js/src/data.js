@@ -713,7 +713,7 @@ export const data = {
             </div>`;
         }).join('');
 
-        tabsEl.innerHTML = tabsHtml + '<div class="sub-tabs-indicator"></div>';
+        tabsEl.innerHTML = tabsHtml + '<button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === \'function\' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button><div class="sub-tabs-indicator"></div>';
         contentEl.innerHTML = contentHtml;
 
         // 更新滑动指示器

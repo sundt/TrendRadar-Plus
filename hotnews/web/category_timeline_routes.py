@@ -137,13 +137,47 @@ async def api_featured_mps_timeline(
 # 财经投资 Timeline
 # ---------------------------------------------------------------------------
 
+def _get_finance_source_ids(conn) -> tuple:
+    """获取所有财经分类的源 ID 及名称映射（rss_sources + custom_sources）。"""
+    source_ids: list = []
+    name_map: dict = {}  # source_id → name
+
+    # RSS sources
+    try:
+        cur = conn.execute(
+            "SELECT id, name FROM rss_sources WHERE category = 'finance' AND enabled = 1"
+        )
+        for r in cur.fetchall():
+            sid = str(r[0] or "").strip()
+            if sid:
+                source_ids.append(sid)
+                name_map[sid] = str(r[1] or "").strip()
+    except Exception:
+        pass
+
+    # Custom sources
+    try:
+        cur = conn.execute(
+            "SELECT id, name FROM custom_sources WHERE category = 'finance' AND enabled = 1"
+        )
+        for r in cur.fetchall():
+            sid = str(r[0] or "").strip()
+            if sid:
+                source_ids.append(sid)
+                name_map[sid] = str(r[1] or "").strip()
+    except Exception:
+        pass
+
+    return source_ids, name_map
+
+
 @router.get("/api/rss/finance/timeline")
 async def api_finance_timeline(
     limit: int = Query(50, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     nofilter: int = Query(0, ge=0, le=1),
 ):
-    """财经投资时间线 - 过滤非财经内容，类似每日AI早报的过滤逻辑。
+    """财经投资时间线 - 包含 rss_sources 和 custom_sources 中 category='finance' 的所有源。
 
     过滤策略（nofilter=0，默认）：
     - 有 AI 标注的文章：排除被 AI 标为 exclude 且无财经标签的
@@ -157,25 +191,30 @@ async def api_finance_timeline(
     off = int(offset or 0)
     skip_filter = bool(nofilter)
 
+    source_ids, name_map = _get_finance_source_ids(conn)
+    if not source_ids:
+        return UnicodeJSONResponse(
+            content={"offset": off, "limit": lim, "items": [], "total_returned": 0}
+        )
+
+    ph = ",".join(["?"] * len(source_ids))
+
     if skip_filter:
         # Card mode: no AI filtering, just return all finance source articles
         fetch_limit = off + lim + 200
         try:
             cur = conn.execute(
-                """
-                SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
-                       COALESCE(s.name, e.source_id) as source_name
+                f"""
+                SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
                 FROM rss_entries e
-                JOIN rss_sources s ON s.id = e.source_id
-                WHERE s.category = 'finance'
-                  AND s.enabled = 1
+                WHERE e.source_id IN ({ph})
                   AND e.published_at > 0
                   AND e.title IS NOT NULL AND e.title != ''
                   AND e.url IS NOT NULL AND e.url != ''
                 ORDER BY e.published_at DESC
                 LIMIT ?
                 """,
-                (fetch_limit,),
+                (*source_ids, fetch_limit),
             )
             rows = cur.fetchall() or []
         except Exception:
@@ -191,7 +230,7 @@ async def api_finance_timeline(
             url = str(r[2] or "").strip()
             created_at = int(r[3] or 0)
             published_at = int(r[4] or 0)
-            sname = str(r[5] or "").strip()
+            sname = name_map.get(sid, sid)
 
             if not url or url in seen_urls:
                 continue
@@ -203,7 +242,7 @@ async def api_finance_timeline(
                 seen_titles.add(tk)
 
             it = rss_row_to_item(
-                platform_id=f"rss-{sid}",
+                platform_id=f"rss-{sid}" if not sid.startswith("custom_") else sid,
                 source_id=sid,
                 source_name=sname,
                 title=title,
@@ -225,20 +264,17 @@ async def api_finance_timeline(
 
     try:
         cur = conn.execute(
-            """
+            f"""
             SELECT e.source_id, e.dedup_key, e.title, e.url,
-                   e.created_at, e.published_at,
-                   COALESCE(s.name, e.source_id) as source_name
+                   e.created_at, e.published_at
             FROM rss_entries e
-            JOIN rss_sources s ON s.id = e.source_id
-            WHERE s.category = 'finance'
-              AND s.enabled = 1
+            WHERE e.source_id IN ({ph})
               AND e.published_at > 0
               AND e.title IS NOT NULL AND e.title != ''
             ORDER BY e.published_at DESC, e.id DESC
             LIMIT ?
             """,
-            (fetch_limit,),
+            (*source_ids, fetch_limit),
         )
         rows = cur.fetchall() or []
     except Exception:
@@ -255,7 +291,7 @@ async def api_finance_timeline(
         url = str(r[3] or "").strip()
         created_at = int(r[4] or 0)
         published_at = int(r[5] or 0)
-        sname = str(r[6] or "").strip()
+        sname = name_map.get(sid, sid)
 
         if not url or url in seen_urls:
             continue
@@ -267,7 +303,7 @@ async def api_finance_timeline(
             seen_titles.add(title_key)
 
         it = rss_row_to_item(
-            platform_id=f"rss-{sid}",
+            platform_id=f"rss-{sid}" if not sid.startswith("custom_") else sid,
             source_id=sid,
             source_name=sname,
             title=title,
