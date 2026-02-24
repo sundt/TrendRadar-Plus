@@ -813,28 +813,25 @@ export const data = {
 
         tabsEl.innerHTML = tabsHtml + '<button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === \'function\' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button><div class="sub-tabs-indicator"></div>';
 
-        // 为 _columnConfig 中所有子节点（L2/L3）生成 pane（/api/news 不返回这些）
+        // 为 _columnConfig 中所有子节点（L1/L2/L3）生成 pane（/api/news 不返回这些）
         let extraPanesHtml = '';
         if (Array.isArray(columns) && columns.length) {
-            function _collectSubPanes(nodes, parentActiveId) {
+            function _collectSubPanes(nodes) {
                 let html = '';
                 for (const n of nodes) {
                     const nId = String(n.id || '');
                     if (!nId || nId in (categories || {})) continue; // already rendered
+                    // 排除自管理 tab（它们有自己的 pane renderer）
+                    if (['my-tags', 'discovery', 'explore', 'rsscol-rss'].includes(nId)) continue;
                     const isActive = nId === String(activeTabId);
                     html += renderThemePane(nId, isActive);
                     if (Array.isArray(n.children) && n.children.length) {
-                        html += _collectSubPanes(n.children, parentActiveId);
+                        html += _collectSubPanes(n.children);
                     }
                 }
                 return html;
             }
-            // Only collect children (L2+), not L1 (already in categories or rendered above)
-            for (const col of columns) {
-                if (Array.isArray(col.children)) {
-                    extraPanesHtml += _collectSubPanes(col.children, activeTabId);
-                }
-            }
+            extraPanesHtml = _collectSubPanes(columns);
         }
 
         contentEl.innerHTML = contentHtml + extraPanesHtml;
