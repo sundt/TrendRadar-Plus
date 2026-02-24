@@ -22,6 +22,8 @@ build/
 output/
 *.log
 logs/
+*.db
+*.sqlite
 
 # Temporary files
 *.tmp
