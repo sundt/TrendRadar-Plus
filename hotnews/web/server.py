@@ -2563,6 +2563,57 @@ async def _warmup_cache():
         print(f"⚠️ 缓存预热失败: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Background cache refresh (keeps AI classification caches always warm)
+# ---------------------------------------------------------------------------
+_cache_refresh_task: Optional[asyncio.Task] = None
+_CACHE_REFRESH_INTERVAL = 480  # 8 minutes (TTL is 10 min, refresh before expiry)
+
+
+async def _cache_refresh_loop():
+    """Periodically refresh timeline caches so users never hit a cold cache."""
+    import asyncio
+    await asyncio.sleep(_CACHE_REFRESH_INTERVAL)  # first run after interval (startup already warmed)
+    while True:
+        try:
+            from hotnews.web.cache_warmup import CacheWarmupService, WarmupConfig
+            try:
+                import yaml as _yaml
+                _cfg_path = project_root / "config" / "config.yaml"
+                with open(_cfg_path, "r", encoding="utf-8") as _f:
+                    _full_cfg = _yaml.safe_load(_f) or {}
+            except Exception:
+                _full_cfg = {}
+            warmup_config = WarmupConfig.from_yaml(_full_cfg)
+            conn = _get_online_db_conn()
+            service = CacheWarmupService(db_conn=conn, config=warmup_config)
+            result = await service.warmup_all()
+            if result.errors:
+                for err in result.errors:
+                    print(f"  ⚠️ Cache refresh: {err}")
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"⚠️ Cache refresh failed: {e}")
+        try:
+            await asyncio.sleep(_CACHE_REFRESH_INTERVAL)
+        except asyncio.CancelledError:
+            break
+
+
+def _start_cache_refresh_task():
+    global _cache_refresh_task
+    _cache_refresh_task = asyncio.get_event_loop().create_task(_cache_refresh_loop())
+    print(f"✅ Background cache refresh started (every {_CACHE_REFRESH_INTERVAL}s)")
+
+
+def _stop_cache_refresh_task():
+    global _cache_refresh_task
+    if _cache_refresh_task and not _cache_refresh_task.done():
+        _cache_refresh_task.cancel()
+        _cache_refresh_task = None
+
+
 @app.on_event("startup")
 async def on_startup():
     """服务器启动时的初始化"""
@@ -2632,11 +2683,18 @@ async def on_startup():
     except Exception as e:
         print(f"⚠️ WeChat shared credentials init failed: {e}")
 
+    # Start background cache refresh task
+    _start_cache_refresh_task()
+
 
 @app.on_event("shutdown")
 async def on_shutdown():
     try:
         auto_fetch_scheduler.stop_scheduler()
+    except Exception:
+        pass
+    try:
+        _stop_cache_refresh_task()
     except Exception:
         pass
     try:
