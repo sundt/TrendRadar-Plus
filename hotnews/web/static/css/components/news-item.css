@@ -528,23 +528,28 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 3px 8px;
-    background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-    color: white;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    color: #9ca3af;
     border: none;
-    border-radius: 100px;
-    font-size: 11px;
-    font-weight: 500;
+    border-radius: 4px;
+    font-size: 13px;
     cursor: pointer;
-    white-space: nowrap;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.15s ease, color 0.15s ease;
     flex-shrink: 0;
 }
 
 .news-preview-btn::before {
     content: "📖";
+    font-size: 12px;
+}
+
+.news-preview-btn:hover {
+    color: #06b6d4;
 }
 
 @media (hover: hover) {
