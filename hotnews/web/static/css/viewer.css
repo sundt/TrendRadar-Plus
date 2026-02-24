@@ -1,3 +1,6 @@
+        /* Temporarily hide AI summary & comment buttons (low usage, can re-enable later) */
+        .news-summary-btn, .news-comment-btn, .news-ai-indicator { display: none !important; }
+
         :root {
             --primary-color: #1d1d1f;
             --secondary-color: #86868b;
