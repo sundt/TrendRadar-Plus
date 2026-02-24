@@ -13,6 +13,25 @@ const INITIAL_CARDS_DESKTOP = 3;
 const INITIAL_CARDS_MOBILE = 1;
 const MAX_CARDS = 20;
 
+/**
+ * 递归在 window._columnConfig 树中查找 catId 节点
+ */
+function _findInColumnConfig(catId) {
+    const tree = window._columnConfig;
+    if (!Array.isArray(tree)) return null;
+    function _search(nodes) {
+        for (const node of nodes) {
+            if (String(node.id || '') === String(catId)) return node;
+            if (Array.isArray(node.children) && node.children.length) {
+                const found = _search(node.children);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    return _search(tree);
+}
+
 function _getInitialCards() {
     return window.innerWidth <= 640 ? INITIAL_CARDS_MOBILE : INITIAL_CARDS_DESKTOP;
 }
@@ -44,13 +63,17 @@ function _resetState(catId) {
 
 // --- API URL mapping ---
 function _getApiUrl(catId) {
-    if (catId === 'featured-mps') return '/api/rss/featured-mps/timeline';
     if (catId === 'finance') return '/api/rss/finance/timeline';
     if (catId === 'explore') return '/api/explore/timeline';
     if (catId === 'my-tags') return '/api/rss/my-tags/timeline';
     if (catId.startsWith('topic-')) {
         const topicId = catId.replace('topic-', '');
         return `/api/rss/topic/${topicId}/timeline`;
+    }
+    // Tag-driven 栏目：从 _columnConfig 树中查找 tag_ids
+    const node = _findInColumnConfig(catId);
+    if (node && Array.isArray(node.tag_ids) && node.tag_ids.length) {
+        return `/api/timeline?tags=${node.tag_ids.join(',')}`;
     }
     // Generic category
     return `/api/rss/category/${encodeURIComponent(catId)}/timeline`;
@@ -296,10 +319,9 @@ function restoreCardMode(catId) {
 }
 
 // --- Load card mode (per-source grouped cards) ---
-// Used by self-managed timeline categories (featured-mps, finance) when switching to card mode.
+// Used by self-managed timeline categories (finance) when switching to card mode.
 // For categories with full platform data (e.g. finance), fetches from /api/category/ to get
-// all platforms (custom scrapers + RSS sources). For others (e.g. featured-mps), fetches from
-// the timeline API and groups items by source.
+// all platforms (custom scrapers + RSS sources).
 async function loadCardMode(catId) {
     const grid = _getGrid(catId);
     if (!grid) return;
@@ -314,6 +336,44 @@ async function loadCardMode(catId) {
     grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
 
     try {
+        // Tag-driven 分支：若该栏目在 _columnConfig 中有 tag_ids，每个 tag 渲染一张卡片
+        const node = _findInColumnConfig(catId);
+        if (node && Array.isArray(node.tag_ids) && node.tag_ids.length) {
+            grid.innerHTML = '';
+            for (const tagId of node.tag_ids) {
+                try {
+                    const resp = await fetch(`/api/timeline?tags=${encodeURIComponent(tagId)}&limit=20`, { credentials: 'include' });
+                    if (!resp.ok) continue;
+                    const payload = await resp.json();
+                    const items = Array.isArray(payload?.items) ? payload.items : [];
+                    if (!items.length) continue;
+                    const card = document.createElement('div');
+                    card.className = 'platform-card';
+                    card.dataset.platform = `tag-${tagId}`;
+                    card.draggable = false;
+                    card.innerHTML = `
+                        <div class="platform-header">
+                            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                                🏷️ ${escapeHtml(tagId)}
+                            </div>
+                            <div class="platform-header-actions"></div>
+                        </div>
+                        <ul class="news-list">
+                            ${_buildNewsItemsHtml(items, catId)}
+                        </ul>
+                    `;
+                    grid.appendChild(card);
+                } catch (e) {
+                    // skip failed tag
+                }
+            }
+            if (!grid.querySelector('.platform-card')) {
+                grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
+            }
+            try { TR.readState?.restoreReadState?.(); } catch {}
+            return;
+        }
+
         // Try /api/category/ first — it returns the full set of platforms
         // (custom scrapers + RSS sources) which is what the original card mode shows.
         let usedCategoryApi = false;

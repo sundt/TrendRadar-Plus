@@ -280,21 +280,7 @@ export const settings = {
             }
         });
 
-        try {
-            const flagKey = '__migrated_explore_knowledge_front_v1';
-            const idxExplore = Array.isArray(userConfig.categoryOrder) ? userConfig.categoryOrder.indexOf('explore') : -1;
-            const idxKnowledge = Array.isArray(userConfig.categoryOrder) ? userConfig.categoryOrder.indexOf('knowledge') : -1;
-            const needsPromote = (idxExplore !== 0) || (idxKnowledge !== 1);
-            if (!userConfig[flagKey] && needsPromote) {
-                const promoted = promoteCategoryOrder(merged.categoryOrder, ['explore', 'knowledge']);
-                merged.categoryOrder = promoted;
-                userConfig.categoryOrder = promoted;
-                userConfig[flagKey] = Date.now();
-                this.saveCategoryConfig(userConfig);
-            }
-        } catch (e) {
-            // ignore
-        }
+        // knowledge migration removed — knowledge tab replaced by tag-driven AI column
 
         // Ensure 'my-tags' is at the front if it exists
         try {

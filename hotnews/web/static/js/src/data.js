@@ -6,7 +6,7 @@
 import { TR, ready, escapeHtml, formatUpdatedAt, formatNewsDate } from './core.js';
 import { storage } from './storage.js';
 import { renderPlatformCardHtml } from './templates/platform-card.js';
-import { renderRssColPane, renderExplorePane, renderMyTagsPane, renderTopicDynamicPane, renderFeaturedMpsPane, renderDiscoveryPane, renderKnowledgePane } from './templates/tab-panes.js';
+import { renderRssColPane, renderExplorePane, renderMyTagsPane, renderTopicDynamicPane, renderDiscoveryPane, renderThemePane } from './templates/tab-panes.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const CATEGORY_PAGE_SIZE = window.SYSTEM_SETTINGS?.display?.items_per_card || 20;
@@ -549,6 +549,85 @@ async function _deletePlatformCard(cardEl) {
     }
 }
 
+/**
+ * 生成二级/三级 dropdown 列内容
+ * children: 二级分类节点数组（每个节点可能有 children 三级）
+ */
+function renderDropdownColumns(children) {
+    if (!children || !children.length) return '';
+    return children.map(child => {
+        const childId = escapeHtml(child.id || '');
+        const childName = escapeHtml(child.name || child.id || '');
+        const grandchildren = Array.isArray(child.children) ? child.children : [];
+        if (grandchildren.length) {
+            // 有三级：列标题不可点击，列内容为三级列表
+            const items = grandchildren.map(gc => {
+                const gcId = escapeHtml(gc.id || '');
+                const gcName = escapeHtml(gc.name || gc.id || '');
+                return `<div class="dropdown-item" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${gcId}')">${gcName}</div>`;
+            }).join('');
+            return `
+                <div class="dropdown-col">
+                    <div class="dropdown-col-title">${childName}</div>
+                    ${items}
+                </div>`;
+        } else {
+            // 无三级：列标题可点击直接跳转
+            return `
+                <div class="dropdown-col">
+                    <div class="dropdown-col-title dropdown-col-title--link" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${childId}')">${childName}</div>
+                </div>`;
+        }
+    }).join('');
+}
+
+/**
+ * 生成桌面端导航 HTML（含 hover dropdown megamenu）
+ * columns: /api/columns 返回的一级栏目树数组
+ * categories: /api/news 返回的 categories 对象（用于 badge 等）
+ * activeTabId: 当前激活的 tab id
+ */
+function renderDesktopNav(columns, categories, activeTabId) {
+    if (!Array.isArray(columns) || !columns.length) return '';
+    return columns.map(col => {
+        const colId = escapeHtml(col.id || '');
+        const colName = escapeHtml(col.name || col.id || '');
+        const children = Array.isArray(col.children) ? col.children : [];
+        const cat = categories ? categories[col.id] : null;
+        const badgeCategory = cat?.is_new ? `<span class="new-badge new-badge-category" data-category="${colId}">NEW</span>` : '';
+        const badgeSports = col.id === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
+        const badge = `${badgeCategory}${badgeSports}`;
+
+        // Determine active state: active if colId matches OR any child/grandchild matches
+        function _isDescendantActive(nodes) {
+            for (const n of nodes) {
+                if (String(n.id) === String(activeTabId)) return true;
+                if (Array.isArray(n.children) && _isDescendantActive(n.children)) return true;
+            }
+            return false;
+        }
+        const isActive = String(col.id) === String(activeTabId) || _isDescendantActive(children);
+        const activeClass = isActive ? ' active' : '';
+
+        if (!children.length) {
+            // 无子分类：普通 tab 按钮
+            return `<button class="sub-tab${activeClass}" data-category="${colId}" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${colId}')">${colName}${badge}</button>`;
+        }
+
+        // 有子分类：wrapper + dropdown
+        const dropdownCols = renderDropdownColumns(children);
+        return `
+            <div class="sub-tab-wrapper${activeClass}" data-category="${colId}">
+                <button class="sub-tab${activeClass}" data-category="${colId}" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${colId}')">${colName}${badge}</button>
+                <div class="sub-dropdown">
+                    <div class="dropdown-grid">
+                        ${dropdownCols}
+                    </div>
+                </div>
+            </div>`;
+    }).join('');
+}
+
 export const data = {
     formatUpdatedAt,
 
@@ -595,7 +674,7 @@ export const data = {
         };
     },
 
-    renderViewerFromData(data, state) {
+    renderViewerFromData(data, state, columns) {
         const contentEl = document.querySelector('.tab-content-area');
         const tabsEl = document.getElementById('homeSubTabs');
         if (!tabsEl || !contentEl) return;
@@ -609,11 +688,8 @@ export const data = {
             // ignore
         }
 
-        // Do NOT preserve knowledge grid HTML — morning-brief.js manages its own
-        // state (_mbOffset, _mbFinished, etc.) and will do a clean reload on
-        // viewer:rendered. Preserving stale HTML causes duplicate cards in WeChat
-        // because the preserved cards don't match the reset JS state.
-        let _knowledgeGridHtml = '';
+        // Do NOT preserve knowledge grid HTML — no longer needed (knowledge tab removed)
+        // morning-brief.js is disabled; knowledge tab replaced by tag-driven AI column
 
         const categories = TR.settings.applyCategoryConfigToData(data?.categories || {});
         _latestCategories = categories;
@@ -648,18 +724,37 @@ export const data = {
             activeTabId = firstTabId;
         }
 
-        const tabsHtml = Object.entries(categories).map(([catId, cat]) => {
-            // 跳过主题栏目（由 topic-tracker.js 动态管理）
-            if (String(catId).startsWith('topic-')) return '';
-            
-            const name = escapeHtml(cat?.name || catId);
-            const badgeCategory = cat?.is_new ? `<span class="new-badge new-badge-category" data-category="${escapeHtml(catId)}">NEW</span>` : '';
-            const badgeSports = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
-            const badge = `${badgeCategory}${badgeSports}`;
-            const activeClass = (String(catId) === String(activeTabId)) ? ' active' : '';
-            
-            return `<button class="sub-tab${activeClass}" data-category="${escapeHtml(catId)}" onclick="switchTab('${escapeHtml(catId)}')">${name}${badge}</button>`;
-        }).filter(Boolean).join('');
+        const tabsHtml = (() => {
+            // 若有 columns 数据，用 renderDesktopNav 生成含 dropdown 的导航
+            if (Array.isArray(columns) && columns.length) {
+                return renderDesktopNav(columns, categories, activeTabId);
+            }
+            // 降级：无 columns 时沿用旧逻辑
+            return Object.entries(categories).map(([catId, cat]) => {
+                if (String(catId).startsWith('topic-')) return '';
+                const name = escapeHtml(cat?.name || catId);
+                const badgeCategory = cat?.is_new ? `<span class="new-badge new-badge-category" data-category="${escapeHtml(catId)}">NEW</span>` : '';
+                const badgeSports = catId === 'sports' ? '<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>' : '';
+                const badge = `${badgeCategory}${badgeSports}`;
+                const activeClass = (String(catId) === String(activeTabId)) ? ' active' : '';
+                return `<button class="sub-tab${activeClass}" data-category="${escapeHtml(catId)}" onclick="switchTab('${escapeHtml(catId)}')">${name}${badge}</button>`;
+            }).filter(Boolean).join('');
+        })();
+
+        // Build a set of theme column ids (from /api/columns) for quick lookup
+        // These get renderThemePane — content loaded by categoryTimeline on switchTab
+        const _themeColIds = new Set();
+        if (Array.isArray(columns) && columns.length) {
+            function _collectIds(nodes) {
+                for (const n of nodes) {
+                    _themeColIds.add(String(n.id));
+                    if (Array.isArray(n.children)) _collectIds(n.children);
+                }
+            }
+            _collectIds(columns);
+            // Exclude special tabs that have their own dedicated pane renderers
+            ['my-tags', 'discovery', 'explore', 'rsscol-rss'].forEach(id => _themeColIds.delete(id));
+        }
 
         const contentHtml = Object.entries(categories).map(([catId, cat]) => {
             const isActiveCategory = !!activeTabId && String(catId) === String(activeTabId);
@@ -667,6 +762,9 @@ export const data = {
             if (String(catId) === 'rsscol-rss') return renderRssColPane(catId, isActiveCategory);
             if (String(catId) === 'explore') return renderExplorePane(catId, isActiveCategory);
             if (String(catId) === 'my-tags') return renderMyTagsPane(catId, isActiveCategory);
+
+            // Tag-driven 主题栏目：空 pane，由 categoryTimeline.load() 填充
+            if (_themeColIds.has(String(catId))) return renderThemePane(catId, isActiveCategory);
 
             if (String(catId).startsWith('topic-')) {
                 const isDynamic = cat?.is_dynamic !== false;
@@ -676,9 +774,9 @@ export const data = {
                 // else: fall through to normal rendering with pre-loaded data
             }
 
-            if (String(catId) === 'featured-mps') return renderFeaturedMpsPane(catId, isActiveCategory);
+            if (String(catId) === 'featured-mps') return ''; // featured-mps 已下线
             if (String(catId) === 'discovery') return renderDiscoveryPane(catId, isActiveCategory);
-            if (String(catId) === 'knowledge') return renderKnowledgePane(catId, isActiveCategory, _knowledgeGridHtml);
+            // knowledge tab 已由 tag-driven AI 栏目替代，跳过
 
             const platforms = cat?.platforms || {};
             const orderedIds = Object.keys(platforms || {});
@@ -714,7 +812,32 @@ export const data = {
         }).join('');
 
         tabsEl.innerHTML = tabsHtml + '<button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === \'function\' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button><div class="sub-tabs-indicator"></div>';
-        contentEl.innerHTML = contentHtml;
+
+        // 为 _columnConfig 中所有子节点（L2/L3）生成 pane（/api/news 不返回这些）
+        let extraPanesHtml = '';
+        if (Array.isArray(columns) && columns.length) {
+            function _collectSubPanes(nodes, parentActiveId) {
+                let html = '';
+                for (const n of nodes) {
+                    const nId = String(n.id || '');
+                    if (!nId || nId in (categories || {})) continue; // already rendered
+                    const isActive = nId === String(activeTabId);
+                    html += renderThemePane(nId, isActive);
+                    if (Array.isArray(n.children) && n.children.length) {
+                        html += _collectSubPanes(n.children, parentActiveId);
+                    }
+                }
+                return html;
+            }
+            // Only collect children (L2+), not L1 (already in categories or rendered above)
+            for (const col of columns) {
+                if (Array.isArray(col.children)) {
+                    extraPanesHtml += _collectSubPanes(col.children, activeTabId);
+                }
+            }
+        }
+
+        contentEl.innerHTML = contentHtml + extraPanesHtml;
 
         // 更新滑动指示器
         if (TR.tabs && TR.tabs.updateIndicator) {
@@ -871,8 +994,11 @@ export const data = {
                 }
             }
 
-            const response = await fetch('/api/news');
-            const baseData = await response.json();
+            const [newsResponse, columnsResponse] = await Promise.all([
+                fetch('/api/news'),
+                fetch('/api/columns').catch(() => null),
+            ]);
+            const baseData = await newsResponse.json();
 
             // 自动同步本地缓存：清理服务器上已不存在的平台
             try {
@@ -883,17 +1009,37 @@ export const data = {
                 console.error('[HotNews] Cache sync failed:', e);
             }
 
-            this.renderViewerFromData(baseData, state);
+            // 挂载 column_config 树到全局，供 view-mode.js / category-timeline.js 使用
+            try {
+                if (columnsResponse && columnsResponse.ok) {
+                    const columnsData = await columnsResponse.json();
+                    window._columnConfig = Array.isArray(columnsData) ? columnsData : (columnsData?.columns || []);
+                    // 构建父节点映射 {childId -> parentId}，供 handleTabClickWithAuth 使用
+                    window._columnParentMap = {};
+                    function _buildParentMap(nodes, parentId) {
+                        for (const n of nodes) {
+                            if (parentId) window._columnParentMap[String(n.id)] = parentId;
+                            if (Array.isArray(n.children) && n.children.length) {
+                                _buildParentMap(n.children, String(n.id));
+                            }
+                        }
+                    }
+                    _buildParentMap(window._columnConfig, null);
+                }
+            } catch (e) {
+                window._columnConfig = window._columnConfig || [];
+            }
+
+            this.renderViewerFromData(baseData, state, window._columnConfig);
 
             try { TR.events.emit('data:refreshed', baseData); } catch (_) { }
 
             // Restore scroll position: prefer navigation state (back-nav) over snapshot
-            // For dynamic tabs (topic, my-tags, discovery, featured-mps, knowledge):
-            // don't consume nav state here — these modules handle scroll restoration
-            // after their content loads asynchronously.
+            // For dynamic tabs (topic, my-tags, discovery): don't consume nav state here
+            // — these modules handle scroll restoration after their content loads asynchronously.
             const navActiveTab = TR.scroll?.peekNavigationState?.()?.activeTab || '';
             const isTopicTab = String(navActiveTab).startsWith('topic-');
-            const isDynamicTab = ['my-tags', 'discovery', 'featured-mps', 'knowledge', 'explore'].includes(navActiveTab);
+            const isDynamicTab = ['my-tags', 'discovery', 'explore'].includes(navActiveTab);
             
             console.log(`[Data] After render: navActiveTab=${navActiveTab}, isTopicTab=${isTopicTab}, isDynamicTab=${isDynamicTab}`);
             
@@ -1006,7 +1152,7 @@ export const data = {
 
     showCategoryUpdateDot(categoryId) {
         // Categories that should never show update dots (unreliable timestamps)
-        const NO_UPDATE_DOT_CATEGORIES = ['explore', 'knowledge'];
+        const NO_UPDATE_DOT_CATEGORIES = ['explore'];
         if (NO_UPDATE_DOT_CATEGORIES.includes(categoryId)) return;
 
         const tab = document.querySelector(`.sub-tab[data-category="${categoryId}"]`);
@@ -1036,6 +1182,40 @@ export const data = {
 // 全局函数
 window.fetchData = () => data.fetchData();
 window.refreshViewerData = (opts) => data.refreshViewerData(opts);
+
+/**
+ * Tab 点击（含登录检查）
+ * 未登录时弹登录弹窗，已登录时直接切换
+ */
+window.handleTabClickWithAuth = (categoryId) => {
+    try {
+        const { authState } = window.TR || {};
+        // 需要登录的栏目：检查 _columnConfig 中的 require_login 字段
+        const node = (() => {
+            const tree = window._columnConfig;
+            if (!Array.isArray(tree)) return null;
+            function _s(nodes) {
+                for (const n of nodes) {
+                    if (String(n.id) === String(categoryId)) return n;
+                    if (Array.isArray(n.children)) { const f = _s(n.children); if (f) return f; }
+                }
+                return null;
+            }
+            return _s(tree);
+        })();
+        if (node?.require_login && authState && !authState.isLoggedIn()) {
+            if (typeof window.openLoginModal === 'function') window.openLoginModal();
+            return;
+        }
+        // 若点击的是子分类，记录到父栏目的 subtab 偏好
+        if (window._columnParentMap && window._columnParentMap[categoryId] && window.TR?.tabs?.saveActiveSubTab) {
+            window.TR.tabs.saveActiveSubTab(window._columnParentMap[categoryId], categoryId);
+        }
+    } catch (e) {
+        // ignore
+    }
+    if (typeof window.switchTab === 'function') window.switchTab(categoryId);
+};
 
 TR.data = data;
 

@@ -590,6 +590,14 @@ app.include_router(_article_stats_router)
 from hotnews.web.cache_stats_routes import router as _cache_stats_router
 app.include_router(_cache_stats_router)
 
+# Tag-driven columns API
+from hotnews.web.columns_routes import router as _columns_router
+app.include_router(_columns_router)
+
+# Tag-driven timeline API
+from hotnews.web.timeline_routes import router as _timeline_router
+app.include_router(_timeline_router)
+
 # [KERNEL] Kernel Static Files
 kernel_static = Path(__file__).parent.parent / "kernel" / "static"
 if kernel_static.exists():

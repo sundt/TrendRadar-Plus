@@ -31,12 +31,14 @@ import './category-tab-reorder.js';
 import './explore-timeline.js';
 import './rss-category-carousel.js';
 import './title-drag-scroll.js';
-import './morning-brief.js';
+// morning-brief.js (knowledge tab) 已由 tag-driven AI 栏目替代，已禁用
+// import './morning-brief.js';
 import './click-tracker.js';
 import './auth.js';
 import './my-tags.js';
 import './discovery.js';
-import './featured-mps.js';
+// featured-mps.js 已下线
+// import './featured-mps.js';
 import './finance-timeline.js';
 import './source-subscription.js';
 import './login-modal.js';

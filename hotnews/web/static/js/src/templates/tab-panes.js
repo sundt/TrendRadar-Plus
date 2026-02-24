@@ -103,3 +103,15 @@ export function renderKnowledgePane(catId, isActive, existingGridHtml) {
             <div class="platform-grid" data-mb-injected="1"></div>
         </div>`;
 }
+
+/**
+ * 通用主题栏目 pane（tag-driven 栏目复用）
+ * 内容由 categoryTimeline.load() 在 switchTab 时填充
+ */
+export function renderThemePane(catId, isActive) {
+    const cls = isActive ? ' active' : '';
+    return `
+        <div class="tab-pane${cls}" id="tab-${escapeHtml(catId)}">
+            <div class="platform-grid"></div>
+        </div>`;
+}

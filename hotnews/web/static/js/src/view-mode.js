@@ -14,16 +14,30 @@ const STORAGE_KEY = 'hotnews_view_mode_v1';
 
 // 不可切换的栏目
 const FIXED_CATEGORIES = {
-    'knowledge': 'timeline',   // 每日AI早报 — 固定时间线
     'discovery': 'card',       // 新发现 — 固定卡片
     'rsscol-rss': 'card',      // RSS 阅读器 — 固定
     'explore': 'timeline',     // 精选博客 — 固定时间线
 };
 
-// 默认时间线模式的栏目
-const DEFAULT_TIMELINE = new Set([
-    'featured-mps', 'finance',
-]);
+/**
+ * 递归在 window._columnConfig 树中查找 catId
+ * 找到则返回该节点，否则返回 null
+ */
+function _findInColumnConfig(catId) {
+    const tree = window._columnConfig;
+    if (!Array.isArray(tree)) return null;
+    function _search(nodes) {
+        for (const node of nodes) {
+            if (String(node.id || '') === String(catId)) return node;
+            if (Array.isArray(node.children) && node.children.length) {
+                const found = _search(node.children);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+    return _search(tree);
+}
 
 function _load() {
     try {
@@ -44,10 +58,12 @@ export const viewMode = {
     get(categoryId) {
         const cid = String(categoryId || '');
         if (FIXED_CATEGORIES[cid]) return FIXED_CATEGORIES[cid];
+        // Tag-driven 栏目（在 column_config 树中）固定时间线
+        if (_findInColumnConfig(cid)) return 'timeline';
         const map = _load();
         if (map[cid]) return map[cid];
-        // 默认值
-        return DEFAULT_TIMELINE.has(cid) ? 'timeline' : 'card';
+        // 默认值：finance 默认时间线，其余默认卡片
+        return cid === 'finance' ? 'timeline' : 'card';
     },
 
     /**
@@ -79,7 +95,11 @@ export const viewMode = {
      * 是否可切换
      */
     canSwitch(categoryId) {
-        return !FIXED_CATEGORIES[String(categoryId || '')];
+        const cid = String(categoryId || '');
+        if (FIXED_CATEGORIES[cid]) return false;
+        // Tag-driven 栏目固定时间线，不可切换
+        if (_findInColumnConfig(cid)) return false;
+        return true;
     },
 };
 

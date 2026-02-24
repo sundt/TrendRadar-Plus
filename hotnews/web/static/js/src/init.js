@@ -276,7 +276,7 @@ ready(function () {
             const navState = TR.scroll?.peekNavigationState?.() || null;
             if (navState) {
                 const isTopicTab = String(navState.activeTab || '').startsWith('topic-');
-                const isDynamicTab = ['my-tags', 'discovery', 'featured-mps', 'knowledge', 'explore'].includes(navState.activeTab);
+                const isDynamicTab = ['my-tags', 'discovery', 'explore'].includes(navState.activeTab);
                 
                 if (isTopicTab || isDynamicTab) {
                     // Dynamic tab content not yet loaded - leave nav state for the module to consume

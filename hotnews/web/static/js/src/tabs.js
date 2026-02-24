@@ -21,7 +21,7 @@ const EXPLORE_MODAL_CLOSED_EVENT = 'tr_explore_modal_closed';
 
 // Default tabs based on login status
 const DEFAULT_TAB_LOGGED_IN = 'my-tags';  // 已登录用户默认显示"我的关注"
-const DEFAULT_TAB_GUEST = 'explore';       // 未登录用户默认显示"探索"（有缓存预热）
+const DEFAULT_TAB_GUEST = 'ai';            // 未登录用户默认显示"AI"（tag-driven 主栏目）
 
 // Memory optimization: max number of tabs to keep DOM content
 const MAX_CACHED_TABS = 3;
@@ -78,10 +78,8 @@ function _restoreViewerPosIfAny() {
         const tabId = String(pos?.activeTab || '').trim();
         if (!tabId) return;
 
-        const escaped = (window.CSS && typeof window.CSS.escape === 'function') ? window.CSS.escape(String(tabId)) : String(tabId);
-        const tabEl = document.querySelector(`.sub-tab[data-category="${escaped}"]`);
-        if (!tabEl) return;
-
+        // Directly call switchTab — it handles L2/L3 ids that may not have
+        // a .sub-tab DOM element (e.g. tag-driven sub-columns).
         tabs.switchTab(tabId);
         const y = Number(pos?.scrollY || 0) || 0;
         requestAnimationFrame(() => {
@@ -264,7 +262,7 @@ function _cleanupInactiveTabs(currentTabId) {
     tabsToClean.forEach(tabId => {
         try {
             // Skip special tabs that shouldn't be cleaned
-            if (['explore', 'knowledge', 'my-tags', 'discovery', 'rsscol-rss', 'featured-mps', 'finance'].includes(tabId)) return;
+            if (['explore', 'my-tags', 'discovery', 'rsscol-rss'].includes(tabId)) return;
             // Skip topic tabs — their content is async-loaded and expensive to re-fetch
             if (String(tabId).startsWith('topic-')) return;
             
@@ -294,6 +292,33 @@ function _cleanupInactiveTabs(currentTabId) {
             // ignore
         }
     });
+}
+
+const SUB_TAB_STORAGE_PREFIX = 'hotnews_active_subtab_';
+
+/**
+ * 获取某一级栏目上次激活的二级分类 id
+ * 无记录时返回 `{parentId}-all`（全部子分类）
+ */
+function getDefaultSubTab(parentId) {
+    try {
+        const saved = storage.getRaw(SUB_TAB_STORAGE_PREFIX + parentId);
+        if (saved) return saved;
+    } catch (e) {
+        // ignore
+    }
+    return `${parentId}-all`;
+}
+
+/**
+ * 持久化某一级栏目当前激活的二级分类 id
+ */
+function saveActiveSubTab(parentId, subTabId) {
+    try {
+        storage.setRaw(SUB_TAB_STORAGE_PREFIX + parentId, subTabId);
+    } catch (e) {
+        // ignore
+    }
 }
 
 export const tabs = {
@@ -379,7 +404,7 @@ export const tabs = {
 
         // --- View mode handling ---
         // Tabs with their own dedicated timeline modules handle themselves
-        const SELF_MANAGED_TIMELINE = ['knowledge', 'explore', 'featured-mps', 'finance'];
+        const SELF_MANAGED_TIMELINE = ['explore', 'my-tags', 'discovery'];
         const mode = viewMode.get(categoryId);
 
         if (mode === 'timeline' && !SELF_MANAGED_TIMELINE.includes(String(categoryId))) {
@@ -410,8 +435,8 @@ export const tabs = {
             return;
         }
 
-        // featured-mps / finance in card mode: no SSR cards, use loadCardMode
-        const DYNAMIC_CARD_CATS = ['featured-mps', 'finance'];
+        // finance in card mode: no SSR cards, use loadCardMode
+        const DYNAMIC_CARD_CATS = ['finance'];
         if (DYNAMIC_CARD_CATS.includes(String(categoryId)) && mode === 'card') {
             const grid = paneEl.querySelector('.platform-grid');
             const hasCards = grid && grid.querySelector('.platform-card');
@@ -426,10 +451,8 @@ export const tabs = {
             const hasPlaceholder = !!paneEl.querySelector('.news-placeholder');
             const shouldLoad = !hasItems && hasPlaceholder;
 
-            // Knowledge tab has its own loading logic (morning-brief.js),
-            // skip bulkLoadCategory to avoid duplicate card creation.
             // Explore is self-loading only when in timeline mode.
-            const selfLoadingTabs = ['knowledge'];
+            const selfLoadingTabs = [];
             if (viewMode.get('explore') === 'timeline') selfLoadingTabs.push('explore');
             if (shouldLoad && !selfLoadingTabs.includes(String(categoryId))) {
                 if (TR.infiniteScroll && typeof TR.infiniteScroll.scheduleBulkLoadCategory === 'function') {
@@ -616,6 +639,8 @@ export const tabs = {
     switchMainNav,
     getMainNav() { return _currentMainNav; },
     updateIndicator: _updateIndicator,
+    getDefaultSubTab,
+    saveActiveSubTab,
 
     restoreActiveTabPlatformGridScroll(state) {
         TR.scroll.restoreActiveTabPlatformGridScroll(state);
@@ -690,15 +715,12 @@ ready(function () {
         const activeTab = tabs.getActiveTabId();
 
         // Self-managed timeline tabs (have their own dedicated modules)
-        const SELF_MANAGED_TIMELINE = ['knowledge', 'explore', 'featured-mps', 'finance'];
+        const SELF_MANAGED_TIMELINE = ['explore', 'my-tags', 'discovery'];
 
         if (mode === 'timeline') {
             if (SELF_MANAGED_TIMELINE.includes(catId)) {
                 // These tabs' own modules handle timeline rendering.
-                // For featured-mps/finance, reset their module state so they reload.
-                if (catId === 'featured-mps' && window.HotNews?.featuredMps?.load) {
-                    window.HotNews.featuredMps.load(true);
-                } else if (catId === 'finance' && window.HotNews?.financeTimeline?.load) {
+                if (catId === 'finance' && window.HotNews?.financeTimeline?.load) {
                     window.HotNews.financeTimeline.load(true);
                 } else if (catId !== activeTab) {
                     tabs.switchTab(catId);
@@ -713,9 +735,8 @@ ready(function () {
             }
         } else {
             // Switching to card mode
-            if (catId === 'featured-mps' || catId === 'finance') {
-                // These have no SSR card data — use categoryTimeline.loadCardMode
-                // which fetches from timeline API and groups by source
+            if (catId === 'finance') {
+                // finance has no SSR card data — use categoryTimeline.loadCardMode
                 categoryTimeline.loadCardMode(catId);
             } else if (String(catId).startsWith('topic-')) {
                 // Topic tabs: restore card layout, then trigger topic-tracker reload
@@ -729,7 +750,7 @@ ready(function () {
                 // Re-trigger switchTab to load card content
                 setTimeout(() => tabs.switchTab(catId), 50);
             } else {
-                // Other self-managed (knowledge, explore) — shouldn't reach here (fixed)
+                // Other self-managed (explore) — restore grid
                 const grid = document.querySelector(`#tab-${catId} .platform-grid`);
                 if (grid) {
                     grid.style.display = '';

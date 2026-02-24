@@ -1,8 +1,8 @@
 """
-Morning Brief Routes
+Morning Brief Routes — DEPRECATED
 
-RSS 精选、时间线、数据源等 API 端点。
-从 server.py 提取，降低主文件复杂度。
+知识库（knowledge tab）已由 tag-driven AI 栏目替代。
+此路由保留以兼容 cache_warmup.py 和旧版客户端，不再主动使用。
 """
 
 import json

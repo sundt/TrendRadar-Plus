@@ -1101,10 +1101,10 @@ export const platformReorder = {
 
             if (!card || !grid || !categoryId) return;
 
-            // Exclude special categories: explore, knowledge (morning brief)
+            // Exclude special categories: explore
             // my-tags is handled separately with additional "unfollow" option
             // discovery is handled separately with "follow" option
-            if (categoryId === 'explore' || categoryId === 'knowledge') return;
+            if (categoryId === 'explore') return;
 
             e.preventDefault();
             showContextMenu(e, card, grid, categoryId);

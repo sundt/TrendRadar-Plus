@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>导航结构预览</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #f5f5f7;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  padding: 24px 0 60px;
+}
+.main-container {
+  width: 96vw; max-width: 1400px;
+  margin: 0 auto; padding: 0 15px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.nav-card {
+  background: #fff;
+  border-radius: 10px; border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  position: sticky; top: 12px; z-index: 100;
+  overflow: visible;
+}
+.nav-top { display: flex; align-items: center; padding: 10px 20px; gap: 8px; }
+.main-nav { display: flex; gap: 2px; }
+.main-nav-item {
+  padding: 6px 14px; font-size: 13.5px; font-weight: 600;
+  cursor: pointer; border-radius: 7px; border: none; background: none;
+  color: #9ca3af; transition: all 0.15s;
+}
+.main-nav-item:hover { color: #1d1d1f; background: #f3f4f6; }
+.main-nav-item.active { color: #1d1d1f; background: #f3f4f6; }
+.nav-spacer { flex: 1; }
+.nav-divider { height: 1px; background: #f3f4f6; margin: 0 20px; }
+
+.sub-tabs {
+  display: flex; align-items: stretch;
+  overflow: visible; padding: 0 14px; position: relative;
+}
+.sub-tab {
+  padding: 8px 12px 10px; font-size: 13px; font-weight: 500;
+  color: #9ca3af; cursor: pointer; white-space: nowrap;
+  border: none; background: none; flex-shrink: 0; transition: color 0.15s;
+}
+.sub-tab:hover { color: #1d1d1f; }
+.sub-tab.active { color: #1d1d1f; font-weight: 600; }
+.sub-tabs-indicator {
+  position: absolute; bottom: 0; height: 2px;
+  background: #1d1d1f; border-radius: 1px;
+  transition: left 0.25s cubic-bezier(0.4,0,0.2,1), width 0.25s cubic-bezier(0.4,0,0.2,1);
+  pointer-events: none;
+}
+
+.sub-tab-wrapper {
+  position: relative; display: inline-flex; flex-shrink: 0;
+  padding-bottom: 10px; margin-bottom: -10px;
+}
+
+.sub-dropdown {
+  position: absolute;
+  top: 100%; left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.1), 0 2px 8px rgba(0,0,0,0.05);
+  padding: 16px 20px 14px;
+  z-index: 9999; opacity: 0; pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.sub-tab-wrapper:hover .sub-dropdown {
+  opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0);
+}
+
+.dropdown-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 28px;
+  align-items: flex-start;
+}
+
+.dropdown-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 76px;
+}
+
+.col-header {
+  font-size: 11px; font-weight: 700;
+  color: #9ca3af; letter-spacing: 0.07em; text-transform: uppercase;
+  padding: 0 6px 7px; margin-bottom: 2px;
+  cursor: pointer; white-space: nowrap;
+  border-bottom: 1px solid #f0f0f0;
+  transition: color 0.15s; display: block;
+}
+.col-header:hover { color: #6b7280; }
+.col-header.active { color: #1d1d1f; }
+
+.col-item {
+  font-size: 13px; color: #374151;
+  padding: 5px 6px; border-radius: 6px;
+  cursor: pointer; border: none; background: none;
+  text-align: left; white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+  display: block; width: 100%;
+}
+.col-item:hover { background: #f3f4f6; color: #1d1d1f; }
+.col-item.active { color: #1d1d1f; font-weight: 600; background: #f3f4f6; }
+
+/* col separator */
+.dropdown-col + .dropdown-col {
+  border-left: 1px solid #f3f4f6;
+  padding-left: 28px;
+  margin-left: -28px;
+}
+
+.tab-content-area {
+  background: white; border-radius: 10px; padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.07); min-height: 260px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pane-label { color: #9ca3af; font-size: 14px; text-align: center; }
+.pane-label strong { color: #374151; font-size: 16px; display: block; margin-bottom: 4px; }
+.note {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  padding: 12px 18px; font-size: 12px; color: #9ca3af; line-height: 1.8;
+}
+</style>
+</head>
+<body>
+<div class="main-container">
+
+  <div class="nav-card">
+    <div class="nav-top">
+      <div class="main-nav">
+        <button class="main-nav-item active" onclick="switchMainNav('home',this)">主页</button>
+        <button class="main-nav-item" onclick="switchMainNav('topics',this)">我的主题</button>
+      </div>
+      <div class="nav-spacer"></div>
+    </div>
+    <div class="nav-divider"></div>
+
+    <div class="sub-tabs" id="homeSubTabs">
+
+      <button class="sub-tab" onclick="switchTab('my-tags','我的关注',this)">我的关注</button>
+      <button class="sub-tab" onclick="switchTab('discovery','新发现',this)">新发现</button>
+      <button class="sub-tab" onclick="switchTab('explore','精选博客',this)">精选博客</button>
+
+      <!-- AI：三级 -->
+      <div class="sub-tab-wrapper">
+        <button class="sub-tab active" onclick="switchTab('ai','AI',this)">AI</button>
+        <div class="sub-dropdown">
+          <div class="dropdown-grid">
+            <div class="dropdown-col">
+              <span class="col-header">大模型</span>
+              <button class="col-item" onclick="pick(this,'AI','OpenAI')">OpenAI</button>
+              <button class="col-item" onclick="pick(this,'AI','Claude')">Claude</button>
+              <button class="col-item" onclick="pick(this,'AI','Gemini')">Gemini</button>
+              <button class="col-item" onclick="pick(this,'AI','Grok / xAI')">Grok / xAI</button>
+              <button class="col-item" onclick="pick(this,'AI','DeepSeek')">DeepSeek</button>
+              <button class="col-item" onclick="pick(this,'AI','Kimi')">Kimi</button>
+              <button class="col-item" onclick="pick(this,'AI','豆包')">豆包</button>
+              <button class="col-item" onclick="pick(this,'AI','元宝')">元宝</button>
+              <button class="col-item" onclick="pick(this,'AI','Qwen')">Qwen</button>
+              <button class="col-item" onclick="pick(this,'AI','智谱 / GLM')">智谱 / GLM</button>
+              <button class="col-item" onclick="pick(this,'AI','MiniMax')">MiniMax</button>
+              <button class="col-item" onclick="pick(this,'AI','阶跃星辰')">阶跃星辰</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">AI 编程</span>
+              <button class="col-item" onclick="pick(this,'AI','Claude Code')">Claude Code</button>
+              <button class="col-item" onclick="pick(this,'AI','Agentic Coding')">Agentic Coding</button>
+              <button class="col-item" onclick="pick(this,'AI','Vibe Coding')">Vibe Coding</button>
+              <button class="col-item" onclick="pick(this,'AI','Codex')">Codex</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">AI Agent</span>
+              <button class="col-item" onclick="pick(this,'AI','AI Agent')">AI Agent</button>
+              <button class="col-item" onclick="pick(this,'AI','MCP')">MCP</button>
+              <button class="col-item" onclick="pick(this,'AI','Agentic AI')">Agentic AI</button>
+              <button class="col-item" onclick="pick(this,'AI','Embodied AI')">Embodied AI</button>
+              <button class="col-item" onclick="pick(this,'AI','Physical AI')">Physical AI</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">硬件芯片</span>
+              <button class="col-item" onclick="pick(this,'AI','NVIDIA')">NVIDIA</button>
+              <button class="col-item" onclick="pick(this,'AI','ASML')">ASML</button>
+              <button class="col-item" onclick="pick(this,'AI','HBM / 存储')">HBM / 存储</button>
+              <button class="col-item" onclick="pick(this,'AI','半导体')">半导体</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 开发者：二级 -->
+      <div class="sub-tab-wrapper">
+        <button class="sub-tab" onclick="switchTab('developer','开发者',this)">开发者</button>
+        <div class="sub-dropdown">
+          <div class="dropdown-grid">
+            <div class="dropdown-col">
+              <span class="col-header">移动开发</span>
+              <button class="col-item" onclick="pick(this,'开发者','iOS 26')">iOS 26</button>
+              <button class="col-item" onclick="pick(this,'开发者','Android')">Android</button>
+              <button class="col-item" onclick="pick(this,'开发者','HarmonyOS')">HarmonyOS</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">云与基础设施</span>
+              <button class="col-item" onclick="pick(this,'开发者','6G')">6G</button>
+              <button class="col-item" onclick="pick(this,'开发者','光通信')">光通信</button>
+              <button class="col-item" onclick="pick(this,'开发者','量子计算')">量子计算</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">开发工具</span>
+              <button class="col-item" onclick="pick(this,'开发者','AI 眼镜')">AI 眼镜</button>
+              <button class="col-item" onclick="pick(this,'开发者','低空经济')">低空经济</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 商业：二级 -->
+      <div class="sub-tab-wrapper">
+        <button class="sub-tab" onclick="switchTab('business','商业',this)">商业</button>
+        <div class="sub-dropdown">
+          <div class="dropdown-grid">
+            <div class="dropdown-col">
+              <span class="col-header">出行汽车</span>
+              <button class="col-item" onclick="pick(this,'商业','小米 SU7')">小米 SU7</button>
+              <button class="col-item" onclick="pick(this,'商业','Robotaxi')">Robotaxi</button>
+              <button class="col-item" onclick="pick(this,'商业','Tesla FSD')">Tesla FSD</button>
+              <button class="col-item" onclick="pick(this,'商业','Cybercab')">Cybercab</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">创业融资</span>
+              <button class="col-item" onclick="pick(this,'商业','商业航天')">商业航天</button>
+              <button class="col-item" onclick="pick(this,'商业','SpaceX IPO')">SpaceX IPO</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">低空经济</span>
+              <button class="col-item" onclick="pick(this,'商业','低空经济')">低空经济</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 财经：二级 -->
+      <div class="sub-tab-wrapper">
+        <button class="sub-tab" onclick="switchTab('finance','财经',this)">财经</button>
+        <div class="sub-dropdown">
+          <div class="dropdown-grid">
+            <div class="dropdown-col">
+              <span class="col-header">大宗商品</span>
+              <button class="col-item" onclick="pick(this,'财经','黄金')">黄金</button>
+              <button class="col-item" onclick="pick(this,'财经','原油')">原油</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">股票市场</span>
+              <button class="col-item" onclick="pick(this,'财经','A 股')">A 股</button>
+              <button class="col-item" onclick="pick(this,'财经','美股')">美股</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">加密货币</span>
+              <button class="col-item" onclick="pick(this,'财经','Bitcoin')">Bitcoin</button>
+              <button class="col-item" onclick="pick(this,'财经','以太坊')">以太坊</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">宏观经济</span>
+              <button class="col-item" onclick="pick(this,'财经','贸易政策')">贸易政策</button>
+              <button class="col-item" onclick="pick(this,'财经','房地产')">房地产</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 科学健康：三级 -->
+      <div class="sub-tab-wrapper">
+        <button class="sub-tab" onclick="switchTab('science','科学健康',this)">科学健康</button>
+        <div class="sub-dropdown">
+          <div class="dropdown-grid">
+            <div class="dropdown-col">
+              <span class="col-header">航天能源</span>
+              <button class="col-item" onclick="pick(this,'科学健康','商业航天')">商业航天</button>
+              <button class="col-item" onclick="pick(this,'科学健康','太空太阳能')">太空太阳能</button>
+              <button class="col-item" onclick="pick(this,'科学健康','核聚变')">核聚变</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">机器人</span>
+              <button class="col-item" onclick="pick(this,'科学健康','人形机器人')">人形机器人</button>
+              <button class="col-item" onclick="pick(this,'科学健康','Unitree')">Unitree</button>
+              <button class="col-item" onclick="pick(this,'科学健康','Optimus')">Optimus</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">生物医药</span>
+              <button class="col-item" onclick="pick(this,'科学健康','基因编辑')">基因编辑</button>
+              <button class="col-item" onclick="pick(this,'科学健康','新药研发')">新药研发</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">前沿科学</span>
+              <button class="col-item" onclick="pick(this,'科学健康','量子计算')">量子计算</button>
+              <button class="col-item" onclick="pick(this,'科学健康','UFO 披露')">UFO 披露</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 生活：二级 -->
+      <div class="sub-tab-wrapper">
+        <button class="sub-tab" onclick="switchTab('lifestyle','生活',this)">生活</button>
+        <div class="sub-dropdown">
+          <div class="dropdown-grid">
+            <div class="dropdown-col">
+              <span class="col-header">影视娱乐</span>
+              <button class="col-item" onclick="pick(this,'生活','短剧')">短剧</button>
+              <button class="col-item" onclick="pick(this,'生活','春节档')">春节档</button>
+              <button class="col-item" onclick="pick(this,'生活','冬奥会')">冬奥会</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">汽车</span>
+              <button class="col-item" onclick="pick(this,'生活','新能源')">新能源</button>
+              <button class="col-item" onclick="pick(this,'生活','自动驾驶')">自动驾驶</button>
+            </div>
+            <div class="dropdown-col">
+              <span class="col-header">体育</span>
+              <button class="col-item" onclick="pick(this,'生活','冬奥会')">冬奥会</button>
+              <button class="col-item" onclick="pick(this,'生活','奥运')">奥运</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-tabs-indicator" id="homeIndicator"></div>
+    </div>
+  </div>
+
+  <div class="tab-content-area">
+    <div class="pane-label" id="paneLabel">
+      <strong>AI</strong>全部内容
+    </div>
+  </div>
+
+  <div class="note">
+    点击一级 tab → 该栏目全部内容；hover → 展开面板，AI / 科学健康 有三级，其余二级；点击任意项直接跳转。
+  </div>
+</div>
+
+<script>
+function allParentTabs() {
+  return document.querySelectorAll('#homeSubTabs > .sub-tab, #homeSubTabs > .sub-tab-wrapper > .sub-tab');
+}
+function switchTab(id, name, btn) {
+  allParentTabs().forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('paneLabel').innerHTML = '<strong>' + name + '</strong>全部内容';
+  updateIndicator();
+}
+function pick(btn, parent, name) {
+  allParentTabs().forEach(b => b.classList.remove('active'));
+  const wrapper = btn.closest('.sub-tab-wrapper');
+  const parentBtn = wrapper && wrapper.querySelector(':scope > .sub-tab');
+  if (parentBtn) parentBtn.classList.add('active');
+  const dropdown = btn.closest('.sub-dropdown');
+  if (dropdown) dropdown.querySelectorAll('.col-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('paneLabel').innerHTML = '<strong>' + parent + ' › ' + name + '</strong>内容区域';
+  updateIndicator();
+}
+function switchMainNav(nav, btn) {
+  document.querySelectorAll('.main-nav-item').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('homeSubTabs').style.visibility = nav === 'topics' ? 'hidden' : 'visible';
+}
+function updateIndicator() {
+  const container = document.getElementById('homeSubTabs');
+  const indicator = document.getElementById('homeIndicator');
+  if (!container || !indicator) return;
+  const active = container.querySelector('.sub-tab-wrapper > .sub-tab.active') ||
+                 container.querySelector(':scope > .sub-tab.active');
+  if (!active) return;
+  const cr = container.getBoundingClientRect();
+  const tr = active.getBoundingClientRect();
+  indicator.style.left = (tr.left - cr.left + container.scrollLeft + 12) + 'px';
+  indicator.style.width = Math.max(tr.width - 24, 0) + 'px';
+}
+setTimeout(updateIndicator, 60);
+window.addEventListener('resize', updateIndicator);
+</script>
+</body>
+</html>

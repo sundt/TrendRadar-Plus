@@ -1,9 +1,14 @@
 #!/bin/bash
 set -e
 
+# 脚本所在目录（无论从哪里调用都能找到 .env）
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Load .env if it exists
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
 fi
 
 # Configuration - 必须通过环境变量设置

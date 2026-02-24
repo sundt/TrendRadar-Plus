@@ -209,3 +209,104 @@ body.categories-ready.category-tabs-drag-mode .category-drag-handle {
         transform: scale(1);
     }
 }
+
+/* ── Tag-driven Columns: Hover Dropdown Megamenu ── */
+
+/* Wrapper for tabs that have sub-columns */
+.sub-tab-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    /* Bridge gap between tab and dropdown so hover doesn't break */
+    padding-bottom: 8px;
+    margin-bottom: -8px;
+}
+
+.sub-tab-wrapper .sub-tab {
+    /* Inherit existing sub-tab styles */
+}
+
+/* Dropdown panel */
+.sub-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 200;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 16px;
+    min-width: 320px;
+    max-width: 600px;
+    white-space: nowrap;
+}
+
+.sub-tab-wrapper:hover .sub-dropdown {
+    display: block;
+}
+
+/* Grid of columns inside dropdown */
+.dropdown-grid {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+/* Each column in the dropdown */
+.dropdown-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 80px;
+}
+
+/* Column title (L2 label) */
+.dropdown-col-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 0 6px;
+    border-bottom: 1px solid #f3f4f6;
+    margin-bottom: 4px;
+    white-space: nowrap;
+}
+
+/* Clickable column title (L2 leaf — no L3 children) */
+.dropdown-col-title--link {
+    cursor: pointer;
+    color: #374151;
+    text-transform: none;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.dropdown-col-title--link:hover {
+    color: var(--primary-color, #07c160);
+}
+
+/* L3 items */
+.dropdown-item {
+    font-size: 13px;
+    color: #374151;
+    padding: 3px 6px;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+
+.dropdown-item:hover {
+    background: #f3f4f6;
+    color: var(--primary-color, #07c160);
+}
+
+/* Active state for wrapper */
+.sub-tab-wrapper.active > .sub-tab {
+    /* active styles already applied by .sub-tab.active */
+}

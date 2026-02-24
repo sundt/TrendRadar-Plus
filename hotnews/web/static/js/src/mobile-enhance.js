@@ -628,22 +628,48 @@ const MobileEnhance = {
     }, { passive: true });
   },
 
-  /** 查找当前激活 tab 的前/后一个可见 tab */
+  /**
+   * 从 _columnConfig 构建扁平导航顺序：
+   * 每个一级栏目展开为其所有叶子节点 id（二级或三级）。
+   * 降级：_columnConfig 未就绪时从 DOM 读取。
+   */
+  _buildNavOrder() {
+    const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
+    if (!columns.length) {
+      // 降级：从 DOM 读取可见 sub-tab
+      return Array.from(
+        document.querySelectorAll('.sub-tab[data-category]:not(.sub-tab-new)')
+      ).filter(t => !this._isTabHiddenByUser(t))
+        .map(t => t.dataset.category);
+    }
+
+    const ids = [];
+    function collectLeaves(nodes) {
+      for (const n of nodes) {
+        const children = Array.isArray(n.children) ? n.children : [];
+        if (!children.length) {
+          ids.push(String(n.id));
+        } else {
+          collectLeaves(children);
+        }
+      }
+    }
+    collectLeaves(columns);
+    return ids;
+  },
+
+  /** 查找当前激活 tab 的前/后一个 tab */
   _findAdjacentTab(direction) {
-    const allTabs = Array.from(
-      document.querySelectorAll('.sub-tab[data-category]:not(.sub-tab-new)')
-    ).filter(tab => !this._isTabHiddenByUser(tab));
-
     const activeId = window.TR?.tabs?.getActiveTabId?.() ||
-      document.querySelector('.sub-tab.active')?.dataset?.category;
+      document.querySelector('.sub-tab.active')?.dataset?.category || '';
 
-    const currentIndex = allTabs.findIndex(t => t.dataset.category === activeId);
-    if (currentIndex === -1) return null;
+    const navOrder = this._buildNavOrder();
+    const idx = navOrder.indexOf(activeId);
+    if (idx === -1) return null;
 
-    const targetIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-    if (targetIndex < 0 || targetIndex >= allTabs.length) return null;
-
-    return allTabs[targetIndex].dataset.category || null;
+    const targetIdx = direction === 'next' ? idx + 1 : idx - 1;
+    if (targetIdx < 0 || targetIdx >= navOrder.length) return null;
+    return navOrder[targetIdx];
   },
 
 
@@ -1007,106 +1033,223 @@ const MobileEnhance = {
     if (this._categoryPanel) this._categoryPanel.classList.remove('open');
   },
 
-  /** 渲染分类面板内容 */
+  /** 渲染分类面板内容（两级结构，从 _columnConfig 读取） */
   _renderCategoryItems() {
     if (!this._categoryPanel) return;
 
-    // 获取当前激活分类
     const activeId = window.TR?.tabs?.getActiveTabId?.() ||
       document.querySelector('.sub-tab.active')?.dataset?.category || '';
-    const activeTab = document.querySelector(`.sub-tab[data-category="${activeId}"]`);
-    const activeName = activeTab?.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || activeId;
 
-    // 读取系统分类（排除 topic-tab 和 sub-tab-new，排除用户隐藏的）
-    const systemTabs = Array.from(
-      document.querySelectorAll('#homeSubTabs .sub-tab[data-category]')
-    ).filter(tab => !this._isTabHiddenByUser(tab));
+    const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
 
-    // 读取用户主题
-    const topicTabs = Array.from(
-      document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
-    ).filter(tab => !this._isTabHiddenByUser(tab));
+    // 若 _columnConfig 尚未就绪，降级到旧的 DOM 读取逻辑
+    if (!columns.length) {
+      this._renderCategoryItemsFallback(activeId);
+      return;
+    }
 
-    let html = '';
+    // 找到当前激活分类的显示名
+    let activeName = activeId;
+    for (const col of columns) {
+      if (col.id === activeId) { activeName = col.name || activeId; break; }
+      for (const ch of (col.children || [])) {
+        if (ch.id === activeId) { activeName = ch.name || activeId; break; }
+        for (const gc of (ch.children || [])) {
+          if (gc.id === activeId) { activeName = gc.name || activeId; break; }
+        }
+      }
+    }
 
-    // 顶部 header：当前分类 + 关闭按钮
-    html += `
+    let html = `
       <div class="me-category-header">
         <span class="me-category-header-title">当前：${this._escapeHtml(activeName)}</span>
         <button class="me-category-close" aria-label="关闭">✕</button>
       </div>
     `;
 
-    // 系统分类
-    html += '<div class="me-category-section-title">分类</div>';
-    html += '<div class="me-category-grid">';
-    systemTabs.forEach(tab => {
-      const id = tab.dataset.category || '';
-      const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
-      const isActive = id === activeId;
-      html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
-    });
-    html += '</div>';
+    // 渲染每个一级栏目（含可展开的二级列表）
+    for (const col of columns) {
+      const colId = col.id || '';
+      const colName = col.name || colId;
+      const children = Array.isArray(col.children) ? col.children : [];
+      const requireLogin = !!col.require_login;
 
-    // 用户主题
-    html += '<div class="me-category-section-title">我的主题</div>';
-    html += '<div class="me-category-grid">';
+      // 判断当前激活是否在此一级栏目下
+      const isColActive = colId === activeId ||
+        children.some(ch => ch.id === activeId ||
+          (ch.children || []).some(gc => gc.id === activeId));
+
+      // 一级栏目行：名称可点击（跳转到 {col}-all），箭头展开二级
+      html += `<div class="me-cat-row${isColActive ? ' me-cat-row--active' : ''}" data-col-id="${this._escapeHtml(colId)}" data-require-login="${requireLogin}">`;
+      html += `  <span class="me-cat-row-name" data-nav="${this._escapeHtml(colId + '-all')}">${this._escapeHtml(colName)}</span>`;
+      if (children.length) {
+        html += `  <span class="me-cat-row-arrow${isColActive ? ' expanded' : ''}" data-toggle="${this._escapeHtml(colId)}">▶</span>`;
+      }
+      html += `</div>`;
+
+      // 二级列表（默认展开当前激活的一级栏目）
+      if (children.length) {
+        html += `<div class="me-cat-children${isColActive ? ' expanded' : ''}" data-parent="${this._escapeHtml(colId)}">`;
+        for (const ch of children) {
+          const chId = ch.id || '';
+          const chName = ch.name || chId;
+          const grandchildren = Array.isArray(ch.children) ? ch.children : [];
+          const isChActive = chId === activeId || grandchildren.some(gc => gc.id === activeId);
+
+          if (grandchildren.length) {
+            // 有三级：显示为不可点击的分组标题 + 三级按钮
+            html += `<div class="me-cat-subgroup">`;
+            html += `  <div class="me-cat-subgroup-title">${this._escapeHtml(chName)}</div>`;
+            html += `  <div class="me-cat-subgroup-items">`;
+            for (const gc of grandchildren) {
+              const gcId = gc.id || '';
+              const gcName = gc.name || gcId;
+              const isGcActive = gcId === activeId;
+              html += `<button class="me-cat-item${isGcActive ? ' active' : ''}" data-nav="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
+            }
+            html += `  </div>`;
+            html += `</div>`;
+          } else {
+            // 无三级：直接可点击按钮
+            html += `<button class="me-cat-item${isChActive ? ' active' : ''}" data-nav="${this._escapeHtml(chId)}">${this._escapeHtml(chName)}</button>`;
+          }
+        }
+        html += `</div>`;
+      }
+    }
+
+    // 用户主题（topic-tracker 动态加载，仍从 DOM 读取）
+    const topicTabs = Array.from(
+      document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
+    ).filter(tab => !this._isTabHiddenByUser(tab));
+
+    html += '<div class="me-category-section-title" style="margin-top:12px;">我的主题</div>';
     if (topicTabs.length > 0) {
+      html += '<div class="me-category-grid">';
       topicTabs.forEach(tab => {
         const id = tab.dataset.category || '';
         const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
         const isActive = id === activeId;
         html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
       });
+      html += '</div>';
     } else {
-      html += '<div class="me-category-empty">暂无自建主题，点击下方按钮创建</div>';
+      html += '<div class="me-category-empty">暂无自建主题</div>';
     }
-    // 新建主题按钮
     html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
-    html += '</div>';
 
     this._categoryPanel.innerHTML = html;
 
-    // 事件绑定
-    // 关闭按钮
-    const closeBtn = this._categoryPanel.querySelector('.me-category-close');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => this._closeCategoryPanel());
-    }
+    // ── 事件绑定 ──
 
-    // 分类项点击
-    this._categoryPanel.querySelectorAll('.me-category-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const categoryId = item.dataset.category;
-        if (categoryId) {
-          this._closeCategoryPanel();
-          try {
-            console.log('[MobileEnhance] 切换分类:', categoryId);
-            // 优先使用全局 switchTab（与 HTML onclick 一致）
-            if (typeof window.switchTab === 'function') {
-              window.switchTab(categoryId);
-            } else if (window.TR?.tabs?.switchTab) {
-              window.TR.tabs.switchTab(categoryId);
-            }
-            // 切换后滚动到顶部
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          } catch (e) {
-            console.error('[MobileEnhance] switchTab 失败:', e);
-          }
+    // 关闭按钮
+    this._categoryPanel.querySelector('.me-category-close')
+      ?.addEventListener('click', () => this._closeCategoryPanel());
+
+    // 一级栏目名点击 → 跳转
+    this._categoryPanel.querySelectorAll('.me-cat-row-name[data-nav]').forEach(el => {
+      el.addEventListener('click', () => this._navTo(el.dataset.nav));
+    });
+
+    // 箭头点击 → 展开/收起二级列表
+    this._categoryPanel.querySelectorAll('.me-cat-row-arrow[data-toggle]').forEach(arrow => {
+      arrow.addEventListener('click', () => {
+        const colId = arrow.dataset.toggle;
+        const childrenEl = this._categoryPanel.querySelector(`.me-cat-children[data-parent="${colId}"]`);
+        const isExpanded = childrenEl?.classList.contains('expanded');
+        // 收起所有
+        this._categoryPanel.querySelectorAll('.me-cat-children').forEach(el => el.classList.remove('expanded'));
+        this._categoryPanel.querySelectorAll('.me-cat-row-arrow').forEach(el => el.classList.remove('expanded'));
+        // 若之前未展开则展开
+        if (!isExpanded && childrenEl) {
+          childrenEl.classList.add('expanded');
+          arrow.classList.add('expanded');
         }
       });
     });
 
+    // 二级/三级按钮点击 → 跳转
+    this._categoryPanel.querySelectorAll('.me-cat-item[data-nav]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.dataset.nav;
+        // 登录检查：从 _columnConfig 查 require_login
+        const row = btn.closest('[data-require-login]');
+        const requireLogin = row?.dataset?.requireLogin === 'true';
+        if (requireLogin) {
+          try {
+            const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
+            if (!isLoggedIn) {
+              this._closeCategoryPanel();
+              if (typeof window.openLoginModal === 'function') window.openLoginModal();
+              return;
+            }
+          } catch (e) { /* ignore */ }
+        }
+        this._navTo(targetId);
+      });
+    });
+
+    // 旧式 me-category-item（topic tabs）
+    this._categoryPanel.querySelectorAll('.me-category-item').forEach(item => {
+      item.addEventListener('click', () => this._navTo(item.dataset.category));
+    });
+
     // 新建主题按钮
-    const newTopicBtn = this._categoryPanel.querySelector('.me-category-new-topic');
-    if (newTopicBtn) {
-      newTopicBtn.addEventListener('click', () => {
+    this._categoryPanel.querySelector('.me-category-new-topic')
+      ?.addEventListener('click', () => {
         this._closeCategoryPanel();
         if (window.TopicTracker && typeof window.TopicTracker.openModal === 'function') {
           window.TopicTracker.openModal();
         }
       });
+  },
+
+  /** 跳转到指定 tab 并关闭面板 */
+  _navTo(categoryId) {
+    if (!categoryId) return;
+    this._closeCategoryPanel();
+    try {
+      if (typeof window.switchTab === 'function') {
+        window.switchTab(categoryId);
+      } else if (window.TR?.tabs?.switchTab) {
+        window.TR.tabs.switchTab(categoryId);
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (e) {
+      console.error('[MobileEnhance] switchTab 失败:', e);
     }
+  },
+
+  /** 降级渲染：_columnConfig 未就绪时从 DOM 读取 */
+  _renderCategoryItemsFallback(activeId) {
+    const systemTabs = Array.from(
+      document.querySelectorAll('#homeSubTabs .sub-tab[data-category]')
+    ).filter(tab => !this._isTabHiddenByUser(tab));
+
+    const activeTab = document.querySelector(`.sub-tab[data-category="${activeId}"]`);
+    const activeName = activeTab?.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || activeId;
+
+    let html = `
+      <div class="me-category-header">
+        <span class="me-category-header-title">当前：${this._escapeHtml(activeName)}</span>
+        <button class="me-category-close" aria-label="关闭">✕</button>
+      </div>
+      <div class="me-category-section-title">分类</div>
+      <div class="me-category-grid">
+    `;
+    systemTabs.forEach(tab => {
+      const id = tab.dataset.category || '';
+      const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
+      html += `<div class="me-category-item${id === activeId ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
+    });
+    html += '</div>';
+    this._categoryPanel.innerHTML = html;
+
+    this._categoryPanel.querySelector('.me-category-close')
+      ?.addEventListener('click', () => this._closeCategoryPanel());
+    this._categoryPanel.querySelectorAll('.me-category-item').forEach(item => {
+      item.addEventListener('click', () => this._navTo(item.dataset.category));
+    });
   },
 
   /** 判断 tab 是否被用户隐藏（而非被移动端 CSS 隐藏） */
@@ -1149,8 +1292,8 @@ const MobileEnhance = {
     try { this._createSettingsMenu(); } catch (e) { console.error('[MobileEnhance] SettingsMenu 初始化失败:', e); }
     try { this._overrideTitleClick(); } catch (e) { console.error('[MobileEnhance] TitleClick 覆盖失败:', e); }
     try { this._initPullToRefresh(); } catch (e) { console.error('[MobileEnhance] PullToRefresh 初始化失败:', e); }
-    // BoundarySwipe 已禁用 — 卡片左右滑动切换代替
-    // try { this._initBoundarySwipe(); } catch (e) { console.error('[MobileEnhance] BoundarySwipe 初始化失败:', e); }
+    // BoundarySwipe — 边界滑动切换分类（使用 _columnConfig 叶子节点顺序）
+    try { this._initBoundarySwipe(); } catch (e) { console.error('[MobileEnhance] BoundarySwipe 初始化失败:', e); }
     try { this._createBackToTop(); } catch (e) { console.error('[MobileEnhance] BackToTop 初始化失败:', e); }
     try { this._createActionSheet(); } catch (e) { console.error('[MobileEnhance] ActionSheet 初始化失败:', e); }
     try { this._interceptContextMenu(); } catch (e) { console.error('[MobileEnhance] ContextMenu 拦截失败:', e); }
