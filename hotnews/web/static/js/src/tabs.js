@@ -334,10 +334,28 @@ export const tabs = {
         const subTabsContainer = _currentMainNav === 'home'
             ? document.getElementById('homeSubTabs')
             : document.getElementById('topicSubTabs');
-        const tabEl = subTabsContainer
+        let tabEl = subTabsContainer
             ? subTabsContainer.querySelector(`.sub-tab[data-category="${escapedCategoryId}"]`)
             : document.querySelector(`.sub-tab[data-category="${escapedCategoryId}"]`);
         const paneEl = document.getElementById(`tab-${categoryId}`);
+
+        // 若 tabEl 未找到但 pane 存在，可能是 dropdown 子分类（dd-item）
+        // 此时激活其父栏目的 tab
+        let parentWrapperTab = null;
+        if (!tabEl && paneEl) {
+            // 从 _columnParentMap 查找父栏目
+            const parentMap = window._columnParentMap || {};
+            let parentId = parentMap[categoryId];
+            // 可能需要向上多级（L3 → L2 → L1）
+            while (parentId && !subTabsContainer?.querySelector(`.sub-tab[data-category="${parentId}"]`)) {
+                parentId = parentMap[parentId];
+            }
+            if (parentId) {
+                parentWrapperTab = subTabsContainer?.querySelector(`.sub-tab[data-category="${parentId}"]`);
+            }
+            if (parentWrapperTab) tabEl = parentWrapperTab;
+        }
+
         if (!tabEl || !paneEl) {
             // If this is a topic tab that hasn't been loaded yet by topic-tracker,
             // keep the saved tab ID so topic-tracker can restore it later.
