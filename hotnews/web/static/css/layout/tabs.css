@@ -291,7 +291,7 @@ body.categories-ready.category-tabs-drag-mode .category-drag-handle {
 }
 
 /* L3 items */
-.dropdown-item {
+.dd-item {
     font-size: 13px;
     color: #374151;
     padding: 3px 6px;
@@ -301,7 +301,7 @@ body.categories-ready.category-tabs-drag-mode .category-drag-handle {
     transition: background 0.15s, color 0.15s;
 }
 
-.dropdown-item:hover {
+.dd-item:hover {
     background: #f3f4f6;
     color: var(--primary-color, #07c160);
 }

@@ -564,7 +564,7 @@ function renderDropdownColumns(children) {
             const items = grandchildren.map(gc => {
                 const gcId = escapeHtml(gc.id || '');
                 const gcName = escapeHtml(gc.name || gc.id || '');
-                return `<div class="dropdown-item" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${gcId}')">${gcName}</div>`;
+                return `<div class="dd-item" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${gcId}')">${gcName}</div>`;
             }).join('');
             return `
                 <div class="dropdown-col">
