@@ -676,6 +676,12 @@ class DedupEngine:
         new_pairs = 0
         processed = 0
 
+        # Ensure no pending transaction
+        try:
+            self.conn.commit()
+        except Exception:
+            pass
+
         # 1. 标题指纹精确匹配：找出跨源重复组
         try:
             groups = self.conn.execute(
@@ -860,6 +866,12 @@ class DedupEngine:
         """
         t0 = time.time()
         updated = 0
+
+        # Ensure no pending transaction
+        try:
+            self.conn.commit()
+        except Exception:
+            pass
 
         while True:
             rows = self.conn.execute(
