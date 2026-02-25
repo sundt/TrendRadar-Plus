@@ -56,6 +56,64 @@ async def dedup_backfill(request: Request):
     result = engine.backfill_fingerprints()
     return result
 
+@router.post("/purge")
+async def dedup_purge(
+    request: Request,
+    limit: int = Body(default=0),
+):
+    """对已记录但未删除的重复文章执行物理删除"""
+    engine = _get_engine(request)
+    conn = _get_conn(request)
+    try:
+        query = """SELECT canonical_source_id, canonical_dedup_key,
+                          dup_source_id, dup_dedup_key, dup_title, dup_url, dup_published_at
+                   FROM cross_source_dedup
+                   WHERE deleted_at = 0"""
+        params: list = []
+        if limit > 0:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+        deleted = 0
+        now_ts = int(time.time())
+        for r in rows:
+            canonical = {
+                "source_id": str(r[0]), "dedup_key": str(r[1]),
+                "url": "", "title": "", "published_at": 0, "description": "",
+            }
+            # 获取 canonical 的 url 用于摘要迁移
+            crow = conn.execute(
+                "SELECT url FROM rss_entries WHERE source_id = ? AND dedup_key = ?",
+                (r[0], r[1]),
+            ).fetchone()
+            if crow:
+                canonical["url"] = str(crow[0] or "")
+            dup = {
+                "source_id": str(r[2]), "dedup_key": str(r[3]),
+                "title": str(r[4] or ""), "url": str(r[5] or ""),
+                "published_at": int(r[6] or 0), "description": "",
+            }
+            # 检查 dup 文章是否还存在
+            exists = conn.execute(
+                "SELECT 1 FROM rss_entries WHERE source_id = ? AND dedup_key = ? LIMIT 1",
+                (dup["source_id"], dup["dedup_key"]),
+            ).fetchone()
+            if exists:
+                engine._physical_delete(canonical, dup, now_ts)
+                deleted += 1
+            else:
+                # 文章已不存在，直接标记 deleted_at
+                conn.execute(
+                    "UPDATE cross_source_dedup SET deleted_at = ? WHERE dup_source_id = ? AND dup_dedup_key = ? AND deleted_at = 0",
+                    (now_ts, dup["source_id"], dup["dedup_key"]),
+                )
+                conn.commit()
+                deleted += 1
+        return {"total_pending": len(rows), "deleted": deleted}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.get("/pairs")
 async def dedup_pairs(
     request: Request,
