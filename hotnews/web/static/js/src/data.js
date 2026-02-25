@@ -560,7 +560,7 @@ function renderDropdownColumns(children) {
         const childName = escapeHtml(child.name || child.id || '');
         const grandchildren = Array.isArray(child.children) ? child.children : [];
         if (grandchildren.length) {
-            // 有三级：列标题不可点击，列内容为三级列表
+            // 有三级：二级标题可点击（显示该二级下所有内容），下方列出三级
             const items = grandchildren.map(gc => {
                 const gcId = escapeHtml(gc.id || '');
                 const gcName = escapeHtml(gc.name || gc.id || '');
@@ -568,11 +568,11 @@ function renderDropdownColumns(children) {
             }).join('');
             return `
                 <div class="dropdown-col">
-                    <div class="dropdown-col-title">${childName}</div>
+                    <div class="dropdown-col-title dropdown-col-title--link" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${childId}')">${childName}</div>
                     ${items}
                 </div>`;
         } else {
-            // 无三级：列标题可点击直接跳转
+            // 无三级：直接可点击
             return `
                 <div class="dropdown-col">
                     <div class="dropdown-col-title dropdown-col-title--link" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('${childId}')">${childName}</div>

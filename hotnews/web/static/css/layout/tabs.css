@@ -266,41 +266,36 @@ body.categories-ready.category-tabs-drag-mode .category-drag-handle {
 .dropdown-col {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     min-width: 80px;
     flex-shrink: 0;
 }
 
-/* Column title (L2 label) */
+/* Column title (L2 label) — 统一样式，全部可点击 */
 .dropdown-col-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 0 6px;
-    border-bottom: 1px solid #f3f4f6;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    padding: 2px 6px 6px;
+    border-bottom: 1px solid #f0f0f0;
     margin-bottom: 4px;
     white-space: nowrap;
 }
 
-/* Clickable column title (L2 leaf — no L3 children) */
+/* Clickable column title */
 .dropdown-col-title--link {
     cursor: pointer;
-    color: #374151;
-    text-transform: none;
-    font-weight: 600;
-    font-size: 13px;
+    transition: color 0.15s;
 }
 
 .dropdown-col-title--link:hover {
     color: var(--primary-color, #07c160);
 }
 
-/* L3 items */
+/* L3 items — 与二级标题左对齐 */
 .dd-item {
     font-size: 13px;
-    color: #374151;
+    color: #6b7280;
     padding: 3px 6px;
     border-radius: 5px;
     cursor: pointer;
