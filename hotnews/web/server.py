@@ -550,6 +550,14 @@ if _tag_candidate_admin_router:
     from hotnews.kernel.admin.tag_candidate_admin import evolution_router
     app.include_router(evolution_router)
 if _user_stats_admin_router: app.include_router(_user_stats_admin_router)
+
+# Dedup admin routes
+try:
+    from hotnews.kernel.admin.dedup_admin import router as _dedup_admin_router
+    app.include_router(_dedup_admin_router)
+except Exception:
+    pass
+
 if _wechat_mp_callback_router: app.include_router(_wechat_mp_callback_router)
 if _wechat_qr_login_router: app.include_router(_wechat_qr_login_router)
 if _share_router: app.include_router(_share_router)
@@ -1955,6 +1963,23 @@ async def api_search(
         ),
         reverse=True,
     )
+
+    # Cross-source dedup filtering: remove duplicate articles
+    try:
+        from hotnews.web.deps import get_online_db
+        conn = get_online_db()
+        dup_set = set()
+        for row in conn.execute(
+            "SELECT dup_source_id, dup_dedup_key FROM cross_source_dedup WHERE deleted_at = 0"
+        ).fetchall():
+            dup_set.add((str(row[0]), str(row[1])))
+        if dup_set:
+            payload = [
+                d for d in payload
+                if (d.get("source_id", ""), d.get("dedup_key", "")) not in dup_set
+            ]
+    except Exception:
+        pass
 
     return UnicodeJSONResponse(
         content={

@@ -72,6 +72,13 @@ def save_mp_articles(
             
             if cur.rowcount > 0:
                 inserted += 1
+                # Cross-source dedup check
+                try:
+                    from hotnews.kernel.services.dedup_engine import DedupEngine
+                    dedup = DedupEngine(conn)
+                    dedup.check_and_handle(source_id, dedup_key, title, url, publish_time, dry_run=True)
+                except Exception:
+                    pass
             else:
                 skipped += 1
             

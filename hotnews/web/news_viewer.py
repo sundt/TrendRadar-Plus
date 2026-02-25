@@ -468,9 +468,50 @@ class NewsViewerService:
             filtered_news = [n for n in filtered_news if str(n.get("platform") or "").strip() not in disabled_set]
             removed_news = [n for n in removed_news if str(n.get("platform") or "").strip() not in disabled_set]
 
-        # 检测跨平台新闻
-        # cross_platform_news = self._detect_cross_platform_news(filtered_news)
+        # 检测跨平台新闻（基于 cross_source_dedup 表）
         cross_platform_news = {}
+        try:
+            from .db_online import get_online_db_conn
+            _conn = get_online_db_conn(self.project_root)
+            _dup_rows = _conn.execute(
+                """SELECT d.dup_source_id, d.dup_dedup_key, d.dup_title,
+                          d.canonical_source_id, d.canonical_dedup_key
+                   FROM cross_source_dedup d
+                   WHERE d.deleted_at = 0"""
+            ).fetchall()
+            # Build dup set and cross-platform info
+            _dup_set = set()
+            _canonical_sources = {}  # (c_sid, c_dk) -> [dup source names]
+            for r in _dup_rows:
+                _dup_set.add((str(r[0]), str(r[1])))
+                ck = (str(r[3]), str(r[4]))
+                if ck not in _canonical_sources:
+                    _canonical_sources[ck] = []
+                _canonical_sources[ck].append(str(r[0]))
+            # Filter out dup articles from filtered_news
+            _before = len(filtered_news)
+            filtered_news = [
+                n for n in filtered_news
+                if (n.get("source_id", ""), n.get("dedup_key", "")) not in _dup_set
+            ]
+            # Annotate canonical articles with cross-platform info
+            _source_names = {}
+            try:
+                for row in _conn.execute("SELECT id, name FROM rss_sources").fetchall():
+                    _source_names[str(row[0])] = str(row[1] or "")
+            except Exception:
+                pass
+            for n in filtered_news:
+                nk = (n.get("source_id", ""), n.get("dedup_key", ""))
+                if nk in _canonical_sources:
+                    dup_sids = _canonical_sources[nk]
+                    other_names = [_source_names.get(s, s) for s in dup_sids if s != nk[0]]
+                    if other_names:
+                        n["is_cross_platform"] = True
+                        n["cross_platform_count"] = len(other_names) + 1
+                        n["cross_platforms"] = other_names
+        except Exception:
+            pass
 
         # 按分类组织新闻
         categories = {}

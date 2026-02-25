@@ -403,6 +403,14 @@ async def run_custom_source(source_id: str, request: Request, _=Depends(_require
                 )
                 conn.commit()
                 print(f"Custom source {source_id}: inserted {len(rows_to_insert)} rows into rss_entries")
+                # Cross-source dedup check
+                try:
+                    from hotnews.kernel.services.dedup_engine import DedupEngine
+                    dedup = DedupEngine(conn)
+                    for row in rows_to_insert:
+                        dedup.check_and_handle(row[0], row[1], row[3], row[2], row[4], dry_run=True)
+                except Exception as dedup_e:
+                    print(f"Dedup check error: {dedup_e}")
         except Exception as e:
             print(f"Error saving to rss_entries: {e}")
             traceback.print_exc()

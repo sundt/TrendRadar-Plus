@@ -732,6 +732,61 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_view_stats_article ON article_view_stats(article_url_hash)")
 
+    # ========== Cross-Source Dedup (跨源文章去重) ==========
+    # 数据源分组表：将同一发布者的多个数据源关联为一组
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS source_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_name TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS source_group_members (
+            group_id INTEGER NOT NULL,
+            source_id TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            PRIMARY KEY (group_id, source_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sgm_source ON source_group_members(source_id)")
+
+    # 跨源去重关系表：记录重复文章对及审计信息
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cross_source_dedup (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            canonical_source_id TEXT NOT NULL,
+            canonical_dedup_key TEXT NOT NULL,
+            dup_source_id TEXT NOT NULL,
+            dup_dedup_key TEXT NOT NULL,
+            match_type TEXT NOT NULL,
+            similarity_score REAL NOT NULL DEFAULT 1.0,
+            dup_title TEXT DEFAULT '',
+            dup_url TEXT DEFAULT '',
+            dup_published_at INTEGER DEFAULT 0,
+            detected_at INTEGER NOT NULL,
+            deleted_at INTEGER DEFAULT 0,
+            UNIQUE(canonical_source_id, canonical_dedup_key, dup_source_id, dup_dedup_key)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_csd_canonical ON cross_source_dedup(canonical_source_id, canonical_dedup_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_csd_dup ON cross_source_dedup(dup_source_id, dup_dedup_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_csd_detected ON cross_source_dedup(detected_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_csd_match_type ON cross_source_dedup(match_type)")
+
+    # rss_entries 去重指纹列
+    _ensure_column("rss_entries", "title_fingerprint", "TEXT DEFAULT ''")
+    _ensure_column("rss_entries", "url_normalized", "TEXT DEFAULT ''")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_title_fp ON rss_entries(title_fingerprint)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_url_norm ON rss_entries(url_normalized)")
+
     conn.commit()
 
     _online_db_conn = conn

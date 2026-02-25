@@ -89,6 +89,12 @@ async def api_timeline(
                    e.published_at, e.created_at, e.description
             FROM rss_entries e
             WHERE (e.source_id, e.dedup_key) IN ({pair_placeholders})
+              AND NOT EXISTS (
+                SELECT 1 FROM cross_source_dedup d
+                WHERE d.dup_source_id = e.source_id
+                  AND d.dup_dedup_key = e.dedup_key
+                  AND d.deleted_at = 0
+              )
             """,
             flat_params,
         ).fetchall()

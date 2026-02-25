@@ -1711,6 +1711,15 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
                 _maybe_log_rss_entries_stats(conn)
                 # Realtime FTS5 index update for new RSS entries
                 _update_fts_index_for_rss_entries(rows_to_insert)
+                # Cross-source dedup check for newly inserted entries
+                try:
+                    from hotnews.kernel.services.dedup_engine import DedupEngine
+                    dedup = DedupEngine(conn)
+                    for row in rows_to_insert:
+                        r_sid, r_dk, r_url, r_title, r_pub = row[0], row[1], row[2], row[3], row[4]
+                        dedup.check_and_handle(r_sid, r_dk, r_title, r_url, r_pub, dry_run=True)
+                except Exception as dedup_e:
+                    logger.debug("rss_warmup.dedup_check error source_id=%s: %s", sid, dedup_e)
         except Exception as inner_e:
             logger.info(f"DEBUG: scheduler inner exception sid={sid} err={inner_e}")
             try:
