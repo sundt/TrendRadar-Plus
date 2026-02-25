@@ -389,12 +389,33 @@ export const tabs = {
             subTabsContainer.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
         }
         tabEl.classList.add('active');
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        paneEl.classList.add('active');
-        storage.setRaw(TAB_STORAGE_KEY, categoryId);
 
         // 更新滑动指示器
         _updateIndicator(subTabsContainer);
+
+        // 委托给 activatePane 完成 pane 激活 + 数据加载
+        this.activatePane(categoryId, { prevCategoryId, hasUpdate });
+    },
+
+    /**
+     * 激活指定分类的 pane 并触发数据加载。
+     * 不依赖 .sub-tab DOM 元素，只需要 #tab-{categoryId} pane 存在。
+     * switchTab 内部调用此方法；移动端分类面板也可直接调用。
+     *
+     * @param {string} categoryId
+     * @param {object} [opts] - { prevCategoryId, hasUpdate } 可选上下文
+     */
+    activatePane(categoryId, opts) {
+        const paneEl = document.getElementById(`tab-${categoryId}`);
+        if (!paneEl) return;
+
+        const prevCategoryId = opts?.prevCategoryId ?? this.getActiveTabId();
+        const hasUpdate = opts?.hasUpdate ?? false;
+
+        // 激活 pane
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        paneEl.classList.add('active');
+        storage.setRaw(TAB_STORAGE_KEY, categoryId);
 
         // Memory optimization: clean up inactive tabs after a short delay
         setTimeout(() => _cleanupInactiveTabs(categoryId), 500);
@@ -460,6 +481,19 @@ export const tabs = {
             const hasCards = grid && grid.querySelector('.platform-card');
             if (!hasCards) {
                 categoryTimeline.loadCardMode(categoryId);
+            }
+            return;
+        }
+
+        // Topic tabs in card mode: use TopicTracker
+        if (String(categoryId).startsWith('topic-') && mode !== 'timeline') {
+            const topicId = String(categoryId).replace('topic-', '');
+            const grid = paneEl.querySelector('.platform-grid');
+            const hasRealContent = grid && grid.querySelector('.news-item');
+            if (!hasRealContent) {
+                if (window.TopicTracker?.refreshTopic) {
+                    window.TopicTracker.refreshTopic(topicId);
+                }
             }
             return;
         }
@@ -671,6 +705,7 @@ export const tabs = {
 
 // 全局函数
 window.switchTab = (categoryId) => tabs.switchTab(categoryId);
+window.activatePane = (categoryId, opts) => tabs.activatePane(categoryId, opts);
 window.switchMainNav = switchMainNav;
 
 TR.tabs = tabs;

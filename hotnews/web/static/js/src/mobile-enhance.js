@@ -1439,90 +1439,16 @@ const MobileEnhance = {
       // 确保 tab pane 存在（renderViewerFromData 可能还没创建）
       this._ensureTabPane(categoryId);
 
-      // 尝试正常的 switchTab 流程
-      if (typeof window.handleTabClickWithAuth === 'function') {
-        window.handleTabClickWithAuth(categoryId);
+      // 直接调用 activatePane — 跳过 switchTab 的 .sub-tab 查找，
+      // 复用 tabs.js 内部完全相同的 pane 激活 + 数据加载逻辑。
+      if (typeof window.activatePane === 'function') {
+        window.activatePane(categoryId);
       } else if (typeof window.switchTab === 'function') {
+        // 降级：activatePane 尚未就绪时走 switchTab
         window.switchTab(categoryId);
-      } else if (window.TR?.tabs?.switchTab) {
-        window.TR.tabs.switchTab(categoryId);
       }
-
-      // switchTab 可能因为找不到 .sub-tab 元素而回退到其他 tab
-      // （例如 developer 在 DEFAULT_HIDDEN_CATEGORIES 中，没有 .sub-tab DOM）
-      // 检查目标 pane 是否真的被激活了，如果没有则手动激活并加载数据
-      this._ensureDataLoaded(categoryId);
     } catch (e) {
-      console.error('[MobileEnhance] switchTab 失败:', e);
-    }
-  },
-
-  /**
-   * 确保指定分类的数据已加载。
-   * switchTab 可能因为找不到 .sub-tab 而回退到其他 tab，
-   * 此方法会手动激活 pane 并触发数据加载。
-   */
-  _ensureDataLoaded(categoryId) {
-    if (!categoryId) return;
-    const paneId = 'tab-' + categoryId;
-    const pane = document.getElementById(paneId);
-    if (!pane) return;
-
-    // 检查 pane 是否已激活
-    const isActive = pane.classList.contains('active');
-
-    // 检查 pane 是否有实际内容（tl-card 或 news-item）
-    const hasTlCards = !!pane.querySelector('.tl-card');
-    const hasNewsItems = !!pane.querySelector('.news-item');
-    const hasContent = hasTlCards || hasNewsItems;
-
-    if (isActive && hasContent) return; // 已激活且有内容，无需处理
-
-    // 手动激活 pane（switchTab 可能没有激活它）
-    if (!isActive) {
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-      pane.classList.add('active');
-      // 更新 storage 中的 active tab
-      try {
-        if (window.TR?.storage?.setRaw) {
-          window.TR.storage.setRaw('hotnews_active_tab', categoryId);
-        } else {
-          localStorage.setItem('hotnews_active_tab', categoryId);
-        }
-      } catch (e) { /* ignore */ }
-    }
-
-    // 触发数据加载
-    if (!hasContent) {
-      const isTopic = String(categoryId).startsWith('topic-');
-
-      if (isTopic) {
-        // Topic tab：用 TopicTracker.refreshTopic 加载
-        const topicId = String(categoryId).replace('topic-', '');
-        if (window.TopicTracker?.refreshTopic) {
-          window.TopicTracker.refreshTopic(topicId);
-        } else if (window.TR?.infiniteScroll?.scheduleBulkLoadCategory) {
-          window.TR.infiniteScroll.scheduleBulkLoadCategory(categoryId);
-        }
-        return;
-      }
-
-      // 普通栏目：判断视图模式
-      const mode = window.TR?.viewMode?.get?.(categoryId) || 'timeline';
-      if (mode === 'timeline') {
-        if (window.categoryTimeline?.load) {
-          window.categoryTimeline.load(categoryId);
-        } else if (window.TR?.categoryTimeline?.load) {
-          window.TR.categoryTimeline.load(categoryId);
-        }
-      } else {
-        // card 模式
-        if (window.categoryTimeline?.loadCardMode) {
-          window.categoryTimeline.loadCardMode(categoryId);
-        } else if (window.TR?.infiniteScroll?.scheduleBulkLoadCategory) {
-          window.TR.infiniteScroll.scheduleBulkLoadCategory(categoryId);
-        }
-      }
+      console.error('[MobileEnhance] activatePane 失败:', e);
     }
   },
 
