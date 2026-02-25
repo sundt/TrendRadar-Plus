@@ -812,4 +812,36 @@
     color: var(--primary-color, #4f46e5);
   }
 
+  /* ── Category Panel Tab Bar (主页 / 我的主题) ── */
+
+  .me-cat-tab-bar {
+    display: flex;
+    gap: 0;
+    padding: 0 16px 8px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .me-cat-tab {
+    flex: 1;
+    padding: 8px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .me-cat-tab.active {
+    color: var(--primary-color, #4f46e5);
+    border-bottom-color: var(--primary-color, #4f46e5);
+  }
+
+  .me-cat-tab:active {
+    background: rgba(0, 0, 0, 0.03);
+  }
+
 } /* end @media (max-width: 640px) */
