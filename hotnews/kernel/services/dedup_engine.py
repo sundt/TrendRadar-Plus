@@ -74,9 +74,9 @@ class TitleNormalizer:
         # 长度差异过大直接排除
         if abs(len(n1) - len(n2)) > max(len(n1), len(n2)) * 0.3:
             return 0.0
-        shorter, longer = (n1, n2) if len(n1) <= len(n2) else (n2, n1)
-        matches = sum(1 for c in shorter if c in longer)
-        return matches / len(shorter)
+        # 使用 SequenceMatcher 做序列级相似度（考虑顺序）
+        from difflib import SequenceMatcher
+        return SequenceMatcher(None, n1, n2).ratio()
 
     @staticmethod
     def is_eligible_for_fuzzy(title: str) -> bool:
