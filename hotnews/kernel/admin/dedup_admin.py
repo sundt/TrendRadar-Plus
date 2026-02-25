@@ -59,7 +59,7 @@ async def dedup_backfill(request: Request):
 @router.post("/purge")
 async def dedup_purge(
     request: Request,
-    limit: int = Body(default=0),
+    limit: int = Body(default=0, embed=True),
 ):
     """对已记录但未删除的重复文章执行物理删除"""
     engine = _get_engine(request)
