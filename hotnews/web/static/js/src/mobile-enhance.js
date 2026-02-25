@@ -993,6 +993,17 @@ const MobileEnhance = {
   _openCategoryPanel() {
     if (!this._categoryOverlay) this._createCategoryPanel();
 
+    // DEBUG: 临时 alert 确认此函数被调用
+    try {
+      const cols = window._columnConfig;
+      const colsLen = Array.isArray(cols) ? cols.length : -1;
+      const aiCol = Array.isArray(cols) ? cols.find(c => c.id === 'ai') : null;
+      const aiChildren = aiCol ? (aiCol.children || []).length : -1;
+      alert('v3 panel open | cols=' + colsLen + ' | ai.children=' + aiChildren);
+    } catch (e) {
+      alert('v3 error: ' + e.message);
+    }
+
     // 渲染分类内容
     this._renderCategoryItems();
 
