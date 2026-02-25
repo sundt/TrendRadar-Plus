@@ -1080,21 +1080,102 @@ const MobileEnhance = {
     this._renderAllLevels();
   },
 
+  /** 使用事件委托绑定面板内所有点击事件（只绑定一次） */
+  _bindCategoryPanelEvents() {
+    if (!this._categoryPanel || this._categoryPanel._delegated) return;
+    this._categoryPanel._delegated = true;
+    const self = this;
+
+    this._categoryPanel.addEventListener('click', function (e) {
+      const target = e.target;
+
+      // 关闭按钮
+      if (target.closest('.me-category-close')) {
+        self._closeCategoryPanel();
+        return;
+      }
+
+      // L1 pill 点击
+      const l1Pill = target.closest('.me-cat-l1-pill');
+      if (l1Pill) {
+        e.stopPropagation();
+        const colId = l1Pill.dataset.id;
+        const hasChildren = l1Pill.dataset.hasChildren === 'true';
+
+        // 登录检查
+        if (l1Pill.dataset.requireLogin === 'true') {
+          try {
+            const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
+            if (!isLoggedIn) {
+              self._closeCategoryPanel();
+              if (typeof window.openLoginModal === 'function') window.openLoginModal();
+              return;
+            }
+          } catch (ex) { /* ignore */ }
+        }
+
+        if (!hasChildren) {
+          self._navTo(colId);
+          return;
+        }
+
+        // 有子项 → 更新选中的 L1，重置 L2
+        self._catState.selL1 = colId;
+        self._catState.selL2 = null;
+        self._renderAllLevels();
+        return;
+      }
+
+      // L2 item 点击
+      const l2Item = target.closest('.me-cat-l2-item');
+      if (l2Item) {
+        const chId = l2Item.dataset.id;
+        const hasChildren = l2Item.dataset.hasChildren === 'true';
+
+        if (!hasChildren) {
+          self._navTo(chId);
+          return;
+        }
+
+        // 有三级 → 更新选中的 L2，重新渲染
+        self._catState.selL2 = chId;
+        self._renderAllLevels();
+        return;
+      }
+
+      // L3 pill 点击 → 直接跳转
+      const l3Pill = target.closest('.me-cat-l3-pill');
+      if (l3Pill) {
+        self._navTo(l3Pill.dataset.id);
+        return;
+      }
+
+      // 新建主题
+      if (target.closest('.me-category-new-topic')) {
+        self._closeCategoryPanel();
+        if (window.TopicTracker && typeof window.TopicTracker.openModal === 'function') {
+          window.TopicTracker.openModal();
+        }
+        return;
+      }
+
+      // 降级模式的 category-item
+      const catItem = target.closest('.me-category-item');
+      if (catItem) {
+        self._navTo(catItem.dataset.category);
+        return;
+      }
+    });
+  },
+
   /** 渲染三级同屏面板 */
   _renderAllLevels() {
     if (!this._categoryPanel || !this._catState) return;
     const { columns, activeId, selL1, selL2 } = this._catState;
-    console.log('[MobileEnhance] _renderAllLevels selL1:', selL1, 'selL2:', selL2, 'activeId:', activeId);
-    const self = this;
 
     const selL1Col = columns.find(c => c.id === selL1);
     const l2Children = selL1Col?.children || [];
-    console.log('[MobileEnhance] selL1Col:', selL1Col?.name, 'l2Children count:', l2Children.length);
     const selL2Col = l2Children.find(c => c.id === selL2);
-    const l3Children = selL2Col?.children || [];
-
-    // 如果选中的 L2 没有三级子项，不显示 L3
-    const showL3 = l3Children.length > 0;
 
     // 如果没有选中 L2，默认选中第一个有子项的 L2
     let effectiveL2 = selL2;
@@ -1113,6 +1194,7 @@ const MobileEnhance = {
         <span class="me-category-header-title">选择分类</span>
         <button class="me-category-close" aria-label="关闭">✕</button>
       </div>
+      <div style="padding:2px 16px;font-size:11px;color:#9ca3af;">v2 | L1=${selL1 || 'none'} | L2子项=${l2Children.length} | L3子项=${effectiveL3.length}</div>
     `;
 
     // ── L1: 横向滚动 pill 行 ──
@@ -1180,93 +1262,18 @@ const MobileEnhance = {
 
     this._categoryPanel.innerHTML = html;
 
-    // ── 事件绑定 ──
-
-    // 关闭
-    this._categoryPanel.querySelector('.me-category-close')
-      ?.addEventListener('click', () => this._closeCategoryPanel());
-
-    // L1 pill 点击
-    this._categoryPanel.querySelectorAll('.me-cat-l1-pill').forEach(pill => {
-      pill.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const colId = pill.dataset.id;
-        const hasChildren = pill.dataset.hasChildren === 'true';
-        console.log('[MobileEnhance] L1 click:', colId, 'hasChildren:', hasChildren, 'raw:', pill.dataset.hasChildren);
-
-        // 登录检查
-        if (pill.dataset.requireLogin === 'true') {
-          try {
-            const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
-            if (!isLoggedIn) {
-              self._closeCategoryPanel();
-              if (typeof window.openLoginModal === 'function') window.openLoginModal();
-              return;
-            }
-          } catch (e) { /* ignore */ }
-        }
-
-        if (!hasChildren) {
-          // 叶子节点 → 直接跳转
-          self._navTo(colId);
-          return;
-        }
-
-        // 有子项 → 更新选中的 L1，重置 L2
-        self._catState.selL1 = colId;
-        self._catState.selL2 = null;
-        self._renderAllLevels();
-
-        // 滚动 L1 行让选中项可见
-        requestAnimationFrame(() => {
-          const activeL1 = self._categoryPanel.querySelector('.me-cat-l1-pill.active');
-          if (activeL1) activeL1.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-        });
-      });
-    });
-
-    // L2 item 点击
-    this._categoryPanel.querySelectorAll('.me-cat-l2-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const chId = item.dataset.id;
-        const hasChildren = item.dataset.hasChildren === 'true';
-
-        if (!hasChildren) {
-          // 叶子节点 → 直接跳转
-          self._navTo(chId);
-          return;
-        }
-
-        // 有三级 → 更新选中的 L2，重新渲染
-        self._catState.selL2 = chId;
-        self._renderAllLevels();
-      });
-    });
-
-    // L3 pill 点击 → 直接跳转
-    this._categoryPanel.querySelectorAll('.me-cat-l3-pill').forEach(pill => {
-      pill.addEventListener('click', () => self._navTo(pill.dataset.id));
-    });
-
-    // 新建主题
-    this._categoryPanel.querySelector('.me-category-new-topic')
-      ?.addEventListener('click', () => {
-        this._closeCategoryPanel();
-        if (window.TopicTracker && typeof window.TopicTracker.openModal === 'function') {
-          window.TopicTracker.openModal();
-        }
-      });
+    // 确保事件委托已绑定（只绑定一次，不受 innerHTML 影响）
+    this._bindCategoryPanelEvents();
 
     // 滚动 L1 行让选中项可见
     requestAnimationFrame(() => {
-      const activeL1 = this._categoryPanel.querySelector('.me-cat-l1-pill.active');
+      const activeL1 = this._categoryPanel?.querySelector('.me-cat-l1-pill.active');
       if (activeL1) activeL1.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
     });
   },
 
   /** 跳转到指定 tab 并关闭面板 */
   _navTo(categoryId) {
-    console.log('[MobileEnhance] _navTo called with:', categoryId);
     if (!categoryId) return;
     this._closeCategoryPanel();
     try {
@@ -1306,11 +1313,8 @@ const MobileEnhance = {
     html += '</div>';
     this._categoryPanel.innerHTML = html;
 
-    this._categoryPanel.querySelector('.me-category-close')
-      ?.addEventListener('click', () => this._closeCategoryPanel());
-    this._categoryPanel.querySelectorAll('.me-category-item').forEach(item => {
-      item.addEventListener('click', () => this._navTo(item.dataset.category));
-    });
+    // 确保事件委托已绑定
+    this._bindCategoryPanelEvents();
   },
 
   /** 判断 tab 是否被用户隐藏（而非被移动端 CSS 隐藏） */
