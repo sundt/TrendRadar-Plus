@@ -1717,7 +1717,7 @@ async def _rss_process_warmup_one(source_id: str) -> Dict[str, Any]:
                     dedup = DedupEngine(conn)
                     for row in rows_to_insert:
                         r_sid, r_dk, r_url, r_title, r_pub = row[0], row[1], row[2], row[3], row[4]
-                        dedup.check_and_handle(r_sid, r_dk, r_title, r_url, r_pub, dry_run=True)
+                        dedup.check_and_handle(r_sid, r_dk, r_title, r_url, r_pub, dry_run=False)
                 except Exception as dedup_e:
                     logger.debug("rss_warmup.dedup_check error source_id=%s: %s", sid, dedup_e)
         except Exception as inner_e:

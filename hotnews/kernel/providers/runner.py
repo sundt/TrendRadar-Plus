@@ -134,7 +134,7 @@ def _save_custom_items_to_rss_entries(
         for item in items:
             dedup_key = item.url if item.url else hashlib.md5(item.title.encode()).hexdigest()
             pub_at = item.published_at if hasattr(item, 'published_at') and item.published_at else now_ts
-            dedup.check_and_handle(platform_id, dedup_key, item.title, item.url or "", pub_at, dry_run=True)
+            dedup.check_and_handle(platform_id, dedup_key, item.title, item.url or "", pub_at, dry_run=False)
     except Exception:
         pass
     

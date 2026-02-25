@@ -408,7 +408,7 @@ async def run_custom_source(source_id: str, request: Request, _=Depends(_require
                     from hotnews.kernel.services.dedup_engine import DedupEngine
                     dedup = DedupEngine(conn)
                     for row in rows_to_insert:
-                        dedup.check_and_handle(row[0], row[1], row[3], row[2], row[4], dry_run=True)
+                        dedup.check_and_handle(row[0], row[1], row[3], row[2], row[4], dry_run=False)
                 except Exception as dedup_e:
                     print(f"Dedup check error: {dedup_e}")
         except Exception as e:

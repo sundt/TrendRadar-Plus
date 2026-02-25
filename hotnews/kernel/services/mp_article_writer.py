@@ -76,7 +76,7 @@ def save_mp_articles(
                 try:
                     from hotnews.kernel.services.dedup_engine import DedupEngine
                     dedup = DedupEngine(conn)
-                    dedup.check_and_handle(source_id, dedup_key, title, url, publish_time, dry_run=True)
+                    dedup.check_and_handle(source_id, dedup_key, title, url, publish_time, dry_run=False)
                 except Exception:
                     pass
             else:
