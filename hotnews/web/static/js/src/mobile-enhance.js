@@ -1428,6 +1428,7 @@ const MobileEnhance = {
   /** 跳转到指定 tab 并关闭面板 */
   _navTo(categoryId) {
     if (!categoryId) return;
+    console.log('[MobileEnhance] _navTo (close panel):', categoryId);
     this._closeCategoryPanel();
     this._navToBackground(categoryId);
   },
@@ -1436,6 +1437,10 @@ const MobileEnhance = {
   _navToBackground(categoryId) {
     if (!categoryId) return;
     try {
+      console.log('[MobileEnhance] _navToBackground:', categoryId,
+        'handleTabClickWithAuth:', typeof window.handleTabClickWithAuth,
+        'switchTab:', typeof window.switchTab,
+        '_columnConfig length:', (window._columnConfig || []).length);
       if (typeof window.handleTabClickWithAuth === 'function') {
         window.handleTabClickWithAuth(categoryId);
       } else if (typeof window.switchTab === 'function') {
