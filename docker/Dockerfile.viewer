@@ -38,4 +38,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8090
 
-CMD ["sh", "-c", "python -m uvicorn hotnews.web.server:app --host 0.0.0.0 --port ${VIEWER_PORT:-8090} --workers ${VIEWER_WORKERS:-2}"]
+# gunicorn + uvicorn worker：支持 kill -HUP 零停机重启
+# --graceful-timeout 30: 旧 worker 最多等 30 秒处理完当前请求
+# --pid /tmp/gunicorn.pid: 方便 deploy 脚本发送 HUP 信号
+# 注意：exec 确保 gunicorn 是 PID 1，能正确接收 docker kill 的信号
+CMD ["sh", "-c", "exec gunicorn hotnews.web.server:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:${VIEWER_PORT:-8090} --workers ${VIEWER_WORKERS:-2} --graceful-timeout 30 --timeout 120 --pid /tmp/gunicorn.pid --access-logfile - --error-logfile -"]

@@ -432,6 +432,73 @@ def _get_cdn_base_url(project_root) -> str:
         return ""
 
 
+def _load_column_config_for_ssr(project_root) -> List[Dict[str, Any]]:
+    """
+    Load column_config tree for SSR tab rendering.
+    Same logic as /api/columns endpoint, so SSR tabs match the JS-rendered tabs.
+    """
+    try:
+        from hotnews.web.db_online import get_online_db_conn
+        conn = get_online_db_conn(project_root)
+        rows = conn.execute(
+            """
+            SELECT id, name, icon, parent_id, tag_ids,
+                   source_type, source_filter, default_view,
+                   sort_order, enabled
+            FROM column_config
+            WHERE enabled = 1
+            ORDER BY sort_order ASC, id ASC
+            """
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        # Build tree (same as columns_routes.py)
+        by_parent: Dict[Optional[str], List[Dict]] = {}
+        for row in rows:
+            sf_str = row[6] or "{}"
+            try:
+                sf = json.loads(sf_str)
+            except Exception:
+                sf = {}
+            tag_ids_raw = row[4] or "[]"
+            try:
+                tag_ids = json.loads(tag_ids_raw)
+            except Exception:
+                tag_ids = []
+
+            node = {
+                "id": row[0],
+                "name": row[1],
+                "icon": row[2] or "",
+                "tag_ids": tag_ids,
+                "default_view": row[7] or "timeline",
+                "sort_order": row[8] or 0,
+                "require_login": bool(sf.get("require_login", False)),
+                "children": [],
+                "_parent_id": row[3],
+            }
+            pid = node["_parent_id"]
+            by_parent.setdefault(pid, []).append(node)
+
+        def attach_children(nodes):
+            result = []
+            for node in nodes:
+                nid = node["id"]
+                children = by_parent.get(nid, [])
+                if children:
+                    node["children"] = attach_children(children)
+                del node["_parent_id"]
+                result.append(node)
+            return result
+
+        roots = by_parent.get(None, [])
+        return attach_children(roots)
+    except Exception:
+        return []
+
+
 def _get_asset_rev(project_root) -> str:
     forced = (os.environ.get("ASSET_REV") or "").strip()
     if forced:
@@ -678,10 +745,8 @@ async def render_viewer_page(
 
         asset_rev = _get_asset_rev(project_root)
 
-        # Load system settings (moved up)
-        # from hotnews.kernel.admin.settings_admin import get_system_settings
-        # sys_settings = get_system_settings(project_root)
-        # items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
+        # Load column_config for SSR tab rendering (same source as /api/columns)
+        ssr_columns = _load_column_config_for_ssr(project_root)
 
         resp = templates.TemplateResponse(
             "viewer.html",
@@ -694,6 +759,8 @@ async def render_viewer_page(
                 "asset_rev": asset_rev,
                 "items_per_card": items_per_card,
                 "sys_settings": sys_settings,
+                "ssr_columns": ssr_columns,
+                "ssr_columns_json": json.dumps(ssr_columns, ensure_ascii=False),
             },
         )
 

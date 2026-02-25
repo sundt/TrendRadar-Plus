@@ -81,18 +81,25 @@ EOF
 
 # Step 4: Health Check & Rollback Warning
 echo ">>> Step 4: Health Check..."
+sleep 10
 
-# Check health endpoint via SSH (safer than external curl usually)
 echo "   Checking viewer health (http://127.0.0.1:8090/health)..."
-if ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "curl -fsS http://127.0.0.1:8090/health >/dev/null"; then
-    echo "   ✅ Health check passed."
-else
-    echo "   ❌ Health check FAILED!"
-    echo "   ⚠️  Immediate rollback NOT performed (images overwritten)."
-    echo "   ⚠️  Please check server logs immediately."
-    ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "docker logs --tail 20 hotnews-viewer"
-    exit 1
-fi
+for i in 1 2 3 4 5; do
+    if ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "curl -fsS http://127.0.0.1:8090/health >/dev/null 2>&1"; then
+        echo "   ✅ Health check passed (attempt $i/5)."
+        break
+    else
+        if [ $i -lt 5 ]; then
+            echo "   ⏳ Waiting for service... (attempt $i/5)"
+            sleep 8
+        else
+            echo "   ❌ Health check FAILED after 5 attempts!"
+            echo "   ⚠️  Please check server logs immediately."
+            ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "docker logs --tail 30 hotnews-viewer"
+            exit 1
+        fi
+    fi
+done
 
 # Check container status
 echo "   Checking container status..."

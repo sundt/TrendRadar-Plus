@@ -18,6 +18,8 @@
     <link rel="modulepreload" href="{{ static_prefix }}/js/index.js?v={{ asset_rev }}">
     <!-- 系统设置 JSON -->
     <script id="system-settings-json" type="application/json">{{ sys_settings | tojson }}</script>
+    <!-- 栏目配置 JSON（供移动端 JS 立即使用，无需等待 /api/columns） -->
+    <script id="column-config-json" type="application/json">{{ ssr_columns_json }}</script>
     <script>
         // 早期隐藏逻辑：防止栏目闪烁
         (function () {
@@ -50,6 +52,18 @@
             } catch (e) { }
         })();
         try { window.SYSTEM_SETTINGS = JSON.parse((document.getElementById('system-settings-json') || {}).textContent || '{}'); } catch (e) { window.SYSTEM_SETTINGS = {}; }
+        try { window._columnConfig = JSON.parse((document.getElementById('column-config-json') || {}).textContent || '[]'); } catch (e) { window._columnConfig = []; }
+        // 构建父节点映射（供 handleTabClickWithAuth 使用）
+        try {
+            window._columnParentMap = {};
+            (function _bp(nodes, pid) {
+                for (var i = 0; i < nodes.length; i++) {
+                    var n = nodes[i];
+                    if (pid) window._columnParentMap[String(n.id)] = pid;
+                    if (n.children && n.children.length) _bp(n.children, String(n.id));
+                }
+            })(window._columnConfig || [], null);
+        } catch (e) { window._columnParentMap = {}; }
     </script>
     <script type="text/javascript">
         (function (c, l, a, r, i, t, y) {
@@ -144,6 +158,16 @@
 
             <!-- 主页子栏目 -->
             <div class="sub-tabs" id="homeSubTabs">
+                {% if ssr_columns %}
+                {# 使用 column_config 渲染 tabs（与 /api/columns 一致） #}
+                {% for col in ssr_columns %}
+                <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}"
+                        data-category="{{ col.id }}" onclick="switchTab('{{ col.id }}')">
+                    {{ col.name }}
+                </button>
+                {% endfor %}
+                {% else %}
+                {# 降级：使用旧的 data.categories 渲染 #}
                 {% for cat_id, category in data.categories.items() %}
                 {% if not category.is_topic %}
                 <button class="sub-tab{% if cat_id == 'my-tags' %} active{% endif %}"
@@ -152,6 +176,7 @@
                 </button>
                 {% endif %}
                 {% endfor %}
+                {% endif %}
                 <button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button>
                 <div class="sub-tabs-indicator"></div>
             </div>
