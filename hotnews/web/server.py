@@ -666,19 +666,14 @@ async def add_cache_headers(request: Request, call_next):
         response.headers["Cache-Control"] = "public, max-age=120, s-maxage=120"
         return response
 
-    # 发现页 / 精选公众号 — 10 分钟
-    if path.startswith("/api/discovery/") or path.startswith("/api/featured-mps"):
+    # 发现页 — 10 分钟
+    if path.startswith("/api/discovery/"):
         response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
         return response
 
     # 财经投资时间线 — 5 分钟
     if path.startswith("/api/rss/finance/timeline"):
         response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
-        return response
-
-    # 精选公众号时间线 — 10 分钟
-    if path.startswith("/api/rss/featured-mps/timeline"):
-        response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
         return response
 
     # 文章标签 — 10 分钟
@@ -1074,7 +1069,7 @@ def _init_default_categories_if_empty() -> None:
     
     # Use explicit order if available or infer
     order_map = {
-        'explore': 0, 'knowledge': 10, 'ai': 20, 'finance': 30, 
+        'explore': 0, 'ai': 20, 'finance': 30, 
         'tech_news': 40, 'developer': 50, 'social': 60, 'general': 70, 'sports': 80
     }
     
@@ -1574,7 +1569,7 @@ async def api_news_check_updates():
     five_minutes_ago = int(time.time()) - 300
     
     try:
-        # Check RSS/knowledge category (morning brief)
+        # Check RSS/explore category
         cur = conn.execute(
             """
             SELECT MAX(created_at) FROM rss_entries
@@ -1582,7 +1577,6 @@ async def api_news_check_updates():
         )
         row = cur.fetchone()
         latest_rss = int(row[0] or 0) if row else 0
-        categories_result["knowledge"] = latest_rss > five_minutes_ago
         
         # Check explore category (same data source)
         categories_result["explore"] = latest_rss > five_minutes_ago
@@ -1836,7 +1830,7 @@ async def api_news(
     # IMPORTANT: deep-copy to avoid mutating the cached dict in-place.
     import copy
     data = copy.deepcopy(data)
-    _DEDICATED_TAB_IDS = {"explore", "knowledge", "discovery", "featured-mps", "my-tags", "finance"}
+    _DEDICATED_TAB_IDS = {"explore", "discovery", "my-tags", "finance"}
     try:
         cats = data.get("categories")
         if isinstance(cats, dict):

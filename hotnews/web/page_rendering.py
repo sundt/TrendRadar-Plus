@@ -296,46 +296,6 @@ def _inject_discovery_category(data: Dict[str, Any]) -> Dict[str, Any]:
         return data
 
 
-def _inject_featured_mps_category(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Inject 'featured-mps' category after 'knowledge' (每日AI早报)."""
-    try:
-        cats = data.get("categories") if isinstance(data, dict) else None
-        if not isinstance(cats, dict):
-            return data
-        if "featured-mps" in cats:
-            return data
-
-        featured_mps = {
-            "id": "featured-mps",
-            "name": "精选公众号",
-            "icon": "📱",
-            "platforms": {},
-            "news_count": 0,
-            "filtered_count": 0,
-            "is_new": False,
-            "requires_auth": False,
-            "is_dynamic": True,
-        }
-        
-        # Insert after knowledge (每日AI早报)
-        new_cats = {}
-        inserted = False
-        for k, v in cats.items():
-            new_cats[k] = v
-            if k == "knowledge":
-                new_cats["featured-mps"] = featured_mps
-                inserted = True
-        
-        # If knowledge not found, insert at the end
-        if not inserted:
-            new_cats["featured-mps"] = featured_mps
-        
-        data["categories"] = new_cats
-        return data
-    except Exception:
-        return data
-
-
 def _inject_source_subscription_category(data: Dict[str, Any]) -> Dict[str, Any]:
     """Inject 'source-subscription' category tab for subscribed sources."""
     try:
@@ -373,7 +333,7 @@ def _inject_source_subscription_category(data: Dict[str, Any]) -> Dict[str, Any]
 def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     优化 SSR 数据：只保留特殊栏目的元数据，普通栏目保留完整数据。
-    特殊栏目（explore, my-tags, discovery, knowledge, featured-mps）有自己的加载逻辑。
+    特殊栏目（explore, my-tags, discovery）有自己的加载逻辑。
     普通栏目（ai, finance, tech_news 等）需要预渲染数据。
     """
     # 直接返回原始数据，不做精简
@@ -385,7 +345,7 @@ def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
 DEFAULT_HIDDEN_CATEGORIES = ['other', 'general', 'social', 'tech_news', 'developer']
 
 # 特殊栏目，不应该被服务端过滤（它们有自己的动态加载逻辑）
-PROTECTED_CATEGORIES = ['my-tags', 'discovery', 'explore', 'knowledge', 'featured-mps', 'source-subscription', 'finance']
+PROTECTED_CATEGORIES = ['my-tags', 'discovery', 'explore', 'source-subscription', 'finance']
 
 
 def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str, Any]:
@@ -697,7 +657,6 @@ async def render_viewer_page(
         # 这样即使页面被 CDN/Nginx 缓存，也不会泄露用户主题
         # data = _inject_user_topics_as_categories(data, request)
         data = _inject_discovery_category(data)
-        data = _inject_featured_mps_category(data)
         # Removed: source-subscription tab is now integrated into user settings page
         # data = _inject_source_subscription_category(data)
 

@@ -288,7 +288,7 @@ class UserTimelineCache:
 # All caches use DEFAULT_CACHE_TTL (10 minutes) for consistency.
 # When adding a new category, create a cache instance here using the defaults.
 
-brief_timeline_cache = TimelineCache(max_items=1000)  # 知识库 (knowledge)
+brief_timeline_cache = TimelineCache(max_items=1000)  # 早报 (deprecated, kept for cache_warmup compat)
 explore_timeline_cache = TimelineCache(max_items=1000)  # 探索 (explore)
 my_tags_cache = UserTimelineCache()  # 我的关注 (my-tags) - per-user
 discovery_news_cache = TimelineCache(max_items=1500)  # 新发现 (discovery)

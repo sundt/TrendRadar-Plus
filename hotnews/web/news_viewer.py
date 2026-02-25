@@ -99,12 +99,6 @@ PLATFORM_CATEGORIES = {
             "weibo", "douyin", "bilibili-hot-search", "tieba", "zhihu", "douban"
         ]
     },
-    "knowledge": {
-        "name": "每日AI早报",
-        "icon": "📚",
-        "news_limit": 10,
-        "platforms": []
-    },
     "tech_news": {
         "name": "科技资讯",
         "icon": "📱",
@@ -139,7 +133,7 @@ PLATFORM_CATEGORIES = {
 
 # 分类显示顺序（用户期望的顺序）
 # Note: "explore" is injected by server.py and will always be the first tab.
-CATEGORY_ORDER = ['knowledge', 'ai', 'finance', 'tech_news', 'developer', 'social', 'general', 'sports', 'other']
+CATEGORY_ORDER = ['ai', 'finance', 'tech_news', 'developer', 'social', 'general', 'sports', 'other']
 
 
 class NewsViewerService:
@@ -582,7 +576,7 @@ class NewsViewerService:
 
         # 移除空分类
         # 总是保留配置的分类，即使是空的 (Always keep configured categories)
-        keep_empty = {"ai", "knowledge", "explore"}
+        keep_empty = {"ai", "explore"}
         if self._dynamic_categories:
             keep_empty.update(self._dynamic_categories.keys())
         else:

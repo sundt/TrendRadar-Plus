@@ -51,6 +51,8 @@ async def api_timeline(
     placeholders = ",".join("?" * len(tag_list))
 
     # Step 1: 按 tag 聚合 dedup_key，取最新时间，分页
+    # 注意：这里用 rss_entry_tags.created_at 排序（标签打标时间），
+    # 最终结果会按 published_at 重新排序
     try:
         step1_rows = conn.execute(
             f"""
@@ -97,13 +99,15 @@ async def api_timeline(
     source_ids = list(set(str(r[0]) for r in entry_rows if r[0]))
     source_names = _fetch_source_names(conn, source_ids)
 
-    # Build a lookup by (source_id, dedup_key)
+    # Build a lookup by (source_id, dedup_key) — keep the one with latest published_at
     entry_map: Dict[tuple, Any] = {}
     for r in entry_rows:
         k = (str(r[0]), str(r[1]))
-        entry_map[k] = r
+        existing = entry_map.get(k)
+        if existing is None or int(r[4] or 0) > int(existing[4] or 0):
+            entry_map[k] = r
 
-    # Assemble items in Step 1 order (already sorted by latest DESC)
+    # Assemble items
     items: List[Dict[str, Any]] = []
     for source_id, dedup_key in keys:
         k = (source_id, dedup_key)
@@ -129,6 +133,9 @@ async def api_timeline(
             "description": description,
             "tag_latest": latest_map.get(k, 0),
         })
+
+    # 按 published_at 降序排序（前端显示的是这个时间）
+    items.sort(key=lambda x: x.get("published_at", 0), reverse=True)
 
     return UnicodeJSONResponse(
         content={"items": items, "total": len(items), "has_more": has_more},

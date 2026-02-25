@@ -820,11 +820,14 @@ export const data = {
                 let html = '';
                 for (const n of nodes) {
                     const nId = String(n.id || '');
-                    if (!nId || nId in (categories || {})) continue; // already rendered
+                    if (!nId) continue;
                     // 排除自管理 tab（它们有自己的 pane renderer）
                     if (['my-tags', 'discovery', 'explore', 'rsscol-rss'].includes(nId)) continue;
-                    const isActive = nId === String(activeTabId);
-                    html += renderThemePane(nId, isActive);
+                    // 如果 /api/news 已经渲染了该分类的 pane，跳过自身但仍递归子节点
+                    if (!(nId in (categories || {}))) {
+                        const isActive = nId === String(activeTabId);
+                        html += renderThemePane(nId, isActive);
+                    }
                     if (Array.isArray(n.children) && n.children.length) {
                         html += _collectSubPanes(n.children);
                     }
