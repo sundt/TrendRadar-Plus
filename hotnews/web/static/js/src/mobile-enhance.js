@@ -1084,10 +1084,12 @@ const MobileEnhance = {
   _renderAllLevels() {
     if (!this._categoryPanel || !this._catState) return;
     const { columns, activeId, selL1, selL2 } = this._catState;
+    console.log('[MobileEnhance] _renderAllLevels selL1:', selL1, 'selL2:', selL2, 'activeId:', activeId);
     const self = this;
 
     const selL1Col = columns.find(c => c.id === selL1);
     const l2Children = selL1Col?.children || [];
+    console.log('[MobileEnhance] selL1Col:', selL1Col?.name, 'l2Children count:', l2Children.length);
     const selL2Col = l2Children.find(c => c.id === selL2);
     const l3Children = selL2Col?.children || [];
 
@@ -1186,9 +1188,11 @@ const MobileEnhance = {
 
     // L1 pill 点击
     this._categoryPanel.querySelectorAll('.me-cat-l1-pill').forEach(pill => {
-      pill.addEventListener('click', () => {
+      pill.addEventListener('click', (e) => {
+        e.stopPropagation();
         const colId = pill.dataset.id;
         const hasChildren = pill.dataset.hasChildren === 'true';
+        console.log('[MobileEnhance] L1 click:', colId, 'hasChildren:', hasChildren, 'raw:', pill.dataset.hasChildren);
 
         // 登录检查
         if (pill.dataset.requireLogin === 'true') {
@@ -1262,6 +1266,7 @@ const MobileEnhance = {
 
   /** 跳转到指定 tab 并关闭面板 */
   _navTo(categoryId) {
+    console.log('[MobileEnhance] _navTo called with:', categoryId);
     if (!categoryId) return;
     this._closeCategoryPanel();
     try {
