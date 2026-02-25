@@ -56,6 +56,76 @@ async def dedup_backfill(request: Request):
     result = engine.backfill_fingerprints()
     return result
 
+@router.get("/pairs")
+async def dedup_pairs(
+    request: Request,
+    match_type: str = Query(default=""),
+    limit: int = Query(default=20),
+    offset: int = Query(default=0),
+):
+    """查看重复对详情，用于人工抽查验证"""
+    conn = _get_conn(request)
+    try:
+        where = "WHERE 1=1"
+        params: list = []
+        if match_type:
+            where += " AND d.match_type = ?"
+            params.append(match_type)
+
+        rows = conn.execute(
+            f"""SELECT d.canonical_source_id, d.canonical_dedup_key,
+                       d.dup_source_id, d.dup_dedup_key,
+                       d.match_type, d.similarity_score,
+                       d.dup_title, d.dup_url, d.dup_published_at,
+                       d.detected_at, d.deleted_at,
+                       c.title as canonical_title, c.url as canonical_url,
+                       c.published_at as canonical_published_at,
+                       cs.name as canonical_source_name,
+                       ds.name as dup_source_name
+                FROM cross_source_dedup d
+                LEFT JOIN rss_entries c
+                  ON c.source_id = d.canonical_source_id
+                 AND c.dedup_key = d.canonical_dedup_key
+                LEFT JOIN rss_sources cs ON cs.id = d.canonical_source_id
+                LEFT JOIN rss_sources ds ON ds.id = d.dup_source_id
+                {where}
+                ORDER BY d.detected_at DESC
+                LIMIT ? OFFSET ?""",
+            (*params, limit, offset),
+        ).fetchall()
+
+        pairs = []
+        for r in rows:
+            pairs.append({
+                "canonical": {
+                    "source_id": str(r[0]),
+                    "source_name": str(r[14] or r[0]),
+                    "title": str(r[11] or ""),
+                    "url": str(r[12] or ""),
+                    "published_at": int(r[13] or 0),
+                },
+                "duplicate": {
+                    "source_id": str(r[2]),
+                    "source_name": str(r[15] or r[2]),
+                    "title": str(r[6] or ""),
+                    "url": str(r[7] or ""),
+                    "published_at": int(r[8] or 0),
+                },
+                "match_type": str(r[4]),
+                "similarity": float(r[5] or 0),
+                "detected_at": int(r[9] or 0),
+                "deleted": int(r[10] or 0) > 0,
+            })
+
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM cross_source_dedup d {where}", params
+        ).fetchone()[0]
+
+        return {"total": total, "pairs": pairs}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 
 # ------------------------------------------------------------------
 # Manual dedup link
