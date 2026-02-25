@@ -907,6 +907,109 @@ class DedupEngine:
                     pass
             processed += len(articles)
 
+        # 3. 跨源模糊标题匹配（阈值 0.90）
+        #    按源分组，每个源的文章与其他源做模糊比对
+        try:
+            all_articles = self.conn.execute(
+                """SELECT source_id, dedup_key, title, url, published_at,
+                          COALESCE(description, '') as description
+                   FROM rss_entries
+                   WHERE published_at >= ?
+                     AND title_fingerprint != '' AND title_fingerprint != '_empty_'
+                   ORDER BY published_at ASC""",
+                (cutoff,),
+            ).fetchall()
+        except Exception as e:
+            logger.error("batch_scan fuzzy load error: %s", e)
+            all_articles = []
+
+        if all_articles:
+            # 已被标记为 dup 的跳过
+            known_dups = set()
+            try:
+                for row in self.conn.execute(
+                    "SELECT dup_source_id, dup_dedup_key FROM cross_source_dedup"
+                ).fetchall():
+                    known_dups.add((str(row[0]), str(row[1])))
+            except Exception:
+                pass
+
+            # 构建候选列表（排除已知 dup）
+            candidates = []
+            for r in all_articles:
+                key = (str(r[0]), str(r[1]))
+                if key not in known_dups:
+                    candidates.append({
+                        "source_id": str(r[0]), "dedup_key": str(r[1]),
+                        "title": str(r[2] or ""), "url": str(r[3] or ""),
+                        "published_at": int(r[4] or 0),
+                        "description": str(r[5] or ""),
+                    })
+
+            fuzzy_pairs = 0
+            matched_keys = set()
+            for i, art in enumerate(candidates):
+                if not TitleNormalizer.is_eligible_for_fuzzy(art["title"]):
+                    continue
+                art_key = (art["source_id"], art["dedup_key"])
+                if art_key in matched_keys:
+                    continue
+                n_len = len(TitleNormalizer.normalize(art["title"]))
+                if n_len == 0:
+                    continue
+
+                for j in range(i + 1, len(candidates)):
+                    other = candidates[j]
+                    if other["source_id"] == art["source_id"]:
+                        continue
+                    other_key = (other["source_id"], other["dedup_key"])
+                    if other_key in matched_keys:
+                        continue
+                    # 时间差检查
+                    if art["published_at"] and other["published_at"] and abs(art["published_at"] - other["published_at"]) > self.MAX_TIME_DIFF:
+                        continue
+                    # 长度预筛选
+                    o_len = len(TitleNormalizer.normalize(other["title"]))
+                    if o_len == 0 or abs(n_len - o_len) > max(n_len, o_len) * 0.3:
+                        continue
+
+                    score = TitleNormalizer.similarity(art["title"], other["title"])
+                    if score >= self.THRESHOLD_CROSS_GROUP:
+                        canonical = CanonicalSelector.select([art, other])
+                        dup = other if canonical is art or (canonical["source_id"] == art["source_id"] and canonical["dedup_key"] == art["dedup_key"]) else art
+                        try:
+                            cur = self.conn.execute(
+                                """INSERT OR IGNORE INTO cross_source_dedup
+                                   (canonical_source_id, canonical_dedup_key,
+                                    dup_source_id, dup_dedup_key,
+                                    match_type, similarity_score,
+                                    dup_title, dup_url, dup_published_at, detected_at)
+                                   VALUES (?, ?, ?, ?, 'title_fuzzy_cross', ?, ?, ?, ?, ?)""",
+                                (
+                                    canonical["source_id"], canonical["dedup_key"],
+                                    dup["source_id"], dup["dedup_key"],
+                                    score,
+                                    dup["title"], dup["url"], dup["published_at"],
+                                    now_ts,
+                                ),
+                            )
+                            if cur.rowcount > 0:
+                                new_pairs += 1
+                                fuzzy_pairs += 1
+                                matched_keys.add((dup["source_id"], dup["dedup_key"]))
+                                if not dry_run:
+                                    self._physical_delete(canonical, dup, now_ts)
+                        except Exception:
+                            pass
+
+                if fuzzy_pairs % 50 == 0 and fuzzy_pairs > 0:
+                    try:
+                        self.conn.commit()
+                    except Exception:
+                        pass
+
+            logger.info("batch_scan fuzzy phase: %d new fuzzy pairs", fuzzy_pairs)
+
         try:
             self.conn.commit()
         except Exception:
