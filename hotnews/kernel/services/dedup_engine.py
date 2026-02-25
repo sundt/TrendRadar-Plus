@@ -264,8 +264,8 @@ class DedupEngine:
         self, source_id: str, dedup_key: str, title: str, url: str
     ) -> None:
         """为单条 rss_entries 填充 title_fingerprint 和 url_normalized"""
-        tfp = TitleNormalizer.fingerprint(title)
-        unorm = URLNormalizer.normalize(url)
+        tfp = TitleNormalizer.fingerprint(title) or "_empty_"
+        unorm = URLNormalizer.normalize(url) or "_empty_"
         try:
             self.conn.execute(
                 """UPDATE rss_entries
@@ -886,8 +886,8 @@ class DedupEngine:
 
             for r in rows:
                 sid, dk, title, url = str(r[0]), str(r[1]), str(r[2] or ""), str(r[3] or "")
-                tfp = TitleNormalizer.fingerprint(title)
-                unorm = URLNormalizer.normalize(url)
+                tfp = TitleNormalizer.fingerprint(title) or "_empty_"
+                unorm = URLNormalizer.normalize(url) or "_empty_"
                 self.conn.execute(
                     """UPDATE rss_entries
                        SET title_fingerprint = ?, url_normalized = ?
