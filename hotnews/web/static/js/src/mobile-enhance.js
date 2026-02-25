@@ -993,15 +993,33 @@ const MobileEnhance = {
   _openCategoryPanel() {
     if (!this._categoryOverlay) this._createCategoryPanel();
 
-    // DEBUG: 临时 alert 确认此函数被调用
-    try {
-      const cols = window._columnConfig;
-      const colsLen = Array.isArray(cols) ? cols.length : -1;
-      const aiCol = Array.isArray(cols) ? cols.find(c => c.id === 'ai') : null;
-      const aiChildren = aiCol ? (aiCol.children || []).length : -1;
-      alert('v3 panel open | cols=' + colsLen + ' | ai.children=' + aiChildren);
-    } catch (e) {
-      alert('v3 error: ' + e.message);
+    // 如果 _columnConfig 为空，尝试从 SSR JSON 重新解析
+    if (!Array.isArray(window._columnConfig) || window._columnConfig.length === 0) {
+      try {
+        const el = document.getElementById('column-config-json');
+        if (el && el.textContent) {
+          const parsed = JSON.parse(el.textContent);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            window._columnConfig = parsed;
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    // 如果仍然为空，尝试从 /api/columns 同步获取
+    if (!Array.isArray(window._columnConfig) || window._columnConfig.length === 0) {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/columns', false); // 同步请求
+        xhr.send();
+        if (xhr.status === 200) {
+          const data = JSON.parse(xhr.responseText);
+          const cols = Array.isArray(data) ? data : (data?.columns || []);
+          if (cols.length > 0) {
+            window._columnConfig = cols;
+          }
+        }
+      } catch (e) { /* ignore */ }
     }
 
     // 渲染分类内容
@@ -1205,7 +1223,6 @@ const MobileEnhance = {
         <span class="me-category-header-title">选择分类</span>
         <button class="me-category-close" aria-label="关闭">✕</button>
       </div>
-      <div style="padding:2px 16px;font-size:11px;color:#9ca3af;">v2 | L1=${selL1 || 'none'} | L2子项=${l2Children.length} | L3子项=${effectiveL3.length}</div>
     `;
 
     // ── L1: 横向滚动 pill 行 ──
