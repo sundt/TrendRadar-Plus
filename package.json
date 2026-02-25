@@ -10,6 +10,7 @@
     "test:report": "playwright show-report",
     "test:prod": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod",
     "test:prod:headed": "BASE_URL=https://hot.uihash.com VIEWER_PATH=/viewer playwright test --grep @prod --headed",
+    "prebuild:js": "rm -f hotnews/web/static/js/chunk-*.js hotnews/web/static/js/explore-embedded-rss-*.js hotnews/web/static/js/favorites-*.js hotnews/web/static/js/platform-reorder-*.js hotnews/web/static/js/rss-catalog-preview-parity-*.js hotnews/web/static/js/subscription-*.js hotnews/web/static/js/topic-tracker-*.js",
     "build:js": "esbuild hotnews/web/static/js/src/index.js --bundle --splitting --format=esm --outdir=hotnews/web/static/js --minify",
     "build:js:watch": "esbuild hotnews/web/static/js/src/index.js --bundle --splitting --format=esm --outdir=hotnews/web/static/js --watch",
     "dev:write": "vite --config vite.config.write.js",
