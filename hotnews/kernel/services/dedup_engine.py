@@ -326,6 +326,18 @@ class DedupEngine:
                     now_ts, dry_run,
                 )
 
+        # Step 2.5: 跨源模糊标题匹配（阈值 0.90）
+        if TitleNormalizer.is_eligible_for_fuzzy(title):
+            match = self._match_title_fuzzy_cross(
+                source_id, dedup_key, title, published_at
+            )
+            if match:
+                return self._record_match(
+                    source_id, dedup_key, title, url, published_at,
+                    match["article"], "title_fuzzy_cross", match["score"],
+                    now_ts, dry_run,
+                )
+
         # Step 3: url_normalized 精确匹配（跨源，7 天内）
         if unorm:
             match = self._match_url_exact(
@@ -409,6 +421,59 @@ class DedupEngine:
                 continue
             score = TitleNormalizer.similarity(title, other_title)
             if score >= self.THRESHOLD_INTRA_GROUP and score > best_score:
+                best_score = score
+                best_article = {
+                    "source_id": str(r[0]),
+                    "dedup_key": str(r[1]),
+                    "title": other_title,
+                    "url": str(r[3] or ""),
+                    "published_at": other_pub,
+                    "description": str(r[5] or ""),
+                }
+        if best_article:
+            return {"article": best_article, "score": best_score}
+        return None
+
+    def _match_title_fuzzy_cross(
+        self, source_id: str, dedup_key: str, title: str, published_at: int
+    ) -> Optional[Dict]:
+        """跨源模糊标题匹配（阈值 0.90，3 天窗口）
+
+        用归一化标题长度做预筛选，只拉长度接近的候选文章，控制比对量。
+        """
+        cutoff = (published_at or int(time.time())) - self.FUZZY_WINDOW
+        normalized = TitleNormalizer.normalize(title)
+        if not normalized:
+            return None
+        nlen = len(normalized)
+        # 长度差 30% 以内才有可能达到 0.90 相似度
+        min_len = int(nlen * 0.7)
+        max_len = int(nlen * 1.3)
+
+        try:
+            rows = self.conn.execute(
+                """SELECT source_id, dedup_key, title, url, published_at,
+                          COALESCE(description, '') as description
+                   FROM rss_entries
+                   WHERE source_id != ?
+                     AND published_at >= ?
+                     AND LENGTH(title) BETWEEN ? AND ?
+                   ORDER BY published_at DESC
+                   LIMIT 300""",
+                (source_id, cutoff, min_len, max_len),
+            ).fetchall()
+        except Exception:
+            return None
+
+        best_score = 0.0
+        best_article = None
+        for r in rows:
+            other_title = str(r[2] or "")
+            other_pub = int(r[4] or 0)
+            if published_at and other_pub and abs(published_at - other_pub) > self.MAX_TIME_DIFF:
+                continue
+            score = TitleNormalizer.similarity(title, other_title)
+            if score >= self.THRESHOLD_CROSS_GROUP and score > best_score:
                 best_score = score
                 best_article = {
                     "source_id": str(r[0]),
