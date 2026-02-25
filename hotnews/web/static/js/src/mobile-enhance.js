@@ -1034,13 +1034,13 @@ const MobileEnhance = {
   },
 
   /**
-   * 渲染分类面板内容（分步导航模式）
+   * 渲染分类面板内容（三级同屏模式）
    *
-   * 交互逻辑（类似 iOS 设置页逐级深入）：
-   *  - 初始：显示所有一级分类（网格按钮）
-   *  - 点击一级（有子项）→ 面板切换为二级列表（带返回按钮）
-   *  - 点击二级（有三级）→ 面板切换为三级列表（带返回按钮）
-   *  - 点击叶子节点 → 直接跳转并关闭面板
+   * 交互逻辑：
+   *  - 顶部：一级分类横向滚动 pill 行
+   *  - 中间：选中一级后，下方显示二级列表
+   *  - 底部：选中二级（有三级）后，下方显示三级 pill
+   *  - 只有叶子节点点击才跳转
    */
   _renderCategoryItems() {
     if (!this._categoryPanel) return;
@@ -1055,68 +1055,120 @@ const MobileEnhance = {
       return;
     }
 
-    // 渲染一级列表
-    this._renderL1(columns, activeId);
+    // 找到 activeId 所属的一级和二级
+    let selL1 = null;
+    let selL2 = null;
+    for (const col of columns) {
+      if (col.id === activeId) { selL1 = col.id; break; }
+      for (const ch of (col.children || [])) {
+        if (ch.id === activeId) { selL1 = col.id; selL2 = ch.id; break; }
+        for (const gc of (ch.children || [])) {
+          if (gc.id === activeId) { selL1 = col.id; selL2 = ch.id; break; }
+        }
+        if (selL2) break;
+      }
+      if (selL1) break;
+    }
+
+    // 默认选中第一个有子项的一级
+    if (!selL1) {
+      const firstWithChildren = columns.find(c => c.children?.length > 0);
+      if (firstWithChildren) selL1 = firstWithChildren.id;
+    }
+
+    this._catState = { columns, activeId, selL1, selL2 };
+    this._renderAllLevels();
   },
 
-  /** 渲染一级分类列表 */
-  _renderL1(columns, activeId) {
-    if (!this._categoryPanel) return;
+  /** 渲染三级同屏面板 */
+  _renderAllLevels() {
+    if (!this._categoryPanel || !this._catState) return;
+    const { columns, activeId, selL1, selL2 } = this._catState;
+    const self = this;
 
-    // 找到 activeId 所属的一级
-    let activeL1 = null;
-    for (const col of columns) {
-      if (col.id === activeId) { activeL1 = col.id; break; }
-      for (const ch of (col.children || [])) {
-        if (ch.id === activeId) { activeL1 = col.id; break; }
-        for (const gc of (ch.children || [])) {
-          if (gc.id === activeId) { activeL1 = col.id; break; }
-        }
-        if (activeL1) break;
+    const selL1Col = columns.find(c => c.id === selL1);
+    const l2Children = selL1Col?.children || [];
+    const selL2Col = l2Children.find(c => c.id === selL2);
+    const l3Children = selL2Col?.children || [];
+
+    // 如果选中的 L2 没有三级子项，不显示 L3
+    const showL3 = l3Children.length > 0;
+
+    // 如果没有选中 L2，默认选中第一个有子项的 L2
+    let effectiveL2 = selL2;
+    if (!effectiveL2 && l2Children.length > 0) {
+      const firstL2WithChildren = l2Children.find(c => c.children?.length > 0);
+      if (firstL2WithChildren) {
+        effectiveL2 = firstL2WithChildren.id;
+        this._catState.selL2 = effectiveL2;
       }
-      if (activeL1) break;
     }
+    const effectiveL2Col = l2Children.find(c => c.id === effectiveL2);
+    const effectiveL3 = effectiveL2Col?.children || [];
 
     let html = `
       <div class="me-category-header">
         <span class="me-category-header-title">选择分类</span>
         <button class="me-category-close" aria-label="关闭">✕</button>
       </div>
-      <div class="me-cat-grid">
     `;
 
+    // ── L1: 横向滚动 pill 行 ──
+    html += '<div class="me-cat-l1-row">';
     for (const col of columns) {
       const colId = col.id || '';
       const colName = col.name || colId;
       const colIcon = col.icon || '';
-      const children = Array.isArray(col.children) ? col.children : [];
-      const hasChildren = children.length > 0;
-      const isActive = colId === activeL1;
+      const isActive = colId === selL1;
+      const hasChildren = (col.children || []).length > 0;
+      html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(colId)}" data-has-children="${hasChildren}" data-require-login="${!!col.require_login}">${colIcon ? colIcon + ' ' : ''}${this._escapeHtml(colName)}</button>`;
+    }
+    html += '</div>';
 
-      html += `<div class="me-cat-tile${isActive ? ' active' : ''}" data-id="${this._escapeHtml(colId)}" data-has-children="${hasChildren}" data-require-login="${!!col.require_login}">`;
-      html += `  <span class="me-cat-tile-icon">${colIcon || '📂'}</span>`;
-      html += `  <span class="me-cat-tile-name">${this._escapeHtml(colName)}</span>`;
-      if (hasChildren) {
-        html += `  <span class="me-cat-tile-arrow">›</span>`;
+    // ── L2: 二级列表（仅当选中的 L1 有子项时显示） ──
+    if (l2Children.length > 0) {
+      html += '<div class="me-cat-l2-section">';
+      html += `<div class="me-cat-section-label">${selL1Col.icon || ''} ${this._escapeHtml(selL1Col.name || '')}</div>`;
+      html += '<div class="me-cat-l2-list">';
+      for (const ch of l2Children) {
+        const chId = ch.id || '';
+        const chName = ch.name || chId;
+        const hasGrandchildren = (ch.children || []).length > 0;
+        const isActive = chId === effectiveL2;
+        html += `<button class="me-cat-l2-item${isActive ? ' active' : ''}" data-id="${this._escapeHtml(chId)}" data-has-children="${hasGrandchildren}">${this._escapeHtml(chName)}${hasGrandchildren ? ' <span class="me-cat-l2-arrow">›</span>' : ''}</button>`;
       }
-      html += `</div>`;
+      html += '</div>';
+      html += '</div>';
     }
 
-    html += `</div>`;
+    // ── L3: 三级 pill（仅当选中的 L2 有子项时显示） ──
+    if (effectiveL3.length > 0) {
+      html += '<div class="me-cat-l3-section">';
+      html += `<div class="me-cat-section-label">${this._escapeHtml(effectiveL2Col?.name || '')}</div>`;
+      html += '<div class="me-cat-l3-pills">';
+      for (const gc of effectiveL3) {
+        const gcId = gc.id || '';
+        const gcName = gc.name || gcId;
+        const isActive = gcId === activeId;
+        html += `<button class="me-cat-l3-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
+      }
+      html += '</div>';
+      html += '</div>';
+    }
 
-    // 用户主题
+    // ── 用户主题 ──
     const topicTabs = Array.from(
       document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
     ).filter(tab => !this._isTabHiddenByUser(tab));
 
-    html += '<div class="me-category-section-title" style="margin-top:8px;">我的主题</div>';
+    html += '<div class="me-cat-section-label" style="margin-top:4px;">我的主题</div>';
     if (topicTabs.length > 0) {
-      html += '<div class="me-category-grid">';
+      html += '<div class="me-cat-l3-pills">';
       topicTabs.forEach(tab => {
         const id = tab.dataset.category || '';
         const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
         const isActive = id === activeId;
-        html += `<div class="me-category-item${isActive ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
+        html += `<button class="me-cat-l3-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(id)}">${this._escapeHtml(name)}</button>`;
       });
       html += '</div>';
     } else {
@@ -1125,20 +1177,21 @@ const MobileEnhance = {
     html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
 
     this._categoryPanel.innerHTML = html;
-    const self = this;
+
+    // ── 事件绑定 ──
 
     // 关闭
     this._categoryPanel.querySelector('.me-category-close')
       ?.addEventListener('click', () => this._closeCategoryPanel());
 
-    // 一级 tile 点击
-    this._categoryPanel.querySelectorAll('.me-cat-tile').forEach(tile => {
-      tile.addEventListener('click', () => {
-        const colId = tile.dataset.id;
-        const hasChildren = tile.dataset.hasChildren === 'true';
+    // L1 pill 点击
+    this._categoryPanel.querySelectorAll('.me-cat-l1-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const colId = pill.dataset.id;
+        const hasChildren = pill.dataset.hasChildren === 'true';
 
         // 登录检查
-        if (tile.dataset.requireLogin === 'true') {
+        if (pill.dataset.requireLogin === 'true') {
           try {
             const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
             if (!isLoggedIn) {
@@ -1150,19 +1203,45 @@ const MobileEnhance = {
         }
 
         if (!hasChildren) {
+          // 叶子节点 → 直接跳转
           self._navTo(colId);
           return;
         }
 
-        // 有子项 → 进入二级
-        const col = columns.find(c => c.id === colId);
-        if (col) self._renderL2(columns, col, activeId);
+        // 有子项 → 更新选中的 L1，重置 L2
+        self._catState.selL1 = colId;
+        self._catState.selL2 = null;
+        self._renderAllLevels();
+
+        // 滚动 L1 行让选中项可见
+        requestAnimationFrame(() => {
+          const activeL1 = self._categoryPanel.querySelector('.me-cat-l1-pill.active');
+          if (activeL1) activeL1.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+        });
       });
     });
 
-    // topic tabs
-    this._categoryPanel.querySelectorAll('.me-category-item').forEach(item => {
-      item.addEventListener('click', () => this._navTo(item.dataset.category));
+    // L2 item 点击
+    this._categoryPanel.querySelectorAll('.me-cat-l2-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const chId = item.dataset.id;
+        const hasChildren = item.dataset.hasChildren === 'true';
+
+        if (!hasChildren) {
+          // 叶子节点 → 直接跳转
+          self._navTo(chId);
+          return;
+        }
+
+        // 有三级 → 更新选中的 L2，重新渲染
+        self._catState.selL2 = chId;
+        self._renderAllLevels();
+      });
+    });
+
+    // L3 pill 点击 → 直接跳转
+    this._categoryPanel.querySelectorAll('.me-cat-l3-pill').forEach(pill => {
+      pill.addEventListener('click', () => self._navTo(pill.dataset.id));
     });
 
     // 新建主题
@@ -1173,122 +1252,11 @@ const MobileEnhance = {
           window.TopicTracker.openModal();
         }
       });
-  },
 
-  /** 渲染二级分类列表 */
-  _renderL2(columns, parentCol, activeId) {
-    if (!this._categoryPanel || !parentCol) return;
-
-    const children = Array.isArray(parentCol.children) ? parentCol.children : [];
-    const parentName = parentCol.name || parentCol.id || '';
-    const parentIcon = parentCol.icon || '📂';
-
-    // 找到 activeId 所属的二级
-    let activeL2 = null;
-    for (const ch of children) {
-      if (ch.id === activeId) { activeL2 = ch.id; break; }
-      for (const gc of (ch.children || [])) {
-        if (gc.id === activeId) { activeL2 = ch.id; break; }
-      }
-      if (activeL2) break;
-    }
-
-    let html = `
-      <div class="me-category-header">
-        <button class="me-cat-back" aria-label="返回">‹</button>
-        <span class="me-category-header-title">${parentIcon} ${this._escapeHtml(parentName)}</span>
-        <button class="me-category-close" aria-label="关闭">✕</button>
-      </div>
-      <div class="me-cat-sublist">
-    `;
-
-    for (const ch of children) {
-      const chId = ch.id || '';
-      const chName = ch.name || chId;
-      const grandchildren = Array.isArray(ch.children) ? ch.children : [];
-      const hasChildren = grandchildren.length > 0;
-      const isActive = chId === activeL2 || chId === activeId;
-
-      html += `<div class="me-cat-subitem${isActive ? ' active' : ''}" data-id="${this._escapeHtml(chId)}" data-has-children="${hasChildren}">`;
-      html += `  <span class="me-cat-subitem-name">${this._escapeHtml(chName)}</span>`;
-      if (hasChildren) {
-        html += `  <span class="me-cat-subitem-count">${grandchildren.length}</span>`;
-        html += `  <span class="me-cat-subitem-arrow">›</span>`;
-      }
-      html += `</div>`;
-    }
-
-    html += `</div>`;
-
-    this._categoryPanel.innerHTML = html;
-    const self = this;
-
-    // 返回
-    this._categoryPanel.querySelector('.me-cat-back')
-      ?.addEventListener('click', () => self._renderL1(columns, activeId));
-
-    // 关闭
-    this._categoryPanel.querySelector('.me-category-close')
-      ?.addEventListener('click', () => this._closeCategoryPanel());
-
-    // 二级项点击
-    this._categoryPanel.querySelectorAll('.me-cat-subitem').forEach(item => {
-      item.addEventListener('click', () => {
-        const chId = item.dataset.id;
-        const hasChildren = item.dataset.hasChildren === 'true';
-
-        if (!hasChildren) {
-          self._navTo(chId);
-          return;
-        }
-
-        // 有三级 → 进入三级
-        const ch = children.find(c => c.id === chId);
-        if (ch) self._renderL3(columns, parentCol, ch, activeId);
-      });
-    });
-  },
-
-  /** 渲染三级分类列表 */
-  _renderL3(columns, grandparentCol, parentCol, activeId) {
-    if (!this._categoryPanel || !parentCol) return;
-
-    const grandchildren = Array.isArray(parentCol.children) ? parentCol.children : [];
-    const parentName = parentCol.name || parentCol.id || '';
-    const grandparentName = grandparentCol.name || grandparentCol.id || '';
-
-    let html = `
-      <div class="me-category-header">
-        <button class="me-cat-back" aria-label="返回">‹</button>
-        <span class="me-category-header-title">${this._escapeHtml(parentName)}</span>
-        <button class="me-category-close" aria-label="关闭">✕</button>
-      </div>
-      <div class="me-cat-pills">
-    `;
-
-    for (const gc of grandchildren) {
-      const gcId = gc.id || '';
-      const gcName = gc.name || gcId;
-      const isActive = gcId === activeId;
-      html += `<button class="me-cat-pill${isActive ? ' active' : ''}" data-nav="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
-    }
-
-    html += `</div>`;
-
-    this._categoryPanel.innerHTML = html;
-    const self = this;
-
-    // 返回到二级
-    this._categoryPanel.querySelector('.me-cat-back')
-      ?.addEventListener('click', () => self._renderL2(columns, grandparentCol, activeId));
-
-    // 关闭
-    this._categoryPanel.querySelector('.me-category-close')
-      ?.addEventListener('click', () => this._closeCategoryPanel());
-
-    // 三级 pill 点击 → 跳转
-    this._categoryPanel.querySelectorAll('.me-cat-pill[data-nav]').forEach(btn => {
-      btn.addEventListener('click', () => self._navTo(btn.dataset.nav));
+    // 滚动 L1 行让选中项可见
+    requestAnimationFrame(() => {
+      const activeL1 = this._categoryPanel.querySelector('.me-cat-l1-pill.active');
+      if (activeL1) activeL1.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
     });
   },
 

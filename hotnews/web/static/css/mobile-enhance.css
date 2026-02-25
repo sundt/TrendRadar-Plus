@@ -531,139 +531,35 @@
     color: #9ca3af;
   }
 
-  /* ── Drill-down category navigation ── */
+  /* ── Three-level simultaneous category navigation ── */
 
-  /* L1: 一级分类网格 */
-  .me-cat-grid {
-    display: flex;
-    flex-direction: column;
-    padding: 4px 0;
-  }
-
-  .me-cat-tile {
-    display: flex;
-    align-items: center;
-    padding: 14px 20px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 0.15s ease;
-  }
-
-  .me-cat-tile:active {
-    background: rgba(0, 0, 0, 0.04);
-  }
-
-  .me-cat-tile.active {
-    background: rgba(79, 70, 229, 0.05);
-  }
-
-  .me-cat-tile-icon {
-    font-size: 20px;
-    width: 32px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  .me-cat-tile-name {
-    flex: 1;
-    font-size: 15px;
-    font-weight: 500;
-    color: #1f2937;
-  }
-
-  .me-cat-tile.active .me-cat-tile-name {
-    color: var(--primary-color, #4f46e5);
-  }
-
-  .me-cat-tile-arrow {
-    font-size: 18px;
-    color: #9ca3af;
-    flex-shrink: 0;
-  }
-
-  /* 返回按钮 */
-  .me-cat-back {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: #f3f4f6;
-    border-radius: 50%;
-    cursor: pointer;
-    color: #374151;
-    font-size: 20px;
-    font-weight: 600;
-    -webkit-tap-highlight-color: transparent;
-    flex-shrink: 0;
-    margin-right: 8px;
-  }
-
-  .me-cat-back:active {
-    background: #e5e7eb;
-  }
-
-  /* L2: 二级列表 */
-  .me-cat-sublist {
-    display: flex;
-    flex-direction: column;
-    padding: 4px 0;
-  }
-
-  .me-cat-subitem {
-    display: flex;
-    align-items: center;
-    padding: 13px 20px 13px 28px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 0.15s ease;
-  }
-
-  .me-cat-subitem:active {
-    background: rgba(0, 0, 0, 0.04);
-  }
-
-  .me-cat-subitem.active {
-    background: rgba(79, 70, 229, 0.05);
-  }
-
-  .me-cat-subitem-name {
-    flex: 1;
-    font-size: 15px;
-    color: #374151;
-  }
-
-  .me-cat-subitem.active .me-cat-subitem-name {
-    color: var(--primary-color, #4f46e5);
-    font-weight: 500;
-  }
-
-  .me-cat-subitem-count {
+  /* 区块标签 */
+  .me-cat-section-label {
+    padding: 10px 20px 4px;
     font-size: 12px;
+    font-weight: 600;
     color: #9ca3af;
-    margin-right: 6px;
-    background: #f3f4f6;
-    padding: 1px 6px;
-    border-radius: 8px;
+    letter-spacing: 0.3px;
   }
 
-  .me-cat-subitem-arrow {
-    font-size: 16px;
-    color: #9ca3af;
-    flex-shrink: 0;
-  }
-
-  /* L3: 三级 pill 按钮 */
-  .me-cat-pills {
+  /* L1: 横向滚动 pill 行 */
+  .me-cat-l1-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 8px 20px 16px;
+    gap: 8px;
+    padding: 8px 16px 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
   }
 
-  .me-cat-pill {
-    padding: 8px 16px;
+  .me-cat-l1-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .me-cat-l1-pill {
+    flex-shrink: 0;
+    padding: 8px 14px;
     font-size: 14px;
     color: #374151;
     background: #f3f4f6;
@@ -675,11 +571,92 @@
     white-space: nowrap;
   }
 
-  .me-cat-pill:active {
+  .me-cat-l1-pill:active {
     background: #e5e7eb;
   }
 
-  .me-cat-pill.active {
+  .me-cat-l1-pill.active {
+    color: #fff;
+    background: var(--primary-color, #4f46e5);
+    border-color: var(--primary-color, #4f46e5);
+  }
+
+  /* L2: 二级列表区域 */
+  .me-cat-l2-section {
+    border-top: 1px solid #f3f4f6;
+  }
+
+  .me-cat-l2-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 16px 10px;
+  }
+
+  .me-cat-l2-item {
+    padding: 7px 14px;
+    font-size: 14px;
+    color: #374151;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .me-cat-l2-item:active {
+    background: #e5e7eb;
+  }
+
+  .me-cat-l2-item.active {
+    color: var(--primary-color, #4f46e5);
+    background: rgba(79, 70, 229, 0.08);
+    border-color: var(--primary-color, #4f46e5);
+    font-weight: 500;
+  }
+
+  .me-cat-l2-arrow {
+    font-size: 13px;
+    color: #9ca3af;
+    margin-left: 2px;
+  }
+
+  .me-cat-l2-item.active .me-cat-l2-arrow {
+    color: var(--primary-color, #4f46e5);
+  }
+
+  /* L3: 三级 pill 区域 */
+  .me-cat-l3-section {
+    border-top: 1px solid #f3f4f6;
+  }
+
+  .me-cat-l3-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 16px 12px;
+  }
+
+  .me-cat-l3-pill {
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #6b7280;
+    background: #f3f4f6;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .me-cat-l3-pill:active {
+    background: #e5e7eb;
+  }
+
+  .me-cat-l3-pill.active {
     color: var(--primary-color, #4f46e5);
     background: rgba(79, 70, 229, 0.08);
     border-color: var(--primary-color, #4f46e5);
