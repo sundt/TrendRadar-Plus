@@ -1291,11 +1291,6 @@ const MobileEnhance = {
       btn.addEventListener('click', () => self._navTo(btn.dataset.nav));
     });
   },
-        if (window.TopicTracker && typeof window.TopicTracker.openModal === 'function') {
-          window.TopicTracker.openModal();
-        }
-      });
-  },
 
   /** 跳转到指定 tab 并关闭面板 */
   _navTo(categoryId) {
