@@ -1154,14 +1154,19 @@ const MobileEnhance = {
           } catch (ex) { /* ignore */ }
         }
 
+        // 始终导航到 L1（后台加载数据）
+        self._navToBackground(colId);
+
         if (!hasChildren) {
-          self._navTo(colId);
+          // 无子项 → 导航并关闭面板
+          self._closeCategoryPanel();
           return;
         }
 
-        // 有子项 → 更新选中的 L1，重置 L2
+        // 有子项 → 展开 L2（面板保持打开）
         self._catState.selL1 = colId;
         self._catState.selL2 = null;
+        self._catState.activeId = colId;
         self._renderAllLevels();
         return;
       }
@@ -1172,18 +1177,23 @@ const MobileEnhance = {
         const chId = l2Item.dataset.id;
         const hasChildren = l2Item.dataset.hasChildren === 'true';
 
+        // 始终导航到 L2（后台加载数据）
+        self._navToBackground(chId);
+
         if (!hasChildren) {
-          self._navTo(chId);
+          // 叶子节点 → 关闭面板
+          self._closeCategoryPanel();
           return;
         }
 
-        // 有三级 → 更新选中的 L2，只刷新 L2 高亮和 L3 区域（不重绘 L1）
+        // 有三级 → 展开 L3（面板保持打开）
         self._catState.selL2 = chId;
+        self._catState.activeId = chId;
         self._updateL2AndL3();
         return;
       }
 
-      // L3 pill 点击 → 直接跳转
+      // L3 pill 点击 → 导航并关闭面板
       const l3Pill = target.closest('.me-cat-l3-pill');
       if (l3Pill) {
         self._navTo(l3Pill.dataset.id);
@@ -1355,26 +1365,63 @@ const MobileEnhance = {
   /** 渲染"我的主题"标签页内容 */
   _renderTopicsTab() {
     const activeId = this._catState?.activeId || '';
-    const topicTabs = Array.from(
+
+    // 优先从 DOM 读取已渲染的 topic tabs
+    let topicTabs = Array.from(
       document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
     ).filter(tab => !this._isTabHiddenByUser(tab));
 
-    let html = '';
-
     if (topicTabs.length > 0) {
-      html += '<div class="me-cat-l1-row" style="flex-wrap:wrap;">';
-      topicTabs.forEach(tab => {
-        const id = tab.dataset.category || '';
-        const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
-        const isActive = id === activeId;
-        html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(id)}" data-has-children="false" data-require-login="false">${this._escapeHtml(name)}</button>`;
-      });
-      html += '</div>';
-    } else {
-      html += '<div class="me-category-empty">暂无自建主题</div>';
+      return this._renderTopicPills(topicTabs, activeId);
     }
-    html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
 
+    // DOM 中没有 topic tabs（可能 topic-tracker 还没加载完）
+    // 尝试异步从 API 获取
+    const self = this;
+    fetch('/api/topics', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok || !data.topics?.length) return;
+        // 面板仍然打开且在"我的主题" tab 时才更新
+        if (!self._categoryOverlay?.classList.contains('open')) return;
+        if (self._catState?.panelTab !== 'topics') return;
+
+        // 构建 pill HTML
+        let html = '<div class="me-cat-l1-row" style="flex-wrap:wrap;">';
+        data.topics.forEach(topic => {
+          const id = 'topic-' + topic.id;
+          const name = topic.name || id;
+          const isActive = id === activeId;
+          html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${self._escapeHtml(id)}" data-has-children="false" data-require-login="false">${self._escapeHtml(name)}</button>`;
+        });
+        html += '</div>';
+        html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
+
+        // 替换面板中 topics 区域的内容（tab bar 之后的部分）
+        const tabBar = self._categoryPanel?.querySelector('.me-cat-tab-bar');
+        if (tabBar) {
+          // 移除 tab bar 之后的所有内容
+          while (tabBar.nextSibling) tabBar.nextSibling.remove();
+          tabBar.insertAdjacentHTML('afterend', html);
+        }
+      })
+      .catch(() => {});
+
+    // 先返回加载中状态
+    return '<div class="me-category-empty" style="text-align:center;padding:20px;">加载中...</div>';
+  },
+
+  /** 从 DOM topic tabs 生成 pill HTML */
+  _renderTopicPills(topicTabs, activeId) {
+    let html = '<div class="me-cat-l1-row" style="flex-wrap:wrap;">';
+    topicTabs.forEach(tab => {
+      const id = tab.dataset.category || '';
+      const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
+      const isActive = id === activeId;
+      html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(id)}" data-has-children="false" data-require-login="false">${this._escapeHtml(name)}</button>`;
+    });
+    html += '</div>';
+    html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
     return html;
   },
 
@@ -1382,6 +1429,12 @@ const MobileEnhance = {
   _navTo(categoryId) {
     if (!categoryId) return;
     this._closeCategoryPanel();
+    this._navToBackground(categoryId);
+  },
+
+  /** 后台导航到指定 tab（不关闭面板） */
+  _navToBackground(categoryId) {
+    if (!categoryId) return;
     try {
       if (typeof window.handleTabClickWithAuth === 'function') {
         window.handleTabClickWithAuth(categoryId);
