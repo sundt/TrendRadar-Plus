@@ -1033,7 +1033,16 @@ const MobileEnhance = {
     if (this._categoryPanel) this._categoryPanel.classList.remove('open');
   },
 
-  /** 渲染分类面板内容（两级结构，从 _columnConfig 读取） */
+  /**
+   * 渲染分类面板内容（三级树结构，从 _columnConfig 读取）
+   *
+   * 交互逻辑：
+   *  - 一级目录（有子项）：点击整行 → 展开/收起二级列表（手风琴）
+   *  - 一级目录（无子项）：点击 → 直接跳转
+   *  - 二级目录（有三级）：点击 → 展开/收起三级列表
+   *  - 二级目录（无三级）：点击 → 直接跳转
+   *  - 三级目录：点击 → 直接跳转
+   */
   _renderCategoryItems() {
     if (!this._categoryPanel) return;
 
@@ -1042,22 +1051,25 @@ const MobileEnhance = {
 
     const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
 
-    // 若 _columnConfig 尚未就绪，降级到旧的 DOM 读取逻辑
     if (!columns.length) {
       this._renderCategoryItemsFallback(activeId);
       return;
     }
 
-    // 找到当前激活分类的显示名
+    // 找到当前激活分类的显示名 + 所属一级/二级 id
     let activeName = activeId;
+    let activeL1 = null;
+    let activeL2 = null;
     for (const col of columns) {
-      if (col.id === activeId) { activeName = col.name || activeId; break; }
+      if (col.id === activeId) { activeName = col.name || activeId; activeL1 = col.id; break; }
       for (const ch of (col.children || [])) {
-        if (ch.id === activeId) { activeName = ch.name || activeId; break; }
+        if (ch.id === activeId) { activeName = ch.name || activeId; activeL1 = col.id; activeL2 = ch.id; break; }
         for (const gc of (ch.children || [])) {
-          if (gc.id === activeId) { activeName = gc.name || activeId; break; }
+          if (gc.id === activeId) { activeName = gc.name || activeId; activeL1 = col.id; activeL2 = ch.id; break; }
         }
+        if (activeL1) break;
       }
+      if (activeL1) break;
     }
 
     let html = `
@@ -1065,60 +1077,63 @@ const MobileEnhance = {
         <span class="me-category-header-title">当前：${this._escapeHtml(activeName)}</span>
         <button class="me-category-close" aria-label="关闭">✕</button>
       </div>
+      <div class="me-cat-list">
     `;
 
-    // 渲染每个一级栏目（含可展开的二级列表）
     for (const col of columns) {
       const colId = col.id || '';
       const colName = col.name || colId;
+      const colIcon = col.icon || '';
       const children = Array.isArray(col.children) ? col.children : [];
-      const requireLogin = !!col.require_login;
+      const hasChildren = children.length > 0;
+      const isL1Active = colId === activeL1;
 
-      // 判断当前激活是否在此一级栏目下
-      const isColActive = colId === activeId ||
-        children.some(ch => ch.id === activeId ||
-          (ch.children || []).some(gc => gc.id === activeId));
-
-      // 一级栏目行：名称可点击（跳转到 {col}-all），箭头展开二级
-      html += `<div class="me-cat-row${isColActive ? ' me-cat-row--active' : ''}" data-col-id="${this._escapeHtml(colId)}" data-require-login="${requireLogin}">`;
-      html += `  <span class="me-cat-row-name" data-nav="${this._escapeHtml(colId + '-all')}">${this._escapeHtml(colName)}</span>`;
-      if (children.length) {
-        html += `  <span class="me-cat-row-arrow${isColActive ? ' expanded' : ''}" data-toggle="${this._escapeHtml(colId)}">▶</span>`;
+      // 一级行
+      html += `<div class="me-cat-l1${isL1Active ? ' me-cat-l1--active' : ''}" data-l1="${this._escapeHtml(colId)}" data-has-children="${hasChildren}" data-require-login="${!!col.require_login}">`;
+      html += `  <span class="me-cat-l1-icon">${colIcon || '📂'}</span>`;
+      html += `  <span class="me-cat-l1-name">${this._escapeHtml(colName)}</span>`;
+      if (hasChildren) {
+        html += `  <span class="me-cat-l1-arrow${isL1Active ? ' expanded' : ''}">›</span>`;
       }
       html += `</div>`;
 
-      // 二级列表（默认展开当前激活的一级栏目）
-      if (children.length) {
-        html += `<div class="me-cat-children${isColActive ? ' expanded' : ''}" data-parent="${this._escapeHtml(colId)}">`;
+      // 二级容器
+      if (hasChildren) {
+        html += `<div class="me-cat-l2-list${isL1Active ? ' expanded' : ''}" data-l1-parent="${this._escapeHtml(colId)}">`;
         for (const ch of children) {
           const chId = ch.id || '';
           const chName = ch.name || chId;
           const grandchildren = Array.isArray(ch.children) ? ch.children : [];
-          const isChActive = chId === activeId || grandchildren.some(gc => gc.id === activeId);
+          const hasGrandchildren = grandchildren.length > 0;
+          const isL2Active = chId === activeL2;
 
-          if (grandchildren.length) {
-            // 有三级：显示为不可点击的分组标题 + 三级按钮
-            html += `<div class="me-cat-subgroup">`;
-            html += `  <div class="me-cat-subgroup-title">${this._escapeHtml(chName)}</div>`;
-            html += `  <div class="me-cat-subgroup-items">`;
+          // 二级行
+          html += `<div class="me-cat-l2${isL2Active ? ' me-cat-l2--active' : ''}" data-l2="${this._escapeHtml(chId)}" data-has-children="${hasGrandchildren}">`;
+          html += `  <span class="me-cat-l2-name">${this._escapeHtml(chName)}</span>`;
+          if (hasGrandchildren) {
+            html += `  <span class="me-cat-l2-arrow${isL2Active ? ' expanded' : ''}">›</span>`;
+          }
+          html += `</div>`;
+
+          // 三级容器
+          if (hasGrandchildren) {
+            html += `<div class="me-cat-l3-list${isL2Active ? ' expanded' : ''}" data-l2-parent="${this._escapeHtml(chId)}">`;
             for (const gc of grandchildren) {
               const gcId = gc.id || '';
               const gcName = gc.name || gcId;
               const isGcActive = gcId === activeId;
-              html += `<button class="me-cat-item${isGcActive ? ' active' : ''}" data-nav="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
+              html += `<button class="me-cat-l3${isGcActive ? ' active' : ''}" data-nav="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
             }
-            html += `  </div>`;
             html += `</div>`;
-          } else {
-            // 无三级：直接可点击按钮
-            html += `<button class="me-cat-item${isChActive ? ' active' : ''}" data-nav="${this._escapeHtml(chId)}">${this._escapeHtml(chName)}</button>`;
           }
         }
         html += `</div>`;
       }
     }
 
-    // 用户主题（topic-tracker 动态加载，仍从 DOM 读取）
+    html += `</div>`; // end me-cat-list
+
+    // 用户主题
     const topicTabs = Array.from(
       document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
     ).filter(tab => !this._isTabHiddenByUser(tab));
@@ -1141,51 +1156,92 @@ const MobileEnhance = {
     this._categoryPanel.innerHTML = html;
 
     // ── 事件绑定 ──
+    const self = this;
 
     // 关闭按钮
     this._categoryPanel.querySelector('.me-category-close')
       ?.addEventListener('click', () => this._closeCategoryPanel());
 
-    // 一级栏目名点击 → 跳转
-    this._categoryPanel.querySelectorAll('.me-cat-row-name[data-nav]').forEach(el => {
-      el.addEventListener('click', () => this._navTo(el.dataset.nav));
-    });
+    // 一级行点击
+    this._categoryPanel.querySelectorAll('.me-cat-l1').forEach(row => {
+      row.addEventListener('click', () => {
+        const colId = row.dataset.l1;
+        const hasChildren = row.dataset.hasChildren === 'true';
 
-    // 箭头点击 → 展开/收起二级列表
-    this._categoryPanel.querySelectorAll('.me-cat-row-arrow[data-toggle]').forEach(arrow => {
-      arrow.addEventListener('click', () => {
-        const colId = arrow.dataset.toggle;
-        const childrenEl = this._categoryPanel.querySelector(`.me-cat-children[data-parent="${colId}"]`);
-        const isExpanded = childrenEl?.classList.contains('expanded');
-        // 收起所有
-        this._categoryPanel.querySelectorAll('.me-cat-children').forEach(el => el.classList.remove('expanded'));
-        this._categoryPanel.querySelectorAll('.me-cat-row-arrow').forEach(el => el.classList.remove('expanded'));
-        // 若之前未展开则展开
-        if (!isExpanded && childrenEl) {
-          childrenEl.classList.add('expanded');
-          arrow.classList.add('expanded');
-        }
-      });
-    });
-
-    // 二级/三级按钮点击 → 跳转
-    this._categoryPanel.querySelectorAll('.me-cat-item[data-nav]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.nav;
-        // 登录检查：从 _columnConfig 查 require_login
-        const row = btn.closest('[data-require-login]');
-        const requireLogin = row?.dataset?.requireLogin === 'true';
-        if (requireLogin) {
+        // 登录检查
+        if (row.dataset.requireLogin === 'true') {
           try {
             const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
             if (!isLoggedIn) {
-              this._closeCategoryPanel();
+              self._closeCategoryPanel();
               if (typeof window.openLoginModal === 'function') window.openLoginModal();
               return;
             }
           } catch (e) { /* ignore */ }
         }
-        this._navTo(targetId);
+
+        if (!hasChildren) {
+          // 无子项 → 直接跳转
+          self._navTo(colId);
+          return;
+        }
+
+        // 有子项 → 手风琴展开/收起
+        const l2List = self._categoryPanel.querySelector(`.me-cat-l2-list[data-l1-parent="${colId}"]`);
+        const arrow = row.querySelector('.me-cat-l1-arrow');
+        const isExpanded = l2List?.classList.contains('expanded');
+
+        // 收起所有一级
+        self._categoryPanel.querySelectorAll('.me-cat-l2-list').forEach(el => el.classList.remove('expanded'));
+        self._categoryPanel.querySelectorAll('.me-cat-l1-arrow').forEach(el => el.classList.remove('expanded'));
+        self._categoryPanel.querySelectorAll('.me-cat-l1').forEach(el => el.classList.remove('me-cat-l1--active'));
+
+        if (!isExpanded && l2List) {
+          l2List.classList.add('expanded');
+          if (arrow) arrow.classList.add('expanded');
+          row.classList.add('me-cat-l1--active');
+        }
+      });
+    });
+
+    // 二级行点击
+    this._categoryPanel.querySelectorAll('.me-cat-l2').forEach(row => {
+      row.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const chId = row.dataset.l2;
+        const hasChildren = row.dataset.hasChildren === 'true';
+
+        if (!hasChildren) {
+          self._navTo(chId);
+          return;
+        }
+
+        // 有三级 → 展开/收起
+        const l3List = self._categoryPanel.querySelector(`.me-cat-l3-list[data-l2-parent="${chId}"]`);
+        const arrow = row.querySelector('.me-cat-l2-arrow');
+        const isExpanded = l3List?.classList.contains('expanded');
+
+        // 收起同级所有三级
+        const parentL2List = row.closest('.me-cat-l2-list');
+        if (parentL2List) {
+          parentL2List.querySelectorAll('.me-cat-l3-list').forEach(el => el.classList.remove('expanded'));
+          parentL2List.querySelectorAll('.me-cat-l2-arrow').forEach(el => el.classList.remove('expanded'));
+          parentL2List.querySelectorAll('.me-cat-l2').forEach(el => el.classList.remove('me-cat-l2--active'));
+        }
+
+        if (!isExpanded && l3List) {
+          l3List.classList.add('expanded');
+          if (arrow) arrow.classList.add('expanded');
+          row.classList.add('me-cat-l2--active');
+        }
+      });
+    });
+
+    // 三级按钮点击 → 跳转
+    this._categoryPanel.querySelectorAll('.me-cat-l3[data-nav]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        self._navTo(btn.dataset.nav);
       });
     });
 

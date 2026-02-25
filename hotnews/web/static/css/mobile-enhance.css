@@ -531,6 +531,162 @@
     color: #9ca3af;
   }
 
+  /* ── Three-level category tree ── */
+
+  .me-cat-list {
+    padding: 4px 0;
+  }
+
+  /* L1: 一级栏目行 */
+  .me-cat-l1 {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .me-cat-l1:active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .me-cat-l1--active {
+    background: rgba(79, 70, 229, 0.04);
+  }
+
+  .me-cat-l1-icon {
+    font-size: 18px;
+    width: 28px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .me-cat-l1-name {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 500;
+    color: #1f2937;
+  }
+
+  .me-cat-l1--active .me-cat-l1-name {
+    color: var(--primary-color, #4f46e5);
+  }
+
+  .me-cat-l1-arrow {
+    font-size: 16px;
+    color: #9ca3af;
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+  }
+
+  .me-cat-l1-arrow.expanded {
+    transform: rotate(90deg);
+    color: var(--primary-color, #4f46e5);
+  }
+
+  /* L2: 二级列表容器 */
+  .me-cat-l2-list {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    background: rgba(0, 0, 0, 0.015);
+  }
+
+  .me-cat-l2-list.expanded {
+    max-height: 2000px;
+  }
+
+  /* L2: 二级行 */
+  .me-cat-l2 {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px 10px 48px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease;
+  }
+
+  .me-cat-l2:active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .me-cat-l2--active {
+    background: rgba(79, 70, 229, 0.04);
+  }
+
+  .me-cat-l2-name {
+    flex: 1;
+    font-size: 14px;
+    color: #374151;
+  }
+
+  .me-cat-l2--active .me-cat-l2-name {
+    color: var(--primary-color, #4f46e5);
+    font-weight: 500;
+  }
+
+  .me-cat-l2-arrow {
+    font-size: 14px;
+    color: #9ca3af;
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+  }
+
+  .me-cat-l2-arrow.expanded {
+    transform: rotate(90deg);
+    color: var(--primary-color, #4f46e5);
+  }
+
+  /* L3: 三级列表容器 */
+  .me-cat-l3-list {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    padding-left: 48px;
+  }
+
+  .me-cat-l3-list.expanded {
+    max-height: 1000px;
+    padding-top: 4px;
+    padding-bottom: 8px;
+  }
+
+  /* L3: 三级按钮（pill 样式，横向 wrap） */
+  .me-cat-l3-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-right: 20px;
+  }
+
+  .me-cat-l3 {
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #4b5563;
+    background: #f3f4f6;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .me-cat-l3:active {
+    background: #e5e7eb;
+  }
+
+  .me-cat-l3.active {
+    color: var(--primary-color, #4f46e5);
+    background: rgba(79, 70, 229, 0.08);
+    border-color: var(--primary-color, #4f46e5);
+  }
+
   /* ==========================================================================
      10. Touch Feedback
      ========================================================================== */
