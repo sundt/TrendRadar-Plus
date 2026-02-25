@@ -1428,8 +1428,8 @@ const MobileEnhance = {
   /** 跳转到指定 tab 并关闭面板 */
   _navTo(categoryId) {
     if (!categoryId) return;
-    console.log('[MobileEnhance] _navTo (close panel):', categoryId);
     this._closeCategoryPanel();
+    this._ensureTabPane(categoryId);
     this._navToBackground(categoryId);
   },
 
@@ -1437,10 +1437,9 @@ const MobileEnhance = {
   _navToBackground(categoryId) {
     if (!categoryId) return;
     try {
-      console.log('[MobileEnhance] _navToBackground:', categoryId,
-        'handleTabClickWithAuth:', typeof window.handleTabClickWithAuth,
-        'switchTab:', typeof window.switchTab,
-        '_columnConfig length:', (window._columnConfig || []).length);
+      // 确保 tab pane 存在（renderViewerFromData 可能还没创建）
+      this._ensureTabPane(categoryId);
+
       if (typeof window.handleTabClickWithAuth === 'function') {
         window.handleTabClickWithAuth(categoryId);
       } else if (typeof window.switchTab === 'function') {
@@ -1448,9 +1447,43 @@ const MobileEnhance = {
       } else if (window.TR?.tabs?.switchTab) {
         window.TR.tabs.switchTab(categoryId);
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
       console.error('[MobileEnhance] switchTab 失败:', e);
+    }
+  },
+
+  /** 确保指定分类的 tab pane 存在，不存在则创建 */
+  _ensureTabPane(categoryId) {
+    if (!categoryId) return;
+    const paneId = 'tab-' + categoryId;
+    if (document.getElementById(paneId)) return; // 已存在
+
+    // 创建空的 tab pane（categoryTimeline.load 会填充内容）
+    const contentArea = document.querySelector('.tab-content-area');
+    if (!contentArea) return;
+
+    const pane = document.createElement('div');
+    pane.className = 'tab-pane';
+    pane.id = paneId;
+    pane.innerHTML = '<div class="platform-grid"></div>';
+    contentArea.appendChild(pane);
+
+    // 同时确保 _columnParentMap 中有该 ID 的映射
+    if (window._columnParentMap && !window._columnParentMap[categoryId]) {
+      const columns = window._columnConfig || [];
+      function _findParent(nodes, parentId) {
+        for (const n of nodes) {
+          if (String(n.id) === String(categoryId) && parentId) {
+            window._columnParentMap[categoryId] = parentId;
+            return true;
+          }
+          if (Array.isArray(n.children) && n.children.length) {
+            if (_findParent(n.children, String(n.id))) return true;
+          }
+        }
+        return false;
+      }
+      _findParent(columns, null);
     }
   },
 
