@@ -24,6 +24,7 @@ router = APIRouter()
 async def api_rss_explore_timeline(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    no_content: int = Query(0, ge=0, le=1),
 ):
     """API: Explore timeline - all RSS entries sorted by published_at DESC."""
     conn = get_online_db()
@@ -35,6 +36,8 @@ async def api_rss_explore_timeline(
     cached_items = explore_timeline_cache.get()
     if cached_items is not None and off + lim <= len(cached_items):
         sliced = cached_items[off:off + lim]
+        if no_content:
+            sliced = [{k: v for k, v in it.items() if k != "content"} for it in sliced]
         return UnicodeJSONResponse(
             content={
                 "offset": off,
@@ -124,6 +127,8 @@ async def api_rss_explore_timeline(
     explore_timeline_cache.set(items_all)
 
     sliced = items_all[off:off + lim]
+    if no_content:
+        sliced = [{k: v for k, v in it.items() if k != "content"} for it in sliced]
     return UnicodeJSONResponse(
         content={
             "offset": off,

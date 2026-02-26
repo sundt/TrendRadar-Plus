@@ -1,5 +1,5 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
-import { skeletonCard, skeletonSentinel } from './skeleton.js';
+import { skeletonCards, skeletonSentinel } from './skeleton.js';
 
 const EXPLORE_TAB_ID = 'explore';
 const INITIAL_CARDS_DESKTOP = 3;
@@ -133,7 +133,9 @@ async function _fetchJson(url) {
 }
 
 async function _fetchTimelineBatch(limit, offset) {
-    const url = `/api/rss/explore/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`;
+    const isMobile = window.innerWidth <= 640;
+    const noContent = isMobile ? '&no_content=1' : '';
+    const url = `/api/rss/explore/timeline?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}${noContent}`;
     const payload = await _fetchJson(url);
     return Array.isArray(payload?.items) ? payload.items : [];
 }
@@ -296,7 +298,7 @@ async function _loadTimeline() {
 
     _exploreOffset = 0;
     _exploreFinished = false;
-    grid.innerHTML = skeletonCard({ rows: 10, extraClass: 'tr-skeleton-explore' });
+    grid.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3, { rows: 10, extraClass: 'tr-skeleton-explore' });
 
     _createSentinel(grid);
 

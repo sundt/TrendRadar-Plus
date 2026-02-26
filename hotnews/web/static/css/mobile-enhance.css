@@ -660,6 +660,16 @@
     transition: background-color 0.1s ease;
   }
 
+  .news-item .news-title {
+    -webkit-tap-highlight-color: transparent;
+    text-decoration: none !important;
+  }
+
+  .news-item .news-title:active {
+    text-decoration: none !important;
+    opacity: 0.6;
+  }
+
   .news-item:active {
     background-color: rgba(0, 0, 0, 0.04);
   }
