@@ -21,7 +21,15 @@ let _exploreGeneration = 0;
 
 function _getActiveTabId() {
     try {
-        return document.querySelector('.sub-tabs .sub-tab.active')?.dataset?.category || null;
+        // 优先从 sub-tab 按钮读取（PC 端）
+        const fromTab = document.querySelector('.sub-tabs .sub-tab.active')?.dataset?.category || null;
+        if (fromTab) return fromTab;
+        // 降级：从 tab-pane.active 读取（移动端 drawer 导航时 sub-tab 可能没有 active）
+        const activePane = document.querySelector('.tab-pane.active');
+        if (activePane && activePane.id) {
+            return activePane.id.replace(/^tab-/, '');
+        }
+        return null;
     } catch (e) {
         return null;
     }
