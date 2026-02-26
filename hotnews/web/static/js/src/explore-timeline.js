@@ -381,7 +381,9 @@ async function _loadTimeline() {
 }
 
 async function _refreshTimelineIfNeeded(force = false) {
-    if (_getActiveTabId() !== EXPLORE_TAB_ID) return false;
+    // 当 force=true 时跳过 active tab 检查（移动端 drawer 导航通过 activatePane
+    // 切换 tab，不更新 .sub-tab.active，导致 _getActiveTabId() 返回旧值）
+    if (!force && _getActiveTabId() !== EXPLORE_TAB_ID) return false;
     if (!_ensureLayout()) return false;
 
     const grid = _getGrid();

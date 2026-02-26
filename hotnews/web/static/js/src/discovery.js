@@ -29,7 +29,7 @@ function _getInitialCount() {
 }
 
 function _getNewsLimit() {
-    return 15;
+    return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.items_per_card) || 50;
 }
 
 function _getGrid() {
