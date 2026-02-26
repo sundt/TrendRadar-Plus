@@ -1365,6 +1365,18 @@ const MobileEnhance = {
           label.textContent = name;
           item.appendChild(label);
 
+          // View mode toggle
+          try {
+            if (_TR()?.viewMode?.canSwitch?.(id)) {
+              const mode = _TR().viewMode.get(id);
+              const modeBtn = document.createElement('button');
+              modeBtn.className = 'me-tree-mode-btn';
+              modeBtn.dataset.id = id;
+              modeBtn.textContent = mode === 'timeline' ? '≡' : '⊞';
+              item.appendChild(modeBtn);
+            }
+          } catch (ex) { /* ignore */ }
+
           container.appendChild(item);
         }
         const newBtn = document.createElement('div');

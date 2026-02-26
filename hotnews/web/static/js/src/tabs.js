@@ -449,7 +449,7 @@ export const tabs = {
 
         // --- View mode handling ---
         // Tabs with their own dedicated timeline modules handle themselves
-        const SELF_MANAGED_TIMELINE = ['explore', 'my-tags', 'discovery'];
+        const SELF_MANAGED_TIMELINE = ['explore', 'discovery'];
         const mode = viewMode.get(categoryId);
 
         if (mode === 'timeline' && !SELF_MANAGED_TIMELINE.includes(String(categoryId))) {
@@ -774,7 +774,7 @@ ready(function () {
         const activeTab = tabs.getActiveTabId();
 
         // Self-managed timeline tabs (have their own dedicated modules)
-        const SELF_MANAGED_TIMELINE = ['explore', 'my-tags', 'discovery'];
+        const SELF_MANAGED_TIMELINE = ['explore', 'discovery'];
 
         if (mode === 'timeline') {
             if (SELF_MANAGED_TIMELINE.includes(catId)) {

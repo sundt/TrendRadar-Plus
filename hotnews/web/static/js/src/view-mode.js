@@ -108,19 +108,29 @@ export const viewMode = {
      */
     canSwitch(categoryId) {
         const cid = String(categoryId || '');
-        if (FIXED_CATEGORIES[cid]) return false;
-        // 自管理栏目允许切换
-        if (SELF_MANAGED.includes(cid)) return true;
-        // Tag-driven 栏目：fixed_view is a top-level field on the node
-        const node = _findInColumnConfig(cid);
-        if (node) {
-            // 有 fixed_view 的栏目不可切换
-            if (node.fixed_view) return false;
-            // 没有 fixed_view 的栏目（如 finance 及其子分类）可切换
-            return true;
-        }
-        return true;
+        // 只有 my-tags 和 topic-* 可以切换视图模式
+        if (cid === 'my-tags' || cid.startsWith('topic-')) return true;
+        return false;
     },
 };
 
 TR.viewMode = viewMode;
+
+// 页面加载时异步从服务器同步 view_mode（已登录用户）
+// 先用 localStorage 缓存渲染，服务器数据到达后更新本地
+(async function _syncViewModeFromServer() {
+    try {
+        const prefs = await preferences.getPreferences();
+        if (!prefs?.view_mode || typeof prefs.view_mode !== 'object') return;
+        const local = _load();
+        // 比较差异，服务器为准
+        let changed = false;
+        for (const [k, v] of Object.entries(prefs.view_mode)) {
+            if (local[k] !== v) { local[k] = v; changed = true; }
+        }
+        if (changed) {
+            _save(local);
+            console.log('[ViewMode] Synced from server');
+        }
+    } catch (e) { /* ignore */ }
+})();
