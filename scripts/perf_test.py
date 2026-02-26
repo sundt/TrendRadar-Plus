@@ -46,7 +46,7 @@ ENDPOINTS = [
     ("GET", "/api/topics", "话题列表", "high"),
 
     # ========== 各栏目 Timeline API ==========
-    ("GET", "/api/timeline?tags=startup,venture,ecommerce,retail,automotive,apple,google,microsoft,meta,amazon&limit=50", "AI资讯 Timeline", "high"),
+    ("GET", "/api/timeline?tags=openai,claude,anthropic,gemini,grok,xai,deepseek,kimi,doubao&limit=50", "AI大模型 Timeline", "high"),
     ("GET", "/api/rss/finance/timeline?limit=50", "财经 Timeline", "high"),
     ("GET", "/api/rss/brief/timeline?limit=50&offset=0", "早报 Timeline", "high"),
 
