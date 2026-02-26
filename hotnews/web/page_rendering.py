@@ -764,12 +764,8 @@ async def render_viewer_page(
             },
         )
 
-        # 禁止缓存用户特定的页面内容（主题等）
-        # 这是关键：防止 CDN/浏览器缓存导致用户看到其他人的主题
-        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private, max-age=0"
-        resp.headers["Pragma"] = "no-cache"
-        resp.headers["Expires"] = "0"
-        resp.headers["Vary"] = "Cookie"
+        # 缓存策略由 server.py 中间件统一控制（HTML: public, max-age=60）
+        # 不在此处设置，避免与中间件产生矛盾的头信息
 
         # Note: Removed automatic anonymous user creation - users must login now
 

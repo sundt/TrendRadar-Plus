@@ -16,6 +16,8 @@ const MY_TAGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 let myTagsLoaded = false;
 let myTagsLoading = false;
 let _myTagsGeneration = 0;
+/** Dedup: shared in-flight promise for fetchFollowedNews */
+let _fetchInflight = null;
 
 /**
  * Check if user is authenticated using authState
@@ -64,9 +66,15 @@ function redirectToLogin() {
 }
 
 /**
- * Fetch followed news from API
+ * Fetch followed news from API (deduped — concurrent calls share one request)
  */
 async function fetchFollowedNews() {
+    if (_fetchInflight) return _fetchInflight;
+    _fetchInflight = _doFetchFollowedNews();
+    try { return await _fetchInflight; } finally { _fetchInflight = null; }
+}
+
+async function _doFetchFollowedNews() {
     try {
         const res = await fetch('/api/user/preferences/followed-news?limit=50', {
             credentials: 'include'
@@ -596,11 +604,13 @@ function init() {
         }
     });
 
-    // Also check if my-tags is already the active tab (on page load)
-    const activePane = document.querySelector('#tab-my-tags.active');
-    if (activePane) {
-        console.log('[MyTags] Tab is already active on page load');
-        loadMyTags();
+    // Check if my-tags is the default active tab and load (single check, no duplicate)
+    if (!myTagsLoaded && !myTagsLoading) {
+        const activePane = document.querySelector('#tab-my-tags.active');
+        if (activePane) {
+            console.log('[MyTags] Tab is active on init, loading...');
+            loadMyTags();
+        }
     }
 
     // Add click listener to the my-tags tab button as a fallback
@@ -676,23 +686,6 @@ function init() {
 
     // Attach observer after a short delay to ensure DOM is ready
     setTimeout(observeTabActivation, 100);
-
-    // Check if my-tags is the default active tab and load after authState is ready
-    const loadIfActiveTab = async () => {
-        const activePane = document.querySelector('#tab-my-tags.active');
-        if (activePane) {
-            console.log('[MyTags] Tab is active, waiting for authState...');
-            // Wait for authState to initialize
-            if (!authState.initialized) {
-                await authState.init();
-            }
-            console.log('[MyTags] authState ready, loading my-tags...');
-            loadMyTags();
-        }
-    };
-
-    // Use a small delay to ensure DOM is ready and authState has time to initialize
-    setTimeout(loadIfActiveTab, 200);
 
     console.log('[MyTags] Module initialized');
 }
