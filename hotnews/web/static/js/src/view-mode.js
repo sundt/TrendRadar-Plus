@@ -61,8 +61,17 @@ export const viewMode = {
     get(categoryId) {
         const cid = String(categoryId || '');
         if (FIXED_CATEGORIES[cid]) return FIXED_CATEGORIES[cid];
-        // Tag-driven 栏目（在 column_config 树中）固定时间线，但自管理栏目除外
-        if (!SELF_MANAGED.includes(cid) && _findInColumnConfig(cid)) return 'timeline';
+        // Tag-driven 栏目（在 column_config 树中）：有 fixed_view 的固定模式，自管理栏目除外
+        if (!SELF_MANAGED.includes(cid)) {
+            const node = _findInColumnConfig(cid);
+            if (node) {
+                try {
+                    const sf = typeof node.source_filter === 'string' ? JSON.parse(node.source_filter) : (node.source_filter || {});
+                    if (sf.fixed_view) return sf.fixed_view;
+                } catch {}
+                // 没有 fixed_view 的栏目（如 finance 子分类）走用户偏好
+            }
+        }
         const map = _load();
         if (map[cid]) return map[cid];
         // 默认值：finance 默认时间线，其余默认卡片
@@ -102,8 +111,17 @@ export const viewMode = {
         if (FIXED_CATEGORIES[cid]) return false;
         // 自管理栏目允许切换
         if (SELF_MANAGED.includes(cid)) return true;
-        // Tag-driven 栏目固定时间线，不可切换
-        if (_findInColumnConfig(cid)) return false;
+        // Tag-driven 栏目：检查 source_filter 中是否有 fixed_view
+        const node = _findInColumnConfig(cid);
+        if (node) {
+            // 有 fixed_view 的栏目不可切换
+            try {
+                const sf = typeof node.source_filter === 'string' ? JSON.parse(node.source_filter) : (node.source_filter || {});
+                if (sf.fixed_view) return false;
+            } catch { return false; }
+            // 没有 fixed_view 的栏目（如 finance 及其子分类）可切换
+            return true;
+        }
         return true;
     },
 };
