@@ -94,12 +94,12 @@ async def get_user_stats(request: Request):
         total_users = stats["overview"]["total_users"]
         stats["by_auth_type"]["anonymous"] = total_users - oauth_user_count
         
-        # Active sessions
+        # Today unique visitors (distinct users with sessions created today)
         cur = conn.execute("""
-            SELECT COUNT(*) FROM user_sessions 
-            WHERE expires_at > ?
-        """, (now,))
-        stats["sessions"]["active"] = cur.fetchone()[0]
+            SELECT COUNT(DISTINCT user_id) FROM user_sessions 
+            WHERE created_at >= ?
+        """, (today_start,))
+        stats["sessions"]["today_visitors"] = cur.fetchone()[0]
         
         # Today logins (sessions created today)
         cur = conn.execute("""

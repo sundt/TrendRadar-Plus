@@ -1412,8 +1412,8 @@
             <div id="stat-today-new" style="font-size: 32px; font-weight: bold;">-</div>
           </div>
           <div class="stat-card" style="flex: 1; min-width: 150px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 20px; border-radius: 12px;">
-            <div style="font-size: 12px; opacity: 0.8;">活跃会话</div>
-            <div id="stat-active-sessions" style="font-size: 32px; font-weight: bold;">-</div>
+            <div style="font-size: 12px; opacity: 0.8;">今日访问</div>
+            <div id="stat-today-visitors" style="font-size: 32px; font-weight: bold;">-</div>
           </div>
         </div>
         <div style="margin-top: 15px;">
@@ -2140,7 +2140,7 @@
           document.getElementById('stat-total-users').textContent = stats.overview.total_users?.toLocaleString() || '0';
           document.getElementById('stat-oauth-users').textContent = stats.overview.oauth_users?.toLocaleString() || '0';
           document.getElementById('stat-today-new').textContent = stats.overview.today_new?.toLocaleString() || '0';
-          document.getElementById('stat-active-sessions').textContent = stats.sessions.active?.toLocaleString() || '0';
+          document.getElementById('stat-today-visitors').textContent = stats.sessions.today_visitors?.toLocaleString() || '0';
           
           // Update time stats
           document.getElementById('stat-week-new').textContent = stats.overview.week_new?.toLocaleString() || '0';
