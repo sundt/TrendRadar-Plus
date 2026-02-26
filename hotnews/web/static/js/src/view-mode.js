@@ -65,10 +65,8 @@ export const viewMode = {
         if (!SELF_MANAGED.includes(cid)) {
             const node = _findInColumnConfig(cid);
             if (node) {
-                try {
-                    const sf = typeof node.source_filter === 'string' ? JSON.parse(node.source_filter) : (node.source_filter || {});
-                    if (sf.fixed_view) return sf.fixed_view;
-                } catch {}
+                // fixed_view is a top-level field on the node (extracted from source_filter by backend)
+                if (node.fixed_view) return node.fixed_view;
                 // 没有 fixed_view 但在 column_config 中的栏目（如 finance 子分类）：走用户偏好，但默认 timeline
                 const map = _load();
                 return map[cid] || 'timeline';
@@ -113,14 +111,11 @@ export const viewMode = {
         if (FIXED_CATEGORIES[cid]) return false;
         // 自管理栏目允许切换
         if (SELF_MANAGED.includes(cid)) return true;
-        // Tag-driven 栏目：检查 source_filter 中是否有 fixed_view
+        // Tag-driven 栏目：fixed_view is a top-level field on the node
         const node = _findInColumnConfig(cid);
         if (node) {
             // 有 fixed_view 的栏目不可切换
-            try {
-                const sf = typeof node.source_filter === 'string' ? JSON.parse(node.source_filter) : (node.source_filter || {});
-                if (sf.fixed_view) return false;
-            } catch { return false; }
+            if (node.fixed_view) return false;
             // 没有 fixed_view 的栏目（如 finance 及其子分类）可切换
             return true;
         }

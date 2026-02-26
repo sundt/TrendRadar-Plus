@@ -19,6 +19,9 @@
 
 // @ts-nocheck
 
+// Alias: core.js exports as window.Hotnews, shorthand TR for convenience
+const _TR = () => window.Hotnews || window.TR || {};
+
 const MobileEnhance = {
 
   // ========== 状态 ==========
@@ -410,18 +413,18 @@ const MobileEnhance = {
             checkbox.checked = true;
             if (typeof window.markAsRead === 'function') {
               window.markAsRead(checkbox);
-            } else if (window.TR?.readState?.markAsRead) {
-              window.TR.readState.markAsRead(checkbox);
+            } else if (_TR()?.readState?.markAsRead) {
+              _TR().readState.markAsRead(checkbox);
             }
-          } else if (window.TR?.readState?.markItemAsRead) {
-            window.TR.readState.markItemAsRead(item);
+          } else if (_TR()?.readState?.markItemAsRead) {
+            _TR().readState.markItemAsRead(item);
           }
         } catch (e) { /* ignore */ }
 
         // 保存导航状态
         try {
-          if (window.TR?.scroll?.saveNavigationState) {
-            window.TR.scroll.saveNavigationState();
+          if (_TR()?.scroll?.saveNavigationState) {
+            _TR().scroll.saveNavigationState();
           }
         } catch (e) { /* ignore */ }
 
@@ -515,8 +518,8 @@ const MobileEnhance = {
         indicator.style.transform = 'translateX(-50%) translateY(10px)';
 
         try {
-          if (window.TR?.data?.refreshViewerData) {
-            const result = window.TR.data.refreshViewerData();
+          if (_TR()?.data?.refreshViewerData) {
+            const result = _TR().data.refreshViewerData();
             // refreshViewerData 可能返回 Promise
             if (result && typeof result.then === 'function') {
               result.then(() => self._finishRefresh()).catch(() => self._finishRefresh());
@@ -621,8 +624,8 @@ const MobileEnhance = {
         try {
           if (typeof window.switchTab === 'function') {
             window.switchTab(adjacentId);
-          } else if (window.TR?.tabs?.switchTab) {
-            window.TR.tabs.switchTab(adjacentId);
+          } else if (_TR()?.tabs?.switchTab) {
+            _TR().tabs.switchTab(adjacentId);
           }
         } catch (e) {
           console.error('[MobileEnhance] BoundarySwipe switchTab 失败:', e);
@@ -663,7 +666,7 @@ const MobileEnhance = {
 
   /** 查找当前激活 tab 的前/后一个 tab */
   _findAdjacentTab(direction) {
-    const activeId = window.TR?.tabs?.getActiveTabId?.() ||
+    const activeId = _TR()?.tabs?.getActiveTabId?.() ||
       document.querySelector('.sub-tab.active')?.dataset?.category || '';
 
     const navOrder = this._buildNavOrder();
@@ -783,8 +786,8 @@ const MobileEnhance = {
         case 'copy':
           if (newsData.url && navigator.clipboard) {
             navigator.clipboard.writeText(newsData.url).then(() => {
-              if (window.TR?.toast?.show) {
-                window.TR.toast.show('链接已复制', { variant: 'success', durationMs: 1500 });
+              if (_TR()?.toast?.show) {
+                _TR().toast.show('链接已复制', { variant: 'success', durationMs: 1500 });
               }
             }).catch(() => {});
           }
@@ -1033,11 +1036,11 @@ const MobileEnhance = {
       if (modeBtn) {
         e.stopPropagation();
         const nodeId = modeBtn.dataset.id;
-        if (nodeId && window.TR?.viewMode?.toggle) {
-          const newMode = window.TR.viewMode.toggle(nodeId);
+        if (nodeId && _TR()?.viewMode?.toggle) {
+          const newMode = _TR().viewMode.toggle(nodeId);
           modeBtn.textContent = newMode === 'timeline' ? '≡' : '⊞';
-          if (window.TR?.toast?.show) {
-            window.TR.toast.show(
+          if (_TR()?.toast?.show) {
+            _TR().toast.show(
               `已切换为${newMode === 'timeline' ? '时间线' : '卡片'}模式`,
               { variant: 'success', durationMs: 1500 }
             );
@@ -1054,7 +1057,7 @@ const MobileEnhance = {
 
         if (requireLogin) {
           try {
-            const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
+            const isLoggedIn = _TR()?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
             if (!isLoggedIn) {
               this._closeDrawer();
               if (typeof window.openLoginModal === 'function') window.openLoginModal();
@@ -1065,6 +1068,8 @@ const MobileEnhance = {
 
         if (hasChildren) {
           this._toggleNode(treeItem, nodeId);
+          // 轻量预加载：只确保 pane 存在并触发数据加载，不切换当前视图
+          this._preloadCategory(nodeId);
         } else {
           this._navTo(nodeId);
         }
@@ -1112,7 +1117,7 @@ const MobileEnhance = {
 
     this._buildHomeTree();
 
-    const activeId = window.TR?.tabs?.getActiveTabId?.() ||
+    const activeId = _TR()?.tabs?.getActiveTabId?.() ||
       document.querySelector('.sub-tab.active')?.dataset?.category || '';
     if (activeId) this._expandAncestors(activeId);
     this._updateActiveHighlight(activeId);
@@ -1182,8 +1187,8 @@ const MobileEnhance = {
 
       // View mode toggle button (if supported)
       try {
-        if (window.TR?.viewMode?.canSwitch?.(id)) {
-          const mode = window.TR.viewMode.get(id);
+        if (_TR()?.viewMode?.canSwitch?.(id)) {
+          const mode = _TR().viewMode.get(id);
           const modeBtn = document.createElement('button');
           modeBtn.className = 'me-tree-mode-btn';
           modeBtn.dataset.id = id;
@@ -1273,7 +1278,7 @@ const MobileEnhance = {
     const container = this._drawer?.querySelector('#meDrawerTreeTopics');
     if (!container) return;
 
-    const activeId = window.TR?.tabs?.getActiveTabId?.() ||
+    const activeId = _TR()?.tabs?.getActiveTabId?.() ||
       document.querySelector('.sub-tab.active')?.dataset?.category || '';
 
     // 优先从 DOM 读取已渲染的 topic tabs
@@ -1304,8 +1309,8 @@ const MobileEnhance = {
 
         // View mode toggle
         try {
-          if (window.TR?.viewMode?.canSwitch?.(id)) {
-            const mode = window.TR.viewMode.get(id);
+          if (_TR()?.viewMode?.canSwitch?.(id)) {
+            const mode = _TR().viewMode.get(id);
             const modeBtn = document.createElement('button');
             modeBtn.className = 'me-tree-mode-btn';
             modeBtn.dataset.id = id;
@@ -1370,6 +1375,33 @@ const MobileEnhance = {
       .catch(() => {
         container.innerHTML = '<div class="me-drawer-empty">加载失败</div>';
       });
+  },
+
+  /** 轻量预加载：确保 pane 存在并触发 timeline 加载，不切换当前视图 */
+  _preloadCategory(categoryId) {
+    if (!categoryId) return;
+    try {
+      // 移除早期隐藏样式
+      const earlyHideCategories = document.getElementById('early-hide-categories');
+      if (earlyHideCategories) earlyHideCategories.remove();
+
+      this._ensureTabPane(categoryId);
+
+      // 只在 pane 没有内容时触发加载
+      const pane = document.getElementById('tab-' + categoryId);
+      if (!pane) return;
+      const grid = pane.querySelector('.platform-grid');
+      if (!grid) return;
+      const hasContent = grid.querySelector('.tl-card') || grid.querySelector('.news-item');
+      if (hasContent) return;
+
+      // 通过 categoryTimeline 加载（不走 activatePane，不触发 _cleanupInactiveTabs）
+      if (window.categoryTimeline?.load) {
+        window.categoryTimeline.load(categoryId);
+      }
+    } catch (e) {
+      console.error('[MobileEnhance] preloadCategory 失败:', e);
+    }
   },
 
   /** 跳转到指定 tab 并关闭面板 */
