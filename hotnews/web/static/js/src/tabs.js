@@ -797,6 +797,12 @@ ready(function () {
             if (catId === 'finance') {
                 // finance has no SSR card data — use categoryTimeline.loadCardMode
                 categoryTimeline.loadCardMode(catId);
+            } else if (catId === 'my-tags') {
+                // my-tags card content is managed by my-tags.js module
+                categoryTimeline.restoreCardMode(catId);
+                if (window.HotNews?.myTags?.load) {
+                    window.HotNews.myTags.load(true);
+                }
             } else if (String(catId).startsWith('topic-')) {
                 // Topic tabs: restore card layout, then trigger topic-tracker reload
                 categoryTimeline.restoreCardMode(catId);
