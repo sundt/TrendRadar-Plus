@@ -19,6 +19,9 @@ const FIXED_CATEGORIES = {
     'explore': 'timeline',     // 精选博客 — 固定时间线
 };
 
+// 自管理栏目：虽然在 column_config 树中有记录，但不是 tag-driven，允许切换视图模式
+const SELF_MANAGED = ['my-tags', 'discovery', 'explore'];
+
 /**
  * 递归在 window._columnConfig 树中查找 catId
  * 找到则返回该节点，否则返回 null
@@ -58,8 +61,8 @@ export const viewMode = {
     get(categoryId) {
         const cid = String(categoryId || '');
         if (FIXED_CATEGORIES[cid]) return FIXED_CATEGORIES[cid];
-        // Tag-driven 栏目（在 column_config 树中）固定时间线
-        if (_findInColumnConfig(cid)) return 'timeline';
+        // Tag-driven 栏目（在 column_config 树中）固定时间线，但自管理栏目除外
+        if (!SELF_MANAGED.includes(cid) && _findInColumnConfig(cid)) return 'timeline';
         const map = _load();
         if (map[cid]) return map[cid];
         // 默认值：finance 默认时间线，其余默认卡片
@@ -97,6 +100,8 @@ export const viewMode = {
     canSwitch(categoryId) {
         const cid = String(categoryId || '');
         if (FIXED_CATEGORIES[cid]) return false;
+        // 自管理栏目允许切换
+        if (SELF_MANAGED.includes(cid)) return true;
         // Tag-driven 栏目固定时间线，不可切换
         if (_findInColumnConfig(cid)) return false;
         return true;

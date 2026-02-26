@@ -402,10 +402,10 @@
   }
 
   /* ==========================================================================
-     9. CategoryPanel (placeholder)
+     9. CategoryDrawer (left-side tree navigation)
      ========================================================================== */
 
-  .me-category-overlay {
+  .me-drawer-overlay {
     position: fixed;
     inset: 0;
     z-index: 10000;
@@ -415,51 +415,45 @@
     transition: opacity 0.25s ease, visibility 0.25s ease;
   }
 
-  .me-category-overlay.open {
+  .me-drawer-overlay.open {
     opacity: 1;
     visibility: visible;
   }
 
-  .me-category-panel {
+  .me-drawer {
     position: fixed;
-    bottom: 0;
+    top: 0;
     left: 0;
-    right: 0;
+    bottom: 0;
     z-index: 10001;
+    width: 75vw;
+    max-width: 300px;
     background: #fff;
-    border-radius: 16px 16px 0 0;
-    max-height: 70vh;
-    overflow-y: auto;
-    padding-bottom: env(safe-area-inset-bottom);
-    transform: translateY(100%);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(-100%);
     transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   }
 
-  .me-category-overlay.open .me-category-panel,
-  .me-category-panel.open {
-    transform: translateY(0);
+  .me-drawer-overlay.open .me-drawer {
+    transform: translateX(0);
   }
 
-  .me-category-header {
+  .me-drawer-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px 8px;
-    font-size: 14px;
-    color: #6b7280;
-    position: sticky;
-    top: 0;
-    background: #fff;
-    border-radius: 16px 16px 0 0;
+    padding: 16px 16px 10px;
+    flex-shrink: 0;
   }
 
-  .me-category-header-title {
+  .me-drawer-header-title {
     font-weight: 600;
     color: #1f2937;
-    font-size: 15px;
+    font-size: 16px;
   }
 
-  .me-category-close {
+  .me-drawer-close {
     width: 28px;
     height: 28px;
     display: flex;
@@ -470,52 +464,177 @@
     border-radius: 50%;
     cursor: pointer;
     color: #6b7280;
+    font-size: 14px;
     -webkit-tap-highlight-color: transparent;
   }
 
-  .me-category-section-title {
-    padding: 12px 20px 6px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .me-category-grid {
+  .me-drawer-tabs {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 6px 20px 12px;
+    gap: 0;
+    padding: 0 16px 0;
+    border-bottom: 1px solid #f3f4f6;
+    flex-shrink: 0;
   }
 
-  .me-category-item {
-    padding: 8px 14px;
+  .me-drawer-tab {
+    flex: 1;
+    padding: 8px 0;
     font-size: 14px;
-    color: #374151;
-    background: #f3f4f6;
-    border: 1px solid transparent;
-    border-radius: 8px;
+    font-weight: 500;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, border-color 0.15s ease;
   }
 
-  .me-category-item:active {
-    background: #e5e7eb;
-  }
-
-  .me-category-item.active {
+  .me-drawer-tab.active {
     color: var(--primary-color, #4f46e5);
-    background: rgba(79, 70, 229, 0.08);
-    border-color: var(--primary-color, #4f46e5);
+    border-bottom-color: var(--primary-color, #4f46e5);
   }
 
-  .me-category-new-topic {
+  .me-drawer-tab:active {
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  .me-drawer-tree {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 0 calc(env(safe-area-inset-bottom) + 16px);
+  }
+
+  /* Tree item row */
+  .me-tree-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    font-size: 15px;
+    color: #374151;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.1s ease;
+    position: relative;
+    user-select: none;
+  }
+
+  .me-tree-item:active {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .me-tree-item.active {
+    color: var(--primary-color, #4f46e5);
+    background: rgba(79, 70, 229, 0.06);
+  }
+
+  .me-tree-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    background: var(--primary-color, #4f46e5);
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* L1 */
+  .me-tree-item[data-level="1"] {
+    padding-left: 12px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  /* L2 */
+  .me-tree-item[data-level="2"] {
+    padding-left: 32px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  /* L3 */
+  .me-tree-item[data-level="3"] {
+    padding-left: 52px;
+    font-size: 14px;
+    font-weight: 400;
+  }
+
+  /* Arrow */
+  .me-tree-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    font-size: 10px;
+    color: #9ca3af;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .me-tree-arrow.expanded {
+    transform: rotate(90deg);
+  }
+
+  /* Spacer for leaf nodes (no arrow) to keep text aligned */
+  .me-tree-spacer {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+
+  .me-tree-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Children container */
+  .me-tree-children {
+    overflow: hidden;
+  }
+
+  .me-tree-children.collapsed {
+    display: none;
+  }
+
+  /* View mode toggle button */
+  .me-tree-mode-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #9ca3af;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-left: 4px;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  .me-tree-mode-btn:active {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--primary-color, #4f46e5);
+  }
+
+  /* New topic button */
+  .me-drawer-new-topic {
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 8px 14px;
+    margin: 8px 12px;
+    padding: 10px 14px;
     font-size: 14px;
     color: var(--primary-color, #4f46e5);
     background: transparent;
@@ -525,141 +644,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  .me-category-empty {
-    padding: 12px 20px;
+  .me-drawer-empty {
+    padding: 20px 16px;
     font-size: 13px;
     color: #9ca3af;
-  }
-
-  /* ── Three-level simultaneous category navigation ── */
-
-  /* 区块标签 */
-  .me-cat-section-label {
-    padding: 10px 20px 4px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #9ca3af;
-    letter-spacing: 0.3px;
-  }
-
-  /* L1: 横向滚动 pill 行 */
-  .me-cat-l1-row {
-    display: flex;
-    gap: 8px;
-    padding: 8px 16px 10px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    flex-wrap: nowrap;
-  }
-
-  .me-cat-l1-row::-webkit-scrollbar {
-    display: none;
-  }
-
-  .me-cat-l1-pill {
-    flex-shrink: 0;
-    padding: 8px 14px;
-    font-size: 14px;
-    color: #374151;
-    background: #f3f4f6;
-    border: 1px solid transparent;
-    border-radius: 20px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 0.15s ease, border-color 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .me-cat-l1-pill:active {
-    background: #e5e7eb;
-  }
-
-  .me-cat-l1-pill.active {
-    color: #fff;
-    background: var(--primary-color, #4f46e5);
-    border-color: var(--primary-color, #4f46e5);
-  }
-
-  /* L2: 二级列表区域 */
-  .me-cat-l2-section {
-    border-top: 1px solid #f3f4f6;
-  }
-
-  .me-cat-l2-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 6px 16px 10px;
-  }
-
-  .me-cat-l2-item {
-    padding: 7px 14px;
-    font-size: 14px;
-    color: #374151;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 0.15s ease, border-color 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .me-cat-l2-item:active {
-    background: #e5e7eb;
-  }
-
-  .me-cat-l2-item.active {
-    color: var(--primary-color, #4f46e5);
-    background: rgba(79, 70, 229, 0.08);
-    border-color: var(--primary-color, #4f46e5);
-    font-weight: 500;
-  }
-
-  .me-cat-l2-arrow {
-    font-size: 13px;
-    color: #9ca3af;
-    margin-left: 2px;
-  }
-
-  .me-cat-l2-item.active .me-cat-l2-arrow {
-    color: var(--primary-color, #4f46e5);
-  }
-
-  /* L3: 三级 pill 区域 */
-  .me-cat-l3-section {
-    border-top: 1px solid #f3f4f6;
-  }
-
-  .me-cat-l3-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 6px 16px 12px;
-  }
-
-  .me-cat-l3-pill {
-    padding: 6px 12px;
-    font-size: 13px;
-    color: #6b7280;
-    background: #f3f4f6;
-    border: 1px solid transparent;
-    border-radius: 16px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: background 0.15s ease, border-color 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .me-cat-l3-pill:active {
-    background: #e5e7eb;
-  }
-
-  .me-cat-l3-pill.active {
-    color: var(--primary-color, #4f46e5);
-    background: rgba(79, 70, 229, 0.08);
-    border-color: var(--primary-color, #4f46e5);
+    text-align: center;
   }
 
   /* ==========================================================================
@@ -812,36 +801,6 @@
     color: var(--primary-color, #4f46e5);
   }
 
-  /* ── Category Panel Tab Bar (主页 / 我的主题) ── */
-
-  .me-cat-tab-bar {
-    display: flex;
-    gap: 0;
-    padding: 0 16px 8px;
-    border-bottom: 1px solid #f3f4f6;
-  }
-
-  .me-cat-tab {
-    flex: 1;
-    padding: 8px 0;
-    font-size: 14px;
-    font-weight: 500;
-    color: #6b7280;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    transition: color 0.15s ease, border-color 0.15s ease;
-  }
-
-  .me-cat-tab.active {
-    color: var(--primary-color, #4f46e5);
-    border-bottom-color: var(--primary-color, #4f46e5);
-  }
-
-  .me-cat-tab:active {
-    background: rgba(0, 0, 0, 0.03);
-  }
+  /* (drawer tab styles are in section 9 above) */
 
 } /* end @media (max-width: 640px) */

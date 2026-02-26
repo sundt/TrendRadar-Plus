@@ -32,8 +32,11 @@ const MobileEnhance = {
   _actionSheetOverlay: null,
   _actionSheet: null,
   _searchOverlay: null,
-  _categoryOverlay: null,
-  _categoryPanel: null,
+  _drawerOverlay: null,
+  _drawer: null,
+  _drawerExpandedIds: new Set(),
+  _drawerPanelTab: 'home',
+  _drawerTreeBuilt: false,
   _pullIndicator: null,
   _backToTopBtn: null,
   _bottomNav: null,
@@ -968,32 +971,121 @@ const MobileEnhance = {
   },
 
 
-  // ========== 9. CategoryPanel（分类选择面板） ==========
+  // ========== 9. CategoryDrawer（左侧树状分类导航） ==========
 
-  _createCategoryPanel() {
-    if (document.querySelector('.me-category-overlay')) return;
+  _createDrawer() {
+    if (document.querySelector('.me-drawer-overlay')) return;
 
-    // 遮罩层
     const overlay = document.createElement('div');
-    overlay.className = 'me-category-overlay';
+    overlay.className = 'me-drawer-overlay';
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) this._closeCategoryPanel();
+      if (e.target === overlay) this._closeDrawer();
     });
 
-    // 面板
-    const panel = document.createElement('div');
-    panel.className = 'me-category-panel';
+    const drawer = document.createElement('div');
+    drawer.className = 'me-drawer';
 
-    overlay.appendChild(panel);
+    drawer.innerHTML = `
+      <div class="me-drawer-header">
+        <span class="me-drawer-header-title">选择分类</span>
+        <button class="me-drawer-close" aria-label="关闭">✕</button>
+      </div>
+      <div class="me-drawer-tabs">
+        <button class="me-drawer-tab active" data-drawer-tab="home">主页</button>
+        <button class="me-drawer-tab" data-drawer-tab="topics">我的主题</button>
+      </div>
+      <div class="me-drawer-tree" id="meDrawerTreeHome"></div>
+      <div class="me-drawer-tree" id="meDrawerTreeTopics" style="display:none;"></div>
+    `;
+
+    overlay.appendChild(drawer);
     document.body.appendChild(overlay);
-    this._categoryOverlay = overlay;
-    this._categoryPanel = panel;
+    this._drawerOverlay = overlay;
+    this._drawer = drawer;
+
+    // Event delegation
+    drawer.addEventListener('click', (e) => {
+      const target = e.target;
+
+      if (target.closest('.me-drawer-close')) {
+        this._closeDrawer();
+        return;
+      }
+
+      const tabBtn = target.closest('.me-drawer-tab');
+      if (tabBtn) {
+        const tab = tabBtn.dataset.drawerTab;
+        if (tab && tab !== this._drawerPanelTab) {
+          this._drawerPanelTab = tab;
+          drawer.querySelectorAll('.me-drawer-tab').forEach(t =>
+            t.classList.toggle('active', t.dataset.drawerTab === tab)
+          );
+          const homeTree = drawer.querySelector('#meDrawerTreeHome');
+          const topicsTree = drawer.querySelector('#meDrawerTreeTopics');
+          if (homeTree) homeTree.style.display = tab === 'home' ? '' : 'none';
+          if (topicsTree) topicsTree.style.display = tab === 'topics' ? '' : 'none';
+          if (tab === 'topics') this._buildTopicsTree();
+        }
+        return;
+      }
+
+      const modeBtn = target.closest('.me-tree-mode-btn');
+      if (modeBtn) {
+        e.stopPropagation();
+        const nodeId = modeBtn.dataset.id;
+        if (nodeId && window.TR?.viewMode?.toggle) {
+          const newMode = window.TR.viewMode.toggle(nodeId);
+          modeBtn.textContent = newMode === 'timeline' ? '≡' : '⊞';
+          if (window.TR?.toast?.show) {
+            window.TR.toast.show(
+              `已切换为${newMode === 'timeline' ? '时间线' : '卡片'}模式`,
+              { variant: 'success', durationMs: 1500 }
+            );
+          }
+        }
+        return;
+      }
+
+      const treeItem = target.closest('.me-tree-item');
+      if (treeItem) {
+        const nodeId = treeItem.dataset.id;
+        const hasChildren = treeItem.dataset.hasChildren === 'true';
+        const requireLogin = treeItem.dataset.requireLogin === 'true';
+
+        if (requireLogin) {
+          try {
+            const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
+            if (!isLoggedIn) {
+              this._closeDrawer();
+              if (typeof window.openLoginModal === 'function') window.openLoginModal();
+              return;
+            }
+          } catch (ex) { /* ignore */ }
+        }
+
+        if (hasChildren) {
+          this._toggleNode(treeItem, nodeId);
+          this._navToBackground(nodeId);
+        } else {
+          this._navTo(nodeId);
+        }
+        return;
+      }
+
+      if (target.closest('.me-drawer-new-topic')) {
+        this._closeDrawer();
+        if (window.TopicTracker && typeof window.TopicTracker.openModal === 'function') {
+          window.TopicTracker.openModal();
+        }
+        return;
+      }
+    });
   },
 
   _openCategoryPanel() {
-    if (!this._categoryOverlay) this._createCategoryPanel();
+    if (!this._drawerOverlay) this._createDrawer();
 
-    // 如果 _columnConfig 为空，尝试从 SSR JSON 重新解析
+    // Ensure _columnConfig is available
     if (!Array.isArray(window._columnConfig) || window._columnConfig.length === 0) {
       try {
         const el = document.getElementById('column-config-json');
@@ -1006,429 +1098,285 @@ const MobileEnhance = {
       } catch (e) { /* ignore */ }
     }
 
-    // 如果仍然为空，尝试从 /api/columns 同步获取
     if (!Array.isArray(window._columnConfig) || window._columnConfig.length === 0) {
       try {
         const xhr = new XMLHttpRequest();
-        xhr.open('GET', '/api/columns', false); // 同步请求
+        xhr.open('GET', '/api/columns', false);
         xhr.send();
         if (xhr.status === 200) {
           const data = JSON.parse(xhr.responseText);
           const cols = Array.isArray(data) ? data : (data?.columns || []);
-          if (cols.length > 0) {
-            window._columnConfig = cols;
-          }
+          if (cols.length > 0) window._columnConfig = cols;
         }
       } catch (e) { /* ignore */ }
     }
 
-    // 渲染分类内容
-    this._renderCategoryItems();
+    this._buildHomeTree();
 
-    this._categoryOverlay.classList.add('open');
-    this._categoryPanel.classList.add('open');
+    const activeId = window.TR?.tabs?.getActiveTabId?.() ||
+      document.querySelector('.sub-tab.active')?.dataset?.category || '';
+    if (activeId) this._expandAncestors(activeId);
+    this._updateActiveHighlight(activeId);
 
-    // 如果没有 topic tabs 但用户已登录，topic-tracker 可能还在异步加载
-    // 监听 DOM 变化，topic tab 出现后自动刷新
-    const topicTabs = document.querySelectorAll('.sub-tab.topic-tab');
-    if (topicTabs.length === 0) {
-      const categoryTabsEl = document.getElementById('topicSubTabs');
-      if (categoryTabsEl) {
-        const obs = new MutationObserver(() => {
-          const newTopicTabs = document.querySelectorAll('.sub-tab.topic-tab');
-          if (newTopicTabs.length > 0) {
-            obs.disconnect();
-            // 面板仍然打开时才刷新
-            if (this._categoryOverlay?.classList.contains('open')) {
-              this._renderCategoryItems();
-            }
-          }
-        });
-        obs.observe(categoryTabsEl, { childList: true });
-        // 面板关闭时断开
-        const origClose = this._closeCategoryPanel.bind(this);
-        const self = this;
-        this._closeCategoryPanel = function () {
-          obs.disconnect();
-          self._closeCategoryPanel = origClose;
-          origClose();
-        };
+    this._drawerOverlay.classList.add('open');
+
+    requestAnimationFrame(() => {
+      const activeEl = this._drawer?.querySelector('.me-tree-item.active');
+      if (activeEl) activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  },
+
+  _closeDrawer() {
+    if (this._drawerOverlay) this._drawerOverlay.classList.remove('open');
+  },
+
+  /** 构建主页树 */
+  _buildHomeTree() {
+    const container = this._drawer?.querySelector('#meDrawerTreeHome');
+    if (!container) return;
+
+    const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
+    if (!columns.length) {
+      container.innerHTML = '<div class="me-drawer-empty">暂无分类数据</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    this._buildTreeNodes(columns, container, 1);
+    this._drawerTreeBuilt = true;
+  },
+
+  /** 递归构建树节点 DOM */
+  _buildTreeNodes(nodes, parentEl, level) {
+    for (const node of nodes) {
+      const id = String(node.id || '');
+      const name = node.name || id;
+      const icon = node.icon || '';
+      const children = Array.isArray(node.children) ? node.children : [];
+      const hasChildren = children.length > 0;
+      const requireLogin = !!node.require_login;
+
+      const item = document.createElement('div');
+      item.className = 'me-tree-item' + (hasChildren ? '' : ' leaf');
+      item.dataset.id = id;
+      item.dataset.level = String(level);
+      item.dataset.hasChildren = String(hasChildren);
+      if (requireLogin) item.dataset.requireLogin = 'true';
+
+      // Arrow or spacer
+      if (hasChildren) {
+        const arrow = document.createElement('span');
+        arrow.className = 'me-tree-arrow' + (this._drawerExpandedIds.has(id) ? ' expanded' : '');
+        arrow.textContent = '▶';
+        item.appendChild(arrow);
+      } else {
+        const spacer = document.createElement('span');
+        spacer.className = 'me-tree-spacer';
+        item.appendChild(spacer);
+      }
+
+      // Label
+      const label = document.createElement('span');
+      label.className = 'me-tree-label';
+      label.textContent = (icon ? icon + ' ' : '') + name;
+      item.appendChild(label);
+
+      // View mode toggle button (if supported)
+      try {
+        if (window.TR?.viewMode?.canSwitch?.(id)) {
+          const mode = window.TR.viewMode.get(id);
+          const modeBtn = document.createElement('button');
+          modeBtn.className = 'me-tree-mode-btn';
+          modeBtn.dataset.id = id;
+          modeBtn.textContent = mode === 'timeline' ? '≡' : '⊞';
+          item.appendChild(modeBtn);
+        }
+      } catch (ex) { /* ignore */ }
+
+      parentEl.appendChild(item);
+
+      // Children container
+      if (hasChildren) {
+        const childrenEl = document.createElement('div');
+        childrenEl.className = 'me-tree-children' + (this._drawerExpandedIds.has(id) ? '' : ' collapsed');
+        childrenEl.dataset.parentId = id;
+        this._buildTreeNodes(children, childrenEl, level + 1);
+        parentEl.appendChild(childrenEl);
       }
     }
   },
 
-  _closeCategoryPanel() {
-    if (this._categoryOverlay) this._categoryOverlay.classList.remove('open');
-    if (this._categoryPanel) this._categoryPanel.classList.remove('open');
+  /** 展开/折叠节点 */
+  _toggleNode(treeItem, nodeId) {
+    const drawer = this._drawer;
+    if (!drawer) return;
+
+    const childrenEl = drawer.querySelector(`.me-tree-children[data-parent-id="${nodeId}"]`);
+    if (!childrenEl) return;
+
+    const isExpanded = this._drawerExpandedIds.has(nodeId);
+    if (isExpanded) {
+      this._drawerExpandedIds.delete(nodeId);
+      childrenEl.classList.add('collapsed');
+    } else {
+      this._drawerExpandedIds.add(nodeId);
+      childrenEl.classList.remove('collapsed');
+    }
+
+    const arrow = treeItem.querySelector('.me-tree-arrow');
+    if (arrow) arrow.classList.toggle('expanded', !isExpanded);
   },
 
-  /**
-   * 渲染分类面板内容（三级同屏模式）
-   *
-   * 交互逻辑：
-   *  - 顶部：一级分类横向滚动 pill 行
-   *  - 中间：选中一级后，下方显示二级列表
-   *  - 底部：选中二级（有三级）后，下方显示三级 pill
-   *  - 只有叶子节点点击才跳转
-   */
-  _renderCategoryItems() {
-    if (!this._categoryPanel) return;
+  /** 展开激活项的祖先链 */
+  _expandAncestors(activeId) {
+    if (!activeId) return;
+    const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
+
+    // 查找祖先链
+    const ancestors = [];
+    function findPath(nodes, target, path) {
+      for (const n of nodes) {
+        const nid = String(n.id || '');
+        if (nid === String(target)) { ancestors.push(...path); return true; }
+        const ch = Array.isArray(n.children) ? n.children : [];
+        if (ch.length && findPath(ch, target, [...path, nid])) return true;
+      }
+      return false;
+    }
+    findPath(columns, activeId, []);
+
+    // 展开每个祖先
+    const drawer = this._drawer;
+    if (!drawer) return;
+    for (const aid of ancestors) {
+      this._drawerExpandedIds.add(aid);
+      const childrenEl = drawer.querySelector(`.me-tree-children[data-parent-id="${aid}"]`);
+      if (childrenEl) childrenEl.classList.remove('collapsed');
+      const item = drawer.querySelector(`.me-tree-item[data-id="${aid}"]`);
+      const arrow = item?.querySelector('.me-tree-arrow');
+      if (arrow) arrow.classList.add('expanded');
+    }
+  },
+
+  /** 更新激活项高亮 */
+  _updateActiveHighlight(activeId) {
+    const drawer = this._drawer;
+    if (!drawer) return;
+    drawer.querySelectorAll('.me-tree-item.active').forEach(el => el.classList.remove('active'));
+    if (activeId) {
+      const target = drawer.querySelector(`.me-tree-item[data-id="${activeId}"]`);
+      if (target) target.classList.add('active');
+    }
+  },
+
+  /** 构建"我的主题"树 */
+  _buildTopicsTree() {
+    const container = this._drawer?.querySelector('#meDrawerTreeTopics');
+    if (!container) return;
 
     const activeId = window.TR?.tabs?.getActiveTabId?.() ||
       document.querySelector('.sub-tab.active')?.dataset?.category || '';
 
-    const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
-
-    if (!columns.length) {
-      this._renderCategoryItemsFallback(activeId);
-      return;
-    }
-
-    // 找到 activeId 所属的一级和二级
-    let selL1 = null;
-    let selL2 = null;
-    for (const col of columns) {
-      if (col.id === activeId) { selL1 = col.id; break; }
-      for (const ch of (col.children || [])) {
-        if (ch.id === activeId) { selL1 = col.id; selL2 = ch.id; break; }
-        for (const gc of (ch.children || [])) {
-          if (gc.id === activeId) { selL1 = col.id; selL2 = ch.id; break; }
-        }
-        if (selL2) break;
-      }
-      if (selL1) break;
-    }
-
-    // 默认选中第一个有子项的一级
-    if (!selL1) {
-      const firstWithChildren = columns.find(c => c.children?.length > 0);
-      if (firstWithChildren) selL1 = firstWithChildren.id;
-    }
-
-    this._catState = { columns, activeId, selL1, selL2 };
-    this._renderAllLevels();
-  },
-
-  /** 使用事件委托绑定面板内所有点击事件（只绑定一次） */
-  _bindCategoryPanelEvents() {
-    if (!this._categoryPanel || this._categoryPanel._delegated) return;
-    this._categoryPanel._delegated = true;
-    const self = this;
-
-    this._categoryPanel.addEventListener('click', function (e) {
-      const target = e.target;
-
-      // 关闭按钮
-      if (target.closest('.me-category-close')) {
-        self._closeCategoryPanel();
-        return;
-      }
-
-      // Tab bar 切换（主页 / 我的主题）
-      const tabBtn = target.closest('.me-cat-tab');
-      if (tabBtn) {
-        const tab = tabBtn.dataset.panelTab;
-        if (tab && self._catState && self._catState.panelTab !== tab) {
-          self._catState.panelTab = tab;
-          self._renderAllLevels();
-        }
-        return;
-      }
-
-      // L1 pill 点击
-      const l1Pill = target.closest('.me-cat-l1-pill');
-      if (l1Pill) {
-        e.stopPropagation();
-        const colId = l1Pill.dataset.id;
-        const hasChildren = l1Pill.dataset.hasChildren === 'true';
-
-        // 登录检查
-        if (l1Pill.dataset.requireLogin === 'true') {
-          try {
-            const isLoggedIn = window.TR?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
-            if (!isLoggedIn) {
-              self._closeCategoryPanel();
-              if (typeof window.openLoginModal === 'function') window.openLoginModal();
-              return;
-            }
-          } catch (ex) { /* ignore */ }
-        }
-
-        // 始终导航到 L1（后台加载数据）
-        self._navToBackground(colId);
-
-        if (!hasChildren) {
-          // 无子项 → 导航并关闭面板
-          self._closeCategoryPanel();
-          return;
-        }
-
-        // 有子项 → 展开 L2（面板保持打开）
-        self._catState.selL1 = colId;
-        self._catState.selL2 = null;
-        self._catState.activeId = colId;
-        self._renderAllLevels();
-        return;
-      }
-
-      // L2 item 点击
-      const l2Item = target.closest('.me-cat-l2-item');
-      if (l2Item) {
-        const chId = l2Item.dataset.id;
-        const hasChildren = l2Item.dataset.hasChildren === 'true';
-
-        // 始终导航到 L2（后台加载数据）
-        self._navToBackground(chId);
-
-        if (!hasChildren) {
-          // 叶子节点 → 关闭面板
-          self._closeCategoryPanel();
-          return;
-        }
-
-        // 有三级 → 展开 L3（面板保持打开）
-        self._catState.selL2 = chId;
-        self._catState.activeId = chId;
-        self._updateL2AndL3();
-        return;
-      }
-
-      // L3 pill 点击 → 导航并关闭面板
-      const l3Pill = target.closest('.me-cat-l3-pill');
-      if (l3Pill) {
-        self._navTo(l3Pill.dataset.id);
-        return;
-      }
-
-      // 新建主题
-      if (target.closest('.me-category-new-topic')) {
-        self._closeCategoryPanel();
-        if (window.TopicTracker && typeof window.TopicTracker.openModal === 'function') {
-          window.TopicTracker.openModal();
-        }
-        return;
-      }
-
-      // 降级模式的 category-item
-      const catItem = target.closest('.me-category-item');
-      if (catItem) {
-        self._navTo(catItem.dataset.category);
-        return;
-      }
-    });
-  },
-
-  /** 渲染三级同屏面板 */
-  _renderAllLevels() {
-    if (!this._categoryPanel || !this._catState) return;
-    const { columns, activeId, selL1, selL2 } = this._catState;
-
-    // 初始化 panelTab（默认 home）
-    if (!this._catState.panelTab) this._catState.panelTab = 'home';
-    const panelTab = this._catState.panelTab;
-
-    // ── Header + Tab Bar ──
-    let html = `
-      <div class="me-category-header">
-        <span class="me-category-header-title">选择分类</span>
-        <button class="me-category-close" aria-label="关闭">✕</button>
-      </div>
-      <div class="me-cat-tab-bar">
-        <button class="me-cat-tab${panelTab === 'home' ? ' active' : ''}" data-panel-tab="home">主页</button>
-        <button class="me-cat-tab${panelTab === 'topics' ? ' active' : ''}" data-panel-tab="topics">我的主题</button>
-      </div>
-    `;
-
-    if (panelTab === 'home') {
-      html += this._renderHomeLevels();
-    } else {
-      html += this._renderTopicsTab();
-    }
-
-    this._categoryPanel.innerHTML = html;
-
-    // 确保事件委托已绑定（只绑定一次，不受 innerHTML 影响）
-    this._bindCategoryPanelEvents();
-
-    // 滚动 L1 行让选中项可见
-    if (panelTab === 'home') {
-      requestAnimationFrame(() => {
-        const activeL1 = this._categoryPanel?.querySelector('.me-cat-l1-pill.active');
-        if (activeL1) activeL1.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
-      });
-    }
-  },
-
-  /** 渲染"主页"标签页内容（L1→L2→L3） */
-  _renderHomeLevels() {
-    const { columns, activeId, selL1, selL2 } = this._catState;
-
-    const selL1Col = columns.find(c => c.id === selL1);
-    const l2Children = selL1Col?.children || [];
-
-    // 如果没有选中 L2，默认选中第一个有子项的 L2
-    let effectiveL2 = selL2;
-    if (!effectiveL2 && l2Children.length > 0) {
-      const firstL2WithChildren = l2Children.find(c => c.children?.length > 0);
-      if (firstL2WithChildren) {
-        effectiveL2 = firstL2WithChildren.id;
-        this._catState.selL2 = effectiveL2;
-      }
-    }
-    const effectiveL2Col = l2Children.find(c => c.id === effectiveL2);
-    const effectiveL3 = effectiveL2Col?.children || [];
-
-    let html = '';
-
-    // ── L1: 横向滚动 pill 行 ──
-    html += '<div class="me-cat-l1-row">';
-    for (const col of columns) {
-      const colId = col.id || '';
-      const colName = col.name || colId;
-      const colIcon = col.icon || '';
-      const isActive = colId === selL1;
-      const hasChildren = (col.children || []).length > 0;
-      html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(colId)}" data-has-children="${hasChildren}" data-require-login="${!!col.require_login}">${colIcon ? colIcon + ' ' : ''}${this._escapeHtml(colName)}</button>`;
-    }
-    html += '</div>';
-
-    // ── L2: 二级列表 ──
-    if (l2Children.length > 0) {
-      html += '<div class="me-cat-l2-section">';
-      html += '<div class="me-cat-l2-list">';
-      for (const ch of l2Children) {
-        const chId = ch.id || '';
-        const chName = ch.name || chId;
-        const hasGrandchildren = (ch.children || []).length > 0;
-        const isActive = chId === effectiveL2;
-        html += `<button class="me-cat-l2-item${isActive ? ' active' : ''}" data-id="${this._escapeHtml(chId)}" data-has-children="${hasGrandchildren}">${this._escapeHtml(chName)}${hasGrandchildren ? ' <span class="me-cat-l2-arrow">›</span>' : ''}</button>`;
-      }
-      html += '</div>';
-      html += '</div>';
-    }
-
-    // ── L3: 三级 pill ──
-    if (effectiveL3.length > 0) {
-      html += '<div class="me-cat-l3-section">';
-      html += '<div class="me-cat-l3-pills">';
-      for (const gc of effectiveL3) {
-        const gcId = gc.id || '';
-        const gcName = gc.name || gcId;
-        const isActive = gcId === activeId;
-        html += `<button class="me-cat-l3-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
-      }
-      html += '</div>';
-      html += '</div>';
-    }
-
-    return html;
-  },
-
-  /** 局部更新 L2 高亮和 L3 区域（不重绘 L1 行，避免闪烁） */
-  _updateL2AndL3() {
-    if (!this._categoryPanel || !this._catState) return;
-    const { columns, activeId, selL1, selL2 } = this._catState;
-
-    const selL1Col = columns.find(c => c.id === selL1);
-    const l2Children = selL1Col?.children || [];
-    const effectiveL2Col = l2Children.find(c => c.id === selL2);
-    const effectiveL3 = effectiveL2Col?.children || [];
-
-    // 更新 L2 高亮（不重建 DOM，只切换 class）
-    this._categoryPanel.querySelectorAll('.me-cat-l2-item').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.id === selL2);
-    });
-
-    // 移除旧的 L3 section
-    const oldL3 = this._categoryPanel.querySelector('.me-cat-l3-section');
-    if (oldL3) oldL3.remove();
-
-    // 插入新的 L3 section（如果有）
-    if (effectiveL3.length > 0) {
-      let l3Html = '<div class="me-cat-l3-section">';
-      l3Html += '<div class="me-cat-l3-pills">';
-      for (const gc of effectiveL3) {
-        const gcId = gc.id || '';
-        const gcName = gc.name || gcId;
-        const isActive = gcId === activeId;
-        l3Html += `<button class="me-cat-l3-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(gcId)}">${this._escapeHtml(gcName)}</button>`;
-      }
-      l3Html += '</div></div>';
-
-      const l2Section = this._categoryPanel.querySelector('.me-cat-l2-section');
-      if (l2Section) {
-        l2Section.insertAdjacentHTML('afterend', l3Html);
-      }
-    }
-  },
-
-  /** 渲染"我的主题"标签页内容 */
-  _renderTopicsTab() {
-    const activeId = this._catState?.activeId || '';
-
     // 优先从 DOM 读取已渲染的 topic tabs
-    let topicTabs = Array.from(
+    const topicTabs = Array.from(
       document.querySelectorAll('#topicSubTabs .sub-tab.topic-tab')
     ).filter(tab => !this._isTabHiddenByUser(tab));
 
     if (topicTabs.length > 0) {
-      return this._renderTopicPills(topicTabs, activeId);
+      container.innerHTML = '';
+      for (const tab of topicTabs) {
+        const id = tab.dataset.category || '';
+        const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
+
+        const item = document.createElement('div');
+        item.className = 'me-tree-item leaf' + (id === activeId ? ' active' : '');
+        item.dataset.id = id;
+        item.dataset.level = '1';
+        item.dataset.hasChildren = 'false';
+
+        const spacer = document.createElement('span');
+        spacer.className = 'me-tree-spacer';
+        item.appendChild(spacer);
+
+        const label = document.createElement('span');
+        label.className = 'me-tree-label';
+        label.textContent = name;
+        item.appendChild(label);
+
+        // View mode toggle
+        try {
+          if (window.TR?.viewMode?.canSwitch?.(id)) {
+            const mode = window.TR.viewMode.get(id);
+            const modeBtn = document.createElement('button');
+            modeBtn.className = 'me-tree-mode-btn';
+            modeBtn.dataset.id = id;
+            modeBtn.textContent = mode === 'timeline' ? '≡' : '⊞';
+            item.appendChild(modeBtn);
+          }
+        } catch (ex) { /* ignore */ }
+
+        container.appendChild(item);
+      }
+
+      // New topic button
+      const newBtn = document.createElement('div');
+      newBtn.className = 'me-drawer-new-topic';
+      newBtn.textContent = '+ 新建主题';
+      container.appendChild(newBtn);
+      return;
     }
 
-    // DOM 中没有 topic tabs（可能 topic-tracker 还没加载完）
-    // 尝试异步从 API 获取
+    // Fallback: fetch from API
+    container.innerHTML = '<div class="me-drawer-empty">加载中...</div>';
     const self = this;
     fetch('/api/topics', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (!data.ok || !data.topics?.length) return;
-        // 面板仍然打开且在"我的主题" tab 时才更新
-        if (!self._categoryOverlay?.classList.contains('open')) return;
-        if (self._catState?.panelTab !== 'topics') return;
-
-        // 构建 pill HTML
-        let html = '<div class="me-cat-l1-row" style="flex-wrap:wrap;">';
-        data.topics.forEach(topic => {
+        if (!data.ok || !data.topics?.length) {
+          container.innerHTML = '<div class="me-drawer-empty">暂无主题</div>';
+          // Still show new topic button
+          const newBtn = document.createElement('div');
+          newBtn.className = 'me-drawer-new-topic';
+          newBtn.textContent = '+ 新建主题';
+          container.appendChild(newBtn);
+          return;
+        }
+        container.innerHTML = '';
+        for (const topic of data.topics) {
           const id = 'topic-' + topic.id;
           const name = topic.name || id;
-          const isActive = id === activeId;
-          html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${self._escapeHtml(id)}" data-has-children="false" data-require-login="false">${self._escapeHtml(name)}</button>`;
-        });
-        html += '</div>';
-        html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
 
-        // 替换面板中 topics 区域的内容（tab bar 之后的部分）
-        const tabBar = self._categoryPanel?.querySelector('.me-cat-tab-bar');
-        if (tabBar) {
-          // 移除 tab bar 之后的所有内容
-          while (tabBar.nextSibling) tabBar.nextSibling.remove();
-          tabBar.insertAdjacentHTML('afterend', html);
+          const item = document.createElement('div');
+          item.className = 'me-tree-item leaf' + (id === activeId ? ' active' : '');
+          item.dataset.id = id;
+          item.dataset.level = '1';
+          item.dataset.hasChildren = 'false';
+
+          const spacer = document.createElement('span');
+          spacer.className = 'me-tree-spacer';
+          item.appendChild(spacer);
+
+          const label = document.createElement('span');
+          label.className = 'me-tree-label';
+          label.textContent = name;
+          item.appendChild(label);
+
+          container.appendChild(item);
         }
+        const newBtn = document.createElement('div');
+        newBtn.className = 'me-drawer-new-topic';
+        newBtn.textContent = '+ 新建主题';
+        container.appendChild(newBtn);
       })
-      .catch(() => {});
-
-    // 先返回加载中状态
-    return '<div class="me-category-empty" style="text-align:center;padding:20px;">加载中...</div>';
-  },
-
-  /** 从 DOM topic tabs 生成 pill HTML */
-  _renderTopicPills(topicTabs, activeId) {
-    let html = '<div class="me-cat-l1-row" style="flex-wrap:wrap;">';
-    topicTabs.forEach(tab => {
-      const id = tab.dataset.category || '';
-      const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
-      const isActive = id === activeId;
-      html += `<button class="me-cat-l1-pill${isActive ? ' active' : ''}" data-id="${this._escapeHtml(id)}" data-has-children="false" data-require-login="false">${this._escapeHtml(name)}</button>`;
-    });
-    html += '</div>';
-    html += '<div class="me-category-new-topic" data-action="new-topic">+ 新建主题</div>';
-    return html;
+      .catch(() => {
+        container.innerHTML = '<div class="me-drawer-empty">加载失败</div>';
+      });
   },
 
   /** 跳转到指定 tab 并关闭面板 */
   _navTo(categoryId) {
     if (!categoryId) return;
-    this._closeCategoryPanel();
+    this._closeDrawer();
     this._navToBackground(categoryId);
   },
 
@@ -1436,6 +1384,10 @@ const MobileEnhance = {
   _navToBackground(categoryId) {
     if (!categoryId) return;
     try {
+      // 移除早期隐藏样式（防止 !important 覆盖 .active 的 display）
+      const earlyHideCategories = document.getElementById('early-hide-categories');
+      if (earlyHideCategories) earlyHideCategories.remove();
+
       // 确保 tab pane 存在（renderViewerFromData 可能还没创建）
       this._ensureTabPane(categoryId);
 
@@ -1508,35 +1460,6 @@ const MobileEnhance = {
     }
   },
 
-  /** 降级渲染：_columnConfig 未就绪时从 DOM 读取 */
-  _renderCategoryItemsFallback(activeId) {
-    const systemTabs = Array.from(
-      document.querySelectorAll('#homeSubTabs .sub-tab[data-category]')
-    ).filter(tab => !this._isTabHiddenByUser(tab));
-
-    const activeTab = document.querySelector(`.sub-tab[data-category="${activeId}"]`);
-    const activeName = activeTab?.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || activeId;
-
-    let html = `
-      <div class="me-category-header">
-        <span class="me-category-header-title">当前：${this._escapeHtml(activeName)}</span>
-        <button class="me-category-close" aria-label="关闭">✕</button>
-      </div>
-      <div class="me-category-section-title">分类</div>
-      <div class="me-category-grid">
-    `;
-    systemTabs.forEach(tab => {
-      const id = tab.dataset.category || '';
-      const name = tab.textContent?.replace(/[☰]/g, '').replace(/NEW/g, '').trim() || id;
-      html += `<div class="me-category-item${id === activeId ? ' active' : ''}" data-category="${this._escapeHtml(id)}">${this._escapeHtml(name)}</div>`;
-    });
-    html += '</div>';
-    this._categoryPanel.innerHTML = html;
-
-    // 确保事件委托已绑定
-    this._bindCategoryPanelEvents();
-  },
-
   /** 判断 tab 是否被用户隐藏（而非被移动端 CSS 隐藏） */
   _isTabHiddenByUser(tab) {
     // 检查 inline style
@@ -1583,7 +1506,7 @@ const MobileEnhance = {
     try { this._createActionSheet(); } catch (e) { console.error('[MobileEnhance] ActionSheet 初始化失败:', e); }
     try { this._interceptContextMenu(); } catch (e) { console.error('[MobileEnhance] ContextMenu 拦截失败:', e); }
     try { this._createSearchOverlay(); } catch (e) { console.error('[MobileEnhance] SearchOverlay 初始化失败:', e); }
-    try { this._createCategoryPanel(); } catch (e) { console.error('[MobileEnhance] CategoryPanel 初始化失败:', e); }
+    try { this._createDrawer(); } catch (e) { console.error('[MobileEnhance] CategoryDrawer 初始化失败:', e); }
 
     console.log('[MobileEnhance] 初始化完成');
   }

@@ -263,6 +263,14 @@ ready(function () {
         }
     } else {
         // 无自定义配置，直接显示服务端渲染的默认栏目
+        // 移除早期隐藏样式（renderViewerFromData 不会被调用，需要在这里清理）
+        try {
+            const earlyHide = document.getElementById('early-hide');
+            if (earlyHide) earlyHide.remove();
+            const earlyHideCategories = document.getElementById('early-hide-categories');
+            if (earlyHideCategories) earlyHideCategories.remove();
+        } catch (e) { /* ignore */ }
+
         document.body.classList.add('categories-ready');
 
         // Signal to dynamic modules that no renderViewerFromData will be called,
