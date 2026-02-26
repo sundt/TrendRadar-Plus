@@ -5,8 +5,15 @@
 
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
-import { renderMarkdown } from './summary-modal.js';
+// summary-modal.js 已改为动态加载，renderMarkdown 通过 window.* 访问
 import { preferences } from './preferences.js';
+
+// renderMarkdown 代理：优先用 window.renderMarkdown（summary-modal 加载后可用），降级为纯文本
+function renderMarkdown(text) {
+    if (typeof window.renderMarkdown === 'function') return window.renderMarkdown(text);
+    // 降级：简单 HTML 转义
+    return String(text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
 
 const FAVORITES_STORAGE_KEY = 'hotnews_favorites_v1';
 const FAVORITES_WIDTH_KEY = 'hotnews_favorites_width';

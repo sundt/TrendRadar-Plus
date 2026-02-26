@@ -987,6 +987,7 @@ window.loadTodos = loadTodos;
 window.getTodosByGroupId = getTodosByGroupId;
 window.getCurrentTodoCount = getCurrentTodoCount;
 window.initTodoButton = initTodoButton;
+window.initSelectionTodo = initSelectionTodo;
 
 export {
     loadTodos,

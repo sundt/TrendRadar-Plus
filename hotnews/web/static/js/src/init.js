@@ -7,12 +7,9 @@ import { TR, ready } from './core.js';
 import { authState } from './auth-state.js';
 import { AuthButton } from './auth-ui.js';
 import { openLoginModal } from './login-modal.js';
-import { initTodoButton, loadTodos } from './todo.js';
+// todo, subscribe-sidebar, payment 已改为动态加载（code-split）
+// 通过 window.* 全局函数调用，无需静态 import
 import { openSubscriptionModal } from './subscription.js';
-import { openSubscribeSidebar } from './subscribe-sidebar.js';
-
-// 保留原 Token 充值功能（隐藏，仅内部使用）
-import { openPaymentModal as openTokenPaymentModal } from './payment.js';
 
 const MOBILE_TOP_COLLAPSE_STORAGE_KEY = 'hotnews_mobile_top_collapsed_v1';
 const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
@@ -23,7 +20,9 @@ const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
  */
 function goToSettings() {
     if (authState.isLoggedIn()) {
-        openSubscribeSidebar();
+        if (typeof window.openSubscribeSidebar === 'function') {
+            window.openSubscribeSidebar();
+        }
     } else {
         openLoginModal();
     }
@@ -34,8 +33,8 @@ window.goToSettings = goToSettings;
 // openPaymentModal 现在打开订阅弹窗（VIP）
 window.openPaymentModal = openSubscriptionModal;
 window.openSubscriptionModal = openSubscriptionModal;
-// 保留原 Token 充值功能（隐藏入口）
-window.openTokenPaymentModal = openTokenPaymentModal;
+// 保留原 Token 充值功能（隐藏入口）— 动态加载后通过 window.openTokenPaymentModal 访问
+// payment.js 自行注册 window.openPaymentModal，这里覆盖为 openSubscriptionModal
 
 function _isMobileNarrowScreen() {
     try {
@@ -178,13 +177,15 @@ ready(function () {
         }
     }, 300);
     
-    // Initialize Todo button after auth is ready
+    // Initialize Todo button after auth is ready (todo.js 动态加载，通过 window.* 调用)
     setTimeout(() => {
-        initTodoButton();
+        if (typeof window.initTodoButton === 'function') {
+            window.initTodoButton();
+        }
         // Reload todos when user logs in
         authState.subscribe((user) => {
-            if (user) {
-                loadTodos();
+            if (user && typeof window.loadTodos === 'function') {
+                window.loadTodos();
             }
         });
     }, 200);

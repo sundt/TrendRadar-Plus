@@ -738,9 +738,11 @@ async def add_cache_headers(request: Request, call_next):
         return response
 
     # ── HTML 页面 — 1 分钟 ──
+    # Vary: User-Agent 确保 CDN 按设备类型分别缓存（移动端/PC 端加载不同资源）
     content_type = response.headers.get("content-type", "")
     if content_type.startswith("text/html"):
         response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"
+        response.headers["Vary"] = "User-Agent"
         return response
     
     # 默认：不设置缓存头（让 CDN 使用默认策略）

@@ -15,7 +15,11 @@
     <link rel="preload" href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" as="style">
     <link rel="preload" href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" as="style">
     <!-- JS 模块预加载 -->
+    {% if is_mobile %}
+    <link rel="modulepreload" href="{{ static_prefix }}/js/mobile/index-mobile.js?v={{ asset_rev }}">
+    {% else %}
     <link rel="modulepreload" href="{{ static_prefix }}/js/index.js?v={{ asset_rev }}">
+    {% endif %}
     <!-- 系统设置 JSON -->
     <script id="system-settings-json" type="application/json">{{ sys_settings | tojson }}</script>
     <!-- 栏目配置 JSON（供移动端 JS 立即使用，无需等待 /api/columns） -->
@@ -129,17 +133,58 @@
     <link href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" rel="stylesheet">
     <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
     <link href="{{ static_prefix }}/css/layout/tabs.css?v={{ asset_rev }}" rel="stylesheet">
-    <!-- 非首屏样式异步加载（模态框、设置、登录、收藏、订阅等） -->
+    <!-- 非首屏样式异步加载 — 按设备类型条件加载，减少无效下载 -->
+    {% if not is_mobile %}
+    {# PC 端：加载模态框/设置/主题追踪样式，跳过移动端增强 CSS（~70KB） #}
     <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
     <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
-    <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
     <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript>
         <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet">
+        <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet">
+    </noscript>
+    {% else %}
+    {# 移动端：加载移动增强 CSS，延迟加载 PC 模态框样式（首屏不需要） #}
+    <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
+    <noscript>
         <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet">
     </noscript>
+    {# 移动端延迟加载：viewer-deferred.css 和 topic-tracker.css 在首次交互后加载 #}
+    <script>
+        (function(){
+            var loaded = false;
+            function loadDeferredCSS() {
+                if (loaded) return;
+                loaded = true;
+                var sheets = [
+                    '{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}',
+                    '{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}'
+                ];
+                for (var i = 0; i < sheets.length; i++) {
+                    var link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = sheets[i];
+                    document.head.appendChild(link);
+                }
+            }
+            // 首次用户交互时加载（点击/滑动），或 5 秒后自动加载
+            var events = ['touchstart', 'scroll', 'click'];
+            function onInteract() {
+                loadDeferredCSS();
+                for (var i = 0; i < events.length; i++) {
+                    document.removeEventListener(events[i], onInteract);
+                }
+            }
+            for (var i = 0; i < events.length; i++) {
+                document.addEventListener(events[i], onInteract, { once: true, passive: true });
+            }
+            setTimeout(loadDeferredCSS, 5000);
+        })();
+    </script>
+    {% endif %}
 </head>
 
 <body>
@@ -351,8 +396,12 @@
 
     {% include "_viewer_modals.html" %}
 
-    <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
+    {% if is_mobile %}
+    <script type="module" src="{{ static_prefix }}/js/mobile/index-mobile.js?v={{ asset_rev }}"></script>
     <script type="module" src="{{ static_prefix }}/js/src/mobile-enhance.js?v={{ asset_rev }}"></script>
+    {% else %}
+    <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
+    {% endif %}
     <script>
         (function () {
             try {

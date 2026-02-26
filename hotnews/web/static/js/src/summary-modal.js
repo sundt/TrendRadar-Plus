@@ -5,7 +5,7 @@
 
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
-import { openTodoPanel, closeTodoPanel, batchAddTodos, addTodo, getCurrentTodoCount, loadTodos, initSelectionTodo } from './todo.js';
+// todo.js 已改为动态加载（code-split），通过 window.* 全局函数调用
 
 let isModalOpen = false;
 let currentNewsId = null;
@@ -422,7 +422,7 @@ async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
     window._currentSummaryNewsUrl = url;
     
     // Initialize selection todo (only once)
-    initSelectionTodo();
+    if (typeof window.initSelectionTodo === 'function') window.initSelectionTodo();
     
     // Set modal title to news title
     if (modalTitle) {
@@ -1470,7 +1470,7 @@ loadSummarizedList = async function() {
  */
 function openCurrentTodoPanel() {
     if (!currentNewsId || !currentNewsTitle) return;
-    openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
+    if (typeof window.openTodoPanel === 'function') window.openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
     updateTodoToggleButton(true);
 }
 
@@ -1484,10 +1484,10 @@ function toggleCurrentTodoPanel() {
     const isOpen = panel && panel.classList.contains('open');
     
     if (isOpen) {
-        closeTodoPanel();
+        if (typeof window.closeTodoPanel === 'function') window.closeTodoPanel();
         updateTodoToggleButton(false);
     } else {
-        openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
+        if (typeof window.openTodoPanel === 'function') window.openTodoPanel(currentNewsId, currentNewsTitle, currentNewsUrl);
         updateTodoToggleButton(true);
     }
 }
@@ -1540,12 +1540,14 @@ async function addActionListToTodo() {
     }
     
     // Batch add to todo
-    await batchAddTodos(items, {
-        groupId: currentNewsId,
-        groupTitle: currentNewsTitle,
-        groupUrl: currentNewsUrl || '',
-        isCustom: false
-    });
+    if (typeof window.batchAddTodos === 'function') {
+        await window.batchAddTodos(items, {
+            groupId: currentNewsId,
+            groupTitle: currentNewsTitle,
+            groupUrl: currentNewsUrl || '',
+            isCustom: false
+        });
+    }
 }
 
 /**
@@ -1559,12 +1561,14 @@ async function addCurrentToTodo() {
     
     try {
         // addTodo expects (text, source) where source has groupId, groupTitle, groupUrl, isCustom
-        const result = await addTodo(currentNewsTitle, {
-            groupId: currentNewsId,
-            groupTitle: currentNewsTitle,
-            groupUrl: currentNewsUrl || '',
-            isCustom: false
-        });
+        if (typeof window.addTodo === 'function') {
+            await window.addTodo(currentNewsTitle, {
+                groupId: currentNewsId,
+                groupTitle: currentNewsTitle,
+                groupUrl: currentNewsUrl || '',
+                isCustom: false
+            });
+        }
         // addTodo already shows toast on success/failure
     } catch (e) {
         console.error('[Summary] Add to todo error:', e);
@@ -1637,6 +1641,7 @@ window.addActionListToTodo = addActionListToTodo;
 window.forceSummary = forceSummary;
 window.addCurrentToTodo = addCurrentToTodo;
 window.addCurrentToFavorites = addCurrentToFavorites;
+window.renderMarkdown = renderMarkdown;
 
 export {
     openSummaryModal,

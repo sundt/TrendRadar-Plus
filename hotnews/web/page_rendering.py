@@ -748,6 +748,8 @@ async def render_viewer_page(
         # Load column_config for SSR tab rendering (same source as /api/columns)
         ssr_columns = _load_column_config_for_ssr(project_root)
 
+        is_mobile = _detect_mobile(request)
+
         resp = templates.TemplateResponse(
             "viewer.html",
             {
@@ -761,6 +763,7 @@ async def render_viewer_page(
                 "sys_settings": sys_settings,
                 "ssr_columns": ssr_columns,
                 "ssr_columns_json": json.dumps(ssr_columns, ensure_ascii=False),
+                "is_mobile": is_mobile,
             },
         )
 
@@ -784,3 +787,14 @@ async def render_viewer_page(
             """,
             status_code=500,
         )
+
+def _detect_mobile(request: Request) -> bool:
+    """通过 User-Agent 粗略判断是否为移动端，用于条件加载资源。
+
+    不需要 100% 精确 — 只是优化提示，客户端 JS 仍有自己的检测逻辑。
+    """
+    ua = (request.headers.get("user-agent") or "").lower()
+    mobile_keywords = ("mobile", "android", "iphone", "ipad", "ipod", "webos", "opera mini", "ucbrowser", "micromessenger")
+    return any(kw in ua for kw in mobile_keywords)
+
+

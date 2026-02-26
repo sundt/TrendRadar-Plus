@@ -30,9 +30,18 @@ ENDPOINTS = [
     ("GET", "/static/css/comment-preview.css", "comment-preview.css (async)", "medium"),
 
     # ========== 关键 JS ==========
-    ("GET", "/static/js/index.js", "index.js (bundle)", "critical"),
+    ("GET", "/static/js/index.js", "index.js (PC bundle)", "critical"),
+    ("GET", "/static/js/mobile/index-mobile.js", "index-mobile.js (Mobile bundle)", "critical"),
     ("GET", "/static/js/src/mobile-enhance.js", "mobile-enhance.js", "high"),
     ("GET", "/static/js/src/fallback-loader.js", "fallback-loader.js", "high"),
+
+    # ========== Code-Split Chunks（按需加载） ==========
+    ("GET", "/static/js/summary-modal-JHBLFH6C.js", "summary-modal chunk", "low"),
+    ("GET", "/static/js/todo-QUWNCV25.js", "todo chunk", "low"),
+    ("GET", "/static/js/subscribe-sidebar-YL2YUVLO.js", "subscribe-sidebar chunk", "low"),
+    ("GET", "/static/js/favorites-UBYHC5FL.js", "favorites chunk", "low"),
+    ("GET", "/static/js/payment-ZSQRVRBQ.js", "payment chunk", "low"),
+    ("GET", "/static/js/comment-preview-K4I64NKS.js", "comment-preview chunk", "low"),
 
     # ========== 首屏 API（关键路径） ==========
     ("GET", "/api/auth/me", "认证检查 /api/auth/me", "critical"),
