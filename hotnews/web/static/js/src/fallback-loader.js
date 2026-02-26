@@ -152,7 +152,7 @@
         container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;"><div style="font-size:48px;margin-bottom:16px;">✨</div><div style="font-size:16px;">发现中...</div></div>';
         
         try {
-            var res = await fetch('/api/user/preferences/discovery-news?news_limit=50&tag_limit=30', { credentials: 'include' });
+            var res = await fetch('/api/user/preferences/discovery-news?limit=3&offset=0&news_limit=15&tag_limit=30', { credentials: 'include' });
             var data = await res.json();
             
             console.log('[Fallback] Discovery API response:', data.ok, 'tags:', data.tags ? data.tags.length : 0);

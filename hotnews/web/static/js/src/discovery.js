@@ -29,7 +29,7 @@ function _getInitialCount() {
 }
 
 function _getNewsLimit() {
-    return 50;
+    return 15;
 }
 
 function _getGrid() {
