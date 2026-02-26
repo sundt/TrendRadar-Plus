@@ -128,6 +128,14 @@
                 background-position: -200% 0;
             }
         }
+
+        /* Auth 按钮：JS 确认状态前显示占位圆形，避免未登录→已登录闪烁 */
+        .auth-pending {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(156, 163, 175, 0.2);
+        }
     </style>
     <link href="{{ static_prefix }}/css/vendor/bootstrap.min.css" rel="stylesheet">
     <link href="{{ static_prefix }}/css/title-effects.css?v={{ asset_rev }}" rel="stylesheet">
@@ -174,7 +182,7 @@
                     <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()" title="我的收藏">⭐</button>
                     <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换护眼模式">🌙</button>
                     <button class="icon-btn search-btn" onclick="window.open('/search', '_blank')" title="搜索新闻">🔍</button>
-                    <div id="authButtonContainer" class="auth-button-container"></div>
+                    <div id="authButtonContainer" class="auth-button-container auth-pending"></div>
                 </div>
             </div>
 

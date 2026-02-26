@@ -174,6 +174,12 @@ export class AuthButton {
     render(user) {
         if (!this.container) return;
 
+        // auth 状态尚未确认时，保持占位样式，不渲染任何内容
+        if (!authState.initialized) return;
+
+        // 移除初始占位样式
+        this.container.classList.remove('auth-pending');
+
         if (user) {
             this._renderLoggedIn(user);
         } else {

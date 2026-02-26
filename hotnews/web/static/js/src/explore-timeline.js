@@ -59,13 +59,13 @@ function _buildNewsItemsHtml(items, opts = {}) {
         const commentBtnHtml = `<button class="news-comment-btn" data-url="${url.replace(/"/g, '&quot;')}" data-title="${title.replace(/"/g, '&quot;')}"></button>`;
         const actionsHtml = `<div class="news-actions">${timeHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
         // Extract plain-text snippet from content for preview popover
+        // 注意：不能用 innerHTML 解析，否则浏览器会预加载 content 中的所有图片（几百MB流量）
         const rawContent = n?.content || '';
         let snippetText = '';
         let imgSrc = '';
         if (rawContent) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = rawContent;
-            const plain = (tmp.textContent || tmp.innerText || '').trim();
+            // 用正则去除 HTML 标签提取纯文本，避免触发图片加载
+            const plain = rawContent.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
             if (plain) {
                 snippetText = plain.length > 200 ? plain.slice(0, 200) + '…' : plain;
             }
