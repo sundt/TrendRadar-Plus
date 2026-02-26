@@ -1068,8 +1068,9 @@ const MobileEnhance = {
 
         if (hasChildren) {
           this._toggleNode(treeItem, nodeId);
-          // 轻量预加载：只确保 pane 存在并触发数据加载，不切换当前视图
-          this._preloadCategory(nodeId);
+          // 点击父节点：展开子菜单 + 后台导航到该节点的聚合 timeline
+          this._navToBackground(nodeId);
+          this._updateActiveHighlight(nodeId);
         } else {
           this._navTo(nodeId);
         }
