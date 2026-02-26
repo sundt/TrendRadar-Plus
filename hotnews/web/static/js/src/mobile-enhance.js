@@ -1065,7 +1065,6 @@ const MobileEnhance = {
 
         if (hasChildren) {
           this._toggleNode(treeItem, nodeId);
-          this._navToBackground(nodeId);
         } else {
           this._navTo(nodeId);
         }
