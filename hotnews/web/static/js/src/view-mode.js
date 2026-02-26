@@ -61,7 +61,7 @@ export const viewMode = {
     get(categoryId) {
         const cid = String(categoryId || '');
         if (FIXED_CATEGORIES[cid]) return FIXED_CATEGORIES[cid];
-        // Tag-driven 栏目（在 column_config 树中）：有 fixed_view 的固定模式，自管理栏目除外
+        // Tag-driven 栏目（在 column_config 树中），自管理栏目除外
         if (!SELF_MANAGED.includes(cid)) {
             const node = _findInColumnConfig(cid);
             if (node) {
@@ -69,7 +69,9 @@ export const viewMode = {
                     const sf = typeof node.source_filter === 'string' ? JSON.parse(node.source_filter) : (node.source_filter || {});
                     if (sf.fixed_view) return sf.fixed_view;
                 } catch {}
-                // 没有 fixed_view 的栏目（如 finance 子分类）走用户偏好
+                // 没有 fixed_view 但在 column_config 中的栏目（如 finance 子分类）：走用户偏好，但默认 timeline
+                const map = _load();
+                return map[cid] || 'timeline';
             }
         }
         const map = _load();
