@@ -689,6 +689,11 @@ async def add_cache_headers(request: Request, call_next):
         response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
         return response
 
+    # 标签列表（公开）— 10 分钟（变化不频繁）
+    if path == "/api/admin/tags/public/all":
+        response.headers["Cache-Control"] = "public, max-age=600, s-maxage=600"
+        return response
+
     # 评论数据 GET — 1 分钟
     if path.startswith("/api/comments") and request.method == "GET":
         response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"

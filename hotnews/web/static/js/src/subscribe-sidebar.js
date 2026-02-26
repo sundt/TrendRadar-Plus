@@ -269,7 +269,7 @@ async function loadTabContent(tab) {
     
     // Show loading if not loaded yet
     if (!state.loaded) {
-        body.innerHTML = '<div class="subscribe-loading">加载中...</div>';
+        body.innerHTML = '<div class="subscribe-loading"><div class="tr-skeleton-inline"><div class="tr-skeleton-bar"></div><div class="tr-skeleton-bar"></div><div class="tr-skeleton-bar"></div><div class="tr-skeleton-bar"></div></div></div>';
     }
     
     try {

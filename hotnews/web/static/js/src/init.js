@@ -190,6 +190,13 @@ ready(function () {
         });
     }, 200);
 
+    // 已登录用户：空闲时预加载 subscribe-sidebar chunk，避免点击时等待下载
+    setTimeout(() => {
+        if (authState.isLoggedIn()) {
+            import('./subscribe-sidebar.js').catch(() => {});
+        }
+    }, 3000);
+
     // 检查栏目设置 NEW 标记是否应该隐藏 - 现在始终显示 NEW
     // (已移除隐藏逻辑，让 NEW 标记一直显示)
 
