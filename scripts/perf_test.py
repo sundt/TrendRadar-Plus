@@ -20,13 +20,14 @@ ENDPOINTS = [
     ("GET", "/", "首页 HTML", "critical"),
 
     # ========== 关键 CSS（阻塞渲染） ==========
-    ("GET", "/static/css/viewer.css", "viewer.css", "critical"),
+    ("GET", "/static/css/viewer.css", "viewer.css (critical)", "critical"),
     ("GET", "/static/css/vendor/bootstrap.min.css", "bootstrap.min.css", "critical"),
     ("GET", "/static/css/title-effects.css", "title-effects.css", "high"),
     ("GET", "/static/css/layout/tabs.css", "tabs.css", "high"),
-    ("GET", "/static/css/topic-tracker.css", "topic-tracker.css", "medium"),
-    ("GET", "/static/css/mobile-enhance.css", "mobile-enhance.css", "medium"),
-    ("GET", "/static/css/comment-preview.css", "comment-preview.css", "medium"),
+    ("GET", "/static/css/viewer-deferred.css", "viewer-deferred.css (async)", "medium"),
+    ("GET", "/static/css/topic-tracker.css", "topic-tracker.css (async)", "medium"),
+    ("GET", "/static/css/mobile-enhance.css", "mobile-enhance.css (async)", "medium"),
+    ("GET", "/static/css/comment-preview.css", "comment-preview.css (async)", "medium"),
 
     # ========== 关键 JS ==========
     ("GET", "/static/js/index.js", "index.js (bundle)", "critical"),
@@ -57,8 +58,8 @@ ENDPOINTS = [
     ("GET", "/api/search?q=AI", "搜索", "medium"),
 
     # ========== RSS 源 ==========
-    ("GET", "/api/rss-sources", "RSS 源列表", "medium"),
-    ("GET", "/api/rss-source-categories", "RSS 源分类", "medium"),
+    ("GET", "/api/rss-sources", "RSS 源列表 (非首屏)", "low"),
+    ("GET", "/api/rss-source-categories", "RSS 源分类", "low"),
 
     # ========== 图片资源 ==========
     ("GET", "/static/images/hxlogo.jpg", "Logo 图片", "medium"),
