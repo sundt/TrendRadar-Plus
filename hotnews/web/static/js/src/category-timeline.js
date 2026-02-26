@@ -8,6 +8,7 @@
 import { TR, escapeHtml, formatNewsDate } from './core.js';
 import { events } from './events.js';
 import { viewMode } from './view-mode.js';
+import { skeletonCards, skeletonSentinel } from './skeleton.js';
 
 const INITIAL_CARDS_DESKTOP = 3;
 const INITIAL_CARDS_MOBILE = 1;
@@ -200,8 +201,7 @@ function _createSentinel(catId, container) {
     if (existing) existing.remove();
     const sentinel = document.createElement('div');
     sentinel.id = `tl-sentinel-${catId}`;
-    sentinel.style.cssText = 'min-width:20px;height:100%;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#9ca3af;';
-    sentinel.innerHTML = '⏳';
+    sentinel.innerHTML = skeletonSentinel();
     container.appendChild(sentinel);
     return sentinel;
 }
@@ -278,7 +278,7 @@ async function loadTimeline(catId, force = false) {
     s.finished = false;
     const myGen = s.generation;
 
-    grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+    grid.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3);
 
     try {
         const limit = _getItemsPerCard();
@@ -350,7 +350,7 @@ async function loadCardMode(catId) {
     grid.style.overflowY = '';
     grid.style.alignItems = '';
     grid.style.overscrollBehavior = '';
-    grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+    grid.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 2);
 
     try {
         // Tag-driven 分支：若该栏目在 _columnConfig 中有 tag_ids，每个 tag 渲染一张卡片

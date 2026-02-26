@@ -1332,7 +1332,7 @@ const MobileEnhance = {
     }
 
     // Fallback: fetch from API
-    container.innerHTML = '<div class="me-drawer-empty">加载中...</div>';
+    container.innerHTML = '<div class="me-drawer-empty"><div class="tr-skeleton-inline"><div class="tr-skeleton-bar"></div><div class="tr-skeleton-bar"></div><div class="tr-skeleton-bar"></div></div></div>';
     const self = this;
     fetch('/api/topics', { credentials: 'include' })
       .then(r => r.json())

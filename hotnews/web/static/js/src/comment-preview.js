@@ -7,6 +7,7 @@
 import { ready } from './core.js';
 import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
+import { skeletonInline } from './skeleton.js';
 
 const SHOW_DELAY = 250;
 const HIDE_DELAY = 350;
@@ -162,7 +163,7 @@ function openCommentPanel(btn) {
   const panel = document.createElement('div');
   panel.className = 'hn-comment-panel';
   panel.dataset.url = url;
-  panel.innerHTML = `<div class="hn-cp-header"><span>评论</span><button class="hn-cp-close">✕</button></div><div class="hn-cp-loading">加载中…</div>`;
+  panel.innerHTML = `<div class="hn-cp-header"><span>评论</span><button class="hn-cp-close">✕</button></div><div class="hn-cp-loading">${skeletonInline(3)}</div>`;
   document.body.appendChild(panel);
 
   // Position
@@ -428,7 +429,7 @@ function showEmojiPicker(addBtn) {
 
 async function refreshPanelComments(panel, url, title) {
   const loading = panel.querySelector('.hn-cp-loading');
-  if (loading) loading.textContent = '加载中…';
+  if (loading) loading.innerHTML = skeletonInline(3);
 
   const comments = await fetchFullComments(url);
   if (loading) loading.remove();

@@ -1,4 +1,5 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
+import { skeletonCard, skeletonSentinel } from './skeleton.js';
 
 const EXPLORE_TAB_ID = 'explore';
 const INITIAL_CARDS_DESKTOP = 3;
@@ -195,7 +196,7 @@ function _createSentinel(container) {
     sentinel.style.minWidth = '20px';
     sentinel.style.height = '100%';
     sentinel.style.flexShrink = '0';
-    sentinel.innerHTML = '<div style="width:20px;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;">⏳</div>';
+    sentinel.innerHTML = skeletonSentinel();
     container.appendChild(sentinel);
     return sentinel;
 }
@@ -295,7 +296,7 @@ async function _loadTimeline() {
 
     _exploreOffset = 0;
     _exploreFinished = false;
-    grid.innerHTML = '<div id="explore-loading-hint" style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+    grid.innerHTML = skeletonCard({ rows: 10, extraClass: 'tr-skeleton-explore' });
 
     _createSentinel(grid);
 
@@ -322,9 +323,8 @@ async function _loadTimeline() {
     const initialLimit = limit * neededCards;
     const items = await _fetchTimelineBatch(initialLimit, 0);
 
-    // 移除加载提示
-    const loadingHint = grid.querySelector('#explore-loading-hint');
-    if (loadingHint) loadingHint.remove();
+    // 移除 skeleton 占位
+    grid.querySelectorAll('.tr-skeleton-card').forEach(el => el.remove());
 
     if (!items.length) {
         grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';

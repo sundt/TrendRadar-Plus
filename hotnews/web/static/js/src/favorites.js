@@ -7,6 +7,7 @@ import { authState } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
 // summary-modal.js 已改为动态加载，renderMarkdown 通过 window.* 访问
 import { preferences } from './preferences.js';
+import { skeletonInline } from './skeleton.js';
 
 // renderMarkdown 代理：优先用 window.renderMarkdown（summary-modal 加载后可用），降级为纯文本
 function renderMarkdown(text) {
@@ -379,7 +380,7 @@ async function loadFavoritesPanel() {
     const body = document.getElementById('favoritesPanelBody');
     if (!body) return;
     
-    body.innerHTML = '<div class="favorites-loading">加载中...</div>';
+    body.innerHTML = skeletonInline(5);
     
     const user = authState.getUser();
     

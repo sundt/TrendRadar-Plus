@@ -145,45 +145,17 @@
         <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet">
     </noscript>
     {% else %}
-    {# 移动端：加载移动增强 CSS，延迟加载 PC 模态框样式（首屏不需要） #}
+    {# 移动端：加载移动增强 CSS + 非阻塞加载其余样式（media=print trick 立即下载，不阻塞渲染） #}
     <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
     <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
     <noscript>
         <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet">
+        <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet">
+        <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet">
     </noscript>
-    {# 移动端延迟加载：viewer-deferred.css 和 topic-tracker.css 在首次交互后加载 #}
-    <script>
-        (function(){
-            var loaded = false;
-            function loadDeferredCSS() {
-                if (loaded) return;
-                loaded = true;
-                var sheets = [
-                    '{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}',
-                    '{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}'
-                ];
-                for (var i = 0; i < sheets.length; i++) {
-                    var link = document.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = sheets[i];
-                    document.head.appendChild(link);
-                }
-            }
-            // 首次用户交互时加载（点击/滑动），或 5 秒后自动加载
-            var events = ['touchstart', 'scroll', 'click'];
-            function onInteract() {
-                loadDeferredCSS();
-                for (var i = 0; i < events.length; i++) {
-                    document.removeEventListener(events[i], onInteract);
-                }
-            }
-            for (var i = 0; i < events.length; i++) {
-                document.addEventListener(events[i], onInteract, { once: true, passive: true });
-            }
-            setTimeout(loadDeferredCSS, 5000);
-        })();
-    </script>
     {% endif %}
 </head>
 

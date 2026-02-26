@@ -1428,3 +1428,182 @@
             display: none !important;
         }
 
+
+        /* ============================================
+         * 统一 Skeleton Loading 组件
+         * 用于所有数据加载过程的占位动画
+         * ============================================ */
+
+        @keyframes tr-shimmer {
+            0% { background-position: -400px 0; }
+            100% { background-position: 400px 0; }
+        }
+
+        .tr-skeleton-bar {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 37%, #f0f0f0 63%);
+            background-size: 800px 100%;
+            animation: tr-shimmer 1.6s ease-in-out infinite;
+            border-radius: 4px;
+        }
+
+        /* --- Skeleton Card: 模拟 platform-card 的占位 --- */
+        .tr-skeleton-card {
+            background: #f9fafb;
+            border-radius: 12px;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            min-width: 0;
+        }
+
+        /* 卡片内的 header 占位 */
+        .tr-skeleton-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 4px 10px;
+        }
+
+        .tr-skeleton-card-header .tr-skeleton-bar:first-child {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .tr-skeleton-card-header .tr-skeleton-bar:last-child {
+            width: 40%;
+            height: 14px;
+        }
+
+        /* 卡片内的列表行占位 */
+        .tr-skeleton-card-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 4px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .tr-skeleton-card-row:last-child {
+            border-bottom: none;
+        }
+
+        .tr-skeleton-card-row .tr-skeleton-idx {
+            width: 18px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+
+        .tr-skeleton-card-row .tr-skeleton-title {
+            height: 14px;
+            flex: 1;
+        }
+
+        /* 行宽度交错，看起来更自然 */
+        .tr-skeleton-card-row:nth-child(odd) .tr-skeleton-title { width: 85%; }
+        .tr-skeleton-card-row:nth-child(even) .tr-skeleton-title { width: 65%; }
+        .tr-skeleton-card-row:nth-child(3n) .tr-skeleton-title { width: 75%; }
+
+        /* --- 在 platform-grid 中的 skeleton card 尺寸跟随真实卡片 --- */
+        .tab-content-area .platform-grid > .tr-skeleton-card {
+            flex: 0 0 calc((100% - 20px) / 3);
+            width: calc((100% - 20px) / 3);
+            height: var(--tr-platform-card-height);
+        }
+
+        @media (max-width: 1024px) {
+            .tab-content-area .platform-grid > .tr-skeleton-card {
+                flex: 0 0 calc((100% - 10px) / 2);
+                width: calc((100% - 10px) / 2);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .tab-content-area .platform-grid > .tr-skeleton-card {
+                flex: 0 0 100%;
+                width: 100%;
+                border-radius: 12px 12px 0 0;
+                border: none;
+                border-bottom: 1px solid #f3f4f6;
+            }
+        }
+
+        /* --- Explore 时间线 skeleton（横向滚动卡片） --- */
+        .tr-skeleton-card.tr-skeleton-explore {
+            min-width: 360px;
+            flex: 0 0 auto;
+        }
+
+        @media (max-width: 640px) {
+            .tr-skeleton-card.tr-skeleton-explore {
+                min-width: 100%;
+                flex: 0 0 100%;
+                border-radius: 12px 12px 0 0;
+            }
+        }
+
+        /* --- 通用 inline loading（用于面板/弹窗内） --- */
+        .tr-skeleton-inline {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 20px;
+        }
+
+        .tr-skeleton-inline .tr-skeleton-bar {
+            height: 14px;
+        }
+
+        .tr-skeleton-inline .tr-skeleton-bar:nth-child(1) { width: 90%; }
+        .tr-skeleton-inline .tr-skeleton-bar:nth-child(2) { width: 70%; }
+        .tr-skeleton-inline .tr-skeleton-bar:nth-child(3) { width: 80%; }
+        .tr-skeleton-inline .tr-skeleton-bar:nth-child(4) { width: 55%; }
+
+        /* --- 护眼模式 skeleton --- */
+        body.eye-protection-mode .tr-skeleton-bar {
+            background: linear-gradient(90deg, #2a2d33 25%, #363940 37%, #2a2d33 63%);
+            background-size: 800px 100%;
+            animation: tr-shimmer 1.6s ease-in-out infinite;
+        }
+
+        body.eye-protection-mode .tr-skeleton-card {
+            background: #1e2025;
+            border-color: #373a40;
+        }
+
+        body.eye-protection-mode .tr-skeleton-card-row {
+            border-bottom-color: #2a2d33;
+        }
+
+        /* --- Sentinel (加载更多指示器) --- */
+        .tr-load-sentinel {
+            min-width: 40px;
+            height: 100%;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tr-load-sentinel-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #d1d5db;
+            animation: tr-sentinel-pulse 1.2s ease-in-out infinite;
+        }
+
+        .tr-load-sentinel-dot:nth-child(2) { animation-delay: 0.2s; }
+        .tr-load-sentinel-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes tr-sentinel-pulse {
+            0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+            40% { opacity: 1; transform: scale(1.2); }
+        }
+
+        body.eye-protection-mode .tr-load-sentinel-dot {
+            background: #6b7280;
+        }
