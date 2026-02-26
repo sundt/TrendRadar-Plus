@@ -295,7 +295,7 @@ async function _loadTimeline() {
 
     _exploreOffset = 0;
     _exploreFinished = false;
-    grid.innerHTML = '';
+    grid.innerHTML = '<div id="explore-loading-hint" style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
 
     _createSentinel(grid);
 
@@ -321,6 +321,10 @@ async function _loadTimeline() {
 
     const initialLimit = limit * neededCards;
     const items = await _fetchTimelineBatch(initialLimit, 0);
+
+    // 移除加载提示
+    const loadingHint = grid.querySelector('#explore-loading-hint');
+    if (loadingHint) loadingHint.remove();
 
     if (!items.length) {
         grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">暂无内容</div>';
