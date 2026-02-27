@@ -46,21 +46,7 @@ def _get_online_db_conn(request: Request):
     return get_online_db_conn(request.app.state.project_root)
 
 
-def _get_current_user_id(request: Request) -> Optional[int]:
-    """Get current authenticated user ID."""
-    from hotnews.kernel.auth.auth_api import _get_session_token
-    from hotnews.kernel.auth.auth_service import validate_session
-    
-    session_token = _get_session_token(request)
-    if not session_token:
-        return None
-    
-    conn = _get_user_db_conn(request)
-    is_valid, user_info = validate_session(conn, session_token)
-    if not is_valid or not user_info:
-        return None
-    
-    return user_info.get("id")
+from hotnews.kernel.auth.deps import get_optional_user_id as _get_current_user_id
 
 
 @router.get("")

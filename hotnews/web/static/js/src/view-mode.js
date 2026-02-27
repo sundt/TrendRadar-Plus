@@ -84,6 +84,9 @@ export const viewMode = {
     set(categoryId, mode) {
         const cid = String(categoryId || '');
         if (FIXED_CATEGORIES[cid]) return; // 不可切换
+        // column_config 中有 fixed_view 的栏目也不可覆盖
+        const node = _findInColumnConfig(cid);
+        if (node?.fixed_view) return;
         const m = mode === 'timeline' ? 'timeline' : 'card';
         const map = _load();
         map[cid] = m;
@@ -116,6 +119,17 @@ export const viewMode = {
 
 TR.viewMode = viewMode;
 
+// 判断某个栏目的 viewMode 偏好是否应该被忽略/清理
+// 如果栏目不可切换（canSwitch=false），用户偏好就不应该存在
+function _shouldIgnorePreference(cid) {
+    if (FIXED_CATEGORIES[cid]) return true;
+    const node = _findInColumnConfig(cid);
+    if (node?.fixed_view) return true;
+    // 栏目在 column_config 中但不可切换 → 偏好无意义，应清理
+    if (node && !viewMode.canSwitch(cid)) return true;
+    return false;
+}
+
 // 页面加载时异步从服务器同步 view_mode（已登录用户）
 // 先用 localStorage 缓存渲染，服务器数据到达后更新本地
 (async function _syncViewModeFromServer() {
@@ -123,14 +137,41 @@ TR.viewMode = viewMode;
         const prefs = await preferences.getPreferences();
         if (!prefs?.view_mode || typeof prefs.view_mode !== 'object') return;
         const local = _load();
-        // 比较差异，服务器为准
         let changed = false;
+        let serverDirty = false;
+        const cleanedServerMap = { ...prefs.view_mode };
+
         for (const [k, v] of Object.entries(prefs.view_mode)) {
+            if (_shouldIgnorePreference(k)) {
+                // 服务端存了不该存的偏好，本地不同步，并标记需要清理服务端
+                delete cleanedServerMap[k];
+                if (local[k]) { delete local[k]; changed = true; }
+                serverDirty = true;
+                continue;
+            }
             if (local[k] !== v) { local[k] = v; changed = true; }
         }
+
+        // 同时清理本地已有的固定栏目脏数据
+        for (const k of Object.keys(local)) {
+            if (_shouldIgnorePreference(k)) {
+                delete local[k];
+                changed = true;
+                serverDirty = true;
+                if (!(k in cleanedServerMap)) continue;
+                delete cleanedServerMap[k];
+            }
+        }
+
         if (changed) {
             _save(local);
-            console.log('[ViewMode] Synced from server');
+            console.log('[ViewMode] Synced from server (cleaned fixed modes)');
+        }
+
+        // 清理服务端脏数据
+        if (serverDirty) {
+            preferences.updatePreferences({ view_mode: cleanedServerMap }).catch(() => {});
+            console.log('[ViewMode] Cleaned fixed-mode entries from server');
         }
     } catch (e) { /* ignore */ }
 })();

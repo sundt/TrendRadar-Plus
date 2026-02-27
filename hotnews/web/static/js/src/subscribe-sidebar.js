@@ -3,8 +3,7 @@
  * 允许用户在不离开当前页面的情况下快速管理订阅
  */
 
-import { authState } from './auth-state.js';
-import { openLoginModal } from './login-modal.js';
+import { authState, requireLogin } from './auth-state.js';
 import { preferences } from './preferences.js';
 
 // ============ 常量 ============
@@ -67,16 +66,6 @@ function preloadRecommendations() {
         .finally(() => {
             preloadPromise = null;
         });
-}
-
-// ============ 登录检查 ============
-function requireLogin() {
-    const user = authState.getUser();
-    if (!user) {
-        openLoginModal();
-        return false;
-    }
-    return true;
 }
 
 // ============ 工具函数 ============

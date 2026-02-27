@@ -22,22 +22,7 @@ def _get_user_db_conn(request: Request):
     return get_user_db_conn(request.app.state.project_root)
 
 
-def _get_current_user(request: Request):
-    """Get current authenticated user or raise 401."""
-    from hotnews.kernel.auth.auth_api import _get_session_token
-    from hotnews.kernel.auth.auth_service import validate_session
-    
-    session_token = _get_session_token(request)
-    if not session_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    conn = _get_user_db_conn(request)
-    is_valid, user_info = validate_session(conn, session_token)
-    
-    if not is_valid or not user_info:
-        raise HTTPException(status_code=401, detail="Session expired")
-    
-    return user_info
+from hotnews.kernel.auth.deps import get_current_user as _get_current_user
 
 
 def _ensure_favorites_table(conn):

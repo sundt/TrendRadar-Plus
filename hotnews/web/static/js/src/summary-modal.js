@@ -3,8 +3,7 @@
  * One-click article summarization with auto-classification
  */
 
-import { authState } from './auth-state.js';
-import { openLoginModal } from './login-modal.js';
+import { authState, requireLogin } from './auth-state.js';
 // todo.js 已改为动态加载（code-split），通过 window.* 全局函数调用
 
 let isModalOpen = false;
@@ -395,12 +394,7 @@ function ensureModalExists() {
  * Open summary modal and generate summary with streaming
  */
 async function openSummaryModal(newsId, title, url, sourceId, sourceName) {
-    const user = authState.getUser();
-    
-    if (!user) {
-        openLoginModal();
-        return;
-    }
+    if (!requireLogin()) return;
     
     ensureModalExists();
     
@@ -1084,12 +1078,7 @@ async function forceSummary(newsId, encodedTitle, encodedUrl, sourceId, encodedS
  * Open summary modal with force flag (skip short content check)
  */
 async function openSummaryModalForce(newsId, title, url, sourceId, sourceName) {
-    const user = authState.getUser();
-    
-    if (!user) {
-        openLoginModal();
-        return;
-    }
+    if (!requireLogin()) return;
     
     ensureModalExists();
     

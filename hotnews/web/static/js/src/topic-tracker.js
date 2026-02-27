@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml, ready, TR } from './core.js';
-import { authState } from './auth-state.js';
+import { authState, requireLogin } from './auth-state.js';
 import { events } from './events.js';
 import { tabs } from './tabs.js';
 import { scroll } from './scroll.js';
@@ -1044,25 +1044,11 @@ function _confirmDialog(message) {
     }
     
     /**
-     * Open login modal
-     */
-    function showLoginModal() {
-        if (typeof window.openLoginModal === 'function') {
-            window.openLoginModal();
-        } else {
-            alert('请先登录');
-        }
-    }
-
-    /**
      * Open modal for new topic
      */
     function openModal() {
         // Check if user is logged in
-        if (!isUserLoggedIn()) {
-            showLoginModal();
-            return;
-        }
+        if (!requireLogin()) return;
         
         currentEditTopic = null;
         generatedData = null;
@@ -2319,10 +2305,7 @@ function _confirmDialog(message) {
      */
     async function editTopic(topicId) {
         // Check if user is logged in
-        if (!isUserLoggedIn()) {
-            showLoginModal();
-            return;
-        }
+        if (!requireLogin()) return;
         
         const topic = topics.find(t => t.id === topicId);
         if (!topic) return;

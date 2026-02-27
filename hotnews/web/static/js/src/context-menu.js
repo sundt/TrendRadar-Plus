@@ -3,8 +3,7 @@
  * Long press / right click to show actions
  */
 
-import { authState } from './auth-state.js';
-import { openLoginModal } from './login-modal.js';
+import { authState, requireLogin } from './auth-state.js';
 
 let menuEl = null;
 let backdropEl = null;
@@ -171,12 +170,7 @@ function handleMenuClick(e) {
  * Handle summary action
  */
 function handleSummaryAction(data) {
-    const user = authState.getUser();
-    
-    if (!user) {
-        openLoginModal();
-        return;
-    }
+    if (!requireLogin()) return;
     
     // Call the summary modal
     if (typeof window.openSummaryModal === 'function') {
@@ -272,11 +266,7 @@ function clearLongPress() {
  * Handle unfollow tag action
  */
 async function handleUnfollowTag(tagData) {
-    const user = authState.getUser();
-    if (!user) {
-        openLoginModal();
-        return;
-    }
+    if (!requireLogin()) return;
     
     try {
         const card = document.querySelector(`.platform-card[data-tag-id="${tagData.tagId}"]`);

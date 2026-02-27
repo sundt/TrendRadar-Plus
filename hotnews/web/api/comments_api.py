@@ -59,22 +59,7 @@ def _get_online_db(request: Request) -> sqlite3.Connection:
     return get_online_db_conn(request.app.state.project_root)
 
 
-def _resolve_user(request: Request) -> Optional[Dict[str, Any]]:
-    """从 session cookie 解析当前登录用户"""
-    try:
-        from hotnews.kernel.auth.auth_api import _get_session_token
-        from hotnews.kernel.auth.auth_service import validate_session
-        from hotnews.web.user_db import get_user_db_conn
-        token = _get_session_token(request)
-        if not token:
-            return None
-        user_conn = get_user_db_conn(request.app.state.project_root)
-        is_valid, user_info = validate_session(user_conn, token)
-        if is_valid and user_info:
-            return user_info
-    except Exception:
-        pass
-    return None
+from hotnews.kernel.auth.deps import get_optional_user as _resolve_user
 
 
 def _require_user(request: Request) -> Dict[str, Any]:

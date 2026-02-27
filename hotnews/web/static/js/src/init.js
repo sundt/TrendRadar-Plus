@@ -4,7 +4,7 @@
  */
 
 import { TR, ready } from './core.js';
-import { authState } from './auth-state.js';
+import { authState, requireLogin } from './auth-state.js';
 import { AuthButton } from './auth-ui.js';
 import { openLoginModal } from './login-modal.js';
 // todo, subscribe-sidebar, payment 已改为动态加载（code-split）
@@ -19,12 +19,9 @@ const MOBILE_TOP_COLLAPSE_CLASS = 'tr-mobile-top-collapsed';
  * 现在改为打开快速订阅侧边栏
  */
 function goToSettings() {
-    if (authState.isLoggedIn()) {
-        if (typeof window.openSubscribeSidebar === 'function') {
-            window.openSubscribeSidebar();
-        }
-    } else {
-        openLoginModal();
+    if (!requireLogin()) return;
+    if (typeof window.openSubscribeSidebar === 'function') {
+        window.openSubscribeSidebar();
     }
 }
 

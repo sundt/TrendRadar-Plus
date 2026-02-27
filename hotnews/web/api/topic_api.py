@@ -148,24 +148,7 @@ def _get_session_token(request: Request) -> str:
     return token
 
 
-def _get_current_user(request: Request) -> dict:
-    """Get current user from session cookie."""
-    from hotnews.kernel.auth.auth_service import validate_session
-    
-    session_token = _get_session_token(request)
-    if not session_token:
-        logger.warning("[TopicAPI] No session token in cookie")
-        raise HTTPException(status_code=401, detail="请先登录")
-    
-    conn = get_user_db_conn(request.app.state.project_root)
-    is_valid, user_info = validate_session(conn, session_token)
-    
-    if not is_valid or not user_info:
-        logger.warning(f"[TopicAPI] Session validation failed: is_valid={is_valid}, user_info={user_info}")
-        raise HTTPException(status_code=401, detail="请先登录")
-    
-    logger.debug(f"[TopicAPI] User authenticated: {user_info.get('id')}")
-    return user_info
+from hotnews.kernel.auth.deps import get_current_user as _get_current_user
 
 
 def _get_storage(request: Request) -> TopicStorage:

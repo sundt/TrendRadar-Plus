@@ -3,7 +3,7 @@
  * Handles user favorites functionality with local storage fallback
  */
 
-import { authState } from './auth-state.js';
+import { authState, requireLogin } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
 // summary-modal.js 已改为动态加载，renderMarkdown 通过 window.* 访问
 import { preferences } from './preferences.js';
@@ -441,13 +441,7 @@ function initTabSwitching() {
  * Toggle favorites panel visibility
  */
 function toggleFavoritesPanel() {
-    const user = authState.getUser();
-    
-    // If not logged in, show login modal instead of panel
-    if (!user) {
-        openLoginModal();
-        return;
-    }
+    if (!requireLogin()) return;
     
     const panel = document.getElementById('favoritesPanel');
     let overlay = document.getElementById('favoritesOverlay');
@@ -519,13 +513,7 @@ function handleFavoriteClick(event, newsId, title, url, sourceId, sourceName) {
     event.preventDefault();
     event.stopPropagation();
     
-    const user = authState.getUser();
-    
-    // If not logged in, show login modal
-    if (!user) {
-        openLoginModal();
-        return;
-    }
+    if (!requireLogin()) return;
     
     const button = event.currentTarget;
     const newsItem = {
@@ -684,11 +672,7 @@ function initFavoriteButtonDelegation() {
         e.preventDefault();
         e.stopPropagation();
         
-        const user = authState.getUser();
-        if (!user) {
-            openLoginModal();
-            return;
-        }
+        if (!requireLogin()) return;
         
         // 从 DOM 中获取新闻信息
         const newsItem = btn.closest('.news-item');

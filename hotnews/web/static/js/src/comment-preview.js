@@ -5,7 +5,7 @@
  */
 
 import { ready } from './core.js';
-import { authState } from './auth-state.js';
+import { authState, requireLogin } from './auth-state.js';
 import { openLoginModal } from './login-modal.js';
 import { skeletonInline } from './skeleton.js';
 
@@ -235,7 +235,7 @@ function bindPanelEvents(panel, url, title) {
     }
 
     if (target.classList.contains('hn-cp-reaction') && !target.classList.contains('hn-cp-add-reaction')) {
-      if (!authState.isLoggedIn()) { openLoginModal(); return; }
+      if (!requireLogin()) return;
       const cid = target.dataset.commentId;
       const emoji = target.dataset.emoji;
       optimisticToggleReaction(target, cid, emoji);
@@ -243,7 +243,7 @@ function bindPanelEvents(panel, url, title) {
     }
 
     if (target.classList.contains('hn-cp-add-reaction')) {
-      if (!authState.isLoggedIn()) { openLoginModal(); return; }
+      if (!requireLogin()) return;
       showEmojiPicker(target);
       return;
     }
@@ -264,7 +264,7 @@ function bindPanelEvents(panel, url, title) {
     }
 
     if (target.classList.contains('hn-cp-reply-btn')) {
-      if (!authState.isLoggedIn()) { openLoginModal(); return; }
+      if (!requireLogin()) return;
       showReplyInput(target);
       return;
     }

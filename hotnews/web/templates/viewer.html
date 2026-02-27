@@ -192,12 +192,35 @@
             <!-- 主页子栏目 -->
             <div class="sub-tabs" id="homeSubTabs">
                 {% if ssr_columns %}
-                {# 使用 column_config 渲染 tabs（与 /api/columns 一致） #}
+                {# 使用 column_config 渲染 tabs（与 /api/columns 一致，含 dropdown megamenu） #}
                 {% for col in ssr_columns %}
+                {% if col.children %}
+                <div class="sub-tab-wrapper{% if col.id == 'my-tags' %} active{% endif %}" data-category="{{ col.id }}">
+                    <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}"
+                            data-category="{{ col.id }}" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ col.id }}')">
+                        {{ col.name }}
+                    </button>
+                    <div class="sub-dropdown">
+                        <div class="dropdown-grid">
+                            {% for child in col.children %}
+                            <div class="dropdown-col">
+                                <div class="dropdown-col-title dropdown-col-title--link" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ child.id }}')">{{ child.name }}</div>
+                                {% if child.children %}
+                                {% for gc in child.children %}
+                                <div class="dd-item" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ gc.id }}')">{{ gc.name }}</div>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
                 <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}"
-                        data-category="{{ col.id }}" onclick="switchTab('{{ col.id }}')">
+                        data-category="{{ col.id }}" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ col.id }}')">
                     {{ col.name }}
                 </button>
+                {% endif %}
                 {% endfor %}
                 {% else %}
                 {# 降级：使用旧的 data.categories 渲染 #}

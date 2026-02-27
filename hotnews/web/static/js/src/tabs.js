@@ -5,11 +5,10 @@
 
 import { TR, ready } from './core.js';
 import { storage } from './storage.js';
-import { authState } from './auth-state.js';
+import { authState, requireLogin } from './auth-state.js';
 import { events } from './events.js';
 import { viewMode } from './view-mode.js';
 import { categoryTimeline } from './category-timeline.js';
-import { openLoginModal } from './login-modal.js';
 
 const TAB_STORAGE_KEY = 'hotnews_active_tab';
 const VIEWER_POS_STORAGE_KEY = 'hotnews_viewer_pos_v1';
@@ -160,10 +159,7 @@ function switchMainNav(nav) {
     if (nav === _currentMainNav) return;
 
     // 未登录用户点击"我的主题" → 弹登录弹窗，不切换
-    if (nav === 'topics' && !authState.isLoggedIn()) {
-        openLoginModal();
-        return;
-    }
+    if (nav === 'topics' && !requireLogin()) return;
 
     // 保存当前子栏目选中状态
     if (_currentMainNav === 'home') {

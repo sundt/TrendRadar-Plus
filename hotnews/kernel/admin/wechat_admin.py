@@ -92,11 +92,6 @@ def _get_online_db_conn(request: Request):
     return get_online_db_conn(request.app.state.project_root)
 
 
-def _get_session_token(request: Request) -> Optional[str]:
-    """Get session token from cookie."""
-    return request.cookies.get("hotnews_session")
-
-
 def _get_bearer_token(request: Request) -> Optional[str]:
     """Get Bearer token from Authorization header."""
     auth_header = request.headers.get("Authorization", "")
@@ -113,24 +108,19 @@ def _get_current_user(request: Request) -> Optional[Dict[str, Any]]:
     1. Session cookie (hotnews_session) - for web browser
     2. Bearer token in Authorization header - for browser plugin
     """
+    from hotnews.kernel.auth.deps import get_optional_user
     from hotnews.kernel.auth.auth_service import validate_session
     
-    conn = _get_user_db_conn(request)
-    
-    # Try session cookie first
-    session_token = _get_session_token(request)
-    if session_token:
-        try:
-            is_valid, user_info = validate_session(conn, session_token)
-            if is_valid and user_info:
-                return user_info
-        except Exception as e:
-            logger.error(f"Failed to validate session: {e}")
+    # Try session cookie first (via unified deps)
+    user = get_optional_user(request)
+    if user:
+        return user
     
     # Try Bearer token (for plugin)
     bearer_token = _get_bearer_token(request)
     if bearer_token:
         try:
+            conn = _get_user_db_conn(request)
             is_valid, user_info = validate_session(conn, bearer_token)
             if is_valid and user_info:
                 return user_info

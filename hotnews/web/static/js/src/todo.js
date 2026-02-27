@@ -3,8 +3,7 @@
  * 需要登录才能使用
  */
 
-import { authState } from './auth-state.js';
-import { openLoginModal } from './login-modal.js';
+import { authState, requireLogin } from './auth-state.js';
 import { preferences } from './preferences.js';
 
 // ============ 状态 ============
@@ -13,16 +12,6 @@ let todoShowAll = false;
 let todoSidebarOpen = false;
 let todoPanelOpen = false;
 let currentPanelGroupId = null;
-
-// ============ 登录检查 ============
-function requireLogin() {
-    const user = authState.getUser();
-    if (!user) {
-        openLoginModal();
-        return false;
-    }
-    return true;
-}
 
 // ============ 后端 API 交互 ============
 async function fetchTodos(groupId = null) {

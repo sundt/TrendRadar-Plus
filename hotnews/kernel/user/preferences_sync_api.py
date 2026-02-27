@@ -32,29 +32,21 @@ def _get_user_db_conn(request: Request):
     return get_user_db_conn(request.app.state.project_root)
 
 
+from hotnews.kernel.auth.deps import get_current_user as _get_current_user_base
+
+
 def _get_current_user(request: Request, user_id: Optional[int] = None) -> dict:
     """
     Get current user from session token or user_id parameter.
     Raises 401 if not authenticated.
     """
-    from hotnews.kernel.auth.auth_api import _get_session_token
-    from hotnews.kernel.auth.auth_service import validate_session
-    
-    session_token = _get_session_token(request)
-    if not session_token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    conn = _get_user_db_conn(request)
-    is_valid, user_info = validate_session(conn, session_token)
-    
-    if not is_valid or not user_info:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
+    user_info = _get_current_user_base(request)
+
     # If user_id is provided, verify it matches the authenticated user
     if user_id is not None:
         if user_id != user_info.get("id"):
             raise HTTPException(status_code=400, detail="Invalid user_id")
-    
+
     return user_info
 
 

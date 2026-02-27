@@ -1,4 +1,5 @@
 import { TR, ready } from './core.js';
+import { requireLogin } from './auth-state.js';
 
 function showConfirmDialog(message) {
     return new Promise((resolve) => {
@@ -927,26 +928,7 @@ export const platformReorder = {
 
                 if (action === 'follow' && isDiscovery && tagId) {
                     hideContextMenu();
-                    // Check if user is logged in
-                    const authState = window.authState || (window.HotNews && window.HotNews.authState);
-                    let isLoggedIn = false;
-                    try {
-                        if (authState && typeof authState.isLoggedIn === 'function') {
-                            isLoggedIn = authState.isLoggedIn();
-                        } else if (authState && typeof authState.getUser === 'function') {
-                            isLoggedIn = !!authState.getUser();
-                        }
-                    } catch (e) {
-                        console.error('Auth check failed:', e);
-                    }
-                    
-                    if (!isLoggedIn) {
-                        // Open login modal
-                        if (typeof window.openLoginModal === 'function') {
-                            window.openLoginModal();
-                        }
-                        return;
-                    }
+                    if (!requireLogin()) return;
                     
                     // Call follow API
                     const tagName = card.querySelector('.platform-name')?.textContent?.replace(/NEW.*$/, '').replace(/发现于.*$/, '').replace(/\(.*\)/, '').trim() || tagId;

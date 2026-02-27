@@ -91,22 +91,7 @@ def _get_user_db_conn(request: Request):
     return get_user_db_conn(request.app.state.project_root)
 
 
-def _get_current_user(request: Request) -> Optional[Dict[str, Any]]:
-    """Get current authenticated user."""
-    from hotnews.kernel.auth.auth_service import validate_session
-    
-    conn = _get_user_db_conn(request)
-    session_token = request.cookies.get("hotnews_session")
-    
-    if session_token:
-        try:
-            is_valid, user_info = validate_session(conn, session_token)
-            if is_valid and user_info:
-                return user_info
-        except Exception as e:
-            logger.error(f"Failed to validate session: {e}")
-    
-    return None
+from hotnews.kernel.auth.deps import get_optional_user as _get_current_user
 
 
 def _require_admin_auth(request: Request) -> bool:

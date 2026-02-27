@@ -249,7 +249,10 @@ const MobileEnhance = {
               break;
             }
           } catch (e) { /* ignore */ }
-          if (typeof window.openLoginModal === 'function') {
+          // 未登录 — 使用统一 requireLogin（已在 auth-state.js 中暴露到 window）
+          if (typeof window.requireLogin === 'function') {
+            window.requireLogin();
+          } else if (typeof window.openLoginModal === 'function') {
             window.openLoginModal();
           }
           break;

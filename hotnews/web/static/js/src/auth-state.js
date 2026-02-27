@@ -240,6 +240,30 @@ class AuthStateManager {
 // Singleton instance
 export const authState = new AuthStateManager();
 
+/**
+ * 统一的登录检查函数。
+ * 未登录时弹出登录弹窗，返回 false；已登录返回 true。
+ *
+ * @param {Object} [opts]
+ * @param {string} [opts.toast] - 可选的 Toast 提示文案
+ * @param {boolean} [opts.silent] - 为 true 时不弹登录弹窗
+ * @returns {boolean}
+ */
+export function requireLogin(opts = {}) {
+    if (authState.isLoggedIn()) return true;
+    if (opts.toast && window.Toast?.show) {
+        window.Toast.show(opts.toast, 'error');
+    }
+    if (!opts.silent) {
+        // 动态 import 避免循环依赖（login-modal → auth-state）
+        import('./login-modal.js').then(m => m.openLoginModal()).catch(() => {
+            // fallback: 尝试 window 上的全局函数
+            if (typeof window.openLoginModal === 'function') window.openLoginModal();
+        });
+    }
+    return false;
+}
+
 // Auto-initialize on module load
 (async () => {
     try {
@@ -278,3 +302,4 @@ export const authState = new AuthStateManager();
 
 // Expose to window for debugging
 window.authState = authState;
+window.requireLogin = requireLogin;
