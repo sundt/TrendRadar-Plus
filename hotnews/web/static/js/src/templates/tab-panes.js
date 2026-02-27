@@ -4,6 +4,7 @@
  */
 
 import { escapeHtml } from '../core.js';
+import { skeletonCards } from '../skeleton.js';
 
 export function renderRssColPane(catId, isActive) {
     const cls = isActive ? ' active' : '';
@@ -34,10 +35,7 @@ export function renderMyTagsPane(catId, isActive) {
     return `
         <div class="tab-pane${cls}" id="tab-${escapeHtml(catId)}">
             <div class="platform-grid" id="myTagsGrid">
-                <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                    <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
-                    <div style="font-size:16px;">加载中...</div>
-                </div>
+                ${skeletonCards(window.innerWidth <= 640 ? 1 : 3)}
             </div>
         </div>`;
 }
@@ -85,10 +83,7 @@ export function renderDiscoveryPane(catId, isActive) {
     return `
         <div class="tab-pane${cls}" id="tab-${escapeHtml(catId)}">
             <div class="platform-grid" id="discoveryGrid">
-                <div class="discovery-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                    <div style="font-size:48px;margin-bottom:16px;">✨</div>
-                    <div style="font-size:16px;">发现中...</div>
-                </div>
+                ${skeletonCards(window.innerWidth <= 640 ? 1 : 3)}
             </div>
         </div>`;
 }

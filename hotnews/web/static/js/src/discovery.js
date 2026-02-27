@@ -5,6 +5,7 @@
 
 import { formatNewsDate } from './core.js';
 import { events } from './events.js';
+import { skeletonCards } from './skeleton.js';
 
 const CATEGORY_ID = 'discovery';
 const INITIAL_CARDS_DESKTOP = 3;
@@ -164,7 +165,7 @@ async function _initialLoad() {
     _initialized = false;
     const myGen = _generation;
 
-    grid.innerHTML = `<div style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;"><div style="font-size:48px;margin-bottom:16px;">✨</div><div>发现中...</div></div>`;
+    grid.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3);
 
     try {
         const count = _getInitialCount();

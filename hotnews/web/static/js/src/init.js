@@ -299,6 +299,22 @@ ready(function () {
             }
             _bp(window._columnConfig, null);
             console.log('[Init] _columnConfig loaded (no-rebuild path)');
+
+            // _columnConfig 加载完成后，检查当前 active tab 是否是 tag-driven 栏目
+            // 如果是且 pane 为空（restoreActiveTab 在 _columnConfig 之前执行，数据未加载），
+            // 重新 switchTab 触发 categoryTimeline.load()
+            try {
+                const activeTab = TR.tabs.getActiveTabId();
+                if (activeTab) {
+                    const pane = document.getElementById(`tab-${activeTab}`);
+                    const grid = pane?.querySelector('.platform-grid');
+                    const isEmpty = grid && !grid.children.length;
+                    if (isEmpty) {
+                        console.log('[Init] Re-triggering switchTab for', activeTab, 'after _columnConfig loaded');
+                        TR.tabs.switchTab(activeTab);
+                    }
+                }
+            } catch (e) { /* ignore */ }
         }).catch(() => {});
 
         // Check for saved navigation state (back-navigation from WeChat etc.)

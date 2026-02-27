@@ -8,6 +8,7 @@
 import { formatNewsDate } from './core.js';
 import { authState } from './auth-state.js';
 import { events } from './events.js';
+import { skeletonCards } from './skeleton.js';
 
 const MY_TAGS_CATEGORY_ID = 'my-tags';
 const MY_TAGS_CACHE_KEY = 'hotnews_my_tags_cache';
@@ -405,12 +406,7 @@ async function loadMyTags(force = false) {
 
         // Show loading state
         console.log('[MyTags] Showing loading state...');
-        container.innerHTML = `
-            <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                <div style="font-size:48px;margin-bottom:16px;">🏷️</div>
-                <div style="font-size:16px;">加载中...</div>
-            </div>
-        `;
+        container.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3);
 
         // Fetch followed news (will use backend cache if available)
         console.log('[MyTags] Fetching followed news from API...');
