@@ -67,7 +67,9 @@ export const viewMode = {
             if (node) {
                 // fixed_view is a top-level field on the node (extracted from source_filter by backend)
                 if (node.fixed_view) return node.fixed_view;
-                // 没有 fixed_view 但在 column_config 中的栏目（如 finance 子分类）：走用户偏好，但默认 timeline
+                // 不可切换的栏目：忽略用户偏好，直接返回默认值
+                if (!this.canSwitch(cid)) return 'timeline';
+                // 可切换的栏目：走用户偏好，默认 timeline
                 const map = _load();
                 return map[cid] || 'timeline';
             }
