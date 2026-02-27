@@ -357,6 +357,25 @@
                 {% endif %}
             </div>
             {% endfor %}
+
+            {# SSR placeholder panes for ssr_columns not in data.categories (tag-driven columns) #}
+            {% macro render_ssr_placeholder_panes(columns, categories) %}
+                {% for col in columns %}
+                    {% if col.id not in categories %}
+                    <div class="tab-pane" id="tab-{{ col.id }}" data-lazy-load="1">
+                        <div class="platform-grid category-lazy-placeholder">
+                            <div class="lazy-placeholder-text">加载中...</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if col.children %}
+                        {{ render_ssr_placeholder_panes(col.children, categories) }}
+                    {% endif %}
+                {% endfor %}
+            {% endmacro %}
+            {% if ssr_columns %}
+                {{ render_ssr_placeholder_panes(ssr_columns, data.categories) }}
+            {% endif %}
         </div>
     </div>
 

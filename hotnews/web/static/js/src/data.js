@@ -1184,13 +1184,12 @@ window.fetchData = () => data.fetchData();
 window.refreshViewerData = (opts) => data.refreshViewerData(opts);
 
 /**
- * Tab 点击（含登录检查）
- * 未登录时弹登录弹窗，已登录时直接切换
+ * Tab 点击处理
+ * 所有浏览操作（tab 切换）无需登录，登录仅用于写操作（收藏、订阅等）
  */
 window.handleTabClickWithAuth = (categoryId) => {
     try {
-        const { authState } = window.TR || {};
-        // 需要登录的栏目：检查 _columnConfig 中的 require_login 字段
+        // 查找 _columnConfig 中的节点（用于 subtab 偏好记录等）
         const node = (() => {
             const tree = window._columnConfig;
             if (!Array.isArray(tree)) return null;
@@ -1203,10 +1202,6 @@ window.handleTabClickWithAuth = (categoryId) => {
             }
             return _s(tree);
         })();
-        if (node?.require_login && authState && !authState.isLoggedIn()) {
-            if (typeof window.openLoginModal === 'function') window.openLoginModal();
-            return;
-        }
         // 若点击的是子分类，记录到父栏目的 subtab 偏好
         if (window._columnParentMap && window._columnParentMap[categoryId] && window.TR?.tabs?.saveActiveSubTab) {
             window.TR.tabs.saveActiveSubTab(window._columnParentMap[categoryId], categoryId);

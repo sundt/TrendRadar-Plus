@@ -1053,18 +1053,8 @@ const MobileEnhance = {
       if (treeItem) {
         const nodeId = treeItem.dataset.id;
         const hasChildren = treeItem.dataset.hasChildren === 'true';
-        const requireLogin = treeItem.dataset.requireLogin === 'true';
-
-        if (requireLogin) {
-          try {
-            const isLoggedIn = _TR()?.authState?.isLoggedIn?.() || window.authState?.isLoggedIn?.();
-            if (!isLoggedIn) {
-              this._closeDrawer();
-              if (typeof window.openLoginModal === 'function') window.openLoginModal();
-              return;
-            }
-          } catch (ex) { /* ignore */ }
-        }
+        // requireLogin attribute kept on DOM for UI hints (e.g., lock icon),
+        // but browsing navigation is never blocked — "browse free, login for writes"
 
         if (hasChildren) {
           this._toggleNode(treeItem, nodeId);

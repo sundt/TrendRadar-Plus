@@ -362,14 +362,35 @@ export const tabs = {
             if (parentWrapperTab) tabEl = parentWrapperTab;
         }
 
-        if (!tabEl || !paneEl) {
-            // If this is a topic tab that hasn't been loaded yet by topic-tracker,
-            // keep the saved tab ID so topic-tracker can restore it later.
-            if (String(categoryId).startsWith('topic-')) {
-                console.log(`[Tabs] Topic tab ${categoryId} not yet loaded, preserving for later restore`);
-                storage.setRaw(TAB_STORAGE_KEY, categoryId);
-                return;
+        // Topic tab that hasn't been loaded yet by topic-tracker:
+        // keep the saved tab ID so topic-tracker can restore it later.
+        if ((!tabEl || !paneEl) && String(categoryId).startsWith('topic-')) {
+            console.log(`[Tabs] Topic tab ${categoryId} not yet loaded, preserving for later restore`);
+            storage.setRaw(TAB_STORAGE_KEY, categoryId);
+            return;
+        }
+
+        // Tab button exists but pane is missing (e.g. SSR rendered button
+        // for a tag-driven column before JS rebuild creates the pane).
+        // Dynamically create a placeholder pane so the tab switch can proceed.
+        if (tabEl && !paneEl) {
+            const contentArea = document.querySelector('.tab-content-area');
+            if (contentArea) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'tab-pane';
+                placeholder.id = `tab-${categoryId}`;
+                placeholder.dataset.lazyLoad = '1';
+                placeholder.innerHTML =
+                    '<div class="platform-grid category-lazy-placeholder">' +
+                    '<div class="lazy-placeholder-text">加载中...</div>' +
+                    '</div>';
+                contentArea.appendChild(placeholder);
             }
+        }
+
+        // Neither tab button nor pane exists — column truly doesn't exist,
+        // fall back to the first available tab.
+        if (!tabEl) {
             const firstTab = subTabsContainer
                 ? subTabsContainer.querySelector('.sub-tab[data-category]')
                 : document.querySelector('.sub-tab[data-category]');
