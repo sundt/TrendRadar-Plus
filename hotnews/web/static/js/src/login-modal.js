@@ -151,6 +151,12 @@ function startWechatQRCountdown(seconds) {
     const countdownText = document.getElementById('login-qr-countdown-text');
     
     if (!countdown || !countdownText) return;
+
+    // 清理旧的倒计时，防止多个 interval 同时跑
+    if (wechatQRCountdownTimer) {
+        clearInterval(wechatQRCountdownTimer);
+        wechatQRCountdownTimer = null;
+    }
     
     let remaining = seconds;
     countdown.style.display = 'block';
