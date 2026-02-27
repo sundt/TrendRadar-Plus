@@ -152,7 +152,9 @@ def _mb_ai_prompt_text() -> str:
         "• lifestyle: 有实用价值的生活资讯、消费趋势、文化深度 → include；纯广告/鸡汤 → exclude\n"
         "• sports: 赛事报道、深度分析 → include；纯比分/水文 → exclude\n"
         "• other: 不属于以上分类或无实质内容 → exclude\n"
-        "通用排除：标题党、营销软文、无实质信息、重复内容一律 exclude。\n\n"
+        "通用排除：标题党、营销软文、无实质信息、重复内容一律 exclude。\n"
+        "⚠️ 聚合型内容排除：标题包含多个不相关事件的合集（如'早报'、'晚报'、'日报'、'周刊'、'快讯合集'、'一周要闻'、'今日热点'，或用顿号/分号/竖线罗列3个以上事件），"
+        "这类内容与单独报道高度重复且信息密度低 → exclude，score≤30。\n\n"
         "输出格式（严格JSON数组）：\n"
         '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"region":"global","suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9,"keywords":["DeepSeek","深度求索"]}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
         "⚠️ 关键：输出数组长度必须与输入完全一致，不得跳过任何条目。\n\n"
@@ -162,6 +164,7 @@ def _mb_ai_prompt_text() -> str:
         '{"title":"美联储宣布加息25个基点"} → {"category":"finance","topics":["macro"],"attributes":["breaking"],"region":"us","action":"include","score":88,"confidence":0.95,"reason":"美联储加息"}\n'
         '{"title":"A股三大指数收涨"} → {"category":"finance","topics":["stock"],"attributes":["breaking"],"region":"cn","action":"exclude","score":20,"confidence":0.95,"reason":"纯行情播报"}\n'
         '{"title":"请反复阅读！全球畅销百万的经典"} → {"category":"education","topics":[],"attributes":[],"region":"global","action":"exclude","score":10,"confidence":0.92,"reason":"营销软文"}\n'
+        '{"title":"AI早报：OpenAI发布GPT-5、谷歌推出Gemini 3、苹果收购AI公司、微软更新Copilot"} → {"category":"tech","topics":["ai_ml"],"attributes":[],"region":"global","action":"exclude","score":15,"confidence":0.95,"reason":"聚合早报"}\n'
     )
 
 
