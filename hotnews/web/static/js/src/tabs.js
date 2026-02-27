@@ -373,17 +373,14 @@ export const tabs = {
         // Tab button exists but pane is missing (e.g. SSR rendered button
         // for a tag-driven column before JS rebuild creates the pane).
         // Dynamically create a placeholder pane so the tab switch can proceed.
+        // 结构与 renderThemePane 一致，由 categoryTimeline.load() 填充内容。
         if (tabEl && !paneEl) {
             const contentArea = document.querySelector('.tab-content-area');
             if (contentArea) {
                 const placeholder = document.createElement('div');
                 placeholder.className = 'tab-pane';
                 placeholder.id = `tab-${categoryId}`;
-                placeholder.dataset.lazyLoad = '1';
-                placeholder.innerHTML =
-                    '<div class="platform-grid category-lazy-placeholder">' +
-                    '<div class="lazy-placeholder-text">加载中...</div>' +
-                    '</div>';
+                placeholder.innerHTML = '<div class="platform-grid"></div>';
                 contentArea.appendChild(placeholder);
             }
         }

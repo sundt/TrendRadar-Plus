@@ -285,6 +285,22 @@ ready(function () {
         // so they can safely consume nav state on their first load.
         window._trNoRebuildExpected = true;
 
+        // 加载 _columnConfig，使 tag-driven 栏目（AI、开发者等）的
+        // viewMode / categoryTimeline 能正确工作（SSR 不会调用 renderViewerFromData）
+        fetch('/api/columns').then(r => r.ok ? r.json() : null).then(d => {
+            if (!d) return;
+            window._columnConfig = Array.isArray(d) ? d : (d.columns || []);
+            window._columnParentMap = {};
+            function _bp(nodes, pid) {
+                for (const n of nodes) {
+                    if (pid) window._columnParentMap[String(n.id)] = pid;
+                    if (Array.isArray(n.children) && n.children.length) _bp(n.children, String(n.id));
+                }
+            }
+            _bp(window._columnConfig, null);
+            console.log('[Init] _columnConfig loaded (no-rebuild path)');
+        }).catch(() => {});
+
         // Check for saved navigation state (back-navigation from WeChat etc.)
         // When there's no custom config, refreshViewerData won't be called,
         // so we need to restore scroll position here.

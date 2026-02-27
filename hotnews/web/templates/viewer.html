@@ -359,13 +359,12 @@
             {% endfor %}
 
             {# SSR placeholder panes for ssr_columns not in data.categories (tag-driven columns) #}
+            {# 不设 data-lazy-load：这些栏目由 categoryTimeline.load() 加载，不走 _loadCategoryData #}
             {% macro render_ssr_placeholder_panes(columns, categories) %}
                 {% for col in columns %}
                     {% if col.id not in categories %}
-                    <div class="tab-pane" id="tab-{{ col.id }}" data-lazy-load="1">
-                        <div class="platform-grid category-lazy-placeholder">
-                            <div class="lazy-placeholder-text">加载中...</div>
-                        </div>
+                    <div class="tab-pane" id="tab-{{ col.id }}">
+                        <div class="platform-grid"></div>
                     </div>
                     {% endif %}
                     {% if col.children %}
