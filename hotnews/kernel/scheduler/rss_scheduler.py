@@ -66,7 +66,7 @@ _tag_promotion_running: bool = False
 _tag_promotion_last_run_date: str = ""
 
 
-_MB_AI_PROMPT_VERSION = "mb_llm_filter_v5_multilabel"  # Multi-label with topics and attributes
+_MB_AI_PROMPT_VERSION = "mb_llm_filter_v6_multilabel_region"  # Multi-label with topics, attributes, and region
 _MB_AI_ALLOWED_CATEGORIES = {"AI_MODEL", "DEV_INFRA", "HARDWARE_PRO"}
 _MB_AI_SCORE_MIN = 75
 _MB_AI_CONFIDENCE_MIN = 0.70
@@ -113,13 +113,20 @@ def _mb_ai_extract_domain(url: str) -> str:
 
 
 def _mb_ai_prompt_text() -> str:
-    """v5_multilabel: Multi-label classification with category, topics, and attributes + dynamic tag discovery"""
+    """v6_multilabel_region: Multi-label classification with category, topics, attributes, region + dynamic tag discovery"""
     return (
         "任务：对新闻进行多维度分类打标签。输入N条，必须输出N条JSON。\n\n"
         "分类维度：\n"
-        "1. category (必填，单选): tech, finance, business, entertainment, sports, health, science, lifestyle, education, other\n"
+        "1. category (必填，单选，只能从以下10个中选): tech, finance, business, entertainment, sports, health, science, lifestyle, education, other\n"
+        "   ⚠️ category 必须严格使用上述10个值之一，禁止使用其他值（如law→other, politics→other, cybersecurity→tech, gaming→entertainment, automotive→lifestyle）\n"
         "2. topics (选填，最多3个): ai_ml, llm, dev_tools, programming, database, cloud, cybersecurity, hardware, mobile, web3, gaming, robotics, iot, vr_ar, opensource, stock, crypto, macro, startup, ecommerce\n"
-        "3. attributes (选填，最多2个): free_deal, tutorial, deep_dive, breaking, official, opinion, tool_rec, career, event\n\n"
+        "3. attributes (选填，最多2个): free_deal, tutorial, deep_dive, breaking, official, opinion, tool_rec, career, event\n"
+        "4. region (必填，单选): cn, us, global\n\n"
+        "region 判断标准：\n"
+        "• cn: 明确涉及中国大陆市场、政策、企业、A股、人民币、央行、国内城市/省份\n"
+        "• us: 明确涉及美国市场、美联储、美股、纳斯达克、硅谷、美国企业/政策\n"
+        "• global: 全球性话题、跨地域、无明确单一地域、或涉及其他国家/地区\n"
+        "• 如果同时涉及中美，选择主要讨论的那个；如果均等则选 global\n\n"
         "属性判断标准：\n"
         "• free_deal: 包含'免费'、'0元'、'限时'、'薅羊毛'、'开源免费'、'限免'、'优惠'、'折扣'\n"
         "• tutorial: 包含'教程'、'实战'、'手把手'、'从零开始'、'入门指南'\n"
@@ -147,15 +154,14 @@ def _mb_ai_prompt_text() -> str:
         "• other: 不属于以上分类或无实质内容 → exclude\n"
         "通用排除：标题党、营销软文、无实质信息、重复内容一律 exclude。\n\n"
         "输出格式（严格JSON数组）：\n"
-        '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9,"keywords":["DeepSeek","深度求索"]}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
+        '[{"id":"...","category":"tech","topics":["ai_ml","opensource"],"attributes":["free_deal"],"region":"global","suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.9,"keywords":["DeepSeek","深度求索"]}],"action":"include|exclude","score":0-100,"confidence":0.0-1.0,"reason":"<8字"}]\n\n'
         "⚠️ 关键：输出数组长度必须与输入完全一致，不得跳过任何条目。\n\n"
         "示例：\n"
-        '{"title":"免费使用Claude API教程"} → {"category":"tech","topics":["ai_ml"],"attributes":["free_deal","tutorial"],"action":"include","score":90,"confidence":0.95,"reason":"免费AI教程"}\n'
-        '{"title":"DeepSeek发布新模型"} → {"category":"tech","topics":["ai_ml","llm"],"attributes":["official"],"suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.95,"keywords":["DeepSeek","深度求索","深求"]}],"action":"include","score":92,"confidence":0.95,"reason":"AI新模型"}\n'
-        '{"title":"斯坦福团队开发通用鼻喷疫苗"} → {"category":"health","topics":[],"attributes":["breaking"],"action":"include","score":85,"confidence":0.90,"reason":"疫苗研究突破"}\n'
-        '{"title":"日本松下被中国电池企业干趴下"} → {"category":"business","topics":["startup"],"attributes":["deep_dive"],"action":"include","score":82,"confidence":0.88,"reason":"中日电池竞争"}\n'
-        '{"title":"A股三大指数收涨"} → {"category":"finance","topics":["stock"],"attributes":["breaking"],"action":"exclude","score":20,"confidence":0.95,"reason":"纯行情播报"}\n'
-        '{"title":"请反复阅读！全球畅销百万的经典"} → {"category":"education","topics":[],"attributes":[],"action":"exclude","score":10,"confidence":0.92,"reason":"营销软文"}\n'
+        '{"title":"免费使用Claude API教程"} → {"category":"tech","topics":["ai_ml"],"attributes":["free_deal","tutorial"],"region":"global","action":"include","score":90,"confidence":0.95,"reason":"免费AI教程"}\n'
+        '{"title":"DeepSeek发布新模型"} → {"category":"tech","topics":["ai_ml","llm"],"attributes":["official"],"region":"cn","suggested_tags":[{"id":"deepseek","name":"DeepSeek","type":"topic","parent_id":"tech","confidence":0.95,"keywords":["DeepSeek","深度求索","深求"]}],"action":"include","score":92,"confidence":0.95,"reason":"AI新模型"}\n'
+        '{"title":"美联储宣布加息25个基点"} → {"category":"finance","topics":["macro"],"attributes":["breaking"],"region":"us","action":"include","score":88,"confidence":0.95,"reason":"美联储加息"}\n'
+        '{"title":"A股三大指数收涨"} → {"category":"finance","topics":["stock"],"attributes":["breaking"],"region":"cn","action":"exclude","score":20,"confidence":0.95,"reason":"纯行情播报"}\n'
+        '{"title":"请反复阅读！全球畅销百万的经典"} → {"category":"education","topics":[],"attributes":[],"region":"global","action":"exclude","score":10,"confidence":0.92,"reason":"营销软文"}\n'
     )
 
 
@@ -228,6 +234,7 @@ def _mb_ai_normalize_row(out: Any) -> Dict[str, Any]:
             "category": "other",
             "topics": [],
             "attributes": [],
+            "region": "global",
             "action": "exclude",
             "score": 0,
             "confidence": 0.0,
@@ -235,6 +242,27 @@ def _mb_ai_normalize_row(out: Any) -> Dict[str, Any]:
             "error": "invalid_output",
         }
     category = str(out.get("category") or "other").strip().lower() or "other"
+    # Enforce category whitelist — map common AI mistakes to valid categories
+    _VALID_CATEGORIES = {"tech", "finance", "business", "entertainment", "sports", "health", "science", "lifestyle", "education", "other"}
+    _CATEGORY_REMAP = {
+        "technology": "tech", "cybersecurity": "tech", "security": "tech",
+        "gaming": "entertainment", "games": "entertainment",
+        "politics": "other", "government": "other", "law": "other", "society": "other",
+        "world": "other", "international": "other",
+        "automotive": "lifestyle", "travel": "lifestyle", "food": "lifestyle",
+        "career": "education",
+        "energy": "science", "environment": "science", "weather": "science",
+        "real_estate": "finance", "economy": "finance",
+        "media": "entertainment", "culture": "lifestyle",
+        "military": "other", "crime": "other",
+        "agriculture": "business", "transportation": "lifestyle",
+        "design": "tech", "psychology": "health", "infrastructure": "tech",
+        "social": "other", "news": "other", "local": "other",
+        "philosophy": "education", "history": "education", "literature": "education",
+        "religion": "other", "geopolitics": "other",
+    }
+    if category not in _VALID_CATEGORIES:
+        category = _CATEGORY_REMAP.get(category, "other")
     action = str(out.get("action") or "exclude").strip().lower() or "exclude"
     if action not in {"include", "exclude"}:
         action = "exclude"
@@ -298,6 +326,7 @@ def _mb_ai_normalize_row(out: Any) -> Dict[str, Any]:
         "topics": topics,
         "attributes": attributes,
         "suggested_tags": suggested_tags,
+        "region": str(out.get("region") or "global").strip().lower() if str(out.get("region") or "").strip().lower() in ("cn", "us", "global") else "global",
         "action": action,
         "score": score,
         "confidence": confidence,
@@ -418,7 +447,7 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
 
         norm = _mb_ai_normalize_row(out)
 
-        # Relaxed inclusion for v5: include if score >= 60 and confidence >= 0.5
+        # Relaxed inclusion: include if score >= 60 and confidence >= 0.5
         if norm.get("action") == "include":
             if int(norm.get("score") or 0) < 60 or float(norm.get("confidence") or 0) < 0.5:
                 norm["action"] = "exclude"
@@ -461,6 +490,11 @@ def _mb_ai_store_labels(conn, entries: List[Dict[str, Any]], outputs: List[Dict[
         for attr in (norm.get("attributes") or []):
             if attr:
                 tag_rows.append((sid, dk[:500], attr, confidence, "ai", labeled_at))
+
+        # Add region as tag (region:cn, region:us, region:global)
+        region = str(norm.get("region") or "global").strip().lower()
+        if region in ("cn", "us", "global"):
+            tag_rows.append((sid, dk[:500], f"region:{region}", confidence, "ai", labeled_at))
 
     if not rows:
         return
