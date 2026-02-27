@@ -235,7 +235,7 @@ function bindPanelEvents(panel, url, title) {
     }
 
     if (target.classList.contains('hn-cp-reaction') && !target.classList.contains('hn-cp-add-reaction')) {
-      if (!authState.isLoggedIn) { openLoginModal(); return; }
+      if (!authState.isLoggedIn()) { openLoginModal(); return; }
       const cid = target.dataset.commentId;
       const emoji = target.dataset.emoji;
       optimisticToggleReaction(target, cid, emoji);
@@ -243,7 +243,7 @@ function bindPanelEvents(panel, url, title) {
     }
 
     if (target.classList.contains('hn-cp-add-reaction')) {
-      if (!authState.isLoggedIn) { openLoginModal(); return; }
+      if (!authState.isLoggedIn()) { openLoginModal(); return; }
       showEmojiPicker(target);
       return;
     }
@@ -264,7 +264,7 @@ function bindPanelEvents(panel, url, title) {
     }
 
     if (target.classList.contains('hn-cp-reply-btn')) {
-      if (!authState.isLoggedIn) { openLoginModal(); return; }
+      if (!authState.isLoggedIn()) { openLoginModal(); return; }
       showReplyInput(target);
       return;
     }
@@ -445,7 +445,7 @@ async function refreshPanelComments(panel, url, title) {
   panel.querySelector('.hn-cp-header').after(hint);
 
   // Input area
-  if (authState.isLoggedIn) {
+  if (authState.isLoggedIn()) {
     const inputArea = document.createElement('div');
     inputArea.className = 'hn-cp-input-area';
     inputArea.innerHTML = `<textarea class="hn-cp-textarea" rows="1" placeholder="写评论…"></textarea><button class="hn-cp-submit">发送</button>`;
