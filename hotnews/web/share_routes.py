@@ -37,6 +37,35 @@ def _ensure_share_table(conn):
     conn.commit()
 
 
+def _escape_attr(value: str) -> str:
+    """Escape value for safe use in HTML attribute context."""
+    return (value
+            .replace('&', '&amp;')
+            .replace('"', '&quot;')
+            .replace("'", '&#x27;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;'))
+
+
+def _escape_html(value: str) -> str:
+    """Escape value for safe use in HTML text content."""
+    return (value
+            .replace('&', '&amp;')
+            .replace('<', '&lt;')
+            .replace('>', '&gt;'))
+
+
+def _safe_url(url: str) -> str:
+    """Only allow http/https URLs to prevent javascript: injection."""
+    try:
+        from urllib.parse import urlparse
+        if urlparse(url).scheme in ('http', 'https'):
+            return url
+    except Exception:
+        pass
+    return '#'
+
+
 def _render_markdown_to_html(md_text: str) -> str:
     """Simple markdown to HTML conversion."""
     import re
@@ -107,35 +136,42 @@ async def share_page(request: Request, share_id: str):
         """, status_code=404)
     
     title, url, summary, article_type, created_at = row
-    
+
     # Increment view count
     conn.execute("UPDATE summary_shares SET view_count = view_count + 1 WHERE share_id = ?", (share_id,))
     conn.commit()
-    
+
     # Convert markdown to HTML
     summary_html = _render_markdown_to_html(summary)
-    
+
     # Format date
     from datetime import datetime
     date_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d %H:%M') if created_at else ''
-    
+
     # Extract domain from URL
     try:
         from urllib.parse import urlparse
         domain = urlparse(url).netloc.replace('www.', '')
-    except:
+    except Exception:
         domain = ''
-    
+
+    # Escape all user-controlled values before embedding in HTML
+    title_html = _escape_html(title)
+    title_attr = _escape_attr(title)
+    summary_attr = _escape_attr(summary[:150])
+    safe_url = _escape_attr(_safe_url(url))
+    domain_html = _escape_html(domain)
+
     html = f"""
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title} - uihash 总结</title>
-    <meta name="description" content="{summary[:150]}...">
-    <meta property="og:title" content="{title}">
-    <meta property="og:description" content="{summary[:150]}...">
+    <title>{title_html} - uihash 总结</title>
+    <meta name="description" content="{summary_attr}...">
+    <meta property="og:title" content="{title_attr}">
+    <meta property="og:description" content="{summary_attr}...">
     <meta property="og:type" content="article">
     <link rel="icon" href="/static/images/hxlogo.webp" type="image/webp">
     <style>
@@ -286,10 +322,10 @@ async def share_page(request: Request, share_id: str):
         </div>
         <div class="card">
             <div class="card-header">
-                <h1 class="card-title">{title}</h1>
+                <h1 class="card-title">{title_html}</h1>
                 <div class="card-meta">
                     <span>{date_str}</span>
-                    {f'<span>{domain}</span>' if domain else ''}
+                    {f'<span>{domain_html}</span>' if domain else ''}
                 </div>
             </div>
             <div class="divider"></div>
@@ -297,7 +333,7 @@ async def share_page(request: Request, share_id: str):
                 {summary_html}
             </div>
             <div class="card-footer">
-                <a href="{url}" target="_blank" rel="noopener noreferrer" class="source-link">阅读原文 →</a>
+                <a href="{safe_url}" target="_blank" rel="noopener noreferrer" class="source-link">阅读原文 →</a>
                 <span class="powered"><a href="https://hot.uihash.com" target="_blank">uihash智能总结</a></span>
             </div>
         </div>

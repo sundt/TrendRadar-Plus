@@ -2,8 +2,10 @@ import json
 import os
 from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
+
+from hotnews.web.deps import require_admin
 
 from mcp_server.services.cache_service import get_cache
 
@@ -49,7 +51,7 @@ async def health():
 
 
 @router.post("/api/scheduler/start")
-async def api_start_scheduler(request: Request, interval: int = Query(30, ge=5, le=1440)):
+async def api_start_scheduler(request: Request, interval: int = Query(30, ge=5, le=1440), _: str = Depends(require_admin)):
     if not auto_fetch_scheduler:
          return UnicodeJSONResponse(content={"success": False, "message": "Scheduler module not available"}, status_code=501)
     
@@ -65,7 +67,7 @@ async def api_start_scheduler(request: Request, interval: int = Query(30, ge=5, 
 
 
 @router.post("/api/scheduler/stop")
-async def api_stop_scheduler():
+async def api_stop_scheduler(_: str = Depends(require_admin)):
     if not auto_fetch_scheduler:
          return UnicodeJSONResponse(content={"success": False, "message": "Scheduler module not available"}, status_code=501)
     auto_fetch_scheduler.stop_scheduler()
@@ -73,7 +75,7 @@ async def api_stop_scheduler():
 
 
 @router.get("/api/scheduler/status")
-async def api_scheduler_status():
+async def api_scheduler_status(_: str = Depends(require_admin)):
     status = {
         "auto_fetch": {
             "available": False,
@@ -119,7 +121,7 @@ async def api_scheduler_status():
 
 
 @router.post("/api/fetch")
-async def api_fetch_now(request: Request):
+async def api_fetch_now(request: Request, _: str = Depends(require_admin)):
     fn = _get_fetch_news_data(request)
     result = await fn()
     try:

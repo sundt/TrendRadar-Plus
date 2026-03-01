@@ -6,7 +6,7 @@ description: 创建自定义新闻源爬虫
 # 创建新闻源爬虫
 
 ## 概述
-本 Skill 指导如何为新的新闻网站创建自定义爬虫 Provider，并提供**16个生产环境验证的成功案例**作为参考。
+本 Skill 指导如何为新的新闻网站创建自定义爬虫 Provider，并提供**17个生产环境验证的成功案例**作为参考。
 
 ## 🔍 API 发现方法论（100% 成功率）
 
@@ -52,6 +52,8 @@ Step 5: 如果有签名，从 JS 逆向破解
 - **同站多套 API 模式**：eeo.com.cn 首页用 `synPage` action，频道页用 `getMoreArticle` + UUID，快讯用 `catid`，需分别处理
 - **SSR 内嵌 JSON 数据量可能很大**：yicai.com 首页 HTML 约 1MB，其中 `var headList=[...]` 内嵌 300 条完整文章 JSON，无需额外 API 请求
 - **内嵌 JSON 变量名不固定**：有的用 `var xxx = [...]`，有的用 `xxx=[...]`（无 var、无空格），正则需兼容两种写法
+- **Next.js/Nuxt.js 用 __NEXT_DATA__/__NUXT__**：现代 SSR 框架将数据序列化在 `<script id="__NEXT_DATA__">` 中，需递归查找深层嵌套的文章数组
+- **SSR 内嵌数据结构深度不一**：shareuhack.com 的文章数组嵌套在 pageProps 多层之下，需递归搜索而非硬编码路径
 
 
 ---
@@ -75,7 +77,9 @@ flowchart TD
     Q6 -->|是| E10[hackernews_stories.py]
     Q6 -->|否| E7
     Q1 -->|POST JSON 热榜| E11[juejin_hot.py]
-    Q1 -->|SSR 内嵌 JSON| E15[yicai_news.py]
+    Q1 -->|SSR 内嵌 JSON| Q8{内嵌方式?}
+    Q8 -->|var 变量| E15[yicai_news.py]
+    Q8 -->|__NEXT_DATA__| E16[shareuhack_news.py]
     Q2 -->|需要签名| E8[cls_depth_api.py]
     Q2 -->|不需要| Q4{JSON 结构?}
     Q4 -->|简单平铺| E1[sina_tech_roll.py]
@@ -93,7 +97,7 @@ flowchart TD
 ```
 
 
-### 成功案例库（16个）
+### 成功案例库（17个）
 
 | 案例脚本 | 适用场景 | 关键技术 | 难度 |
 |---------|---------|----------|------|
@@ -102,7 +106,8 @@ flowchart TD
 | [sina_tech_roll.py](examples/sina_tech_roll.py) | 简单 JSON API | 参数请求 | ⭐ |
 | [juejin_hot.py](examples/juejin_hot.py) | POST JSON 热榜 | sort_type + hot_index 排序 | ⭐ |
 | [eeo_news.py](examples/eeo_news.py) | 开放 JSON API 多套接口 | 首页/频道/快讯三套 API | ⭐ |
-| [yicai_news.py](examples/yicai_news.py) | SSR 内嵌 JSON | 首页 HTML 内嵌 300 条 JSON、频道筛选 | ⭐ |
+| [yicai_news.py](examples/yicai_news.py) | SSR 内嵌 JSON (var 变量) | 首页 HTML 内嵌 300 条 JSON、频道筛选 | ⭐ |
+| [shareuhack_news.py](examples/shareuhack_news.py) | Next.js SSR 内嵌 JSON | __NEXT_DATA__ 提取、递归查找、ISO 8601 时间 | ⭐ |
 | [gelonghui_hot.py](examples/gelonghui_hot.py) | 开放 API 多板块 | 多 source 分支 | ⭐⭐ |
 | [wallstreetcn_articles.py](examples/wallstreetcn_articles.py) | 多分类 API | 同域猜测、data_path 差异 | ⭐⭐ |
 | [wallstreetcn_flash.py](examples/wallstreetcn_flash.py) | 多频道轮询 | 去重、排序 | ⭐⭐ |

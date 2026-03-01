@@ -715,16 +715,13 @@ async def detect_custom_source(req: DetectRequest, request: Request, _=Depends(_
     try:
         # Try fetching with requests
         # Try fetching with requests
-        # Retry with verify=False if SSLError
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         try:
             res = requests.get(url, headers=headers, timeout=10)
         except requests.exceptions.SSLError:
-            # SSL Verification: Default to True
-            ssl_verify = os.environ.get("HOTNEWS_SSL_VERIFY", "true").lower() == "true"
-            res = requests.get(url, headers=headers, timeout=10, verify=ssl_verify)
+            res = requests.get(url, headers=headers, timeout=10, verify=True)
         except Exception as e:
             # Check for 403 specifically
             if hasattr(e, 'response') and e.response is not None and e.response.status_code == 403:

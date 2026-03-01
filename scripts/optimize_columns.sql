@@ -46,7 +46,7 @@ DELETE FROM column_config WHERE id IN ('sci-frontier-quantum', 'sci-frontier-ufo
 
 -- ==================== 确认 gold_price_surge 标签存在 ====================
 INSERT OR IGNORE INTO tags (id, name, name_en, type, parent_id, is_dynamic, lifecycle, usage_count, created_at, updated_at)
-VALUES ('gold_price_surge', '金价暴涨', 'Gold Price Surge', 'topic', 'finance', 1, 'active', 0, strftime('%s','now'), strftime('%s','now'));
+VALUES ('gold_price_surge', '金价暴涨', 'Gold Price Surge', 'topic', 'finance', 0, 'active', 0, strftime('%s','now'), strftime('%s','now'));
 
 -- 确认 gold 标签存在
 INSERT OR IGNORE INTO tags (id, name, name_en, type, parent_id, is_dynamic, lifecycle, usage_count, created_at, updated_at)

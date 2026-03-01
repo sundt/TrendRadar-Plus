@@ -276,8 +276,8 @@ async def search_news(
         )
         
     except Exception as e:
-        logger.error(f"Search failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Search failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="搜索服务暂时不可用")
 
 
 @router.get("/latest", response_model=SearchResponse)
@@ -326,5 +326,5 @@ async def get_latest_news(
         )
         
     except Exception as e:
-        logger.error(f"Get latest failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Get latest failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取新闻失败，请稍后重试")
