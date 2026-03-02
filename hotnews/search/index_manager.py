@@ -64,9 +64,15 @@ class SearchIndexManager:
         if self.vector_index is not None and not getattr(self.vector_index, "_available", True):
             self.vector_index = None
 
-        # 索引状态
+        # 索引状态：若 FTS 数据库已有数据则直接标为已构建，避免新 worker 启动时重建索引
         self._last_update: Optional[datetime] = None
-        self._built = False
+        try:
+            stats = self.fts_index.get_stats()
+            self._built = stats.get("total_items", 0) > 0
+            if self._built:
+                logger.info(f"使用现有 FTS 索引: {stats['total_items']} 条记录")
+        except Exception:
+            self._built = False
 
         # 搜索缓存: {cache_key: (timestamp, results)}
         self._search_cache: Dict[str, tuple] = {}

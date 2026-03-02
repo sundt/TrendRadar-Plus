@@ -56,25 +56,6 @@
             }
         }
 
-        .tr-newdot {
-            display: none;
-            width: 10px;
-            height: 10px;
-            border-radius: 999px;
-            background: #dc3545;
-            border: 0;
-            padding: 0;
-            margin-right: 6px;
-        }
-
-        .platform-card.tr-has-new .tr-newdot {
-            display: inline-block;
-        }
-
-        .tr-newdot:focus {
-            outline: 2px solid rgba(220, 53, 69, 0.35);
-            outline-offset: 2px;
-        }
     </style>
 </head>
 <body>
@@ -83,7 +64,7 @@
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <a href="/" class="btn btn-sm btn-outline-secondary">返回</a>
                 <div class="flex-grow-1" style="min-width: 240px;">
-                    <input id="searchQuery" type="text" class="form-control form-control-sm" placeholder="🔍 跨日期搜索..." value="{{ q or '' }}" />
+                    <input id="searchQuery" type="text" class="form-control form-control-sm" placeholder="🔍 跨日期搜索..." value="{{ q or '' }}" autocomplete="off" />
                 </div>
                 <select id="searchMode" class="form-select form-select-sm" style="width: 140px;">
                     <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>混合</option>
@@ -103,6 +84,18 @@
 
     <script>
         (function() {
+            var _skeletonWidths = [80, 65, 75, 90, 60, 72, 85, 68];
+            function _makeSkeletonItems(n) {
+                var html = '';
+                for (var i = 0; i < n; i++) {
+                    var w = _skeletonWidths[i % _skeletonWidths.length];
+                    html += '<li style="list-style:none;padding:9px 4px;border-bottom:1px solid #f3f4f6;" aria-hidden="true">' +
+                        '<div class="tr-skeleton-bar" style="height:14px;border-radius:3px;width:' + w + '%;"></div>' +
+                        '</li>';
+                }
+                return html;
+            }
+
             function getParams() {
                 try {
                     return new URLSearchParams(window.location.search || '');
@@ -122,70 +115,9 @@
 
             var panelsEl = document.getElementById('searchPanels');
             var panelSeq = 1;
-            var STORAGE_KEY = 'hotnews_search_panels_v1';
-            var SEEN_KEY = 'hotnews_search_seen_v1';
-            var MAX_SAVED_PANELS = 20;
-            var MAX_SEEN_PER_PANEL = 400;
-            var CHECK_LIMIT = 30;
-            var CHECK_TICK_MS = 7000;
-            var isRestoring = false;
-            var _seenMap = (function() {
-                try {
-                    var raw = localStorage.getItem(SEEN_KEY);
-                    if (!raw) return {};
-                    var obj = JSON.parse(raw);
-                    return obj && typeof obj === 'object' ? obj : {};
-                } catch (e) {
-                    return {};
-                }
-            })();
 
-            function _panelKey(q, mode) {
-                return String(q || '').trim() + '||' + String(mode || 'hybrid').trim();
-            }
 
-            function _persistSeen() {
-                try {
-                    localStorage.setItem(SEEN_KEY, JSON.stringify(_seenMap || {}));
-                } catch (e) {
-                }
-            }
 
-            function _pruneSeenByPanels() {
-                try {
-                    if (!_seenMap || typeof _seenMap !== 'object') _seenMap = {};
-                    var keep = new Set();
-                    var children = Array.from(panelsEl?.children || []);
-                    for (var i = 0; i < children.length; i++) {
-                        var el = children[i];
-                        var q = String(el?.dataset?.query || '').trim();
-                        var m = String(el?.dataset?.mode || 'hybrid').trim() || 'hybrid';
-                        if (!q) continue;
-                        keep.add(_panelKey(q, m));
-                    }
-                    var keys = Object.keys(_seenMap || {});
-                    for (var j = 0; j < keys.length; j++) {
-                        var k = keys[j];
-                        if (!keep.has(k)) {
-                            try { delete _seenMap[k]; } catch (e2) {}
-                        }
-                    }
-                } catch (e) {
-                }
-            }
-
-            function _setPanelHasNew(wrap, hasNew) {
-                if (!wrap) return;
-                try {
-                    if (hasNew) wrap.classList.add('tr-has-new');
-                    else wrap.classList.remove('tr-has-new');
-                } catch (e) {
-                }
-                try {
-                    wrap.dataset.hasNew = hasNew ? '1' : '0';
-                } catch (e) {
-                }
-            }
 
             function _formatNow() {
                 try {
@@ -219,38 +151,6 @@
             }
 
 
-            function _persistPanels() {
-                if (isRestoring) return;
-                if (!panelsEl) return;
-                try {
-                    var items = [];
-                    var children = Array.from(panelsEl.children || []);
-                    for (var i = 0; i < children.length; i++) {
-                        var el = children[i];
-                        var q = el?.dataset?.query || '';
-                        var mode = el?.dataset?.mode || '';
-                        var createdAt = el?.dataset?.createdAt || '';
-                        if (!q) continue;
-                        items.push({ q: q, mode: mode || 'hybrid', createdAt: createdAt || String(Date.now()) });
-                        if (items.length >= MAX_SAVED_PANELS) break;
-                    }
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-                    _pruneSeenByPanels();
-                    _persistSeen();
-                } catch (e) {
-                }
-            }
-
-            function _loadPanels() {
-                try {
-                    var raw = localStorage.getItem(STORAGE_KEY);
-                    if (!raw) return [];
-                    var arr = JSON.parse(raw);
-                    return Array.isArray(arr) ? arr : [];
-                } catch (e) {
-                    return [];
-                }
-            }
 
             function _findExistingPanel(q, mode) {
                 if (!panelsEl) return null;
@@ -290,93 +190,59 @@
                     '<span class="header-subtitle" style="margin-left: 10px;">' + esc(mode) + ' · ' + esc(timeText) + '</span>' +
                     '</div>' +
                     '<div class="platform-header-actions">' +
-                    '<button type="button" class="tr-newdot" data-action="newdot" title="有新结果，点击刷新" aria-label="有新结果"></button>' +
-                    '<button type="button" class="btn btn-sm btn-outline-primary" data-action="refresh">刷新</button>' +
+                    '<button type="button" class="btn btn-sm btn-outline-success" data-action="follow">关注</button>' +
                     '<button type="button" class="btn btn-sm btn-outline-danger" data-action="remove">删除</button>' +
                     '</div>' +
                     '</div>';
 
                 wrap.innerHTML = header +
                     '<div class="tr-panel-body" data-role="body">' +
-                    '<div class="news-placeholder" data-role="status">搜索中...</div>' +
-                    '<ul class="news-list" data-role="list"></ul>' +
+                    '<div class="news-placeholder" data-role="status" style="display:none;"></div>' +
+                    '<ul class="news-list" data-role="list">' + _makeSkeletonItems(8) + '</ul>' +
                     '</div>';
 
                 var removeBtn = wrap.querySelector('[data-action="remove"]');
                 if (removeBtn) {
                     removeBtn.addEventListener('click', function() {
                         try { wrap.remove(); } catch (e) {}
-                        _persistPanels();
                     });
                 }
 
-                var refreshBtn = wrap.querySelector('[data-action="refresh"]');
-                var newDotBtn = wrap.querySelector('[data-action="newdot"]');
-
-                function _triggerPanelRefresh() {
-                    var q2 = wrap?.dataset?.query || '';
-                    var m2 = wrap?.dataset?.mode || 'hybrid';
-                    if (!q2) return;
-                    if (wrap?.dataset?.loading === '1') return;
-
-                    try {
-                        wrap.dataset.loading = '1';
-                    } catch (e) {
-                    }
-
-                    var oldText = refreshBtn ? refreshBtn.textContent : '';
-                    if (refreshBtn) {
-                        refreshBtn.textContent = '刷新中';
+                var followBtn = wrap.querySelector('[data-action="follow"]');
+                if (followBtn) {
+                    followBtn.addEventListener('click', async function() {
+                        var kw = String(wrap?.dataset?.query || '').trim();
+                        if (!kw || followBtn.disabled) return;
+                        followBtn.disabled = true;
+                        followBtn.textContent = '关注中...';
                         try {
-                            refreshBtn.setAttribute('disabled', 'true');
+                            var resp = await fetch('/api/user/keywords', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ keyword: kw })
+                            });
+                            var data = await resp.json();
+                            if (resp.status === 401) {
+                                followBtn.textContent = '请先登录';
+                                followBtn.classList.replace('btn-outline-success', 'btn-outline-secondary');
+                                setTimeout(function() {
+                                    followBtn.textContent = '关注';
+                                    followBtn.classList.replace('btn-outline-secondary', 'btn-outline-success');
+                                    followBtn.disabled = false;
+                                }, 2000);
+                            } else if (data && data.ok) {
+                                followBtn.textContent = '✓ 已关注';
+                                followBtn.classList.replace('btn-outline-success', 'btn-success');
+                            } else {
+                                throw new Error((data && data.detail) || '失败');
+                            }
                         } catch (e) {
+                            followBtn.textContent = '失败';
+                            setTimeout(function() {
+                                followBtn.textContent = '关注';
+                                followBtn.disabled = false;
+                            }, 2000);
                         }
-                    }
-
-                    if (newDotBtn) {
-                        try {
-                            newDotBtn.setAttribute('disabled', 'true');
-                        } catch (e) {
-                        }
-                    }
-
-                    var panelObj = {
-                        wrap: wrap,
-                        statusEl: wrap.querySelector('[data-role="status"]'),
-                        listEl: wrap.querySelector('[data-role="list"]'),
-                    };
-
-                    Promise.resolve(runSearchIntoPanel(q2, m2, panelObj, { clearList: false }))
-                        .finally(function() {
-                            try {
-                                wrap.dataset.loading = '0';
-                            } catch (e) {
-                            }
-                            if (refreshBtn) {
-                                refreshBtn.textContent = oldText;
-                                try {
-                                    refreshBtn.removeAttribute('disabled');
-                                } catch (e) {
-                                }
-                            }
-                            if (newDotBtn) {
-                                try {
-                                    newDotBtn.removeAttribute('disabled');
-                                } catch (e) {
-                                }
-                            }
-                        });
-                }
-
-                if (refreshBtn) {
-                    refreshBtn.addEventListener('click', function() {
-                        _triggerPanelRefresh();
-                    });
-                }
-
-                if (newDotBtn) {
-                    newDotBtn.addEventListener('click', function() {
-                        _triggerPanelRefresh();
                     });
                 }
 
@@ -385,8 +251,6 @@
                 } catch (e) {
                     panelsEl.appendChild(wrap);
                 }
-
-                _persistPanels();
 
                 return {
                     wrap: wrap,
@@ -401,8 +265,8 @@
                 if (!panel) return;
                 var statusEl = panel.statusEl;
                 var listEl = panel.listEl;
-                if (statusEl) statusEl.textContent = clearList ? '搜索中...' : '刷新中...';
-                if (clearList && listEl) listEl.innerHTML = '';
+                if (statusEl) { statusEl.style.display = 'none'; statusEl.textContent = ''; }
+                if (clearList && listEl) listEl.innerHTML = _makeSkeletonItems(8);
 
                 var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=200';
                 try {
@@ -413,22 +277,7 @@
                     }
 
                     var results = Array.isArray(data.results) ? data.results : [];
-                    if (statusEl) statusEl.textContent = '共 ' + results.length + ' 条结果';
-
-                    try {
-                        var key = _panelKey(q, mode);
-                        var urls = [];
-                        for (var i = 0; i < results.length; i++) {
-                            var u = (results[i] && results[i].url) ? String(results[i].url).trim() : '';
-                            if (!u) continue;
-                            urls.push(u);
-                            if (urls.length >= MAX_SEEN_PER_PANEL) break;
-                        }
-                        _seenMap[key] = urls;
-                        _persistSeen();
-                        _setPanelHasNew(panel.wrap, false);
-                    } catch (e) {
-                    }
+                    if (statusEl) { statusEl.textContent = '共 ' + results.length + ' 条结果'; statusEl.style.display = ''; }
 
                     if (!listEl) return;
                     if (!results.length) {
@@ -450,91 +299,9 @@
                         );
                     }).join('');
                 } catch (e) {
-                    if (statusEl) statusEl.textContent = '搜索失败：' + (e && e.message ? e.message : String(e));
+                    if (statusEl) { statusEl.textContent = '搜索失败：' + (e && e.message ? e.message : String(e)); statusEl.style.display = ''; }
+                    if (listEl) listEl.innerHTML = '';
                 }
-            }
-
-            async function _checkNewForPanel(panel) {
-                try {
-                    if (!panel || !panel.wrap) return;
-                    var wrap = panel.wrap;
-                    if (wrap?.dataset?.loading === '1') return;
-                    if (wrap?.dataset?.checking === '1') return;
-                    if (wrap?.dataset?.hasNew === '1') return;
-
-                    var q = String(wrap?.dataset?.query || '').trim();
-                    var mode = String(wrap?.dataset?.mode || 'hybrid').trim() || 'hybrid';
-                    if (!q) return;
-
-                    var key = _panelKey(q, mode);
-                    var seenArr = Array.isArray(_seenMap[key]) ? _seenMap[key] : [];
-                    var seen = new Set(seenArr);
-
-                    try {
-                        wrap.dataset.checking = '1';
-                    } catch (e0) {
-                    }
-
-                    var apiUrl = '/api/search?q=' + encodeURIComponent(q) + '&mode=' + encodeURIComponent(mode) + '&limit=' + String(CHECK_LIMIT);
-                    var resp = await fetch(apiUrl, { method: 'GET' });
-                    var data = await resp.json();
-                    if (!resp.ok) return;
-
-                    var results = Array.isArray(data.results) ? data.results : [];
-                    for (var i = 0; i < results.length; i++) {
-                        var u = (results[i] && results[i].url) ? String(results[i].url).trim() : '';
-                        if (!u) continue;
-                        if (!seen.has(u)) {
-                            _setPanelHasNew(wrap, true);
-                            break;
-                        }
-                    }
-                } catch (e) {
-                } finally {
-                    try {
-                        if (panel && panel.wrap) panel.wrap.dataset.checking = '0';
-                    } catch (e2) {
-                    }
-                }
-            }
-
-            function _setupNewHintLoop() {
-                var idx = 0;
-                window.setInterval(function() {
-                    try {
-                        if (!panelsEl) return;
-                        if (document.visibilityState !== 'visible') return;
-                        var children = Array.from(panelsEl.children || []);
-                        if (!children.length) return;
-                        var el = children[idx % children.length];
-                        idx++;
-                        if (!el) return;
-                        _checkNewForPanel({
-                            wrap: el,
-                            statusEl: el.querySelector('[data-role="status"]'),
-                            listEl: el.querySelector('[data-role="list"]'),
-                        });
-                    } catch (e) {
-                    }
-                }, CHECK_TICK_MS);
-
-                document.addEventListener('visibilitychange', function() {
-                    try {
-                        if (document.visibilityState !== 'visible') return;
-                        if (!panelsEl) return;
-                        var children = Array.from(panelsEl.children || []);
-                        for (var i = 0; i < Math.min(2, children.length); i++) {
-                            var el = children[i];
-                            if (!el) continue;
-                            _checkNewForPanel({
-                                wrap: el,
-                                statusEl: el.querySelector('[data-role="status"]'),
-                                listEl: el.querySelector('[data-role="list"]'),
-                            });
-                        }
-                    } catch (e) {
-                    }
-                });
             }
 
             function triggerSearch(opts) {
@@ -551,30 +318,10 @@
                     panel = _findExistingPanel(q, mode);
                     if (panel && panelsEl && panel.wrap && panelsEl.firstChild !== panel.wrap) {
                         try { panelsEl.prepend(panel.wrap); } catch (e) {}
-                        _persistPanels();
                     }
                 }
-                if (!panel) panel = createPanel(q, mode, { createdAt: opts.createdAt });
+                if (!panel) panel = createPanel(q, mode);
                 runSearchIntoPanel(q, mode, panel);
-            }
-
-            function restoreSavedPanels() {
-                if (!panelsEl) return;
-                var saved = _loadPanels();
-                if (!saved.length) return;
-                isRestoring = true;
-                try {
-                    for (var i = saved.length - 1; i >= 0; i--) {
-                        var it = saved[i] || {};
-                        var q = String(it.q || '').trim();
-                        var mode = String(it.mode || 'hybrid').trim() || 'hybrid';
-                        if (!q) continue;
-                        triggerSearch({ q: q, mode: mode, createdAt: it.createdAt, updateUrl: false });
-                    }
-                } finally {
-                    isRestoring = false;
-                    _persistPanels();
-                }
             }
 
             async function runSearchFromUrl() {
@@ -599,9 +346,6 @@
                 clearBtn.addEventListener('click', function() {
                     if (!panelsEl) return;
                     panelsEl.innerHTML = '';
-                    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-                    try { localStorage.removeItem(SEEN_KEY); } catch (e) {}
-                    try { _seenMap = {}; } catch (e) {}
                 });
             }
 
@@ -629,9 +373,7 @@
                 try { input.focus(); } catch (e) {}
             }
 
-            restoreSavedPanels();
             runSearchFromUrl();
-            _setupNewHintLoop();
         })();
     </script>
 </body>
