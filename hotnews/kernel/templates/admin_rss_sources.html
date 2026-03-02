@@ -179,8 +179,7 @@
       <button data-tab="unified">📱 全部平台</button>
       <button data-tab="catalog" class="active">📋 RSS 源列表</button>
       <button data-tab="custom">🛠️ 自定义源</button>
-      <button data-tab="newsnow">📊 热榜源</button>
-      <button data-tab="import">📥 导入管理</button>
+<button data-tab="import">📥 导入管理</button>
       <button data-tab="requests">📨 请求审核</button>
       <button data-tab="rules">⚙️ 规则配置</button>
       <button data-tab="settings">🛠️ 系统配置</button>
@@ -222,8 +221,7 @@
           <select id="unified-filter-type" onchange="filterUnifiedPlatforms()"
             style="border:1px solid #d1d5db; border-radius:6px; padding:6px;">
             <option value="">所有类型</option>
-            <option value="newsnow">热榜源 (NewsNow)</option>
-            <option value="rss">RSS源</option>
+<option value="rss">RSS源</option>
             <option value="api">API源</option>
             <option value="html">HTML源</option>
           </select>
@@ -556,83 +554,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Tab Panel: NewsNow Platforms -->
-    <div class="tab-panel" data-panel="newsnow">
-      <h2>热榜源管理 (NewsNow API)</h2>
-      <div class="card">
-        <div class="row" style="margin-bottom:10px; gap:10px;">
-          <input type="text" id="newsnow-search" placeholder="搜索平台..." style="flex: 1; max-width: 300px;"
-            oninput="filterNewsNow()" />
-          <button class="btn" onclick="migrateNewsNowFromConfig()">📥 从配置文件导入</button>
-          <button class="btn btn-primary" onclick="showReloadInstructions()">🔄 重新加载配置</button>
-          <button class="btn btn-primary" onclick="openNewsNowModal()">➕ 添加平台</button>
-        </div>
-
-        <div class="table-scroll">
-          <table id="newsnow-table">
-            <thead>
-              <tr>
-                <th style="width:120px;">ID</th>
-                <th style="width:160px;">名称</th>
-                <th style="width:100px;">分类</th>
-                <th style="width:80px;">状态</th>
-                <th style="width:140px;">最后获取</th>
-                <th style="width:180px;">操作</th>
-              </tr>
-            </thead>
-            <tbody id="newsnow-tbody">
-              <!-- Loaded via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Edit NewsNow Platform Modal -->
-    <div id="newsnow-modal"
-      style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
-      <div class="card"
-        style="width:400px; max-width:90%; padding:20px; display:flex; flex-direction:column; gap:12px;">
-        <h3>编辑热榜平台</h3>
-        <input type="hidden" id="newsnow-edit-original-id" />
-
-        <div class="row">
-          <label style="width:80px;">ID:</label>
-          <input type="text" id="newsnow-edit-id" placeholder="weibo" style="flex:1;" />
-        </div>
-        <div class="row">
-          <label style="width:80px;">名称:</label>
-          <input type="text" id="newsnow-edit-name" placeholder="微博" style="flex:1;" />
-        </div>
-        <div class="row">
-          <label style="width:80px;">分类:</label>
-          <select id="newsnow-edit-category" style="flex:1;">
-            <option value="">未分类</option>
-            <option value="general">📰 综合新闻</option>
-            <option value="finance">💰 财经投资</option>
-            <option value="social">🔥 社交娱乐</option>
-            <option value="tech_news">📱 科技资讯</option>
-            <option value="sports">🏀 体育</option>
-          </select>
-        </div>
-        <div class="row">
-          <label style="width:80px;">排序:</label>
-          <input type="number" id="newsnow-edit-order" value="0" style="width:80px;" />
-        </div>
-        <div class="row">
-          <label style="width:80px;">启用:</label>
-          <input type="checkbox" id="newsnow-edit-enabled" checked />
-        </div>
-
-        <div class="row" style="justify-content:flex-end; gap:8px; margin-top:10px;">
-          <button class="btn" onclick="closeNewsNowModal()">取消</button>
-          <button class="btn btn-primary" onclick="saveNewsNowPlatform()">保存</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Fully cleaned up duplicate modal -->
 
     <!-- Tab Panel: RSS Source Catalog (Active by default) -->
     <div class="tab-panel active" data-panel="catalog">
@@ -2085,9 +2006,7 @@
     </script>
     <script src="/static_kernel/js/admin_ai_settings.js?v=5">
     </script>
-    <script src="/static_kernel/js/admin_rss_newsnow.js?v=4">
-    </script>
-    <script>
+<script>
       // Initialize tabs
       if (typeof initTabs === 'function') initTabs();
     </script>
