@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from hotnews.web.deps import require_admin
 
-from mcp_server.services.cache_service import get_cache
+from hotnews.web.services.cache_service import get_cache
 
 # [KERNEL] Dynamic Scheduler
 auto_fetch_scheduler = None

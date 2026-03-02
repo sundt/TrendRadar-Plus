@@ -39,8 +39,8 @@ project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from hotnews.web.news_viewer import NewsViewerService, generate_news_id
-from mcp_server.services.data_service import DataService
-from mcp_server.services.cache_service import get_cache
+from hotnews.web.services.data_service import DataService
+from hotnews.web.services.cache_service import get_cache
 from hotnews.crawler import DataFetcher
 from hotnews.core import load_config
 from hotnews.storage import convert_crawl_results_to_news_data
@@ -1170,7 +1170,7 @@ async def fetch_news_data():
             auto_fetch_scheduler.record_last_fetch_time(datetime.now())
 
             # 清除缓存以加载新数据
-            from mcp_server.services.cache_service import get_cache
+            from hotnews.web.services.cache_service import get_cache
             from hotnews.web.news_viewer import clear_categorized_news_cache
 
             cache = get_cache()

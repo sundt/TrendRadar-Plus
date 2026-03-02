@@ -17,7 +17,8 @@
       "Bash(.venv/bin/python3:*)",
       "Bash(bash:*)",
       "Bash(curl:*)",
-      "Bash(git clone:*)"
+      "Bash(git clone:*)",
+      "Bash(grep -rn \"mcp_server\" /Users/sun/Downloads/project/hotnews/docker/ 2>/dev/null; echo \"docker exit: $?\"\ngrep -rn \"COPY mcp_server\\\\|mcp_server\" /Users/sun/Downloads/project/hotnews/docker/Dockerfile /Users/sun/Downloads/project/hotnews/docker/Dockerfile.viewer 2>/dev/null; echo \"dockerfile exit: $?\")"
     ]
   }
 }

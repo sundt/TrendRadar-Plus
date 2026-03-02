@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .cache_service import get_cache
 from .parser_service import ParserService
-from ..utils.errors import DataNotFoundError
+from .errors import DataNotFoundError
 
 
 class DataService:

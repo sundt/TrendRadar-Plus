@@ -23,7 +23,6 @@ RUN pip install --no-cache-dir --retries 3 --timeout 60 \
     -r requirements.viewer.txt
 
 COPY hotnews/ ./hotnews/
-COPY mcp_server/ ./mcp_server/
 
 # Copy WeChat Pay private key if exists
 COPY pub_key.pem ./pub_key.pem

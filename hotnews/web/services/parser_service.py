@@ -13,7 +13,7 @@ from datetime import datetime
 
 import yaml
 
-from ..utils.errors import FileParseError, DataNotFoundError
+from .errors import FileParseError, DataNotFoundError
 from .cache_service import get_cache
 
 

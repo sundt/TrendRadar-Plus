@@ -24,7 +24,6 @@ RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua
 
 COPY docker/manage.py .
 COPY hotnews/ ./hotnews/
-COPY mcp_server/ ./mcp_server/
 
 # 复制 entrypoint.sh 并强制转换为 LF 格式
 COPY docker/entrypoint.sh /entrypoint.sh.tmp

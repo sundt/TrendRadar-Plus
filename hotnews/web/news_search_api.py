@@ -30,11 +30,6 @@ def _get_user_db_conn(request: Request):
 from hotnews.kernel.auth.deps import get_current_user as _get_current_user
 
 
-def _get_search_tools():
-    """Get search tools instance."""
-    from mcp_server.tools.search_tools import SearchTools
-    return SearchTools(str(project_root))
-
 
 class NewsItem(BaseModel):
     title: str
@@ -223,35 +218,6 @@ async def search_news(
                     all_news.append(n)
                     seen_titles.add(n["title"])
         
-        # 3. 搜索爬虫数据（output 目录）
-        if len(all_news) < limit:
-            tools = _get_search_tools()
-            result = tools.search_news_unified(
-                query=q,
-                search_mode=mode if mode != "tag" else "keyword",
-                limit=limit - len(all_news),
-                include_url=True
-            )
-            
-            logger.info(f"Crawler search result: success={result.get('success')}, keys={list(result.keys())}")
-            
-            if result.get("success"):
-                crawler_news = result.get("results", [])
-                seen_titles = set(n["title"] for n in all_news)
-                for n in crawler_news:
-                    title = n.get("title", "")
-                    if title and title not in seen_titles:
-                        all_news.append({
-                            "title": title,
-                            "platform": n.get("platform", ""),
-                            "platform_name": n.get("platform_name", n.get("platform", "")),
-                            "url": n.get("url", ""),
-                            "rank": n.get("rank", 0),
-                            "weight": n.get("weight", 0.0)
-                        })
-                        seen_titles.add(title)
-                logger.info(f"Found {len(crawler_news)} from crawler data")
-        
         # 限制返回数量
         all_news = all_news[:limit]
         
@@ -296,11 +262,11 @@ async def get_latest_news(
     logger.info(f"User {user.get('id')} getting latest news")
     
     try:
-        from mcp_server.services.data_service import DataService
-        
+        from hotnews.web.services.data_service import DataService
+
         data_service = DataService(str(project_root))
         platform_list = platforms.split(",") if platforms else None
-        
+
         news_list = data_service.get_latest_news(
             platforms=platform_list,
             limit=limit,

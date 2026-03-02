@@ -111,7 +111,6 @@ services:
       - ../config:/app/config:ro
       - ../output:/app/output
       - ../hotnews:/app/hotnews
-      - ../mcp_server:/app/mcp_server
       - ../key/apiclient_key.pem:/app/apiclient_key.pem:ro
 
     environment:
@@ -198,28 +197,3 @@ services:
         reservations:
           cpus: '0.25'
           memory: 256M
-
-  hotnews-mcp:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.mcp
-      network: host
-      args:
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
-        ALL_PROXY: ${ALL_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-}
-    image: wantcat/hotnews-mcp:${HOTNEWS_MCP_TAG:-dev}
-    container_name: hotnews-mcp
-    restart: unless-stopped
-
-    ports:
-      - "127.0.0.1:3333:3333"
-
-    volumes:
-      - ../config:/app/config:ro
-      - ../output:/app/output
-      - ../mcp_server:/app/mcp_server
-
-    environment:
-      - TZ=Asia/Shanghai

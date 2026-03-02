@@ -16,7 +16,7 @@ from aiohttp_socks import ProxyConnector
 from fastapi import APIRouter, Body, Query, Request
 from fastapi.responses import JSONResponse, Response
 
-from mcp_server.services.cache_service import get_cache
+from hotnews.web.services.cache_service import get_cache
 from hotnews.web.db_online import get_online_db_conn
 from hotnews.web.user_db import get_user_db_conn, list_rss_subscriptions, resolve_user_id_by_cookie_token
 
