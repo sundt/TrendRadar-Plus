@@ -506,11 +506,6 @@ async def import_preview(
             cur = conn.execute("SELECT name FROM custom_sources WHERE enabled = 1")
             for row in cur.fetchall():
                 existing_source_names.add(row[0].strip().lower())
-            
-            # NewsNow platforms
-            cur = conn.execute("SELECT name FROM newsnow_platforms WHERE enabled = 1")
-            for row in cur.fetchall():
-                existing_source_names.add(row[0].strip().lower())
         except Exception as e:
             logger.warning(f"Failed to load existing source names: {e}")
         
