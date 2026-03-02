@@ -25,7 +25,7 @@ const MAX_PANEL_WIDTH = 800;
 let favoritesCache = null;
 let isPanelOpen = false;
 let isResizing = false;
-let activeTab = 'summary'; // 'summary' | 'bookmarks'
+let activeTab = 'bookmarks'; // 'summary' | 'bookmarks'
 
 /**
  * Get favorites from local storage (for non-logged-in users or as cache)

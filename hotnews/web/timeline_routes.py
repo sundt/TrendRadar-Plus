@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 
 from hotnews.web.deps import UnicodeJSONResponse, get_online_db
+from hotnews.web.news_viewer import generate_news_id
 
 router = APIRouter()
 
@@ -138,6 +139,7 @@ async def api_timeline(
             "created_at": created_at,
             "description": description,
             "tag_latest": latest_map.get(k, 0),
+            "stable_id": generate_news_id(f"rss-{source_id}", title or url),
         })
 
     # 按 published_at 降序排序（前端显示的是这个时间）
