@@ -30,17 +30,17 @@ try:
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
-    logger.warning("sentence-transformers 未安装，向量搜索将不可用")
+    logger.debug("sentence-transformers 未安装，向量搜索不可用")
 
 try:
     import faiss
     FAISS_AVAILABLE = True
 except ImportError:
     FAISS_AVAILABLE = False
-    logger.warning("faiss 未安装，向量搜索将不可用")
+    logger.debug("faiss 未安装，向量搜索不可用")
 
 if not NUMPY_AVAILABLE:
-    logger.warning("numpy 未安装，向量搜索将不可用")
+    logger.debug("numpy 未安装，向量搜索不可用")
 
 
 @dataclass
@@ -77,7 +77,7 @@ class VectorIndex:
             vector_size: 向量维度
         """
         if not FAISS_AVAILABLE or not SENTENCE_TRANSFORMERS_AVAILABLE or not NUMPY_AVAILABLE:
-            logger.warning("向量索引依赖不可用，将使用模拟实现")
+            logger.debug("向量索引依赖不可用，将使用模拟实现")
             self._available = False
             return
 
