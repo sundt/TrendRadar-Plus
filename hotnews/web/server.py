@@ -201,7 +201,6 @@ from hotnews.web.morning_brief_routes import router as _morning_brief_router
 from hotnews.web.explore_timeline_routes import router as _explore_timeline_router
 from hotnews.web.category_timeline_routes import router as _category_timeline_router
 from hotnews.web.admin_ai_routes import router as _admin_ai_router
-from hotnews.web.online_routes import router as _online_router
 from hotnews.web.viewer_controls_routes import router as _viewer_controls_router
 from hotnews.web.fetch_metrics_routes import router as _fetch_metrics_router
 from hotnews.web.system_routes import router as _system_router
@@ -520,7 +519,6 @@ app.include_router(_morning_brief_router)
 app.include_router(_explore_timeline_router)
 app.include_router(_category_timeline_router)
 app.include_router(_admin_ai_router)
-app.include_router(_online_router)
 app.include_router(_viewer_controls_router)
 app.include_router(_fetch_metrics_router)
 app.include_router(_system_router)
@@ -637,11 +635,6 @@ async def add_cache_headers(request: Request, call_next):
     # 时间线 API — 5 分钟
     if path in ["/api/rss/brief/timeline", "/api/rss/explore/timeline"]:
         response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
-        return response
-
-    # 在线人数统计 — 10 秒（高频轮询，短缓存即可大幅减少回源）
-    if path == "/api/online":
-        response.headers["Cache-Control"] = "public, max-age=10, s-maxage=10"
         return response
 
     # 更新检查 — 1 分钟

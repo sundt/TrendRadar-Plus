@@ -29,10 +29,6 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=5000")      # wait 5s on lock instead of failing
 
     conn.execute(
-        "CREATE TABLE IF NOT EXISTS online_sessions (session_id TEXT PRIMARY KEY, last_seen INTEGER NOT NULL)"
-    )
-
-    conn.execute(
         """
         CREATE TABLE IF NOT EXISTS rss_usage_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
