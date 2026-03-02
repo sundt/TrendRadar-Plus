@@ -132,7 +132,6 @@ function renderUnifiedTable() {
     const type = p.type;
     const isRss = type === 'rss';
     const isCustom = type === 'api' || type === 'html';
-    const isNewsNow = type === 'newsnow';
     const isEnabled = !!p.enabled;
 
     // Badges
@@ -145,8 +144,7 @@ function renderUnifiedTable() {
     if (cat) catName = `${cat.icon} ${cat.name}`;
 
     let typeBadge = '';
-    if (isNewsNow) typeBadge = '<span class="badge" style="background:#ef4444;color:white;">热榜</span>';
-    else if (isRss) typeBadge = '<span class="badge" style="background:#f59e0b;color:white;">RSS</span>';
+    if (isRss) typeBadge = '<span class="badge" style="background:#f59e0b;color:white;">RSS</span>';
     else if (isCustom && type === 'api') typeBadge = '<span class="badge" style="background:#3b82f6;color:white;">API</span>';
     else if (isCustom && type === 'html') typeBadge = '<span class="badge" style="background:#10b981;color:white;">HTML</span>';
     else typeBadge = `<span class="badge" style="background:#6b7280;color:white;">${type}</span>`;
@@ -170,30 +168,25 @@ function renderUnifiedTable() {
       `;
     }
 
-    // Disable Delete for NewsNow/System if safer
-    const allowDelete = !isNewsNow;
-
     const actionButtons = `
       <div class="row-actions">
-        <button class="btn btn-icon" title="Edit" 
-          onclick="dispatchEdit(this, '${type}', '${p.id}')" 
+        <button class="btn btn-icon" title="Edit"
+          onclick="dispatchEdit(this, '${type}', '${p.id}')"
           ${editBtnAttrs}>✏️</button>
-        
-        <button class="btn btn-icon" title="Run" 
-          onclick="dispatchRun(this, '${type}', '${p.id}')" 
+
+        <button class="btn btn-icon" title="Run"
+          onclick="dispatchRun(this, '${type}', '${p.id}')"
           style="color:#2563eb;">▶️</button>
-        
+
         <button class="btn btn-icon" title="${isEnabled ? 'Disable' : 'Enable'}"
           onclick="dispatchToggle(this, '${type}', '${p.id}', ${!isEnabled})"
           style="min-width:24px;">
           ${isEnabled ? '✅' : '⛔'}
         </button>
-        
-        ${allowDelete ? `
-        <button class="btn btn-icon" title="Delete" 
-          onclick="dispatchDelete(this, '${type}', '${p.id}', '${_escapeHtml(p.name)}')" 
+
+        <button class="btn btn-icon" title="Delete"
+          onclick="dispatchDelete(this, '${type}', '${p.id}', '${_escapeHtml(p.name)}')"
           style="color:#dc2626;">🗑️</button>
-        ` : ''}
       </div>
     `;
 
@@ -229,7 +222,6 @@ function renderUnifiedTable() {
 }
 
 function filterTypeMatch(p, filter) {
-  if (filter === 'newsnow') return p.type === 'newsnow';
   if (filter === 'rss') return p.type === 'rss';
   if (filter === 'api') return p.type === 'api';
   if (filter === 'html') return p.type === 'html';
@@ -252,23 +244,6 @@ function dispatchEdit(btn, type, fullId) {
       openEditCustomSourceModal(fullId); // Custom expects full ID
     } else {
       showToast('Custom Edit Module not loaded', 'error');
-    }
-  } else if (type === 'newsnow') {
-    if (typeof openNewsNowModal === 'function') {
-      // NewsNow modal might need ID or empty for new
-      // Currently NewsNow modal is "Add", edit might need implementation or checking
-      // Checking admin_rss_sources.html -> openNewsNowModal() is usually for ADD
-      // But we can check if there's an edit function. 
-      // Based on previous reads, NewsNow edit is supported via edit button there.
-      // We might need to port "openEditNewsNow" logic here or trigger it.
-      // For now, let's try to find an edit function or fallback.
-      // Looking at `openNewsNowModal` in admin_newsnow.js (assumed), it might check global state.
-      // Let's defer NewsNow edit for safety or just alert.
-      // Actually, looking at `admin_rss_sources.html` Tab Panel NewsNow, there is NO edit button in the HTML table usually?
-      // Wait, there is 'Edit NewsNow Platform Modal' in HTML.
-      // Let's assume we can wire it if we had the data.
-      // For now, allow Custom/RSS primarily.
-      alert('NewsNow editing via Unified tab is not fully linked yet.');
     }
   }
 }

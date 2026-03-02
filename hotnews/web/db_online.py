@@ -157,23 +157,6 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
 
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS newsnow_platforms (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            category TEXT DEFAULT '',
-            enabled BOOLEAN DEFAULT 1,
-            sort_order INTEGER DEFAULT 0,
-            last_fetch_at TEXT,
-            last_status TEXT,
-            last_error TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-
-    conn.execute(
-        """
         CREATE TABLE IF NOT EXISTS platform_categories (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -186,22 +169,6 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
         """
     )
 
-    # Platform category rules for regex-based automatic category assignment
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS platform_category_rules (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pattern TEXT NOT NULL,
-            category_id TEXT NOT NULL,
-            priority INTEGER DEFAULT 0,
-            enabled INTEGER DEFAULT 1,
-            description TEXT DEFAULT '',
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS ai_learning_lessons (
@@ -567,9 +534,6 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("rss_sources", "use_socks_proxy", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "use_scraperapi", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "use_socks_proxy", "INTEGER DEFAULT 0")
-
-    # NewsNow platform category override for manual assignment
-    _ensure_column("newsnow_platforms", "category_override", "TEXT DEFAULT ''")
 
     # Preference tracking columns for news_clicks
     _ensure_column("news_clicks", "user_id", "INTEGER DEFAULT 0")
