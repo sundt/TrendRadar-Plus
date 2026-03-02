@@ -88,7 +88,7 @@ function renderFeaturedMpList(mps) {
     if (!mps || mps.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" style="text-align: center; padding: 60px; color: #6b7280;">
+                <td colspan="8" style="text-align: center; padding: 60px; color: #6b7280;">
                     <div style="margin-bottom: 16px;">${FMP_WECHAT_ICON_LARGE}</div>
                     <div>暂无精选公众号</div>
                     <button class="btn btn-primary" onclick="openFeaturedMpAddModal()" style="margin-top: 16px;">添加公众号</button>
@@ -109,8 +109,11 @@ function renderFeaturedMpList(mps) {
         const statusClass = mp.enabled ? 'fmp-status-enabled' : 'fmp-status-disabled';
         const statusText = mp.enabled ? '启用' : '禁用';
         
-        const lastFetch = mp.last_fetch_at 
+        const lastFetch = mp.last_fetch_at
             ? new Date(mp.last_fetch_at * 1000).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+            : '-';
+        const createdAt = mp.created_at
+            ? new Date(mp.created_at * 1000).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
             : '-';
         
         return `
@@ -129,6 +132,7 @@ function renderFeaturedMpList(mps) {
                 <td><span class="fmp-status-badge ${statusClass}">${statusText}</span></td>
                 <td>${mp.sort_order || 0}</td>
                 <td>${lastFetch}</td>
+                <td style="color:#6b7280;font-size:12px;">${createdAt}</td>
                 <td>
                     <button class="btn btn-sm" onclick="openFeaturedMpEditModal('${_escapeHtml(mp.fakeid)}', '${_escapeHtml(mp.nickname)}', '${_escapeHtml(mp.category || 'general')}', ${mp.sort_order || 0}, ${mp.enabled ? 1 : 0})">编辑</button>
                     <button class="btn btn-sm" onclick="manualFetchFeaturedMp('${_escapeHtml(mp.fakeid)}')">抓取</button>
