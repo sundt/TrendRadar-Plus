@@ -62,10 +62,10 @@ def send_email(
         part2 = MIMEText(html_content, "html", "utf-8")
         msg.attach(part2)
         
-        # Send via SMTP with SSL
+        # Send via SMTP with SSL (timeout=10 to avoid indefinite blocking)
         context = ssl.create_default_context()
-        
-        with smtplib.SMTP_SSL(EMAIL_SMTP_SERVER, EMAIL_SMTP_PORT, context=context) as server:
+
+        with smtplib.SMTP_SSL(EMAIL_SMTP_SERVER, EMAIL_SMTP_PORT, context=context, timeout=10) as server:
             server.login(EMAIL_FROM, EMAIL_PASSWORD)
             server.sendmail(EMAIL_FROM, to_email, msg.as_string())
         

@@ -72,20 +72,27 @@ def _row_to_node(row) -> Dict[str, Any]:
 
 @router.get("/api/columns")
 async def api_columns():
-    """返回所有启用栏目的递归树结构。"""
-    conn = get_online_db()
-    rows = conn.execute(
-        """
-        SELECT id, name, icon, parent_id, tag_ids,
-               source_type, source_filter, default_view,
-               sort_order, enabled
-        FROM column_config
-        WHERE enabled = 1
-        ORDER BY sort_order ASC, id ASC
-        """
-    ).fetchall()
-
-    tree = _build_tree(rows)
+    """返回所有启用栏目的递归树结构。
+    
+    注意：column_config 表已废弃，使用 tags 系统替代。
+    此 API 保留用于向后兼容，返回空结果。
+    """
+    try:
+        conn = get_online_db()
+        rows = conn.execute(
+            """
+            SELECT id, name, icon, parent_id, tag_ids,
+                   source_type, source_filter, default_view,
+                   sort_order, enabled
+            FROM column_config
+            WHERE enabled = 1
+            ORDER BY sort_order ASC, id ASC
+            """
+        ).fetchall()
+        tree = _build_tree(rows)
+    except Exception:
+        # column_config 表不存在时返回空结果（功能已废弃）
+        tree = []
 
     return UnicodeJSONResponse(
         content={"columns": tree},

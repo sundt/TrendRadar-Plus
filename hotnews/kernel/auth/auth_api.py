@@ -99,16 +99,18 @@ async def send_verification_code(
     email: str = Body(..., embed=True),
 ):
     """Send a verification code to the email for passwordless login."""
+    import asyncio
     from hotnews.kernel.services.email_code_service import send_verification_code as do_send_code
-    
+
     ip_address = _get_client_ip(request)
     project_root = str(request.app.state.project_root)
-    
-    success, message = do_send_code(project_root, email, ip_address)
-    
+
+    # Run in thread pool to avoid blocking the async event loop (SMTP is blocking I/O)
+    success, message = await asyncio.to_thread(do_send_code, project_root, email, ip_address)
+
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
+
     return {"ok": True, "message": message}
 
 

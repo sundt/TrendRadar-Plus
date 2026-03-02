@@ -17,6 +17,9 @@ build/
 *.swp
 *.swo
 .DS_Store
+__MACOSX/
+output.corrupted/
+SECURITY_AUDIT_*.md
 
 # Output data (too large, local only)
 output/
