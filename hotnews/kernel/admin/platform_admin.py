@@ -273,25 +273,7 @@ async def list_all_platforms(request: Request, _=Depends(_require_admin)):
     conn = _get_conn(request)
     platforms = []
 
-    # 1. NewsNow Platforms
-    try:
-        cur = conn.execute(
-            "SELECT id, name, category, enabled, last_fetch_at, last_status FROM newsnow_platforms"
-        )
-        for r in cur.fetchall():
-            platforms.append({
-                "id": r[0],
-                "name": r[1],
-                "type": "newsnow",
-                "category": r[2] or "",
-                "enabled": bool(r[3]),
-                "last_fetch_at": r[4],
-                "last_status": r[5]
-            })
-    except Exception:
-        pass
-
-    # 2. Custom Sources (API & HTML)
+    # 1. Custom Sources (API & HTML)
     try:
         cur = conn.execute(
             "SELECT id, name, category, provider_type, enabled, last_run_at, last_status, country, language FROM custom_sources"
@@ -354,34 +336,19 @@ async def batch_update_category(
     platform_ids = payload.platform_ids
     category = payload.category_id
     
-    updated_counts = {"newsnow": 0, "custom": 0, "rss": 0}
-    
-    # We need to split IDs by type to update correct tables
-    newsnow_ids = []
+    updated_counts = {"custom": 0, "rss": 0}
+
     custom_ids = []
     rss_ids = []
-    
+
     for pid in platform_ids:
         if pid.startswith("rss-"):
-            rss_ids.append(pid[4:]) # Remove 'rss-' prefix
-        elif pid in _get_all_newsnow_ids(conn):
-             newsnow_ids.append(pid)
+            rss_ids.append(pid[4:])
         else:
-             # Assume custom source if not RSS and not explicitly NewsNow (or check DB)
-             # Better approach: check DB existence for each
-             custom_ids.append(pid)
+            custom_ids.append(pid)
 
     with conn:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Update NewsNow
-        if newsnow_ids:
-             placeholders = ",".join("?" * len(newsnow_ids))
-             conn.execute(
-                 f"UPDATE newsnow_platforms SET category = ?, updated_at = ? WHERE id IN ({placeholders})",
-                 (category, now, *newsnow_ids)
-             )
-             updated_counts["newsnow"] = len(newsnow_ids)
 
         # Update RSS
         if rss_ids:
@@ -420,30 +387,17 @@ async def batch_update_status(
     platform_ids = payload.platform_ids
     enabled = payload.enabled
     
-    newsnow_ids = []
     rss_ids = []
     custom_ids = []
-    
-    # Helper to check ID existence would be better, but for speed we do optimistic updates
-    all_newsnow = _get_all_newsnow_ids(conn)
-    
+
     for pid in platform_ids:
         if pid.startswith("rss-"):
             rss_ids.append(pid[4:])
-        elif pid in all_newsnow:
-            newsnow_ids.append(pid)
         else:
             custom_ids.append(pid)
-            
+
     with conn:
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        if newsnow_ids:
-             placeholders = ",".join("?" * len(newsnow_ids))
-             conn.execute(
-                 f"UPDATE newsnow_platforms SET enabled = ?, updated_at = ? WHERE id IN ({placeholders})",
-                 (1 if enabled else 0, now, *newsnow_ids)
-             )
 
         if rss_ids:
              placeholders = ",".join("?" * len(rss_ids))
@@ -510,12 +464,6 @@ async def batch_update_scraperapi(
     return {"success": True, "updated": updated_counts}
 
 
-def _get_all_newsnow_ids(conn) -> set:
-    try:
-        cur = conn.execute("SELECT id FROM newsnow_platforms")
-        return {r[0] for r in cur.fetchall()}
-    except Exception:
-        return set()
 
 
 class BatchUpdateSocksProxyRequest(BaseModel):

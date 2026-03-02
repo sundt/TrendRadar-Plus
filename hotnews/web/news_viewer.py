@@ -262,22 +262,6 @@ class NewsViewerService:
                     categories[cid]["platforms"].append(pid)
                     self._platform_to_category[pid] = cid
 
-            # NewsNow
-            try:
-                from hotnews.kernel.admin.category_rules import get_category_for_platform
-                for r in conn.execute("SELECT id, name, category_override FROM newsnow_platforms WHERE enabled=1"):
-                    platform_id = str(r[0])
-                    platform_name = str(r[1])
-                    category_override = r[2]
-                    
-                    # Use override if set, otherwise use rule engine
-                    if category_override:
-                        assign(platform_id, category_override)
-                    else:
-                        auto_category = get_category_for_platform(conn, platform_id, platform_name)
-                        assign(platform_id, auto_category)
-            except Exception: pass
-            
             # Custom Sources
             try:
                 for r in conn.execute("SELECT id, category FROM custom_sources WHERE enabled=1"):
@@ -451,18 +435,6 @@ class NewsViewerService:
                 if str(pid or "").strip()
             ]
         )
-        
-        # Also load disabled NewsNow platforms from database
-        try:
-            from .db_online import get_online_db_conn
-            conn = get_online_db_conn(self.project_root)
-            cur = conn.execute("SELECT id FROM newsnow_platforms WHERE enabled = 0")
-            rows = cur.fetchall()
-            for r in rows:
-                disabled_set.add(str(r[0]))
-        except Exception:
-            # Silently ignore database errors (table might not exist)
-            pass
         
         if disabled_set:
             filtered_news = [n for n in filtered_news if str(n.get("platform") or "").strip() not in disabled_set]
