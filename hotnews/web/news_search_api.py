@@ -48,55 +48,45 @@ class SearchResponse(BaseModel):
     query: str = ""
 
 
-def _search_rss_entries(query: str, limit: int = 20) -> List[dict]:
-    """搜索 RSS 条目数据库 - 支持分词搜索"""
+def _search_fts(query: str, limit: int = 20) -> List[dict]:
+    """使用 FTS5 全文索引搜索 - BM25 相关度排序，覆盖全量数据"""
     try:
+        from hotnews.search.fts_index import FTSIndex
         from hotnews.web.db_online import get_online_db_conn
-        conn = get_online_db_conn(project_root)
-        
-        # 分词：按空格分割查询词
-        keywords = [kw.strip() for kw in query.split() if kw.strip()]
-        if not keywords:
-            keywords = [query]
-        
-        # 构建 SQL：每个关键词都要匹配（AND 逻辑）
-        conditions = []
-        params = []
-        for kw in keywords:
-            conditions.append("e.title LIKE ?")
-            params.append(f"%{kw}%")
-        
-        where_clause = " AND ".join(conditions)
-        params.append(limit)
-        
-        sql = f"""
-            SELECT e.title, e.url, e.source_id, COALESCE(s.name, e.source_id) as source_name,
-                   e.published_at, e.created_at
-            FROM rss_entries e
-            LEFT JOIN rss_sources s ON s.id = e.source_id
-            WHERE {where_clause}
-            ORDER BY COALESCE(e.published_at, e.created_at) DESC
-            LIMIT ?
-        """
-        
-        logger.info(f"RSS search SQL: keywords={keywords}")
-        cur = conn.execute(sql, params)
-        
-        results = []
-        for row in cur.fetchall():
-            title, url, source_id, source_name, published_at, created_at = row
-            results.append({
-                "title": title,
-                "url": url or "",
-                "platform": source_id,
-                "platform_name": source_name,
-                "rank": 0,
-                "weight": 0.0
-            })
-        
-        return results
+
+        fts = FTSIndex(index_dir=str(project_root / "output" / "search_indexes"))
+
+        # FTS 语法字符可能导致解析错误，降级到简单搜索
+        try:
+            results = fts.search(query, limit=limit)
+        except Exception:
+            results = fts.simple_search(query, limit=limit)
+
+        if not results:
+            return []
+
+        # 获取 RSS 源名称映射
+        platform_names = {}
+        try:
+            conn = get_online_db_conn(project_root)
+            for row in conn.execute("SELECT id, name FROM rss_sources"):
+                platform_names[f"rss-{row[0]}"] = row[1]
+        except Exception:
+            pass
+
+        return [
+            {
+                "title": r.title,
+                "url": r.url,
+                "platform": r.platform_id,
+                "platform_name": platform_names.get(r.platform_id, r.platform_id),
+                "rank": r.rank,
+                "weight": -r.score if r.score < 0 else r.score,
+            }
+            for r in results
+        ]
     except Exception as e:
-        logger.warning(f"RSS search failed: {e}")
+        logger.warning(f"FTS search failed: {e}")
         return []
 
 
@@ -199,21 +189,17 @@ async def search_news(
     all_news = []
     
     try:
-        # 1. 优先：按标签搜索（最智能）
-        tag_news = _search_by_tags(q, limit)
-        if tag_news:
+        # 1. FTS 全文索引搜索（主力）- BM25 相关度排序，覆盖全量数据
+        fts_news = _search_fts(q, limit)
+        logger.info(f"Found {len(fts_news)} from FTS index")
+        all_news.extend(fts_news)
+
+        # 2. 标签搜索（补充）- 去重后追加
+        if len(all_news) < limit:
+            seen_titles = set(n["title"] for n in all_news)
+            tag_news = _search_by_tags(q, limit - len(all_news))
             logger.info(f"Found {len(tag_news)} from tag search")
             for n in tag_news:
-                all_news.append(n)
-        
-        # 2. 搜索 RSS 数据库（关键词匹配）
-        if len(all_news) < limit:
-            rss_news = _search_rss_entries(q, limit - len(all_news))
-            logger.info(f"Found {len(rss_news)} from RSS database")
-            
-            # 合并结果，去重（按标题）
-            seen_titles = set(n["title"] for n in all_news)
-            for n in rss_news:
                 if n["title"] not in seen_titles:
                     all_news.append(n)
                     seen_titles.add(n["title"])
