@@ -54,14 +54,22 @@ class FTSIndex:
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
 
-        # 创建 FTS5 虚拟表
+        # 检测现有 tokenizer，若不是 trigram 则重建表（迁移）
+        existing = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='news_fts'"
+        ).fetchone()
+        if existing and "trigram" not in existing[0]:
+            logger.info("FTS tokenizer 不是 trigram，正在重建索引表...")
+            cursor.execute("DROP TABLE IF EXISTS news_fts")
+
+        # 创建 FTS5 虚拟表（trigram 支持中文子串匹配）
         cursor.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
                 title,
                 url,
                 platform_id,
                 date,
-                tokenize='porter'
+                tokenize='trigram'
             )
         """)
 
@@ -158,7 +166,7 @@ class FTSIndex:
 
         # 构建查询条件
         where_clauses = ["title MATCH ?"]
-        params = [query + "*"]  # 添加通配符支持前缀匹配
+        params = [query]
 
         if platform_filter:
             placeholders = ",".join("?" * len(platform_filter))

@@ -56,11 +56,15 @@ def _search_fts(query: str, limit: int = 20) -> List[dict]:
 
         fts = FTSIndex(index_dir=str(project_root / "output" / "search_indexes"))
 
-        # FTS 语法字符可能导致解析错误，降级到简单搜索
-        try:
-            results = fts.search(query, limit=limit)
-        except Exception:
+        # trigram 要求至少 3 个字符，短查询直接走 simple_search
+        # FTS 语法字符也可能导致解析错误，统一降级
+        if len(query) < 3:
             results = fts.simple_search(query, limit=limit)
+        else:
+            try:
+                results = fts.search(query, limit=limit)
+            except Exception:
+                results = fts.simple_search(query, limit=limit)
 
         if not results:
             return []
