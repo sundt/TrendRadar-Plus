@@ -18,7 +18,8 @@
       "Bash(bash:*)",
       "Bash(curl:*)",
       "Bash(git clone:*)",
-      "Bash(grep -rn \"mcp_server\" /Users/sun/Downloads/project/hotnews/docker/ 2>/dev/null; echo \"docker exit: $?\"\ngrep -rn \"COPY mcp_server\\\\|mcp_server\" /Users/sun/Downloads/project/hotnews/docker/Dockerfile /Users/sun/Downloads/project/hotnews/docker/Dockerfile.viewer 2>/dev/null; echo \"dockerfile exit: $?\")"
+      "Bash(grep -rn \"mcp_server\" /Users/sun/Downloads/project/hotnews/docker/ 2>/dev/null; echo \"docker exit: $?\"\ngrep -rn \"COPY mcp_server\\\\|mcp_server\" /Users/sun/Downloads/project/hotnews/docker/Dockerfile /Users/sun/Downloads/project/hotnews/docker/Dockerfile.viewer 2>/dev/null; echo \"dockerfile exit: $?\")",
+      "Bash(ssh -p 52222 root@120.77.222.205 \"sqlite3 /root/hotnews/output/hotnews_online.db '.tables'\" 2>/dev/null)"
     ]
   }
 }
