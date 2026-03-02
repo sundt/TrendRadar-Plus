@@ -6,7 +6,7 @@ Share Page Routes - 分享页面
 """
 
 import logging
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse
 
 router = APIRouter()
@@ -98,7 +98,7 @@ def _render_markdown_to_html(md_text: str) -> str:
 
 
 @router.get("/share/{share_id}")
-async def share_page(request: Request, share_id: str):
+async def share_page(request: Request, share_id: str, background_tasks: BackgroundTasks):
     """Render share page HTML."""
     conn = _get_online_db_conn(request)
     _ensure_share_table(conn)
@@ -137,9 +137,14 @@ async def share_page(request: Request, share_id: str):
     
     title, url, summary, article_type, created_at = row
 
-    # Increment view count
-    conn.execute("UPDATE summary_shares SET view_count = view_count + 1 WHERE share_id = ?", (share_id,))
-    conn.commit()
+    # Increment view count in background to avoid blocking response
+    def _increment_view(c, sid):
+        try:
+            c.execute("UPDATE summary_shares SET view_count = view_count + 1 WHERE share_id = ?", (sid,))
+            c.commit()
+        except Exception:
+            pass
+    background_tasks.add_task(_increment_view, conn, share_id)
 
     # Convert markdown to HTML
     summary_html = _render_markdown_to_html(summary)
@@ -342,4 +347,7 @@ async def share_page(request: Request, share_id: str):
 </html>
     """
     
-    return HTMLResponse(content=html)
+    return HTMLResponse(
+        content=html,
+        headers={"Cache-Control": "public, max-age=300"},
+    )

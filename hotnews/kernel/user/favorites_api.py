@@ -244,38 +244,32 @@ async def sync_favorites(
         "created_at": row[6],
     } for row in cur.fetchall() or []}
     
-    # Merge client favorites (add new ones from client)
-    added = []
-    for cf in client_favorites:
-        news_id = cf.get("news_id")
-        if not news_id:
-            continue
-        
-        if news_id not in server_favorites:
-            # Add to server
-            try:
-                conn.execute(
-                    """
-                    INSERT INTO user_favorites (user_id, news_id, title, url, source_id, source_name, published_at, created_at, note)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        user["id"],
-                        news_id,
-                        cf.get("title", "")[:500],
-                        cf.get("url", "")[:2000],
-                        cf.get("source_id"),
-                        cf.get("source_name"),
-                        cf.get("published_at"),
-                        cf.get("created_at") or now,
-                        cf.get("note"),
-                    )
-                )
-                added.append(news_id)
-            except Exception:
-                pass  # Ignore duplicates
-    
-    if added:
+    # Merge client favorites (batch insert new ones from client)
+    to_insert = [
+        (
+            user["id"],
+            cf.get("news_id"),
+            cf.get("title", "")[:500],
+            cf.get("url", "")[:2000],
+            cf.get("source_id"),
+            cf.get("source_name"),
+            cf.get("published_at"),
+            cf.get("created_at") or now,
+            cf.get("note"),
+        )
+        for cf in client_favorites
+        if cf.get("news_id") and cf.get("news_id") not in server_favorites
+    ]
+
+    added = [row[1] for row in to_insert]
+    if to_insert:
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO user_favorites (user_id, news_id, title, url, source_id, source_name, published_at, created_at, note)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            to_insert,
+        )
         conn.commit()
     
     # Return merged list

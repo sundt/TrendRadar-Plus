@@ -32,8 +32,15 @@ async def online_ping(request: Request):
         "INSERT OR REPLACE INTO online_sessions(session_id, last_seen) VALUES (?, ?)",
         (session_id, now),
     )
-    conn.execute("DELETE FROM online_sessions WHERE last_seen < ?", (now - 86400,))
-    conn.commit()
+    # Batch delete expired sessions to avoid locking table on large deletes
+    while True:
+        cur = conn.execute(
+            "DELETE FROM online_sessions WHERE rowid IN (SELECT rowid FROM online_sessions WHERE last_seen < ? LIMIT 500)",
+            (now - 86400,),
+        )
+        conn.commit()
+        if cur.rowcount < 500:
+            break
 
     return JSONResponse(content={"ok": True})
 
@@ -43,18 +50,22 @@ async def online_stats(request: Request):
     now = int(time.time())
     conn = _conn_from_request(request)
 
-    def count_since(seconds: int) -> int:
-        cur = conn.execute(
-            "SELECT COUNT(*) FROM online_sessions WHERE last_seen >= ?",
-            (now - seconds,),
-        )
-        row = cur.fetchone()
-        return int(row[0] if row else 0)
-
+    # Single query for all time windows
+    cur = conn.execute(
+        """
+        SELECT
+            SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END),
+            SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END),
+            SUM(CASE WHEN last_seen >= ? THEN 1 ELSE 0 END)
+        FROM online_sessions
+        """,
+        (now - 60, now - 300, now - 900),
+    )
+    row = cur.fetchone() or (0, 0, 0)
     stats: dict[str, Any] = {
-        "online_1m": count_since(60),
-        "online_5m": count_since(5 * 60),
-        "online_15m": count_since(15 * 60),
+        "online_1m": int(row[0] or 0),
+        "online_5m": int(row[1] or 0),
+        "online_15m": int(row[2] or 0),
         "server_time": now,
     }
 

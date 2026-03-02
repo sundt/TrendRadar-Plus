@@ -46,6 +46,10 @@ def get_user_db_conn(project_root: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-32768")      # 32MB page cache
+    conn.execute("PRAGMA temp_store=MEMORY")      # temp tables in memory
+    conn.execute("PRAGMA mmap_size=134217728")    # 128MB memory-mapped I/O
+    conn.execute("PRAGMA busy_timeout=5000")      # wait 5s on lock instead of failing
 
     conn.execute(
         """

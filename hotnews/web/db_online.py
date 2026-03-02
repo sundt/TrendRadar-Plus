@@ -23,6 +23,10 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-65536")      # 64MB page cache
+    conn.execute("PRAGMA temp_store=MEMORY")      # temp tables in memory
+    conn.execute("PRAGMA mmap_size=268435456")    # 256MB memory-mapped I/O
+    conn.execute("PRAGMA busy_timeout=5000")      # wait 5s on lock instead of failing
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS online_sessions (session_id TEXT PRIMARY KEY, last_seen INTEGER NOT NULL)"
@@ -633,6 +637,8 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_article_summaries_created ON article_summaries(created_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_article_summaries_type ON article_summaries(article_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_article_summaries_url ON article_summaries(url)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_article_summaries_type_created ON article_summaries(article_type, created_at DESC)")
     
     # Migration: add fetch_method column if not exists
     _ensure_column("article_summaries", "fetch_method", "TEXT DEFAULT ''")

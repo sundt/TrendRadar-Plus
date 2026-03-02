@@ -169,12 +169,15 @@ async def register(
     if not success:
         raise HTTPException(status_code=400, detail=message)
     
-    # Send welcome email (async, don't block registration)
-    try:
-        from hotnews.kernel.services.email_service import send_welcome_email
-        send_welcome_email(email, nickname)
-    except Exception as e:
-        print(f"[AUTH] Failed to send welcome email: {e}")
+    # Send welcome email in thread pool to avoid blocking event loop
+    import asyncio
+    async def _send_welcome():
+        try:
+            from hotnews.kernel.services.email_service import send_welcome_email
+            await asyncio.to_thread(send_welcome_email, email, nickname)
+        except Exception as e:
+            print(f"[AUTH] Failed to send welcome email: {e}")
+    asyncio.create_task(_send_welcome())
     
     return {"ok": True, "message": message, "user_id": user_id}
 
@@ -296,16 +299,16 @@ async def forgot_password(
     success, message, token = create_password_reset_token(conn, email)
     
     if token:
-        # Send password reset email
-        try:
-            from hotnews.kernel.services.email_service import send_password_reset_email
-            base_url = os.environ.get("HOTNEWS_BASE_URL", "")
-            if not base_url:
-                base_url = _get_base_url(request)
-            send_password_reset_email(email, token, base_url)
-            print(f"[AUTH] Password reset email sent to {email}")
-        except Exception as e:
-            print(f"[AUTH] Failed to send password reset email: {e}")
+        # Send password reset email in thread pool to avoid blocking event loop
+        import asyncio
+        base_url = os.environ.get("HOTNEWS_BASE_URL", "") or _get_base_url(request)
+        async def _send_reset():
+            try:
+                from hotnews.kernel.services.email_service import send_password_reset_email
+                await asyncio.to_thread(send_password_reset_email, email, token, base_url)
+            except Exception as e:
+                print(f"[AUTH] Failed to send password reset email: {e}")
+        asyncio.create_task(_send_reset())
     
     return {"ok": True, "message": "If the email exists, a reset link will be sent"}
 
