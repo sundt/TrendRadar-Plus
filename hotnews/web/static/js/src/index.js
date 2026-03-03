@@ -49,7 +49,6 @@ import('./favorites.js');
 import './article-tags.js';
 import './context-menu.js';
 import('./comment-preview.js');
-import './snippet-preview.js';
 import('./todo.js');
 import('./subscribe-sidebar.js');
 import('./payment.js');
