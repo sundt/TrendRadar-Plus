@@ -3443,6 +3443,7 @@ body.eye-protection-mode .snippet-popover {
 /* Todo Button (首页) */
 .todo-btn {
     position: relative;
+    display: none !important;
 }
 
 .todo-badge {
