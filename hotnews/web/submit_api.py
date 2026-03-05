@@ -6,16 +6,19 @@
 2. 重复检查
 3. RSS 发现（多路径探测，选最优）
 4. 服务器可达性测试（推断 use_socks_proxy）
-5. 写入 pending_sources 待审表
+5. 自动审核评分（Tranco 榜单 + 规则评分，>= 60 直接入库）
+6. 分流：自动入库 or 写入 pending_sources 待人工审核
 """
 
 import asyncio
+import csv
+import hashlib
 import ipaddress
 import socket
 import time
 import uuid
 import subprocess
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
 import requests
@@ -29,6 +32,9 @@ from pathlib import Path
 router = APIRouter(prefix="/api/submit", tags=["user-submit"])
 
 project_root = Path(__file__).parent.parent.parent
+
+# ─── 自动审核阈值 ─────────────────────────────────────────────────────────────
+AUTO_APPROVE_THRESHOLD = 60
 
 # ─── 限流（内存简易实现）───────────────────────────────────────────────────
 _rate_limit: Dict[str, List[float]] = {}   # ip -> [timestamp, ...]
@@ -99,6 +105,104 @@ def _ensure_pending_sources_table():
 
 # 启动时建表
 _ensure_pending_sources_table()
+
+
+# ─── Tranco 榜单（启动时加载到内存）─────────────────────────────────────────
+
+_tranco_ranks: Dict[str, int] = {}   # domain -> rank (1 = 最高)
+_TRANCO_PATH = project_root / "data" / "tranco-top1m.csv"
+
+def _load_tranco():
+    global _tranco_ranks
+    if _tranco_ranks:
+        return
+    if not _TRANCO_PATH.exists():
+        return
+    try:
+        with open(_TRANCO_PATH, newline="", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if len(row) >= 2:
+                    try:
+                        rank = int(row[0])
+                        domain = row[1].strip().lower()
+                        _tranco_ranks[domain] = rank
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+_load_tranco()
+
+# 低质量域名后缀黑名单
+_SPAMMY_TLDS: Set[str] = {
+    ".xyz", ".top", ".club", ".online", ".site", ".icu",
+    ".vip", ".win", ".loan", ".review", ".stream",
+}
+
+# ─── 自动审核评分 ─────────────────────────────────────────────────────────────
+
+def _calc_trust_score(
+    host: str,
+    feed_url: str,
+    item_count: int,
+    feed_title: str,
+    needs_proxy: bool,
+) -> tuple[int, Dict[str, int]]:
+    """
+    计算可信度分数（满分 100），返回 (total_score, breakdown)。
+
+    评分规则：
+      +30  Tranco top 10w
+      +20  Tranco top 50w
+      +10  Tranco top 100w（榜单内但排名较低）
+      +20  HTTPS
+      +20  条目数 >= 10
+      +15  条目数 >= 5（与上面互斥，取高分）
+      +15  有明确 feed title
+      -20  域名后缀黑名单
+      -10  HTTP（非 HTTPS）
+      （需要代理不扣分，境外知名站点需要代理是正常的）
+    """
+    breakdown: Dict[str, int] = {}
+
+    # Tranco 排名
+    # 主域名可能带 www，取根域名也检查一遍
+    root_host = host.removeprefix("www.")
+    rank = _tranco_ranks.get(host) or _tranco_ranks.get(root_host)
+    if rank:
+        if rank <= 100_000:
+            breakdown["tranco_top100k"] = 30
+        elif rank <= 500_000:
+            breakdown["tranco_top500k"] = 20
+        else:
+            breakdown["tranco_top1m"] = 10
+    
+    # HTTPS
+    if feed_url.startswith("https://"):
+        breakdown["https"] = 20
+    else:
+        breakdown["no_https"] = -10
+
+    # 条目数
+    if item_count >= 10:
+        breakdown["items_10plus"] = 20
+    elif item_count >= 5:
+        breakdown["items_5plus"] = 15
+
+    # Feed title
+    if feed_title and feed_title != host:
+        breakdown["has_title"] = 15
+
+    # 垃圾域名后缀
+    for tld in _SPAMMY_TLDS:
+        if host.endswith(tld):
+            breakdown["spammy_tld"] = -20
+            break
+
+    total = sum(breakdown.values())
+    total = max(0, min(100, total))  # 夹在 0~100
+    return total, breakdown
 
 
 # ─── 安全校验 ────────────────────────────────────────────────────────────────
@@ -413,34 +517,89 @@ async def submit_url(req: SubmitRequest, request: Request):
     # ⑥ 服务器可达性检测
     needs_proxy = await _check_server_reachability(feed_url)
 
-    # ⑦ 写入 pending_sources
-    pending_id = "pending_" + str(uuid.uuid4())[:8]
+    # ⑦ 自动审核评分
+    score, breakdown = _calc_trust_score(
+        host=host,
+        feed_url=feed_url,
+        item_count=item_count,
+        feed_title=feed_title,
+        needs_proxy=needs_proxy,
+    )
+    auto_approve = score >= AUTO_APPROVE_THRESHOLD
+
     now = int(time.time())
     conn = _get_conn()
-    conn.execute(
-        """
-        INSERT INTO pending_sources
-            (id, submitted_url, detected_rss, feed_title, host, item_count,
-             use_socks_proxy, status, submitter_ip, submitted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-        """,
-        (pending_id, raw_url, feed_url, feed_title, host, item_count,
-         1 if needs_proxy else 0, anon_ip, now),
-    )
-    conn.commit()
 
-    return JSONResponse({
-        "ok": True,
-        "status": "submitted",
-        "result": {
-            "feed_url": feed_url,
-            "feed_title": feed_title,
-            "host": host,
-            "item_count": item_count,
-            "needs_proxy": needs_proxy,
-        },
-        "message": "已提交审核，感谢你的贡献！管理员确认后将收录到平台。",
-    })
+    if auto_approve:
+        # ── 直接写入 rss_sources ──────────────────────────────────────────
+        source_id = "rss_" + hashlib.md5(feed_url.encode()).hexdigest()[:8]
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO rss_sources
+                (id, name, url, host, cadence, enabled,
+                 use_socks_proxy, created_at, updated_at, added_at)
+            VALUES (?, ?, ?, ?, 'P4', 1, ?, ?, ?, ?)
+            """,
+            (source_id, feed_title or host, feed_url, host,
+             1 if needs_proxy else 0, now, now, now),
+        )
+        # 同时记录到 pending_sources（留审计日志）
+        pending_id = "pending_" + str(uuid.uuid4())[:8]
+        conn.execute(
+            """
+            INSERT INTO pending_sources
+                (id, submitted_url, detected_rss, feed_title, host, item_count,
+                 use_socks_proxy, status, submitter_ip, submitted_at,
+                 reviewed_at, approved_source_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'auto_approved', ?, ?, ?, ?)
+            """,
+            (pending_id, raw_url, feed_url, feed_title, host, item_count,
+             1 if needs_proxy else 0, anon_ip, now, now, source_id),
+        )
+        conn.commit()
+
+        return JSONResponse({
+            "ok": True,
+            "status": "auto_approved",
+            "result": {
+                "feed_url": feed_url,
+                "feed_title": feed_title,
+                "host": host,
+                "item_count": item_count,
+                "needs_proxy": needs_proxy,
+                "score": score,
+            },
+            "message": "✅ 已自动收录！稍后就能在平台看到这个源了，感谢你的贡献！",
+        })
+
+    else:
+        # ── 进人工审核队列 ────────────────────────────────────────────────
+        pending_id = "pending_" + str(uuid.uuid4())[:8]
+        conn.execute(
+            """
+            INSERT INTO pending_sources
+                (id, submitted_url, detected_rss, feed_title, host, item_count,
+                 use_socks_proxy, status, submitter_ip, submitted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+            """,
+            (pending_id, raw_url, feed_url, feed_title, host, item_count,
+             1 if needs_proxy else 0, anon_ip, now),
+        )
+        conn.commit()
+
+        return JSONResponse({
+            "ok": True,
+            "status": "submitted",
+            "result": {
+                "feed_url": feed_url,
+                "feed_title": feed_title,
+                "host": host,
+                "item_count": item_count,
+                "needs_proxy": needs_proxy,
+                "score": score,
+            },
+            "message": "已提交审核，管理员确认后将收录到平台，感谢你的贡献！",
+        })
 
 
 # ─── 管理员待审接口 ────────────────────────────────────────────────────────────
