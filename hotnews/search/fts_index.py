@@ -54,22 +54,38 @@ class FTSIndex:
         conn = sqlite3.connect(str(self.db_path))
         cursor = conn.cursor()
 
-        # 检测现有 tokenizer，若不是 trigram 则重建表（迁移）
+        # 尝试使用 trigram tokenizer，如果不支持则回退到 unicode61
+        use_trigram = True
+        try:
+            cursor.execute("SELECT 1 FROM pragma_module_list WHERE name='fts5trigram'")
+            if not cursor.fetchone():
+                use_trigram = False
+        except Exception:
+            use_trigram = False
+
+        # 检测现有 tokenizer，判断是否需要重建
         existing = cursor.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='news_fts'"
         ).fetchone()
-        if existing and "trigram" not in existing[0]:
-            logger.info("FTS tokenizer 不是 trigram，正在重建索引表...")
-            cursor.execute("DROP TABLE IF EXISTS news_fts")
+        
+        tokenizer = "trigram" if use_trigram else "unicode61"
+        
+        if existing:
+            if (use_trigram and "trigram" not in existing[0]) or \
+               (not use_trigram and "trigram" in existing[0]):
+                logger.info(f"FTS tokenizer 需要调整，正在重建索引表 ({tokenizer})...")
+                cursor.execute("DROP TABLE IF EXISTS news_fts")
 
-        # 创建 FTS5 虚拟表（trigram 支持中文子串匹配）
-        cursor.execute("""
+        # 创建 FTS5 虚拟表
+        # trigram: 支持中文子串匹配（需要 SQLite 编译支持）
+        # unicode61: 通用 Unicode 分词，兼容性好
+        cursor.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
                 title,
                 url,
                 platform_id,
                 date,
-                tokenize='trigram'
+                tokenize='{tokenizer}'
             )
         """)
 
