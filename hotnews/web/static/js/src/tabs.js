@@ -494,8 +494,8 @@ export const tabs = {
             return;
         }
 
-        // finance in card mode: no SSR cards, use loadCardMode
-        const DYNAMIC_CARD_CATS = ['finance'];
+        // finance and openclaw in card mode: no SSR cards, use loadCardMode
+        const DYNAMIC_CARD_CATS = ['finance', 'openclaw'];
         if (DYNAMIC_CARD_CATS.includes(String(categoryId)) && mode === 'card') {
             const grid = paneEl.querySelector('.platform-grid');
             const hasCards = grid && grid.querySelector('.platform-card');
@@ -788,13 +788,15 @@ ready(function () {
         const activeTab = tabs.getActiveTabId();
 
         // Self-managed timeline tabs (have their own dedicated modules)
-        const SELF_MANAGED_TIMELINE = ['explore', 'discovery'];
+        const SELF_MANAGED_TIMELINE = ['explore', 'discovery', 'finance', 'openclaw'];
 
         if (mode === 'timeline') {
             if (SELF_MANAGED_TIMELINE.includes(catId)) {
                 // These tabs' own modules handle timeline rendering.
                 if (catId === 'finance' && window.HotNews?.financeTimeline?.load) {
                     window.HotNews.financeTimeline.load(true);
+                } else if (catId === 'openclaw' && window.HotNews?.openclawTimeline?.load) {
+                    window.HotNews.openclawTimeline.load(true);
                 } else if (catId !== activeTab) {
                     tabs.switchTab(catId);
                 }
@@ -808,8 +810,8 @@ ready(function () {
             }
         } else {
             // Switching to card mode
-            if (catId === 'finance') {
-                // finance has no SSR card data — use categoryTimeline.loadCardMode
+            if (catId === 'finance' || catId === 'openclaw') {
+                // finance and openclaw have no SSR card data — use categoryTimeline.loadCardMode
                 categoryTimeline.loadCardMode(catId);
             } else if (catId === 'my-tags') {
                 // my-tags card content is managed by my-tags.js module
