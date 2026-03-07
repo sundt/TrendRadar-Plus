@@ -17,6 +17,8 @@ const FIXED_CATEGORIES = {
     'discovery': 'card',       // 新发现 — 固定卡片
     'rsscol-rss': 'card',      // RSS 阅读器 — 固定
     'explore': 'timeline',     // 精选博客 — 固定时间线
+    'openclaw': 'timeline',    // OpenClaw — 固定时间线
+    'finance': 'timeline',     // 财经 — 固定时间线
 };
 
 // 自管理栏目：虽然在 column_config 树中有记录，但不是 tag-driven，允许切换视图模式
