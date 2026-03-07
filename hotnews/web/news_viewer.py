@@ -115,6 +115,12 @@ PLATFORM_CATEGORIES = {
             "juejin", "github", "hackernews", "v2ex", "producthunt", "freebuf"
         ]
     },
+    "openclaw": {
+        "name": "OpenClaw",
+        "icon": "🦞",
+        "news_limit": 10,
+        "platforms": []
+    },
     "sports": {
         "name": "体育",
         "icon": "🏀",
@@ -133,7 +139,7 @@ PLATFORM_CATEGORIES = {
 
 # 分类显示顺序（用户期望的顺序）
 # Note: "explore" is injected by server.py and will always be the first tab.
-CATEGORY_ORDER = ['ai', 'finance', 'tech_news', 'developer', 'social', 'general', 'sports', 'other']
+CATEGORY_ORDER = ['ai', 'finance', 'tech_news', 'developer', 'openclaw', 'social', 'general', 'sports', 'other']
 
 
 class NewsViewerService:

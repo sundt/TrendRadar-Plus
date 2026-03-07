@@ -330,6 +330,81 @@ async def api_finance_timeline(
 
 
 # ---------------------------------------------------------------------------
+# OpenClaw Timeline
+# ---------------------------------------------------------------------------
+
+@router.get("/api/rss/openclaw/timeline")
+async def api_openclaw_timeline(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    """OpenClaw 时间线 - 标题包含 openclaw 关键词的所有文章按发布时间倒序。"""
+    conn = get_online_db()
+    lim = min(int(limit or 50), 500)
+    off = int(offset or 0)
+
+    fetch_limit = off + lim + 200
+
+    try:
+        cur = conn.execute(
+            """
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
+                   COALESCE(s.name, cs.name, e.source_id) as source_name
+            FROM rss_entries e
+            LEFT JOIN rss_sources s ON s.id = e.source_id
+            LEFT JOIN custom_sources cs ON cs.id = e.source_id
+            WHERE (LOWER(e.title) LIKE '%openclaw%')
+              AND e.published_at > 0
+              AND e.title IS NOT NULL AND e.title != ''
+              AND e.url IS NOT NULL AND e.url != ''
+            ORDER BY e.published_at DESC
+            LIMIT ?
+            """,
+            (fetch_limit,),
+        )
+        rows = cur.fetchall() or []
+    except Exception:
+        rows = []
+
+    seen_urls: set = set()
+    seen_titles: set = set()
+    items: List[Dict[str, Any]] = []
+
+    for r in rows:
+        sid = str(r[0] or "").strip()
+        title = str(r[1] or "").strip()
+        url = str(r[2] or "").strip()
+        created_at = int(r[3] or 0)
+        published_at = int(r[4] or 0)
+        sname = str(r[5] or "").strip()
+
+        if not url or url in seen_urls:
+            continue
+        tk = title.lower()
+        if tk and tk in seen_titles:
+            continue
+        seen_urls.add(url)
+        if tk:
+            seen_titles.add(tk)
+
+        it = rss_row_to_item(
+            platform_id=f"rss-{sid}" if not sid.startswith("custom_") else sid,
+            source_id=sid,
+            source_name=sname,
+            title=title,
+            url=url,
+            created_at=created_at,
+        )
+        it["published_at"] = published_at
+        items.append(it)
+
+    sliced = items[off:off + lim]
+    return UnicodeJSONResponse(
+        content={"offset": off, "limit": lim, "items": sliced, "total_returned": len(sliced)}
+    )
+
+
+# ---------------------------------------------------------------------------
 # 通用分类 Timeline（普通分类如 tech_news, ainews, social 等）
 # ---------------------------------------------------------------------------
 
