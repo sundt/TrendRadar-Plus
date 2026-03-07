@@ -260,7 +260,7 @@ function _cleanupInactiveTabs(currentTabId) {
     tabsToClean.forEach(tabId => {
         try {
             // Skip special tabs that shouldn't be cleaned
-            if (['explore', 'my-tags', 'discovery', 'rsscol-rss'].includes(tabId)) return;
+            if (['explore', 'my-tags', 'discovery', 'rsscol-rss', 'finance', 'openclaw'].includes(tabId)) return;
             // Skip topic tabs — their content is async-loaded and expensive to re-fetch
             if (String(tabId).startsWith('topic-')) return;
             

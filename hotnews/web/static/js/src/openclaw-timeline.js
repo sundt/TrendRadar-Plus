@@ -279,8 +279,9 @@ events.on('tab:switched', (detail) => {
     if (viewMode.get(CATEGORY_ID) !== 'timeline') return;
     if (_inFlight) return;
     const grid = _getGrid();
-    const hasCards = grid && grid.querySelectorAll('.tr-openclaw-card').length > 0;
-    if (hasCards) {
+    // 检查是否有实际内容（不只是容器 div 存在，还要有 news-item 条目）
+    const hasLoadedContent = grid && grid.querySelector('.tr-openclaw-card .news-item');
+    if (hasLoadedContent) {
         if (!_finished) _attachObserver();
     } else {
         _initialLoad().catch(() => {});
