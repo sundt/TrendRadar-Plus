@@ -463,7 +463,8 @@ export const tabs = {
 
         // --- View mode handling ---
         // Tabs with their own dedicated timeline modules handle themselves
-        const SELF_MANAGED_TIMELINE = ['explore', 'discovery'];
+        // finance/openclaw have dedicated timeline modules; must be excluded from generic categoryTimeline
+        const SELF_MANAGED_TIMELINE = ['explore', 'discovery', 'finance', 'openclaw'];
         const mode = viewMode.get(categoryId);
 
         if (mode === 'timeline' && !SELF_MANAGED_TIMELINE.includes(String(categoryId))) {
