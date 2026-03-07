@@ -35,6 +35,7 @@ import './auth.js';
 import './my-tags.js';
 import './discovery.js';
 import './finance-timeline.js';
+import './openclaw-timeline.js';
 import './source-subscription.js';
 import './login-modal.js';
 // 以下模块改为动态加载（code-split），减少主 bundle 体积

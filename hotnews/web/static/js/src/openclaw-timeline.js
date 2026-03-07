@@ -193,7 +193,13 @@ async function _loadTimeline() {
     const myGen = _generation;
     _offset = 0;
     _finished = false;
-    grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+    // 显示 skeleton 加载占位（与其他 timeline 栏目保持一致）
+    const skeletonRows = Array.from({ length: 8 }, () =>
+        '<div class="tr-skeleton-card-row"><div class="tr-skeleton-idx"></div><div class="tr-skeleton-title"></div></div>'
+    ).join('');
+    grid.innerHTML = ['', '', ''].map(() =>
+        `<div class="tr-skeleton-card tr-skeleton-explore">${skeletonRows}</div>`
+    ).join('');
 
     try {
         const limit = getItemsPerCard();
