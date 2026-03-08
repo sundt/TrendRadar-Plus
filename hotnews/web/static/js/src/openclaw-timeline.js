@@ -6,6 +6,7 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { events } from './events.js';
 import { viewMode } from './view-mode.js';
+import { skeletonCards } from './skeleton.js';
 
 const CATEGORY_ID = 'openclaw';
 const INITIAL_CARDS_DESKTOP = 3;
@@ -194,12 +195,7 @@ async function _loadTimeline() {
     _offset = 0;
     _finished = false;
     // 显示 skeleton 加载占位（与其他 timeline 栏目保持一致）
-    const skeletonRows = Array.from({ length: 8 }, () =>
-        '<div class="tr-skeleton-card-row"><div class="tr-skeleton-idx"></div><div class="tr-skeleton-title"></div></div>'
-    ).join('');
-    grid.innerHTML = ['', '', ''].map(() =>
-        `<div class="tr-skeleton-card tr-skeleton-explore">${skeletonRows}</div>`
-    ).join('');
+    grid.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3);
 
     try {
         const limit = getItemsPerCard();
