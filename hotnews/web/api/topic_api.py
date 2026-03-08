@@ -184,13 +184,12 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
         if not sub or not sub.get("is_vip"):
             return JSONResponse({"ok": False, "error": "新增主题为会员专属功能，请先升级会员。"}, status_code=403)
         
-        # Check topic quota limit
-        current_topics = storage.get_topics_by_user(str(user["id"]))
-        quota = sub.get("usage_quota", 0)
-        if len(current_topics) >= quota:
+        # Check consumable token quota 
+        usage_remaining = sub.get("usage_remaining", 0)
+        if usage_remaining <= 0:
             return JSONResponse({
                 "ok": False, 
-                "error": f"已达到会员额度（最多可创建 {quota} 个主题），请升级会员套餐或删除旧主题。"
+                "error": "您的会员追踪额度已用尽。新建主题需要消耗额度，请重新开通或升级会员获取更多额度。"
             }, status_code=403)
     except Exception as e:
         logger.error(f"Failed to check VIP status: {e}")
@@ -223,6 +222,16 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
     
     if not topic:
         return JSONResponse({"ok": False, "error": "创建主题失败"}, status_code=500)
+        
+    # 主题创建成功，扣除一次追踪额度
+    try:
+        from hotnews.kernel.user.subscription_service import consume_usage_quota
+        from hotnews.web.user_db import get_user_db_conn
+        conn = get_user_db_conn(request.app.state.project_root)
+        consume_usage_quota(conn, int(user["id"]))
+    except Exception as e:
+        logger.error(f"Failed to consume quota after topic creation: {e}")
+        # Even if consumption fails, the topic is created. Logging the error is sufficient.
     
     # 立即触发数据源抓取（后台执行，不阻塞响应）
     asyncio.create_task(_trigger_source_fetch(rss_source_ids, request.app.state.project_root))
