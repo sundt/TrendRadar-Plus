@@ -145,17 +145,18 @@
       .hn-input-row button:disabled { background: #93c5fd; cursor: default; }
       @media (max-width: 480px) {
         #hn-submit-panel { 
-          width: 100vw; right: 0; left: 0; bottom: 0;
-          max-height: 75vh; height: auto;
-          border-radius: 20px 20px 0 0;
-          padding-bottom: env(safe-area-inset-bottom);
-          /* Override floating animations with literal Bottom Sheet slide */
-          transform: translateY(100%) !important; 
-          opacity: 1 !important;
-          transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1) !important;
+          width: 100vw; height: 100vh; max-height: none;
+          top: 0; left: 0; right: 0; bottom: 0;
+          border-radius: 0;
+          padding-top: env(safe-area-inset-top, 0);
+          /* Override floating animations with full-screen fade-in */
+          transform: translateY(10px) scale(0.98) !important; 
+          opacity: 0 !important;
+          transition: transform 0.25s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s !important;
         }
         #hn-submit-panel.open {
-          transform: translateY(0) !important;
+          transform: translateY(0) scale(1) !important;
+          opacity: 1 !important;
         }
       }
       #hn-submit-overlay {
@@ -165,9 +166,9 @@
         transition: opacity 0.25s, visibility 0.25s;
         display: none;
       }
-      @media (max-width: 480px) {
-        #hn-submit-overlay { display: block; }
-        #hn-submit-overlay.open { opacity: 1; visibility: visible; }
+      /* Hide overlay entirely on mobile since the panel is full-screen */
+      @media (min-width: 481px) {
+        #hn-submit-overlay.open { opacity: 1; visibility: visible; display: block; }
       }
     `;
     document.head.appendChild(style);
@@ -212,18 +213,18 @@
     `;
     document.body.appendChild(panel);
 
-    // iOS 键盘遮挡适配：使用 VisualViewport API 动态调整底部间距
+    // iOS 键盘遮挡适配：对于全屏面板，使用 VisualViewport 调整高度
     if (window.visualViewport) {
       const initialViewportHeight = window.visualViewport.height;
       window.visualViewport.addEventListener('resize', () => {
         if (!panel.classList.contains('open') || window.innerWidth > 480) return;
-        // 如果高度变小，说明键盘弹起了
+        
+        // 动态设置高度以避开键盘，确保输入框可见
         if (window.visualViewport.height < initialViewportHeight) {
-          const keyboardHeight = window.innerHeight - window.visualViewport.height;
-          panel.style.bottom = `${keyboardHeight}px`;
+          panel.style.height = `${window.visualViewport.height}px`;
         } else {
-          // 键盘收起
-          panel.style.bottom = '0px';
+          // 键盘收起 (reset)
+          panel.style.height = '100vh';
         }
       });
     }
