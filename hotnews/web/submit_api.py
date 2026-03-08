@@ -529,6 +529,10 @@ async def submit_url(req: SubmitRequest, request: Request):
     pending_id = "pending_" + str(uuid.uuid4())[:8]
     # 利用 reject_reason 字段临时存储系统给出的参考分数，供后台展示
     score_note = f"系统参考评分: {score}"
+    
+    now = int(time.time())
+    conn = _get_conn()
+    
     conn.execute(
         """
         INSERT INTO pending_sources
