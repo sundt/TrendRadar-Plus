@@ -53,7 +53,7 @@ async function loadPendingSources() {
 
   try {
     const resp = await fetch(`/api/admin/pending-sources?status=${status}`, {
-      headers: { 'X-Admin-Token': window._adminToken || '' }
+      headers: { 'X-Admin-Token': token }
     });
     const data = await resp.json();
 
@@ -133,7 +133,7 @@ async function approvePending(id) {
 
   const resp = await fetch(`/api/admin/pending-sources/${id}/approve`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': window._adminToken || '' },
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
     body: JSON.stringify({ name: name.trim(), category: category.trim() }),
   });
   const data = await resp.json();
@@ -151,7 +151,7 @@ async function rejectPending(id) {
 
   const resp = await fetch(`/api/admin/pending-sources/${id}/reject`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': window._adminToken || '' },
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
     body: JSON.stringify({ reason }),
   });
   const data = await resp.json();
@@ -176,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // 初始化时获取徽标数量
   fetch('/api/admin/pending-sources?status=pending', {
-    headers: { 'X-Admin-Token': window._adminToken || '' }
+    headers: { 'X-Admin-Token': token }
   }).then(r => r.json()).then(data => {
     const badge = document.getElementById('pending-badge');
     const count = (data.counts || {}).pending || 0;
