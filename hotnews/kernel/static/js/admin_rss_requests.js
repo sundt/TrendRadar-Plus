@@ -167,14 +167,8 @@ function escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// Tab 切换时自动加载
+// 页面加载时只获取初始徽标数量
 document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('[data-tab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.tab === 'pending-submissions') loadPendingSources();
-    });
-  });
-  // 初始化时获取徽标数量
   fetch('/api/admin/pending-sources?status=pending', {
     headers: { 'X-Admin-Token': token }
   }).then(r => r.json()).then(data => {
