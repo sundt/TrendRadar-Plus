@@ -13,6 +13,30 @@ import { skeletonCards, skeletonSentinel } from './skeleton.js';
 const INITIAL_CARDS_DESKTOP = 3;
 const INITIAL_CARDS_MOBILE = 1;
 const MAX_CARDS = 20;
+const COLUMN_CONFIG_RETRY_MS = 300;
+const COLUMN_CONFIG_MAX_RETRIES = 5;
+
+/**
+ * 等待 _columnConfig 就绪（服务器重启后异步加载可能延迟）
+ * 返回 true 表示就绪，false 表示超时仍未就绪
+ */
+async function _waitForColumnConfig() {
+    if (Array.isArray(window._columnConfig) && window._columnConfig.length > 0) return true;
+    for (let i = 0; i < COLUMN_CONFIG_MAX_RETRIES; i++) {
+        await new Promise(r => setTimeout(r, COLUMN_CONFIG_RETRY_MS));
+        if (Array.isArray(window._columnConfig) && window._columnConfig.length > 0) return true;
+    }
+    // 最后尝试主动拉取一次
+    try {
+        const resp = await fetch('/api/columns', { credentials: 'include' });
+        if (resp.ok) {
+            const d = await resp.json();
+            window._columnConfig = Array.isArray(d) ? d : (d.columns || []);
+            if (window._columnConfig.length > 0) return true;
+        }
+    } catch {}
+    return false;
+}
 
 /**
  * 递归在 window._columnConfig 树中查找 catId 节点
@@ -270,6 +294,9 @@ async function loadTimeline(catId, force = false) {
         return;
     }
 
+    // 等待 _columnConfig 就绪，避免重启后 tag-driven 栏目显示空白
+    await _waitForColumnConfig();
+
     const grid = _getGrid(catId);
     if (!grid) return;
 
@@ -342,6 +369,9 @@ function restoreCardMode(catId) {
 async function loadCardMode(catId) {
     const grid = _getGrid(catId);
     if (!grid) return;
+
+    // 等待 _columnConfig 就绪，避免重启后 tag-driven 栏目显示空白
+    await _waitForColumnConfig();
 
     // Reset grid styles to standard card layout
     grid.style.display = '';

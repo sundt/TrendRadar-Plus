@@ -156,10 +156,77 @@ class CacheWarmupService:
             logger.warning(f"  ⚠️ {msg}")
             errors.append(msg)
 
+        # Tag-driven Timelines (AI、开发者、商业、财经、科学健康、生活等)
+        try:
+            tag_count = self._warmup_tag_timelines()
+            if tag_count > 0:
+                logger.info(f"  ✅ Tag Timelines 缓存已预热: {tag_count} 个标签")
+        except Exception as e:
+            msg = f"Tag Timelines warmup failed: {e}"
+            logger.warning(f"  ⚠️ {msg}")
+            errors.append(msg)
+
         result.elapsed_ms = int((time.time() - start) * 1000)
         result.errors = errors
         result.success = len(errors) == 0
         return result
+
+    # ------------------------------------------------------------------
+    # Tag-driven Timelines warmup (预热 SQLite 页面缓存)
+    # ------------------------------------------------------------------
+    def _warmup_tag_timelines(self) -> int:
+        """预热 tag-driven 栏目的 SQLite 页面缓存。
+        
+        读取 column_config 表中的 tag_ids，执行与 /api/timeline 相同的查询，
+        让 SQLite 页面缓存提前加载到内存，避免首次请求慢。
+        """
+        # 1. 从 column_config 收集所有 tag_ids
+        all_tags: Set[str] = set()
+        try:
+            rows = self.conn.execute(
+                "SELECT tag_ids FROM column_config WHERE enabled = 1"
+            ).fetchall()
+            for row in rows:
+                raw = str(row[0] or "").strip()
+                if not raw:
+                    continue
+                try:
+                    tags = json.loads(raw)
+                    if isinstance(tags, list):
+                        for t in tags:
+                            s = str(t or "").strip()
+                            if s:
+                                all_tags.add(s)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        except Exception:
+            # column_config 表可能不存在
+            return 0
+
+        if not all_tags:
+            return 0
+
+        # 2. 对每个 tag 执行轻量查询，预热 SQLite 页面缓存
+        warmed = 0
+        for tag_id in all_tags:
+            try:
+                # 与 timeline_routes.py 的查询结构一致
+                self.conn.execute(
+                    """
+                    SELECT et.source_id, et.dedup_key, MAX(et.created_at) AS latest
+                    FROM rss_entry_tags et
+                    WHERE et.tag_id = ?
+                    GROUP BY et.source_id, et.dedup_key
+                    ORDER BY latest DESC
+                    LIMIT 50
+                    """,
+                    (tag_id,),
+                ).fetchall()
+                warmed += 1
+            except Exception:
+                pass
+
+        return warmed
 
     # ------------------------------------------------------------------
     # Brief Timeline warmup
