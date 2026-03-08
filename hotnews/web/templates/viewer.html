@@ -423,7 +423,8 @@
 
     {% if is_mobile %}
     <script type="module" src="{{ static_prefix }}/js/mobile/index-mobile.js?v={{ asset_rev }}"></script>
-    <script type="module" src="{{ static_prefix }}/js/src/mobile-enhance.js?v={{ asset_rev }}"></script>
+ <!-- Mobile JS Enhancement -->
+<script src="{{ static_prefix }}/js/src/mobile-enhance.js?v=20260308h"></script>
     {% else %}
     <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
     {% endif %}
@@ -508,7 +509,7 @@
             }
         });
     </script>
-<script src="/static/js/src/source-submit-chat.js?v=20260308e"></script>
+<script src="/static/js/src/source-submit-chat.js?v=20260308f"></script>
 </body>
 
 </html>

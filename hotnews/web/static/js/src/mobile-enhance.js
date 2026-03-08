@@ -207,6 +207,13 @@ const MobileEnhance = {
         </div>
       </div>
       <div class="me-settings-divider"></div>
+      <div class="me-settings-item" data-action="submit_url">
+        <div class="me-settings-item-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          <span>推荐内容</span>
+        </div>
+      </div>
+      <div class="me-settings-divider"></div>
       <div class="me-settings-item" data-action="login">
         <div class="me-settings-item-left">
           <svg viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -235,6 +242,16 @@ const MobileEnhance = {
           this._closeSettingsMenu();
           if (typeof window.openTodoSidebar === 'function') {
             window.openTodoSidebar();
+          }
+          break;
+
+        case 'submit_url':
+          this._closeSettingsMenu();
+          const fabBtn = document.getElementById('hn-submit-fab');
+          if (fabBtn) {
+            fabBtn.click(); // Trigger the submit chat panel to open
+          } else {
+            alert('投稿功能暂未加载完成');
           }
           break;
 

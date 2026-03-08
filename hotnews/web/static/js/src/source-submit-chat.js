@@ -64,13 +64,10 @@
         stroke: #0066cc; /* Apple's system blue for the icon */
       }
       @media (max-width: 480px) {
+        /* Mobile: completely hide the FAB, functionality moved to bottom '...' menu */
         #hn-submit-fab { 
-          padding: 0; width: 50px; border-radius: 50%; 
-          /* 避开移动端底部导航栏 (约50px + safe-area) */
-          bottom: calc(74px + env(safe-area-inset-bottom));
-          right: 16px;
+          display: none !important; 
         }
-        #hn-submit-fab .hn-fab-text { display: none; }
       }
       #hn-submit-panel {
         position: fixed; bottom: 88px; right: 24px; z-index: 9998;
