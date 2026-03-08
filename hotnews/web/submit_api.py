@@ -445,8 +445,10 @@ class SubmitRequest(BaseModel):
     url: str
 
 
+from fastapi import BackgroundTasks
+
 @router.post("/url")
-async def submit_url(req: SubmitRequest, request: Request):
+async def submit_url(req: SubmitRequest, request: Request, background_tasks: BackgroundTasks):
     """用户提交网站 URL"""
     raw_url = (req.url or "").strip()
 
@@ -500,64 +502,87 @@ async def submit_url(req: SubmitRequest, request: Request):
             "message": "这个网站已经在审核队列中了，请耐心等待管理员处理",
         })
 
-    # ⑤ RSS 发现（在线程池中执行，避免阻塞事件循环）
-    feed_info = await asyncio.to_thread(_discover_rss, raw_url)
-
-    if not feed_info:
-        return JSONResponse({
-            "ok": False,
-            "status": "no_rss",
-            "message": "未找到 RSS/Atom 订阅源。目前仅支持有 RSS 的网站。如果你知道具体的 RSS 地址，可以直接提交那个地址。",
-        })
-
-    feed_url = feed_info["url"]
-    feed_title = feed_info["title"] or host
-    item_count = feed_info["item_count"]
-
-    # ⑥ 服务器可达性检测
-    needs_proxy = await _check_server_reachability(feed_url)
-
-    # ⑦ 自动审核评分
-    score, breakdown = _calc_trust_score(
-        host=host,
-        feed_url=feed_url,
-        item_count=item_count,
-        feed_title=feed_title,
-        needs_proxy=needs_proxy,
-    )
-    # 统统进人工审核队列
+    # 先保存一条 `detecting` 状态的记录，立即返回让前端不阻塞
     pending_id = "pending_" + str(uuid.uuid4())[:8]
-    # 利用 reject_reason 字段临时存储系统给出的参考分数，供后台展示
-    score_note = f"系统参考评分: {score}"
-    
     now = int(time.time())
     conn = _get_conn()
-    
     conn.execute(
         """
         INSERT INTO pending_sources
-            (id, submitted_url, detected_rss, feed_title, host, item_count,
-             use_socks_proxy, status, reject_reason, submitter_ip, submitted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+            (id, submitted_url, host, status, reject_reason, submitter_ip, submitted_at)
+        VALUES (?, ?, ?, 'detecting', '', ?, ?)
         """,
-        (pending_id, raw_url, feed_url, feed_title, host, item_count,
-         1 if needs_proxy else 0, score_note, anon_ip, now),
+        (pending_id, raw_url, host, anon_ip, now),
     )
     conn.commit()
 
+    # 将耗时的 RSS 探测和连通性测试放入后台执行
+    background_tasks.add_task(_process_submission_background, pending_id, raw_url, host)
+
     return JSONResponse({
         "ok": True,
-        "status": "submitted",
-        "result": {
-            "feed_url": feed_url,
-            "feed_title": feed_title,
-            "host": host,
-            "item_count": item_count,
-            "needs_proxy": needs_proxy,
-            "score": score,
-        },
-        "message": "已成功提交审核！我们将评估该站点是否符合高质量资讯标准，感谢你的推荐。👏",
+        "status": "detecting",
+        "message": "您的提交已收录，审核后会显示在订阅列表中，感谢您的推荐！",
     })
+
+async def _process_submission_background(pending_id: str, raw_url: str, host: str):
+    """后台处理 RSS 探测、连通性检查及信任分计算，并更新数据库状态"""
+    try:
+        # ⑤ RSS 发现（在线程池中执行，避免阻塞事件循环）
+        feed_info = await asyncio.to_thread(_discover_rss, raw_url)
+        
+        conn = _get_conn()
+        now = int(time.time())
+
+        if not feed_info:
+            conn.execute(
+                "UPDATE pending_sources SET status='rejected', reject_reason=?, reviewed_at=? WHERE id=?",
+                ("未找到 RSS/Atom 订阅源", now, pending_id)
+            )
+            conn.commit()
+            return
+            
+        feed_url = feed_info["url"]
+        feed_title = feed_info["title"] or host
+        item_count = feed_info["item_count"]
+
+        # ⑥ 服务器可达性检测
+        needs_proxy = await _check_server_reachability(feed_url)
+
+        # ⑦ 自动审核评分
+        score, breakdown = _calc_trust_score(
+            host=host,
+            feed_url=feed_url,
+            item_count=item_count,
+            feed_title=feed_title,
+            needs_proxy=needs_proxy,
+        )
+        score_note = f"系统参考评分: {score}"
+        
+        # 统统进人工审核队列
+        conn.execute(
+            """
+            UPDATE pending_sources 
+            SET detected_rss = ?, feed_title = ?, item_count = ?, 
+                use_socks_proxy = ?, status = 'pending', reject_reason = ?
+            WHERE id = ?
+            """,
+            (feed_url, feed_title, item_count, 1 if needs_proxy else 0, score_note, pending_id)
+        )
+        conn.commit()
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        try:
+            conn = _get_conn()
+            conn.execute(
+                "UPDATE pending_sources SET status='rejected', reject_reason=?, reviewed_at=? WHERE id=?",
+                ("后台检测异常: " + str(e), int(time.time()), pending_id)
+            )
+            conn.commit()
+        except:
+            pass
 
 
 # ─── 管理员待审接口 ────────────────────────────────────────────────────────────

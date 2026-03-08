@@ -264,7 +264,22 @@
   function _renderResult(data, progressBubble) {
     const { ok, status, result, message } = data;
 
-    if (ok && status === 'submitted') {
+    if (ok && status === 'detecting') {
+      progressBubble.innerHTML =
+        '<span class="hn-step ok">格式校验通过</span>' +
+        '<span class="hn-step ok">提交请求成功</span>';
+
+      const resultBubble = _addBotBubble(
+        `您的提交已收录，审核后会显示在订阅列表中，感谢您的推荐！👏
+        <div class="hn-actions">
+          <button class="hn-again-btn">再推荐一个</button>
+          <button class="hn-close-action-btn">关闭</button>
+        </div>`
+      );
+      _bindActions(resultBubble, null);
+
+    } else if (ok && status === 'submitted') {
+      // Legacy support just in case
       progressBubble.innerHTML =
         '<span class="hn-step ok">安全检测通过</span>' +
         '<span class="hn-step ok">订阅源发现成功</span>' +
