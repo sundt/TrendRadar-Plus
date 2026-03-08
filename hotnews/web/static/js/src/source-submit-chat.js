@@ -27,26 +27,44 @@
     const style = document.createElement('style');
     style.id = 'hn-submit-styles';
     style.textContent = `
+      /* Apple-style Glassmorphism FAB */
       #hn-submit-fab {
         position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-        height: 52px; padding: 0 20px; border-radius: 26px;
-        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        color: #fff; border: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 15px; font-weight: 600; letter-spacing: 0.5px;
-        cursor: pointer; box-shadow: 0 4px 15px rgba(99,102,241,.35);
+        height: 50px; padding: 0 20px; border-radius: 25px;
+        background: rgba(255, 255, 255, 0.85); /* Translucent white */
+        color: #1d1d1f; /* Apple's primary dark text */
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        font-size: 15px; font-weight: 500; letter-spacing: 0.3px;
+        cursor: pointer; 
+        box-shadow: 
+          0 4px 16px rgba(0, 0, 0, 0.1),
+          0 1px 3px rgba(0, 0, 0, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 1); /* Subtle inner highlight */
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        backdrop-filter: blur(16px) saturate(180%);
         display: flex; align-items: center; justify-content: center; gap: 8px;
-        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); /* UI Spring */
         -webkit-tap-highlight-color: transparent;
       }
       #hn-submit-fab:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(99,102,241,.5);
-        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 
+          0 8px 24px rgba(0, 0, 0, 0.12),
+          0 2px 6px rgba(0, 0, 0, 0.08),
+          inset 0 1px 0 rgba(255, 255, 255, 1);
+        background: rgba(255, 255, 255, 0.95);
       }
-      #hn-submit-fab:active { transform: translateY(0) scale(0.96); }
-      #hn-submit-fab svg { width: 22px; height: 22px; }
+      #hn-submit-fab:active { 
+        transform: translateY(0) scale(0.96); 
+        background: rgba(240, 240, 245, 0.85);
+      }
+      #hn-submit-fab svg { 
+        width: 20px; height: 20px; 
+        stroke: #0066cc; /* Apple's system blue for the icon */
+      }
       @media (max-width: 480px) {
-        #hn-submit-fab { padding: 0; width: 52px; border-radius: 50%; }
+        #hn-submit-fab { padding: 0; width: 50px; border-radius: 50%; }
         #hn-submit-fab .hn-fab-text { display: none; }
       }
       #hn-submit-panel {
