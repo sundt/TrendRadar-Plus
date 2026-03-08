@@ -435,8 +435,8 @@ async def _check_server_reachability(feed_url: str) -> bool:
         # 200/301/302 = 直连 OK；403/000/其他 = 需要代理
         return code not in ("200", "301", "302", "304")
     except Exception:
-        # 检测失败，保守地认为需要代理
-        return True
+        # SSH 检测失败时，乐观地认为直连可达（管理员可批准后手动调整）
+        return False
 
 
 # ─── API 端点 ─────────────────────────────────────────────────────────────────
