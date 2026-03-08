@@ -111,6 +111,7 @@ services:
       - ../config:/app/config:ro
       - ../output:/app/output
       - ../hotnews:/app/hotnews
+      - ../data:/app/data:ro
       - ../key/apiclient_key.pem:/app/apiclient_key.pem:ro
 
     environment:

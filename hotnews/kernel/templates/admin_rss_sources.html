@@ -181,6 +181,7 @@
       <button data-tab="custom">🛠️ 自定义源</button>
 <button data-tab="import">📥 导入管理</button>
       <button data-tab="requests">📨 请求审核</button>
+      <button data-tab="pending-submissions" id="pending-tab-btn">📬 用户投稿 <span id="pending-badge" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">0</span></button>
       <button data-tab="rules">⚙️ 规则配置</button>
       <button data-tab="settings">🛠️ 系统配置</button>
       <button data-tab="usage">📊 使用统计</button>
@@ -376,6 +377,7 @@
     </div>
 
     <!-- Tab Panel: Request Review -->
+<!-- Tab Panel: User Pending Submissions -->    <div class="tab-panel" data-panel="pending-submissions">      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">        <h2 style="margin:0;">📬 用户投稿审核</h2>        <div style="display:flex;gap:8px;">          <select id="pending-status-filter" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;">            <option value="pending">待审核</option>            <option value="approved">已批准</option>            <option value="rejected">已拒绝</option>          </select>          <button onclick="loadPendingSources()" style="padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">刷新</button>        </div>      </div>      <div id="pending-sources-list"><p style="color:#6b7280;">加载中…</p></div>    </div>
     <div class="tab-panel" data-panel="requests">
       <h2>Pending Requests</h2>
       <div class="card">
