@@ -144,10 +144,29 @@
       .hn-input-row button:disabled { background: #93c5fd; cursor: default; }
       @media (max-width: 480px) {
         #hn-submit-panel { 
-          width: calc(100vw - 32px); right: 16px; 
-          /* 面板也要相应往上移 */
-          bottom: calc(135px + env(safe-area-inset-bottom)); 
+          width: 100vw; right: 0; left: 0; bottom: 0;
+          max-height: 75vh; height: auto;
+          border-radius: 20px 20px 0 0;
+          padding-bottom: env(safe-area-inset-bottom);
+          /* Override floating animations with literal Bottom Sheet slide */
+          transform: translateY(100%) !important; 
+          opacity: 1 !important;
+          transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1) !important;
         }
+        #hn-submit-panel.open {
+          transform: translateY(0) !important;
+        }
+      }
+      #hn-submit-overlay {
+        position: fixed; inset: 0; z-index: 9997;
+        background: rgba(0,0,0,0.4);
+        opacity: 0; visibility: hidden;
+        transition: opacity 0.25s, visibility 0.25s;
+        display: none;
+      }
+      @media (max-width: 480px) {
+        #hn-submit-overlay { display: block; }
+        #hn-submit-overlay.open { opacity: 1; visibility: visible; }
       }
     `;
     document.head.appendChild(style);
@@ -167,6 +186,12 @@
     `;
     fab.addEventListener('click', _togglePanel);
     document.body.appendChild(fab);
+
+    // 遮罩层 (用于移动端点击外部关闭)
+    const overlay = document.createElement('div');
+    overlay.id = 'hn-submit-overlay';
+    overlay.addEventListener('click', _closePanel);
+    document.body.appendChild(overlay);
 
     // 聊天面板
     const panel = document.createElement('div');
@@ -211,11 +236,20 @@
   // ─── 面板控制 ─────────────────────────────────────────────────────────────
   function _togglePanel() {
     _panel.classList.toggle('open');
+    const overlay = document.getElementById('hn-submit-overlay');
+    
     if (_panel.classList.contains('open')) {
+      if (overlay) overlay.classList.add('open');
       _inputEl.focus();
+    } else {
+      if (overlay) overlay.classList.remove('open');
     }
   }
-  function _closePanel() { _panel.classList.remove('open'); }
+  function _closePanel() {
+    _panel.classList.remove('open');
+    const overlay = document.getElementById('hn-submit-overlay');
+    if (overlay) overlay.classList.remove('open');
+  }
 
   // ─── 消息气泡 ─────────────────────────────────────────────────────────────
   function _addBubble(html, type) {
