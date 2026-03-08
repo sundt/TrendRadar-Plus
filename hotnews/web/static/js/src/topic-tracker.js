@@ -1046,9 +1046,22 @@ function _confirmDialog(message) {
     /**
      * Open modal for new topic
      */
-    function openModal() {
+    async function openModal() {
         // Check if user is logged in
         if (!requireLogin()) return;
+        
+        // Check VIP status
+        try {
+            const response = await fetch('/api/subscription/status', { credentials: 'include' });
+            const data = await response.json();
+            if (data.ok !== false && !data.is_vip) {
+                alert('新增主题为会员专属功能，请前往设置中心升级会员。');
+                return;
+            }
+        } catch (e) {
+            console.error('[TopicTracker] Failed to check subscription status:', e);
+            // In case of network error, let the backend handle the VIP verification
+        }
         
         currentEditTopic = null;
         generatedData = null;

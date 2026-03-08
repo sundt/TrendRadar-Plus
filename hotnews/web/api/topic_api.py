@@ -175,6 +175,18 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
     user = _get_current_user(request)
     storage = _get_storage(request)
     
+    # Check VIP status
+    try:
+        from hotnews.kernel.user.subscription_service import get_user_subscription
+        from hotnews.web.user_db import get_user_db_conn
+        conn = get_user_db_conn(request.app.state.project_root)
+        sub = get_user_subscription(conn, int(user["id"]))
+        if not sub or not sub.get("is_vip"):
+            return JSONResponse({"ok": False, "error": "新增主题为会员专属功能，请先升级会员。"}, status_code=403)
+    except Exception as e:
+        logger.error(f"Failed to check VIP status: {e}")
+        return JSONResponse({"ok": False, "error": "无法验证会员状态，请重试。"}, status_code=500)
+    
     name = (body.get("name") or "").strip()
     if not name:
         return JSONResponse({"ok": False, "error": "主题名称不能为空"}, status_code=400)
