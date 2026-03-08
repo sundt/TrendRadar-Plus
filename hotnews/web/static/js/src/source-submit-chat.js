@@ -130,14 +130,15 @@
       }
       .hn-input-row input {
         flex: 1; border: 1px solid #d1d5db; border-radius: 8px;
-        padding: 8px 10px; font-size: 13px; outline: none;
+        padding: 8px 10px; font-size: 16px; /* 16px prevents iOS Safari auto-zoom */
+        outline: none;
         transition: border-color .15s;
       }
       .hn-input-row input:focus { border-color: #2563eb; }
       .hn-input-row input:disabled { background: #f9fafb; color: #9ca3af; }
       .hn-input-row button {
         padding: 8px 14px; border-radius: 8px; background: #2563eb;
-        color: #fff; border: none; cursor: pointer; font-size: 13px;
+        color: #fff; border: none; cursor: pointer; font-size: 14px;
         font-weight: 500; transition: background .15s; white-space: nowrap;
       }
       .hn-input-row button:hover:not(:disabled) { background: #1d4ed8; }
@@ -210,6 +211,22 @@
       </div>
     `;
     document.body.appendChild(panel);
+
+    // iOS 键盘遮挡适配：使用 VisualViewport API 动态调整底部间距
+    if (window.visualViewport) {
+      const initialViewportHeight = window.visualViewport.height;
+      window.visualViewport.addEventListener('resize', () => {
+        if (!panel.classList.contains('open') || window.innerWidth > 480) return;
+        // 如果高度变小，说明键盘弹起了
+        if (window.visualViewport.height < initialViewportHeight) {
+          const keyboardHeight = window.innerHeight - window.visualViewport.height;
+          panel.style.bottom = `${keyboardHeight}px`;
+        } else {
+          // 键盘收起
+          panel.style.bottom = '0px';
+        }
+      });
+    }
 
     panel.querySelector('.hn-close-btn').addEventListener('click', _closePanel);
     _inputEl = panel.querySelector('input');
