@@ -64,7 +64,12 @@
         stroke: #0066cc; /* Apple's system blue for the icon */
       }
       @media (max-width: 480px) {
-        #hn-submit-fab { padding: 0; width: 50px; border-radius: 50%; }
+        #hn-submit-fab { 
+          padding: 0; width: 50px; border-radius: 50%; 
+          /* 避开移动端底部导航栏 (约50px + safe-area) */
+          bottom: calc(74px + env(safe-area-inset-bottom));
+          right: 16px;
+        }
         #hn-submit-fab .hn-fab-text { display: none; }
       }
       #hn-submit-panel {
@@ -141,8 +146,11 @@
       .hn-input-row button:hover:not(:disabled) { background: #1d4ed8; }
       .hn-input-row button:disabled { background: #93c5fd; cursor: default; }
       @media (max-width: 480px) {
-        #hn-submit-panel { width: calc(100vw - 24px); right: 12px; bottom: 80px; }
-        #hn-submit-fab { bottom: 16px; right: 16px; }
+        #hn-submit-panel { 
+          width: calc(100vw - 32px); right: 16px; 
+          /* 面板也要相应往上移 */
+          bottom: calc(135px + env(safe-area-inset-bottom)); 
+        }
       }
     `;
     document.head.appendChild(style);
