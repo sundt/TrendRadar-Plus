@@ -525,81 +525,35 @@ async def submit_url(req: SubmitRequest, request: Request):
         feed_title=feed_title,
         needs_proxy=needs_proxy,
     )
-    auto_approve = score >= AUTO_APPROVE_THRESHOLD
+    # 统统进人工审核队列
+    pending_id = "pending_" + str(uuid.uuid4())[:8]
+    # 利用 reject_reason 字段临时存储系统给出的参考分数，供后台展示
+    score_note = f"系统参考评分: {score}"
+    conn.execute(
+        """
+        INSERT INTO pending_sources
+            (id, submitted_url, detected_rss, feed_title, host, item_count,
+             use_socks_proxy, status, reject_reason, submitter_ip, submitted_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+        """,
+        (pending_id, raw_url, feed_url, feed_title, host, item_count,
+         1 if needs_proxy else 0, score_note, anon_ip, now),
+    )
+    conn.commit()
 
-    now = int(time.time())
-    conn = _get_conn()
-
-    if auto_approve:
-        # ── 直接写入 rss_sources ──────────────────────────────────────────
-        source_id = "rss_" + hashlib.md5(feed_url.encode()).hexdigest()[:8]
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO rss_sources
-                (id, name, url, host, cadence, enabled,
-                 use_socks_proxy, created_at, updated_at, added_at)
-            VALUES (?, ?, ?, ?, 'P4', 1, ?, ?, ?, ?)
-            """,
-            (source_id, feed_title or host, feed_url, host,
-             1 if needs_proxy else 0, now, now, now),
-        )
-        # 同时记录到 pending_sources（留审计日志）
-        pending_id = "pending_" + str(uuid.uuid4())[:8]
-        conn.execute(
-            """
-            INSERT INTO pending_sources
-                (id, submitted_url, detected_rss, feed_title, host, item_count,
-                 use_socks_proxy, status, submitter_ip, submitted_at,
-                 reviewed_at, approved_source_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'auto_approved', ?, ?, ?, ?)
-            """,
-            (pending_id, raw_url, feed_url, feed_title, host, item_count,
-             1 if needs_proxy else 0, anon_ip, now, now, source_id),
-        )
-        conn.commit()
-
-        return JSONResponse({
-            "ok": True,
-            "status": "auto_approved",
-            "result": {
-                "feed_url": feed_url,
-                "feed_title": feed_title,
-                "host": host,
-                "item_count": item_count,
-                "needs_proxy": needs_proxy,
-                "score": score,
-            },
-            "message": "✅ 已自动收录！稍后就能在平台看到这个源了，感谢你的贡献！",
-        })
-
-    else:
-        # ── 进人工审核队列 ────────────────────────────────────────────────
-        pending_id = "pending_" + str(uuid.uuid4())[:8]
-        conn.execute(
-            """
-            INSERT INTO pending_sources
-                (id, submitted_url, detected_rss, feed_title, host, item_count,
-                 use_socks_proxy, status, submitter_ip, submitted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-            """,
-            (pending_id, raw_url, feed_url, feed_title, host, item_count,
-             1 if needs_proxy else 0, anon_ip, now),
-        )
-        conn.commit()
-
-        return JSONResponse({
-            "ok": True,
-            "status": "submitted",
-            "result": {
-                "feed_url": feed_url,
-                "feed_title": feed_title,
-                "host": host,
-                "item_count": item_count,
-                "needs_proxy": needs_proxy,
-                "score": score,
-            },
-            "message": "已提交审核，管理员确认后将收录到平台，感谢你的贡献！",
-        })
+    return JSONResponse({
+        "ok": True,
+        "status": "submitted",
+        "result": {
+            "feed_url": feed_url,
+            "feed_title": feed_title,
+            "host": host,
+            "item_count": item_count,
+            "needs_proxy": needs_proxy,
+            "score": score,
+        },
+        "message": "已成功提交审核！我们将评估该站点是否符合高质量资讯标准，感谢你的推荐。👏",
+    })
 
 
 # ─── 管理员待审接口 ────────────────────────────────────────────────────────────

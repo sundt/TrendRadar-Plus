@@ -264,28 +264,7 @@
   function _renderResult(data, progressBubble) {
     const { ok, status, result, message } = data;
 
-    if (ok && status === 'auto_approved') {
-      progressBubble.innerHTML =
-        '<span class="hn-step ok">安全检测通过</span>' +
-        '<span class="hn-step ok">订阅源发现成功</span>' +
-        '<span class="hn-step ok">自动审核通过</span>';
-
-      const resultBubble = _addBotBubble(
-        `🎉 已自动收录！<br>
-        <div class="hn-result">
-          <strong>📡 ${_esc(result.feed_title || result.host)}</strong>
-          <small>${_esc(result.feed_url)}</small><br>
-          <small>包含 ${result.item_count} 条内容${result.needs_proxy ? ' · 已配置代理' : ''}</small>
-        </div>
-        稍后就能在平台看到这个源了，感谢你的贡献！
-        <div class="hn-actions">
-          <button class="hn-again-btn">再推荐一个</button>
-          <button class="hn-close-action-btn">关闭</button>
-        </div>`
-      );
-      _bindActions(resultBubble, null);
-
-    } else if (ok && status === 'submitted') {
+    if (ok && status === 'submitted') {
       progressBubble.innerHTML =
         '<span class="hn-step ok">安全检测通过</span>' +
         '<span class="hn-step ok">订阅源发现成功</span>' +
@@ -298,7 +277,7 @@
           <small>${_esc(result.feed_url)}</small><br>
           <small>包含 ${result.item_count} 条内容</small>
         </div>
-        已提交审核 ✓<br>管理员确认后将收录到平台，感谢你的贡献！
+        已成功提交审核 ✓<br>我们将评估该站点是否符合高质量资讯标准，感谢你的推荐。👏
         <div class="hn-actions">
           <button class="hn-again-btn">再推荐一个</button>
           <button class="hn-close-action-btn">关闭</button>

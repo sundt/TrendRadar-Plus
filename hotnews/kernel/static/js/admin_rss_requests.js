@@ -124,12 +124,17 @@ async function loadPendingSources() {
 async function approvePending(id) {
   const name = prompt('确认收录名称（可留空用默认）：') ?? null;
   if (name === null) return; // 用户取消
-  const category = prompt('分类（可留空）：') || '';
+  
+  const category = prompt('分类（必须填写，例如：tech_news、ainews、finance 等）：');
+  if (!category || category.trim() === '') {
+    alert('必须填写分类标签，否则文章无法在各个频道正常显示。操作取消。');
+    return;
+  }
 
   const resp = await fetch(`/api/admin/pending-sources/${id}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Admin-Token': window._adminToken || '' },
-    body: JSON.stringify({ name: name.trim(), category }),
+    body: JSON.stringify({ name: name.trim(), category: category.trim() }),
   });
   const data = await resp.json();
   if (data.ok) {
