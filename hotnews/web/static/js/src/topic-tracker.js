@@ -1055,7 +1055,11 @@ function _confirmDialog(message) {
             const response = await fetch('/api/subscription/status', { credentials: 'include' });
             const data = await response.json();
             if (data.ok !== false && !data.is_vip) {
-                alert('新增主题为会员专属功能，请前往设置中心升级会员。');
+                if (typeof window.openSubscriptionModal === 'function') {
+                    window.openSubscriptionModal();
+                } else {
+                    alert('新增主题为会员专属功能，请前往设置中心升级会员。');
+                }
                 return;
             }
         } catch (e) {
