@@ -183,6 +183,15 @@ async def create_topic(request: Request, body: Dict[str, Any] = Body(...)):
         sub = get_user_subscription(conn, int(user["id"]))
         if not sub or not sub.get("is_vip"):
             return JSONResponse({"ok": False, "error": "新增主题为会员专属功能，请先升级会员。"}, status_code=403)
+        
+        # Check topic quota limit
+        current_topics = storage.get_topics_by_user(str(user["id"]))
+        quota = sub.get("usage_quota", 0)
+        if len(current_topics) >= quota:
+            return JSONResponse({
+                "ok": False, 
+                "error": f"已达到会员额度（最多可创建 {quota} 个主题），请升级会员套餐或删除旧主题。"
+            }, status_code=403)
     except Exception as e:
         logger.error(f"Failed to check VIP status: {e}")
         return JSONResponse({"ok": False, "error": "无法验证会员状态，请重试。"}, status_code=500)
