@@ -29,13 +29,26 @@
     style.textContent = `
       #hn-submit-fab {
         position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-        width: 52px; height: 52px; border-radius: 50%;
-        background: #2563eb; color: #fff; border: none;
-        font-size: 20px; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,.4);
-        display: flex; align-items: center; justify-content: center;
-        transition: transform .2s, box-shadow .2s;
+        height: 52px; padding: 0 20px; border-radius: 26px;
+        background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        color: #fff; border: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 15px; font-weight: 600; letter-spacing: 0.5px;
+        cursor: pointer; box-shadow: 0 4px 15px rgba(99,102,241,.35);
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        -webkit-tap-highlight-color: transparent;
       }
-      #hn-submit-fab:hover { transform: scale(1.08); box-shadow: 0 6px 18px rgba(37,99,235,.5); }
+      #hn-submit-fab:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(99,102,241,.5);
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+      }
+      #hn-submit-fab:active { transform: translateY(0) scale(0.96); }
+      #hn-submit-fab svg { width: 22px; height: 22px; }
+      @media (max-width: 480px) {
+        #hn-submit-fab { padding: 0; width: 52px; border-radius: 50%; }
+        #hn-submit-fab .hn-fab-text { display: none; }
+      }
       #hn-submit-panel {
         position: fixed; bottom: 88px; right: 24px; z-index: 9998;
         width: 340px; max-height: 480px;
@@ -123,7 +136,12 @@
     const fab = document.createElement('button');
     fab.id = 'hn-submit-fab';
     fab.title = '推荐网站';
-    fab.innerHTML = '💡';
+    fab.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      <span class="hn-fab-text">推荐内容</span>
+    `;
     fab.addEventListener('click', _togglePanel);
     document.body.appendChild(fab);
 
