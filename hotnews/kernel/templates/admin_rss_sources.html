@@ -293,6 +293,31 @@
       </div>
     </div>
 
+    <!-- Approve Pending Modal -->
+    <div id="approve-pending-modal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeApproveModal()">&times;</span>
+        <h2>收录投稿源</h2>
+        <div class="form-group">
+          <label>收录名称</label>
+          <input type="text" id="approve-pending-name" placeholder="请输入网站名称..." />
+          <small class="muted">可留空，系统自动使用抓取到的标题</small>
+        </div>
+        <div class="form-group">
+          <label>选择分类 <span style="color:red">*</span></label>
+          <select id="approve-pending-category">
+            <option value="">(请选择分类)</option>
+            <!-- Loaded via JS -->
+          </select>
+          <small class="muted">必选。这决定了抓取后的文章会出现在哪个频道的 Timeline 里。</small>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:16px;">
+          <button class="btn btn-primary" onclick="confirmApprovePending()">确定收录</button>
+          <button class="btn" style="background:#e5e7eb;color:#374151;" onclick="closeApproveModal()">取消</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Batch Category Modal -->
     <div id="batch-cat-modal" class="modal">
       <div class="modal-content">

@@ -121,27 +121,83 @@ async function loadPendingSources() {
   }
 }
 
+let _pendingApprovalId = null;
+
 async function approvePending(id) {
-  const name = prompt('确认收录名称（可留空用默认）：') ?? null;
-  if (name === null) return; // 用户取消
+  _pendingApprovalId = String(id || '').trim();
   
-  const category = prompt('分类（必须填写，例如：tech_news、ainews、finance 等）：');
-  if (!category || category.trim() === '') {
-    alert('必须填写分类标签，否则文章无法在各个频道正常显示。操作取消。');
+  // Reset input fields
+  document.getElementById('approve-pending-name').value = '';
+  const catSelect = document.getElementById('approve-pending-category');
+  catSelect.innerHTML = '<option value="">(加载分类中...)</option>';
+  
+  // Show modal early for responsiveness
+  const modal = document.getElementById('approve-pending-modal');
+  if (modal) modal.style.display = 'block';
+
+  // Fetch available categories
+  try {
+    const res = await fetch('/admin/categories');
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.categories)) {
+      catSelect.innerHTML = '<option value="">(请选择分类)</option>' + data.categories.map(c => 
+        `<option value="${c.id}">${c.name || c.id}</option>`
+      ).join('');
+    } else {
+      catSelect.innerHTML = '<option value="">(无法加载分类列表)</option>';
+    }
+  } catch (err) {
+    console.error("Failed to load categories", err);
+    catSelect.innerHTML = '<option value="">(加载分类失败，请手动输入ID)</option>';
+    // Optional fallback: allow them to type if fetching fails, though we stick to select usually.
+  }
+}
+
+function closeApproveModal() {
+  const modal = document.getElementById('approve-pending-modal');
+  if (modal) modal.style.display = 'none';
+  _pendingApprovalId = null;
+}
+
+async function confirmApprovePending() {
+  if (!_pendingApprovalId) return;
+
+  const nameVal = document.getElementById('approve-pending-name')?.value || '';
+  const categoryVal = document.getElementById('approve-pending-category')?.value || '';
+
+  if (categoryVal.trim() === '') {
+    alert('必须选择或填写分类标签，否则文章无法在各个频道正常显示。');
     return;
   }
 
-  const resp = await fetch(`/api/admin/pending-sources/${id}/approve`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
-    body: JSON.stringify({ name: name.trim(), category: category.trim() }),
-  });
-  const data = await resp.json();
-  if (data.ok) {
-    alert(`✅ 已收录！Source ID: ${data.source_id}`);
-    loadPendingSources();
-  } else {
-    alert('操作失败：' + (data.error || '未知错误'));
+  // Show loading state
+  const btn = document.querySelector('#approve-pending-modal .btn-primary');
+  const oldText = btn.textContent;
+  if(btn) btn.textContent = '提交中...';
+
+  try {
+    const resp = await fetch(`/api/admin/pending-sources/${_pendingApprovalId}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+      body: JSON.stringify({ name: nameVal.trim(), category: categoryVal.trim() }),
+    });
+    const data = await resp.json();
+    
+    if (data.ok) {
+      if (typeof showToast === 'function') {
+        showToast(`✅ 已收录！Source ID: ${data.source_id}`);
+      } else {
+        alert(`✅ 已收录！Source ID: ${data.source_id}`);
+      }
+      closeApproveModal();
+      loadPendingSources();
+    } else {
+      alert('操作失败：' + (data.error || '未知错误'));
+    }
+  } catch(e) {
+    alert('请求失败: ' + e.message);
+  } finally {
+    if(btn) btn.textContent = oldText;
   }
 }
 
