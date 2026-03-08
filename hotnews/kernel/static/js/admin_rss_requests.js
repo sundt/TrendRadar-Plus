@@ -135,21 +135,20 @@ async function approvePending(id) {
   const modal = document.getElementById('approve-pending-modal');
   if (modal) modal.style.display = 'block';
 
-  // Fetch available categories
+  // Fetch available categories (returns a plain array [{id, name, icon}])
   try {
-    const res = await fetch('/admin/categories');
+    const res = await fetch('/api/platform/categories');
     const data = await res.json();
-    if (data.ok && Array.isArray(data.categories)) {
-      catSelect.innerHTML = '<option value="">(请选择分类)</option>' + data.categories.map(c => 
-        `<option value="${c.id}">${c.name || c.id}</option>`
+    if (Array.isArray(data) && data.length > 0) {
+      catSelect.innerHTML = '<option value="">(请选择分类)</option>' + data.map(c => 
+        `<option value="${c.id}">${c.icon || ''} ${c.name || c.id}</option>`
       ).join('');
     } else {
-      catSelect.innerHTML = '<option value="">(无法加载分类列表)</option>';
+      catSelect.innerHTML = '<option value="">(暂无分类，请先创建分类)</option>';
     }
   } catch (err) {
     console.error("Failed to load categories", err);
-    catSelect.innerHTML = '<option value="">(加载分类失败，请手动输入ID)</option>';
-    // Optional fallback: allow them to type if fetching fails, though we stick to select usually.
+    catSelect.innerHTML = '<option value="">(加载分类失败，请刷新后重试)</option>';
   }
 }
 
