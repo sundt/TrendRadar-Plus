@@ -180,11 +180,8 @@
       <button data-tab="catalog" class="active">📋 RSS 源列表</button>
       <button data-tab="custom">🛠️ 自定义源</button>
 <button data-tab="import">📥 导入管理</button>
-      <button data-tab="requests">📨 请求审核</button>
       <button data-tab="pending-submissions" id="pending-tab-btn">📬 用户投稿 <span id="pending-badge" style="display:none;background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">0</span></button>
-      <button data-tab="rules">⚙️ 规则配置</button>
       <button data-tab="settings">🛠️ 系统配置</button>
-      <button data-tab="usage">📊 使用统计</button>
       <button data-tab="user-stats">👥 用户统计</button>
       <button data-tab="tag-candidates">🏷️ 标签发现</button>
       <button data-tab="featured-mps">📱 精选公众号</button>
@@ -333,29 +330,6 @@
       </div>
     </div>
 
-    <!-- Tab Panel: Rules Configuration -->
-    <div class="tab-panel" data-panel="rules">
-      <h2>Morning Brief Rules</h2>
-      <div class="card">
-        <div class="muted" style="margin-bottom:8px;">
-          Edit <code>morning_brief_rules_v1</code> (JSON). Changes take effect immediately.
-        </div>
-        <textarea id="mb-rules-text"
-          style="width:100%;min-height:160px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;"
-          placeholder='{"enabled":true,"drop_published_at_zero":true,"topic_keywords":["ai"],"depth_keywords":[],"negative_hard":[],"negative_soft":[],"source_scores":{},"source_decay":{"second":0.6,"third_plus":0.3},"overrides":{"force_top":[],"force_blacklist":[]}}'>
-</textarea>
-        <div style="height:10px;">
-        </div>
-        <div class="row" style="align-items:center;">
-          <button class="btn btn-primary" onclick="loadMorningBriefRules()">Load</button>
-          <button class="btn btn-primary" onclick="validateMorningBriefRules()">Validate</button>
-          <button class="btn btn-primary" onclick="saveMorningBriefRules()">Save</button>
-          <span class="muted" id="mb-rules-status">
-          </span>
-        </div>
-      </div>
-    </div>
-
     <!-- Tab Panel: Import Management -->
     <div class="tab-panel" data-panel="import">
       <h2>CSV Paste Import</h2>
@@ -398,101 +372,6 @@
         </div>
         <div id="csv-import-result">
         </div>
-      </div>
-    </div>
-
-    <!-- Tab Panel: Request Review -->
-<!-- Tab Panel: User Pending Submissions -->    <div class="tab-panel" data-panel="pending-submissions">      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">        <h2 style="margin:0;">📬 用户投稿审核</h2>        <div style="display:flex;gap:8px;">          <select id="pending-status-filter" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;">            <option value="pending">待审核</option>            <option value="approved">已批准</option>            <option value="rejected">已拒绝</option>          </select>          <button onclick="loadPendingSources()" style="padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">刷新</button>        </div>      </div>      <div id="pending-sources-list"><p style="color:#6b7280;">加载中…</p></div>    </div>
-    <div class="tab-panel" data-panel="requests">
-      <h2>Pending Requests</h2>
-      <div class="card">
-        {% if pending and pending|length > 0 %}
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>URL</th>
-                <th>Note</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in pending %}
-              <tr>
-                <td>{{ r.id }}</td>
-                <td style="max-width:240px; word-break:break-word;">
-                  <b>{{ r.title }}</b>
-                </td>
-                <td style="max-width:520px; word-break:break-all;">
-                  <div>
-                    <b>{{ r.host }}</b>
-                  </div>
-                  <div class="muted">{{ r.url }}</div>
-                </td>
-                <td style="max-width:280px; word-break:break-word;">{{ r.note }}</td>
-                <td>
-                  <div class="row">
-                    <input type="text" id="name-{{ r.id }}" placeholder="Source name (optional)" />
-                    <button class="btn btn-primary" data-id="{{ r.id }}"
-                      onclick="approveReq(this.dataset.id)">Approve</button>
-                    <input type="text" id="reason-{{ r.id }}" placeholder="Reject reason" />
-                    <button class="btn btn-danger" data-id="{{ r.id }}"
-                      onclick="rejectReq(this.dataset.id)">Reject</button>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <div class="muted">No pending requests.</div>
-        {% endif %}
-      </div>
-
-      <h2>Rejected Requests</h2>
-      <div class="card">
-        {% if rejected and rejected|length > 0 %}
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>URL</th>
-                <th>Reason</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in rejected %}
-              <tr>
-                <td>{{ r.id }}</td>
-                <td style="max-width:240px; word-break:break-word;">
-                  <b>{{ r.title }}</b>
-                </td>
-                <td style="max-width:520px; word-break:break-all;">
-                  <div>
-                    <b>{{ r.host }}</b>
-                  </div>
-                  <div class="muted">{{ r.url }}</div>
-                </td>
-                <td style="max-width:280px; word-break:break-word;">{{ r.reason }}</td>
-                <td>
-                  <div class="row">
-                    <button class="btn" data-id="{{ r.id }}" onclick="reopenReq(this.dataset.id)">Reopen</button>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <div class="muted">No rejected requests.</div>
-        {% endif %}
       </div>
     </div>
 
@@ -1319,27 +1198,6 @@
         </div>
       </div>
     </div>
-    <!-- Tab Panel: Usage Statistics -->
-    <div class="tab-panel" data-panel="usage">
-      <h2>RSS Usage</h2>
-      <div class="card">
-        <div class="row" style="align-items:center;">
-          <input type="text" id="usage-days" value="7" />
-          <button class="btn btn-primary" onclick="loadUsage()">Load</button>
-          <span class="muted" id="usage-status">
-          </span>
-        </div>
-        <div style="height:10px;">
-        </div>
-        <div class="kpi" id="usage-kpi" style="display:none;">
-        </div>
-        <div style="height:10px;">
-        </div>
-        <div id="usage-table">
-        </div>
-      </div>
-    </div>
-
     <!-- Tab Panel: User Statistics -->
     <div class="tab-panel" data-panel="user-stats">
       <h2>用户统计 (User Statistics)</h2>
