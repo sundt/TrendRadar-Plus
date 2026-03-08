@@ -375,6 +375,22 @@
       </div>
     </div>
 
+    <!-- Tab Panel: User Pending Submissions -->
+    <div class="tab-panel" data-panel="pending-submissions">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="margin:0;">📬 用户投稿审核</h2>
+        <div style="display:flex;gap:8px;">
+          <select id="pending-status-filter" style="padding:6px 10px;border-radius:6px;border:1px solid #d1d5db;">
+            <option value="pending">待审核</option>
+            <option value="approved">已批准</option>
+            <option value="rejected">已拒绝</option>
+          </select>
+          <button onclick="loadPendingSources()" style="padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;">刷新</button>
+        </div>
+      </div>
+      <div id="pending-sources-list"><p style="color:#6b7280;">加载中…</p></div>
+    </div>
+
     <!-- Tab Panel: Custom Sources (Unified API + HTML) -->
     <div class="tab-panel" data-panel="custom">
       <h2>自定义源列表 (API + HTML + Script)</h2>
