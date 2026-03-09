@@ -1,5 +1,6 @@
 import { TR, ready } from './core.js';
 import { requireLogin } from './auth-state.js';
+import { startExport } from './export-progress.js';
 
 function showConfirmDialog(message) {
     return new Promise((resolve) => {
@@ -894,53 +895,7 @@ export const platformReorder = {
 
                 if (action === 'export-pdf') {
                     hideContextMenu();
-                    // Collect articles from the card
-                    const newsItems = Array.from(card.querySelectorAll('.news-list .news-item'));
-                    const articles = [];
-                    for (const item of newsItems) {
-                        const titleEl = item.querySelector('.news-title');
-                        if (!titleEl || !titleEl.href) continue;
-                        articles.push({ title: titleEl.textContent?.trim() || '', url: titleEl.href });
-                    }
-                    if (!articles.length) {
-                        if (window.TR?.toast?.show) {
-                            window.TR.toast.show('该卡片暂无文章', { variant: 'warning', durationMs: 1500 });
-                        }
-                        return;
-                    }
-                    const cardTitle = card.querySelector('.platform-name')?.textContent?.trim() || '文章合集';
-                    if (window.TR?.toast?.show) {
-                        window.TR.toast.show(`正在获取 ${articles.length} 篇文章内容...`, { variant: 'info', durationMs: 30000 });
-                    }
-                    fetch('/api/articles/export', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ articles, card_title: cardTitle })
-                    }).then(resp => {
-                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                        return resp.text();
-                    }).then(html => {
-                        const win = window.open('', '_blank');
-                        if (win) {
-                            win.document.open();
-                            win.document.write(html);
-                            win.document.close();
-                        } else {
-                            const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, '_blank');
-                            setTimeout(() => URL.revokeObjectURL(url), 5000);
-                        }
-                        if (window.TR?.toast?.show) {
-                            window.TR.toast.show('文章合集已生成！', { variant: 'success', durationMs: 2000 });
-                        }
-                    }).catch(err => {
-                        console.error('Export failed:', err);
-                        if (window.TR?.toast?.show) {
-                            window.TR.toast.show('生成失败，请重试', { variant: 'error', durationMs: 2000 });
-                        }
-                    });
+                    startExport(card);
                     return;
                 }
 
