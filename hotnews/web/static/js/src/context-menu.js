@@ -9,6 +9,7 @@ let menuEl = null;
 let backdropEl = null;
 let currentNewsData = null;
 let currentTagData = null;  // For tag unfollow
+let currentCardEl = null;   // Parent card of the right-clicked news item
 let longPressTimer = null;
 let longPressTarget = null;
 
@@ -60,6 +61,11 @@ function buildMenuHtml(type, data) {
         <div class="tr-context-menu-item" data-action="copy">
             <span class="tr-context-menu-item-icon">📋</span>
             <span>复制链接</span>
+        </div>
+        <div class="tr-context-menu-divider"></div>
+        <div class="tr-context-menu-item" data-action="copy-all">
+            <span class="tr-context-menu-item-icon">📎</span>
+            <span>复制卡片所有链接</span>
         </div>
     `;
 }
@@ -136,6 +142,7 @@ function hideMenu() {
     }
     currentNewsData = null;
     currentTagData = null;
+    currentCardEl = null;
     clearLongPress();
 }
 
@@ -159,6 +166,18 @@ function handleMenuClick(e) {
             break;
         case 'copy':
             if (currentNewsData) copyToClipboard(currentNewsData.url);
+            break;
+        case 'copy-all':
+            if (currentCardEl) {
+                const links = Array.from(currentCardEl.querySelectorAll('.news-list .news-title'))
+                    .map(a => a.href)
+                    .filter(Boolean);
+                if (links.length) {
+                    copyToClipboard(links.join('\n'), `已复制 ${links.length} 条链接`);
+                } else if (window.TR?.toast?.show) {
+                    window.TR.toast.show('该卡片暂无链接', { variant: 'warning', durationMs: 1500 });
+                }
+            }
             break;
         case 'unfollow':
             if (currentTagData) handleUnfollowTag(currentTagData);
@@ -187,12 +206,12 @@ function handleSummaryAction(data) {
 /**
  * Copy text to clipboard
  */
-async function copyToClipboard(text) {
+async function copyToClipboard(text, successMsg) {
     try {
         await navigator.clipboard.writeText(text);
         // Show toast if available
         if (window.TR?.toast?.show) {
-            window.TR.toast.show('链接已复制', { variant: 'success', durationMs: 1500 });
+            window.TR.toast.show(successMsg || '链接已复制', { variant: 'success', durationMs: 1500 });
         }
     } catch (e) {
         console.error('Copy failed:', e);
@@ -365,7 +384,11 @@ function handleContextMenu(e) {
     const data = getNewsDataFromElement(target);
     if (!data) return;
     
+    // Save reference to the parent card for "copy all links" action
+    const cardEl = titleEl.closest('.platform-card');
+    
     e.preventDefault();
+    currentCardEl = cardEl;
     showMenu(e.clientX, e.clientY, data);
 }
 

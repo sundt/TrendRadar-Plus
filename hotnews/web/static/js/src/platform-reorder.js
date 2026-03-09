@@ -836,6 +836,9 @@ export const platformReorder = {
                 }
             }
             
+            // Always add "copy all links" option for all card types
+            menuHtml += `<div class="tr-ctx-item" data-action="copy-all-links" style="border-top:1px solid #e5e7eb;">📋 复制所有链接</div>`;
+            
             contextMenuEl.innerHTML = menuHtml;
             contextMenuEl.style.cssText = `
                 position: fixed;
@@ -864,6 +867,29 @@ export const platformReorder = {
             contextMenuEl.addEventListener('click', (ev) => {
                 const action = ev.target?.dataset?.action;
                 if (!action) return;
+
+                if (action === 'copy-all-links') {
+                    hideContextMenu();
+                    const links = Array.from(card.querySelectorAll('.news-list .news-title'))
+                        .map(a => a.href)
+                        .filter(Boolean);
+                    if (links.length) {
+                        navigator.clipboard.writeText(links.join('\n')).then(() => {
+                            if (window.TR?.toast?.show) {
+                                window.TR.toast.show(`已复制 ${links.length} 条链接`, { variant: 'success', durationMs: 2000 });
+                            }
+                        }).catch(() => {
+                            if (window.TR?.toast?.show) {
+                                window.TR.toast.show('复制失败', { variant: 'error', durationMs: 2000 });
+                            }
+                        });
+                    } else {
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show('该卡片暂无链接', { variant: 'warning', durationMs: 1500 });
+                        }
+                    }
+                    return;
+                }
 
                 if (action === 'edit') {
                     // Open settings modal and navigate to the category
