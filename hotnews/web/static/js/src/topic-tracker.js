@@ -8,6 +8,7 @@ import { events } from './events.js';
 import { tabs } from './tabs.js';
 import { scroll } from './scroll.js';
 import { viewMode } from './view-mode.js';
+import { skeletonCards } from './skeleton.js';
 
 function _confirmDialog(message) {
     return new Promise((resolve) => {
@@ -435,10 +436,7 @@ function _confirmDialog(message) {
         // 使用与服务端渲染一致的结构
         pane.innerHTML = `
             <div class="platform-grid" id="topicCards-${topic.id}" data-topic-id="${topic.id}">
-                <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                    <div style="font-size:48px;margin-bottom:16px;">🔍</div>
-                    <div style="font-size:16px;">加载中...</div>
-                </div>
+                ${skeletonCards(window.innerWidth <= 640 ? 1 : 3)}
             </div>
         `;
         
@@ -807,12 +805,7 @@ function _confirmDialog(message) {
      * Show loading state in container
      */
     function showLoadingState(container) {
-        container.innerHTML = `
-            <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
-                <div style="font-size:48px;margin-bottom:16px;">🔍</div>
-                <div style="font-size:16px;">加载中...</div>
-            </div>
-        `;
+        container.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3);
     }
     
     /**
