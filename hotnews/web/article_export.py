@@ -35,6 +35,42 @@ MAX_CONCURRENT = 3
 MAX_ARTICLES = 50
 # Timeout per article fetch
 FETCH_TIMEOUT = 20
+# Minimum content length to consider as valid (chars of visible text)
+MIN_CONTENT_LENGTH = 100
+
+
+def _has_meaningful_content(content: str, fmt: str) -> bool:
+    """Check if fetched content actually has meaningful text."""
+    if not content:
+        return False
+    if fmt == "html":
+        # Strip HTML tags to check actual text length
+        import re
+        text = re.sub(r'<[^>]+>', '', content)
+        text = re.sub(r'\s+', '', text)
+        return len(text) > MIN_CONTENT_LENGTH
+    return len(content.strip()) > MIN_CONTENT_LENGTH
+
+
+async def _fetch_via_jina(url: str) -> tuple:
+    """Fetch article content via Jina Reader as fallback."""
+    import aiohttp
+    jina_url = f"https://r.jina.ai/{url}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                jina_url,
+                headers={"Accept": "text/plain", "User-Agent": "Mozilla/5.0"},
+                timeout=aiohttp.ClientTimeout(total=FETCH_TIMEOUT),
+            ) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    if text and len(text.strip()) > MIN_CONTENT_LENGTH:
+                        return text, None
+                    return None, "Jina 返回内容过短"
+                return None, f"Jina HTTP {resp.status}"
+    except Exception as e:
+        return None, f"Jina 错误: {e}"
 
 
 async def _fetch_single_article(title: str, url: str, semaphore: asyncio.Semaphore) -> dict:
@@ -45,21 +81,33 @@ async def _fetch_single_article(title: str, url: str, semaphore: asyncio.Semapho
 
             if is_wechat:
                 from hotnews.kernel.services.wechat_content_fetcher import fetch_wechat_article
+
+                # Try direct WeChat fetch (HTML)
                 content, error = await asyncio.wait_for(
                     fetch_wechat_article(url, output_format="html"),
                     timeout=FETCH_TIMEOUT,
                 )
-                if content:
+                if content and _has_meaningful_content(content, "html"):
                     return {"title": title, "url": url, "content": content, "format": "html", "error": None}
-                else:
-                    # Fallback: try text format
-                    content, error = await asyncio.wait_for(
-                        fetch_wechat_article(url, output_format="text"),
-                        timeout=FETCH_TIMEOUT,
-                    )
-                    if content:
-                        return {"title": title, "url": url, "content": content, "format": "text", "error": None}
-                    return {"title": title, "url": url, "content": None, "format": None, "error": error}
+
+                # Try direct WeChat fetch (text)
+                content, error = await asyncio.wait_for(
+                    fetch_wechat_article(url, output_format="text"),
+                    timeout=FETCH_TIMEOUT,
+                )
+                if content and _has_meaningful_content(content, "text"):
+                    return {"title": title, "url": url, "content": content, "format": "text", "error": None}
+
+                # Fallback: Jina Reader
+                logger.info(f"[ArticleExport] WeChat direct fetch empty, trying Jina: {url}")
+                content, error = await asyncio.wait_for(
+                    _fetch_via_jina(url),
+                    timeout=FETCH_TIMEOUT,
+                )
+                if content:
+                    return {"title": title, "url": url, "content": content, "format": "text", "error": None}
+
+                return {"title": title, "url": url, "content": None, "format": None, "error": error or "微信文章内容为空"}
             else:
                 # Non-WeChat: use article_summary's fetch
                 from hotnews.kernel.services.article_summary import fetch_article_content
@@ -67,6 +115,19 @@ async def _fetch_single_article(title: str, url: str, semaphore: asyncio.Semapho
                     fetch_article_content(url),
                     timeout=FETCH_TIMEOUT,
                 )
+                if content and _has_meaningful_content(content, "text"):
+                    return {"title": title, "url": url, "content": content, "format": "text", "error": None}
+
+                # Fallback to Jina for non-WeChat too
+                if not content or not _has_meaningful_content(content, "text"):
+                    logger.info(f"[ArticleExport] Direct fetch empty, trying Jina: {url}")
+                    jina_content, jina_err = await asyncio.wait_for(
+                        _fetch_via_jina(url),
+                        timeout=FETCH_TIMEOUT,
+                    )
+                    if jina_content:
+                        return {"title": title, "url": url, "content": jina_content, "format": "text", "error": None}
+
                 if content:
                     return {"title": title, "url": url, "content": content, "format": "text", "error": None}
                 return {"title": title, "url": url, "content": None, "format": None, "error": error}
