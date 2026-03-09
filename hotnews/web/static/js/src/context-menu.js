@@ -67,6 +67,10 @@ function buildMenuHtml(type, data) {
             <span class="tr-context-menu-item-icon">📎</span>
             <span>复制卡片所有链接</span>
         </div>
+        <div class="tr-context-menu-item" data-action="export-pdf">
+            <span class="tr-context-menu-item-icon">📄</span>
+            <span>生成文章合集</span>
+        </div>
     `;
 }
 
@@ -179,6 +183,9 @@ function handleMenuClick(e) {
                 }
             }
             break;
+        case 'export-pdf':
+            if (currentCardEl) handleExportPdf(currentCardEl);
+            break;
         case 'unfollow':
             if (currentTagData) handleUnfollowTag(currentTagData);
             break;
@@ -215,6 +222,77 @@ async function copyToClipboard(text, successMsg) {
         }
     } catch (e) {
         console.error('Copy failed:', e);
+    }
+}
+
+/**
+ * Handle export PDF action — collect all articles from card and generate combined document
+ */
+async function handleExportPdf(cardEl) {
+    // Collect all articles from the card
+    const newsItems = Array.from(cardEl.querySelectorAll('.news-list .news-item'));
+    const articles = [];
+
+    for (const item of newsItems) {
+        const titleEl = item.querySelector('.news-title');
+        if (!titleEl || !titleEl.href) continue;
+        articles.push({
+            title: titleEl.textContent?.trim() || '',
+            url: titleEl.href
+        });
+    }
+
+    if (!articles.length) {
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show('该卡片暂无文章', { variant: 'warning', durationMs: 1500 });
+        }
+        return;
+    }
+
+    // Get card title
+    const cardTitle = cardEl.querySelector('.platform-name')?.textContent?.trim() || '文章合集';
+
+    // Show loading toast
+    if (window.TR?.toast?.show) {
+        window.TR.toast.show(`正在获取 ${articles.length} 篇文章内容...`, { variant: 'info', durationMs: 30000 });
+    }
+
+    try {
+        const resp = await fetch('/api/articles/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ articles, card_title: cardTitle })
+        });
+
+        if (!resp.ok) {
+            throw new Error(`HTTP ${resp.status}`);
+        }
+
+        const html = await resp.text();
+
+        // Open in new window
+        const win = window.open('', 'export-window');
+        if (win) {
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        } else {
+            // Popup blocked — fallback to blob download
+            const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show('文章合集已生成！', { variant: 'success', durationMs: 2000 });
+        }
+    } catch (e) {
+        console.error('Export failed:', e);
+        if (window.TR?.toast?.show) {
+            window.TR.toast.show('生成失败，请重试', { variant: 'error', durationMs: 2000 });
+        }
     }
 }
 

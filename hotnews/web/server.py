@@ -568,6 +568,10 @@ app.include_router(_share_page_router)
 from hotnews.web.source_discovery_api import router as _source_discovery_router
 app.include_router(_source_discovery_router)
 
+# Article Export API (文章合集导出)
+from hotnews.web.article_export import router as _article_export_router
+app.include_router(_article_export_router)
+
 # User Source Submission API
 from hotnews.web.submit_api import router as _submit_router, admin_router as _submit_admin_router
 app.include_router(_submit_router)
