@@ -701,15 +701,29 @@ async def _generate_keywords_with_ai(topic_name: str, online_conn=None, user_con
         result["icon"] = icon
         result["keywords"] = keywords
     
-    # 从数据库匹配 RSS 源（AI 生成的 RSS 不可靠）
+    # 从数据库匹配 RSS 源（含 tags 字段）
     if result.get("keywords") and online_conn:
         rss_sources = await _match_rss_from_database(topic_name, result.get("keywords", []), online_conn)
-        # 合并到推荐源中
         existing_sources = result.get("recommended_sources", [])
         for rss in rss_sources:
             existing_sources.append(rss)
         result["recommended_sources"] = existing_sources
-    
+
+    # 方案 B：若数据库 RSS 不足 5 个，让 AI 联网补充并验证
+    db_rss_count = len([s for s in result.get("recommended_sources", []) if s.get("type") == "rss"])
+    if db_rss_count < 5 and result.get("keywords"):
+        logger.info(f"[TopicAI] DB RSS only {db_rss_count}, triggering AI RSS discovery")
+        extra_rss = await _discover_rss_with_ai(topic_name, result.get("keywords", []))
+        if extra_rss:
+            existing = result.get("recommended_sources", [])
+            seen_urls = {s.get("url") for s in existing if s.get("url")}
+            for rss in extra_rss:
+                if rss.get("url") and rss["url"] not in seen_urls:
+                    seen_urls.add(rss["url"])
+                    existing.append(rss)
+            result["recommended_sources"] = existing
+            logger.info(f"[TopicAI] AI RSS discovery added {len(extra_rss)} sources")
+
     logger.info(f"[TopicAI] Result: keywords={len(result.get('keywords', []))}, sources={len(result.get('recommended_sources', []))}")
     return result
 
@@ -730,18 +744,19 @@ async def _match_rss_from_database(topic_name: str, keywords: list, online_conn)
     try:
         cursor = online_conn.cursor()
         
-        # 合并所有关键词为单次 OR 查询，减少数据库往返
+        # 合并所有关键词为单次 OR 查询，同时搜索 tags 字段（方案 C）
         or_clauses = " OR ".join(
-            ["(name LIKE ? OR COALESCE(description, '') LIKE ? OR url LIKE ?)"] * len(search_terms)
+            ["(name LIKE ? OR COALESCE(description,'') LIKE ? OR url LIKE ? OR COALESCE(tags,'') LIKE ?)"] * len(search_terms)
         )
         params = []
         for term in search_terms:
-            params += [f"%{term}%", f"%{term}%", f"%{term}%"]
-        
+            params += [f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%"]
+
         cursor.execute(f"""
-            SELECT url, name, description
+            SELECT url, name, COALESCE(description,'') as description
             FROM rss_sources
-            WHERE ({or_clauses})
+            WHERE enabled = 1
+              AND ({or_clauses})
             LIMIT 30
         """, params)
         
@@ -765,6 +780,90 @@ async def _match_rss_from_database(topic_name: str, keywords: list, online_conn)
         logger.warning(f"[TopicAI] RSS matching failed: {e}")
     
     return matched_sources
+
+
+async def _discover_rss_with_ai(topic_name: str, keywords: list) -> list:
+    """
+    方案 B：当数据库 RSS 召回不足（<5）时，用 qwen3-max 联网搜索真实 RSS URL。
+
+    策略：
+    - 让模型联网找出该领域有 RSS 订阅的网站/博客
+    - 并行验证每个 URL 是否真实可访问（_quick_validate_rss_url）
+    - 只返回验证通过的 URL，来源标记为 'ai_discovered'
+    """
+    import httpx
+    import os
+
+    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        return []
+
+    keywords_str = "、".join(keywords[:8]) if keywords else ""
+    prompt = f"""用户想追踪关于「{topic_name}」的新闻（关键词：{keywords_str}）。
+
+请通过网络搜索，找出 5-8 个提供 RSS 订阅的网站或博客，要求：
+1. 内容与「{topic_name}」强相关
+2. 网站提供真实有效的 RSS/Atom 订阅链接（.xml / /feed / /rss 等路径）
+3. 优先找垂直领域媒体、独立博客、官方网站
+4. 搜索确认链接真实存在，不要编造
+
+请严格按以下 JSON 格式输出（只输出 JSON，不要其他内容）：
+{{
+    "rss_sources": [
+        {{"name": "网站名称", "url": "https://example.com/feed", "description": "简介"}}
+    ]
+}}"""
+
+    try:
+        logger.info(f"[RSSDiscover] Calling qwen3-max to find RSS for: {topic_name}")
+        async with httpx.AsyncClient(timeout=45) as client:
+            resp = await client.post(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": "qwen3-max",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "response_format": {"type": "json_object"},
+                    "enable_search": True,
+                    "search_options": {"forced_search": True, "search_strategy": "standard"}
+                }
+            )
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"]
+            raw_sources = json.loads(content).get("rss_sources", [])
+            logger.info(f"[RSSDiscover] Got {len(raw_sources)} candidate RSS URLs")
+    except Exception as e:
+        logger.warning(f"[RSSDiscover] AI RSS discovery failed: {e}")
+        return []
+
+    # 并行验证所有候选 RSS URL
+    async def _validate(src):
+        is_valid = await _quick_validate_rss_url(src.get("url", ""))
+        return (src, is_valid)
+
+    results = await asyncio.gather(*[_validate(src) for src in raw_sources], return_exceptions=True)
+
+    verified = []
+    for item in results:
+        if isinstance(item, Exception):
+            continue
+        src, is_valid = item
+        if is_valid:
+            verified.append({
+                "name": src.get("name", src.get("url", "")),
+                "type": "rss",
+                "url": src.get("url", ""),
+                "description": src.get("description", ""),
+                "verified": True,
+                "source": "ai_discovered"
+            })
+            logger.info(f"[RSSDiscover] Validated: {src.get('name')} - {src.get('url')}")
+        else:
+            logger.info(f"[RSSDiscover] Invalid (skipped): {src.get('name')} - {src.get('url')}")
+
+    logger.info(f"[RSSDiscover] {len(raw_sources)} candidates → {len(verified)} verified")
+    return verified
 
 
 async def _search_and_extract_with_dashscope(topic_name: str, online_conn=None, user_conn=None, model: str = None) -> Dict[str, Any]:
@@ -1630,25 +1729,25 @@ async def _search_sources_from_database(topic_name: str, keywords: list, online_
     # 构建搜索关键词（主题名 + 全量关键词，最多 10 个）
     search_terms = [topic_name] + (keywords[:10] if keywords else [])
     
-    # 合并所有关键词为单次 OR 查询，减少数据库往返
+    # 合并所有关键词为单次 OR 查询，包含 tags 字段（方案 C 打标后可大幅提升召回）
     or_clauses_rss = " OR ".join(
-        ["(name LIKE ? OR COALESCE(description, '') LIKE ? OR url LIKE ?)"] * len(search_terms)
+        ["(name LIKE ? OR COALESCE(description,'') LIKE ? OR url LIKE ? OR COALESCE(tags,'') LIKE ?)"] * len(search_terms)
     )
     or_clauses_mp = " OR ".join(
         ["(nickname LIKE ? OR COALESCE(signature, '') LIKE ?)"] * len(search_terms)
     )
-    
+
     rss_params = []
     mp_params = []
     for term in search_terms:
-        rss_params += [f"%{term}%", f"%{term}%", f"%{term}%"]
+        rss_params += [f"%{term}%", f"%{term}%", f"%{term}%", f"%{term}%"]
         mp_params += [f"%{term}%", f"%{term}%"]
 
     # 1. 搜索 RSS 源（单次查询，上限 20）
     try:
         cur = online_conn.execute(
             f"""
-            SELECT id, name, url, category, description
+            SELECT id, name, url, category, COALESCE(description,'') as description
             FROM rss_sources
             WHERE enabled = 1
               AND category != 'wechat_mp'

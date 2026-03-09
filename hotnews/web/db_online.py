@@ -534,6 +534,12 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     _ensure_column("rss_sources", "use_socks_proxy", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "use_scraperapi", "INTEGER DEFAULT 0")
     _ensure_column("custom_sources", "use_socks_proxy", "INTEGER DEFAULT 0")
+    # 主题匹配增强字段：description（人类可读简介）和 tags（逗号分隔主题标签）
+    # tags 用于主题创建时按关键词召回 RSS 源，由批量打标脚本填充
+    _ensure_column("rss_sources", "description", "TEXT DEFAULT ''")
+    _ensure_column("rss_sources", "tags", "TEXT DEFAULT ''")
+    # tags 全文搜索辅助索引（SQLite FTS5 不在此处，普通索引先满足 LIKE 场景）
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_sources_tags ON rss_sources(tags)")
 
     # Preference tracking columns for news_clicks
     _ensure_column("news_clicks", "user_id", "INTEGER DEFAULT 0")
