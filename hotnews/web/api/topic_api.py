@@ -719,40 +719,46 @@ async def _match_rss_from_database(topic_name: str, keywords: list, online_conn)
     从数据库中匹配 RSS 源。
     
     AI 生成的 RSS URL 不可靠（测试准确率 0%），所以改为从数据库已有的 RSS 源中匹配。
+    优化：合并多关键词为单次 OR 查询，扩展搜索字段，提高上限。
     """
     matched_sources = []
     seen_urls = set()
     
-    # 构建搜索词：主题名 + 关键词
-    search_terms = [topic_name] + (keywords[:5] if keywords else [])
+    # 构建搜索词：主题名 + 关键词（覆盖全部，最多 10 个）
+    search_terms = [topic_name] + (keywords[:10] if keywords else [])
     
     try:
         cursor = online_conn.cursor()
         
+        # 合并所有关键词为单次 OR 查询，减少数据库往返
+        or_clauses = " OR ".join(
+            ["(name LIKE ? OR COALESCE(description, '') LIKE ? OR url LIKE ?)"] * len(search_terms)
+        )
+        params = []
         for term in search_terms:
-            if len(matched_sources) >= 5:  # 最多匹配 5 个 RSS
+            params += [f"%{term}%", f"%{term}%", f"%{term}%"]
+        
+        cursor.execute(f"""
+            SELECT url, name, description
+            FROM rss_sources
+            WHERE ({or_clauses})
+            LIMIT 30
+        """, params)
+        
+        for row in cursor.fetchall():
+            if len(matched_sources) >= 15:  # 最多匹配 15 个 RSS
                 break
-            
-            # 在 rss_sources 表中搜索
-            cursor.execute("""
-                SELECT url, name, description 
-                FROM rss_sources 
-                WHERE name LIKE ? OR description LIKE ?
-                LIMIT 10
-            """, (f"%{term}%", f"%{term}%"))
-            
-            for row in cursor.fetchall():
-                url, name, desc = row
-                if url and url not in seen_urls:
-                    seen_urls.add(url)
-                    matched_sources.append({
-                        "name": name or url,
-                        "type": "rss",
-                        "url": url,
-                        "description": desc or "",
-                        "verified": True,
-                        "source": "database"
-                    })
+            url, name, desc = row
+            if url and url not in seen_urls:
+                seen_urls.add(url)
+                matched_sources.append({
+                    "name": name or url,
+                    "type": "rss",
+                    "url": url,
+                    "description": desc or "",
+                    "verified": True,
+                    "source": "database"
+                })
         
         logger.info(f"[TopicAI] Matched {len(matched_sources)} RSS sources from database")
     except Exception as e:
@@ -1608,6 +1614,7 @@ async def _generate_sources_with_dashscope(topic_name: str, keywords: list = Non
 async def _search_sources_from_database(topic_name: str, keywords: list, online_conn) -> list:
     """
     从数据库中搜索匹配的数据源。
+    优化：合并多关键词为单次 OR 查询，扩展搜索字段（加入 description），提升数量上限。
     
     Args:
         topic_name: 主题名称
@@ -1620,75 +1627,89 @@ async def _search_sources_from_database(topic_name: str, keywords: list, online_
     verified_sources = []
     seen_ids = set()
     
-    # 构建搜索关键词（主题名 + 生成的关键词）
-    search_terms = [topic_name] + (keywords[:5] if keywords else [])
+    # 构建搜索关键词（主题名 + 全量关键词，最多 10 个）
+    search_terms = [topic_name] + (keywords[:10] if keywords else [])
     
-    # 1. 搜索 RSS 源
+    # 合并所有关键词为单次 OR 查询，减少数据库往返
+    or_clauses_rss = " OR ".join(
+        ["(name LIKE ? OR COALESCE(description, '') LIKE ? OR url LIKE ?)"] * len(search_terms)
+    )
+    or_clauses_mp = " OR ".join(
+        ["(nickname LIKE ? OR COALESCE(signature, '') LIKE ?)"] * len(search_terms)
+    )
+    
+    rss_params = []
+    mp_params = []
     for term in search_terms:
-        if len(verified_sources) >= 10:
-            break
-        try:
-            cur = online_conn.execute(
-                """
-                SELECT id, name, url, category 
-                FROM rss_sources 
-                WHERE enabled = 1 
-                  AND category != 'wechat_mp'
-                  AND (name LIKE ? OR url LIKE ?)
-                LIMIT 5
-                """,
-                (f"%{term}%", f"%{term}%")
-            )
-            for row in cur.fetchall():
-                source_id = row[0]
-                if source_id not in seen_ids:
-                    seen_ids.add(source_id)
-                    verified_sources.append({
-                        "name": row[1],
-                        "type": "rss",
-                        "url": row[2],
-                        "description": f"分类: {row[3] or '未分类'}",
-                        "verified": True,
-                        "source": "database",
-                        "id": source_id
-                    })
-        except Exception as e:
-            logger.warning(f"RSS search error for term '{term}': {e}")
-    
-    # 2. 搜索公众号
-    for term in search_terms:
-        if len(verified_sources) >= 15:
-            break
-        try:
-            cur = online_conn.execute(
-                """
-                SELECT fakeid, nickname, signature, round_head_img
-                FROM featured_wechat_mps 
-                WHERE enabled = 1 
-                  AND (nickname LIKE ? OR signature LIKE ?)
-                LIMIT 5
-                """,
-                (f"%{term}%", f"%{term}%")
-            )
-            for row in cur.fetchall():
-                fakeid = row[0]
-                mp_id = f"mp-{fakeid}"
-                if mp_id not in seen_ids:
-                    seen_ids.add(mp_id)
-                    verified_sources.append({
-                        "name": row[1],
-                        "type": "wechat_mp",
-                        "wechat_id": fakeid,
-                        "description": row[2] or "",
-                        "verified": True,
-                        "source": "database",
-                        "id": mp_id,
-                        "avatar": row[3] or ""
-                    })
-        except Exception as e:
-            logger.warning(f"MP search error for term '{term}': {e}")
-    
-    logger.info(f"Found {len(verified_sources)} verified sources from database")
+        rss_params += [f"%{term}%", f"%{term}%", f"%{term}%"]
+        mp_params += [f"%{term}%", f"%{term}%"]
+
+    # 1. 搜索 RSS 源（单次查询，上限 20）
+    try:
+        cur = online_conn.execute(
+            f"""
+            SELECT id, name, url, category, description
+            FROM rss_sources
+            WHERE enabled = 1
+              AND category != 'wechat_mp'
+              AND ({or_clauses_rss})
+            LIMIT 40
+            """,
+            rss_params
+        )
+        for row in cur.fetchall():
+            if len([s for s in verified_sources if s["type"] == "rss"]) >= 20:
+                break
+            source_id = row[0]
+            if source_id not in seen_ids:
+                seen_ids.add(source_id)
+                verified_sources.append({
+                    "name": row[1],
+                    "type": "rss",
+                    "url": row[2],
+                    "description": row[4] or f"分类: {row[3] or '未分类'}",
+                    "verified": True,
+                    "source": "database",
+                    "id": source_id
+                })
+    except Exception as e:
+        logger.warning(f"RSS search error: {e}")
+
+    # 2. 搜索公众号（单次查询，上限 25）
+    try:
+        cur = online_conn.execute(
+            f"""
+            SELECT fakeid, nickname, signature, round_head_img
+            FROM featured_wechat_mps
+            WHERE enabled = 1
+              AND ({or_clauses_mp})
+            LIMIT 50
+            """,
+            mp_params
+        )
+        for row in cur.fetchall():
+            if len([s for s in verified_sources if s["type"] == "wechat_mp"]) >= 25:
+                break
+            fakeid = row[0]
+            mp_id = f"mp-{fakeid}"
+            if mp_id not in seen_ids:
+                seen_ids.add(mp_id)
+                verified_sources.append({
+                    "name": row[1],
+                    "type": "wechat_mp",
+                    "wechat_id": fakeid,
+                    "description": row[2] or "",
+                    "verified": True,
+                    "source": "database",
+                    "id": mp_id,
+                    "avatar": row[3] or ""
+                })
+    except Exception as e:
+        logger.warning(f"MP search error: {e}")
+
+    rss_count = len([s for s in verified_sources if s["type"] == "rss"])
+    mp_count = len([s for s in verified_sources if s["type"] == "wechat_mp"])
+    logger.info(f"Found {len(verified_sources)} verified sources from database (rss={rss_count}, mp={mp_count})")
     return verified_sources
 
 
