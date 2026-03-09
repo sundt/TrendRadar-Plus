@@ -38,6 +38,7 @@ def get_db_conn(project_root: Path) -> sqlite3.Connection:
         sys.exit(1)
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")  # 等 10 秒
     # 确保 description 和 tags 列存在
     for col, col_def in [("description", "TEXT DEFAULT ''"), ("tags", "TEXT DEFAULT ''")]:
         try:
@@ -169,12 +170,23 @@ def main():
         print(f"    🏷️ tags: {tags}")
 
         if not args.dry_run:
-            conn.execute(
-                "UPDATE rss_sources SET description = ?, tags = ?, updated_at = ? WHERE id = ?",
-                (desc, tags, int(time.time()), sid)
-            )
-            conn.commit()
-            print(f"    ✅ Saved")
+            for attempt in range(3):
+                try:
+                    conn.execute(
+                        "UPDATE rss_sources SET description = ?, tags = ?, updated_at = ? WHERE id = ?",
+                        (desc, tags, int(time.time()), sid)
+                    )
+                    conn.commit()
+                    print(f"    ✅ Saved")
+                    break
+                except sqlite3.OperationalError as db_err:
+                    if "locked" in str(db_err) and attempt < 2:
+                        print(f"    ⏳ DB locked, retrying ({attempt+1}/3)...")
+                        time.sleep(2)
+                    else:
+                        print(f"    ❌ DB write failed: {db_err}")
+                        failed += 1
+                        continue
         else:
             print(f"    🔍 Dry run, not saved")
 
