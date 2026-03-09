@@ -232,10 +232,27 @@ async def fetch_article_content(url: str, use_proxy: bool = True) -> Tuple[Optio
     fetch_error = None
     fetch_method = "error"
     
-    # WeChat articles need JS rendering, skip direct fetch
     is_wechat = 'mp.weixin.qq.com' in url
     
-    # Try direct fetch first (skip for WeChat)
+    # WeChat articles: use dedicated fetcher (direct server-side request)
+    if is_wechat:
+        try:
+            from hotnews.kernel.services.wechat_content_fetcher import fetch_wechat_article
+            wechat_content, wechat_error = await fetch_wechat_article(url, output_format="text")
+            if wechat_content and len(wechat_content) > 100:
+                # Truncate if too long
+                if len(wechat_content) > MAX_CONTENT_LENGTH:
+                    wechat_content = wechat_content[:MAX_CONTENT_LENGTH] + "\n\n[内容已截断...]"
+                logger.info(f"WeChat direct fetch succeeded for {url}, got {len(wechat_content)} chars")
+                return wechat_content, None, "wechat_direct"
+            else:
+                logger.info(f"WeChat direct fetch insufficient: {wechat_error}, falling back to Jina")
+                fetch_error = wechat_error
+        except Exception as e:
+            logger.warning(f"WeChat direct fetch error: {url} - {e}, falling back to Jina")
+            fetch_error = str(e)
+    
+    # Non-WeChat articles: try direct HTTP fetch
     if not is_wechat:
         try:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
