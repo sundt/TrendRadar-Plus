@@ -19,8 +19,8 @@ const EXPLORE_MODAL_OPENED_EVENT = 'tr_explore_modal_opened';
 const EXPLORE_MODAL_CLOSED_EVENT = 'tr_explore_modal_closed';
 
 // Default tabs based on login status
-const DEFAULT_TAB_LOGGED_IN = 'my-tags';  // 已登录用户默认显示"我的关注"
-const DEFAULT_TAB_GUEST = 'ai';            // 未登录用户默认显示"AI"（tag-driven 主栏目）
+const DEFAULT_TAB_LOGGED_IN = 'my-tags';   // 已登录用户默认显示"我的关注"
+const DEFAULT_TAB_GUEST = 'openclaw';      // 未登录用户默认显示"openclaw"
 
 // Memory optimization: max number of tabs to keep DOM content
 // Mobile users switch tabs more frequently via drawer, need larger cache
