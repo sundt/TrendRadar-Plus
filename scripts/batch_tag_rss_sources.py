@@ -82,7 +82,7 @@ def fetch_recent_titles(conn, source_id, n=5):
 
 def call_ai_for_tags(source_name, source_url, category, titles, api_key):
     """调用 qwen-plus 生成 description 和 tags"""
-    import httpx
+    import urllib.request
 
     titles_str = "\n".join(f"- {t}" for t in titles[:5]) if titles else "(无近期文章)"
     prompt = f"""为下面的 RSS 数据源生成简介和主题标签。
@@ -104,22 +104,25 @@ URL：{source_url}
 严格按以下 JSON 格式输出：
 {{"description": "一句话简介", "tags": "标签1,标签2,标签3"}}"""
 
+    req_body = json.dumps({
+        "model": "qwen-plus",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.3,
+        "response_format": {"type": "json_object"}
+    }).encode("utf-8")
+
     try:
-        resp = httpx.post(
+        req = urllib.request.Request(
             "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+            data=req_body,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={
-                "model": "qwen-plus",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "response_format": {"type": "json_object"}
-            },
-            timeout=30
+            method="POST"
         )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        result = json.loads(content)
-        return result.get("description", ""), result.get("tags", "")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            content = json.loads(resp.read().decode("utf-8"))
+            text = content["choices"][0]["message"]["content"]
+            result = json.loads(text)
+            return result.get("description", ""), result.get("tags", "")
     except Exception as e:
         print(f"    ⚠️ AI call failed: {e}")
         return None, None
