@@ -32,7 +32,7 @@ class ExportRequest(BaseModel):
 # Max concurrent fetches to avoid overwhelming targets
 MAX_CONCURRENT = 3
 # Max articles per export request
-MAX_ARTICLES = 30
+MAX_ARTICLES = 50
 # Timeout per article fetch
 FETCH_TIMEOUT = 20
 
@@ -343,6 +343,7 @@ async def export_articles(req: ExportRequest):
 
     前端可以在新窗口中打开此 HTML，然后 Ctrl+P 保存为 PDF。
     """
+    logger.info(f"[ArticleExport] Received export request: {len(req.articles)} articles")
     if not req.articles:
         raise HTTPException(status_code=400, detail="文章列表不能为空")
 
