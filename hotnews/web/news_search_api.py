@@ -193,25 +193,52 @@ async def search_news(
     all_news = []
     
     try:
-        # 1. FTS 全文索引搜索（主力）- BM25 相关度排序，覆盖全量数据
-        fts_news = _search_fts(q, limit)
-        logger.info(f"Found {len(fts_news)} from FTS index")
-        all_news.extend(fts_news)
-
-        # 2. 标签搜索（补充）- 去重后追加
-        if len(all_news) < limit:
-            seen_titles = set(n["title"] for n in all_news)
-            tag_news = _search_by_tags(q, limit - len(all_news))
-            logger.info(f"Found {len(tag_news)} from tag search")
-            for n in tag_news:
-                if n["title"] not in seen_titles:
-                    all_news.append(n)
-                    seen_titles.add(n["title"])
+        from hotnews.search import get_search_manager
         
+        manager = get_search_manager()
+        
+        if mode == "tag":
+            # 标签搜索（最智能的按标签分类搜索）
+            tag_news = _search_by_tags(q, limit)
+            logger.info(f"Found {len(tag_news)} from tag search")
+            all_news.extend(tag_news)
+        else:
+            # 统一走 SearchManager
+            if mode == "keyword" or mode == "fuzzy" or mode == "entity":
+                results = manager.keyword_search(q, limit=limit)
+                
+                # 如果 FTS 找不到，且输入模式是 keyword，这里我们做一个 fallback，
+                # 尝试用 tag 或者 semantic 兜底一下，提升体验（特别是没搜到"苹果出新品"时）
+                if not results and mode == "keyword":
+                    logger.info(f"FTS found 0 for '{q}', falling back to hybrid search")
+                    results = manager.hybrid_search(q, limit=limit)
+            elif mode == "semantic":
+                results = manager.semantic_search(q, limit=limit)
+            elif mode == "hybrid":
+                results = manager.hybrid_search(q, limit=limit)
+            else:
+                results = manager.keyword_search(q, limit=limit)
+                
+            # 转换 SearchManager 的结果为外部 API 格式
+            for r in results:
+                # 获取分数安全写法
+                score = getattr(r, 'score', getattr(r, '_score', getattr(r, 'total_score', 0)))
+                # 从 platform_id 尝试获取中文平台名
+                platform_name = manager._get_platform_name(r.platform_id)
+                all_news.append({
+                    "title": r.title,
+                    "url": r.url or "",
+                    "platform": r.platform_id,
+                    "platform_name": platform_name,
+                    "rank": len(all_news) + 1,
+                    "weight": score,
+                    "tag": getattr(r, 'match_type', mode) # 利用 tag 字段顺带显示匹配类型
+                })
+                
         # 限制返回数量
         all_news = all_news[:limit]
         
-        logger.info(f"Total found: {len(all_news)} news items")
+        logger.info(f"Total found: {len(all_news)} news items for mode '{mode}'")
         
         return SearchResponse(
             ok=True,

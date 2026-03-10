@@ -7,6 +7,7 @@
 ## 2026-03-10
 
 ### ✨ 新功能
+- ✨ 重构新闻搜索逻辑，支持多模式（keyword/semantic/tag/hybrid）并引入 SearchManager 统一调度 (`c40c72c`)
 - ✨ 实现向量索引构建的内存优化与断点续传功能 (`ad98d1f`)
 - ✨ 新增 AI 驱动的 commit message 生成与更新日志自动化功能 (`46aa69f`)
 - ✨ 部署时自动生成规范 commit message 和更新日志（AI 驱动）
