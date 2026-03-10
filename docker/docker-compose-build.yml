@@ -113,6 +113,7 @@ services:
       - ../hotnews:/app/hotnews
       - ../data:/app/data:ro
       - ../key/apiclient_key.pem:/app/apiclient_key.pem:ro
+      - ../CHANGELOG.md:/app/CHANGELOG.md:ro
 
     environment:
       - TZ=Asia/Shanghai
