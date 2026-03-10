@@ -305,12 +305,9 @@ class VectorIndex:
         if not self._available:
             return
 
-        # 使用 HNSW 索引（快速近似最近邻）
-        self.faiss_index = faiss.IndexHNSWFlat(
-            self.vector_size,
-            32,  # HNSW 参数
-            faiss.METRIC_INNER_PRODUCT,
-        )
+        # 使用 FlatIP 索引（精确内积搜索，内存高效）
+        # 对于 10 万量级数据，精确搜索足够快（~10ms），且比 HNSW 节省大量内存
+        self.faiss_index = faiss.IndexFlatIP(self.vector_size)
 
         self.metadata = {}
         logger.info("新的向量索引已创建")
@@ -421,11 +418,7 @@ class VectorIndex:
         logger.info("所有 embeddings 编码完成，开始构建 FAISS 索引...")
 
         # ---- FAISS 构建阶段：从缓存文件分批加载并写入索引 ----
-        new_index = faiss.IndexHNSWFlat(
-            self.vector_size,
-            32,
-            faiss.METRIC_INNER_PRODUCT,
-        )
+        new_index = faiss.IndexFlatIP(self.vector_size)
 
         cached_files = sorted(cache_dir.glob("emb_*.npy"))
         for i, cf in enumerate(cached_files):

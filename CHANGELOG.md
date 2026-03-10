@@ -26,6 +26,7 @@
 - ✨ RSS 源新增 description 和 tags 字段，提升搜索匹配精度
 
 ### ⚡ 性能优化
+- ⚡ 将 FAISS 索引从 HNSWFlat 替换为 FlatIP，提升内存效率并保持搜索性能 (`7a4fff8`)
 - ⚡ 统一首页 loading 为骨架屏动画，视觉体验更一致
 - ⚡ RSS 批量打标签脚本优化（SQLite busy_timeout + 重试）
 
