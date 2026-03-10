@@ -52,6 +52,9 @@ workspace/metagpt/
 .env
 docker/.env
 
+# Server-only runtime configs
+scripts/.oss_backup_config
+
 # WeChat Pay certificates (sensitive)
 key/
 *.pem

@@ -103,16 +103,15 @@ class SearchIndexManager:
             logger.warning("没有数据可供索引")
             return {"fts": 0, "vector": 0}
 
-        # 清空旧索引
+        # 清空旧 FTS 索引（SQLite 事务内，相对安全）
         self.fts_index.clear()
-        if self.vector_index:
-            self.vector_index.clear()
 
         # 构建 FTS 索引
         self.fts_index.build_from_data(data)
         logger.info("FTS5 索引构建完成")
 
         # 构建向量索引（如果可用）
+        # build_from_data 内部使用原子替换，即使中途被杀也不会丢失旧索引
         if self.vector_index and self.vector_index._available:
             try:
                 self.vector_index.build_from_data(data)

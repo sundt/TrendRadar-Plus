@@ -353,7 +353,10 @@ class VectorIndex:
 
     def build_from_data(self, data: List[Tuple[str, str, str, str, int]]):
         """
-        从数据列表构建索引
+        从数据列表构建索引（原子替换）
+
+        先构建到临时文件，成功后原子替换正式文件。
+        即使 worker 中途被杀，也不会导致索引数据丢失。
 
         Args:
             data: [(title, url, platform_id, date, id), ...]
@@ -386,18 +389,43 @@ class VectorIndex:
         # 合并所有嵌入
         embeddings = np.vstack(all_embeddings)
 
-        # 重建索引
-        self._create_index()
-        self.faiss_index.add(embeddings)
+        # 构建新的 FAISS 索引（内存中）
+        new_index = faiss.IndexHNSWFlat(
+            self.vector_size,
+            32,
+            faiss.METRIC_INNER_PRODUCT,
+        )
+        new_index.add(embeddings)
 
-        # 保存元数据
-        self.metadata = {i: (data[i][0], data[i][1], data[i][2], data[i][3])
+        new_metadata = {i: (data[i][0], data[i][1], data[i][2], data[i][3])
                         for i in range(len(data))}
 
-        # 保存到磁盘
-        self._save_index()
+        # 原子替换：先写临时文件，再 os.replace 替换正式文件
+        tmp_index_path = self.index_dir / "vector_index.faiss.tmp"
+        tmp_meta_path = self.index_dir / "vector_meta.pkl.tmp"
 
-        logger.info(f"✓ 向量索引构建完成: {len(data)} 条记录")
+        try:
+            faiss.write_index(new_index, str(tmp_index_path))
+            with open(tmp_meta_path, "wb") as f:
+                pickle.dump(new_metadata, f)
+
+            # 原子替换（os.replace 在 POSIX 上是原子操作）
+            os.replace(str(tmp_index_path), str(self.index_path))
+            os.replace(str(tmp_meta_path), str(self.meta_path))
+
+            # 替换成功，更新内存中的索引
+            self.faiss_index = new_index
+            self.metadata = new_metadata
+
+            logger.info(f"✓ 向量索引构建完成: {len(data)} 条记录（原子替换）")
+        except Exception as e:
+            # 清理临时文件
+            for tmp in (tmp_index_path, tmp_meta_path):
+                try:
+                    tmp.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            raise RuntimeError(f"向量索引原子替换失败: {e}") from e
 
     def incremental_update(self, data: List[Tuple[str, str, str, str, int]]):
         """
