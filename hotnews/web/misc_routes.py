@@ -15,9 +15,11 @@ router = APIRouter()
 @router.get("/api/changelog")
 async def api_changelog():
     """返回 CHANGELOG.md 内容"""
-    # 支持 volume mount 和本地开发两种路径
+    # 优先从 hotnews/ 目录内读取（目录级 volume mount，git pull 后自动同步）
+    # 避免 Docker 单文件 bind mount 的 inode 追踪问题
     candidates = [
-        Path("/app/CHANGELOG.md"),           # Docker 容器内
+        Path("/app/hotnews/CHANGELOG.md"),   # Docker: 部署脚本 cp 到 hotnews/ 内
+        Path("/app/CHANGELOG.md"),            # Docker: 单文件挂载 (fallback)
         Path(__file__).parent.parent.parent.parent / "CHANGELOG.md",  # 本地开发
     ]
     for p in candidates:

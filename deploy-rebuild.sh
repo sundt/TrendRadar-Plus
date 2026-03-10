@@ -82,6 +82,9 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     git reset --hard origin/\$BRANCH
     git clean -fd
     
+    # 将 CHANGELOG.md 拷贝到 hotnews/ 目录内（目录级 volume mount 自动同步）
+    [ -f CHANGELOG.md ] && cp CHANGELOG.md hotnews/CHANGELOG.md 2>/dev/null || true
+    
     echo "   [Remote] Building services ($SERVICES)..."
     cd docker
     docker compose -f ${DC_FILE} build $SERVICES

@@ -64,3 +64,6 @@ apiclient_*.pem
 # Reference projects (external)
 we-mp-rss/
 wechat-article-exporter/
+
+# Auto-generated copy for Docker volume mount
+hotnews/CHANGELOG.md

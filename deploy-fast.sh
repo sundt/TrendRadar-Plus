@@ -77,6 +77,10 @@ ssh -p "${SERVER_PORT}" "${SERVER_USER}@${SERVER_HOST}" "bash -s" <<EOF
     git reset --hard origin/\$BRANCH
     git clean -fd
     
+    # 将 CHANGELOG.md 拷贝到 hotnews/ 目录内（该目录是 volume mount，
+    # 避免 Docker 单文件 bind mount 的 inode 追踪问题）
+    [ -f CHANGELOG.md ] && cp CHANGELOG.md hotnews/CHANGELOG.md 2>/dev/null || true
+    
     # Graceful reload: gunicorn 是 PID 1（Dockerfile 用了 exec），
     # docker kill --signal=HUP 直接发给 gunicorn master
     echo "   [Remote] Sending SIGHUP to gunicorn (graceful reload)..."
