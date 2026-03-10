@@ -131,7 +131,7 @@ async def api_fetch_now(request: Request, _: str = Depends(require_admin)):
     return UnicodeJSONResponse(content=result)
 
 @router.get("/api/cache/status")
-async def api_cache_status():
+async def api_cache_status(_: str = Depends(require_admin)):
     """获取缓存状态和预热信息"""
     from hotnews.web.timeline_cache import get_cache_status
     status = get_cache_status()

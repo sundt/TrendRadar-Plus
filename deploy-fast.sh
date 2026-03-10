@@ -38,9 +38,24 @@ CHANGES=$(git diff --cached --stat)
 if [ -z "$CHANGES" ]; then
     echo "No changes to commit."
 else
-    MSG="deploy: $(date +'%Y-%m-%d %H:%M:%S')"
+    # AI 自动生成 conventional commit message
+    echo "   🤖 Generating commit message with AI..."
+    MSG=$(bash "$SCRIPT_DIR/scripts/gen-commit-msg.sh" 2>/dev/null) || MSG=""
+    if [ -z "$MSG" ]; then
+        MSG="deploy: $(date +'%Y-%m-%d %H:%M:%S')"
+        echo "   ⚠️  AI fallback, using timestamp"
+    fi
     git commit -m "$MSG"
     echo "✅ Committed: $MSG"
+
+    # 自动更新 CHANGELOG.md
+    bash "$SCRIPT_DIR/scripts/update-changelog.sh" "$MSG" 2>&1 || true
+    # 如果 CHANGELOG 有变更，追加到当前 commit
+    if git diff --name-only | grep -q "CHANGELOG.md"; then
+        git add CHANGELOG.md
+        git commit --amend --no-edit
+        echo "✅ CHANGELOG.md updated"
+    fi
 fi
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)

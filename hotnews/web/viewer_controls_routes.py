@@ -1,6 +1,8 @@
 import json
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
+
+from hotnews.web.deps import require_admin
 
 
 router = APIRouter()
@@ -41,7 +43,7 @@ async def api_filter_stats(request: Request):
 
 
 @router.post("/api/filter/mode")
-async def api_set_filter_mode(request: Request, mode: str):
+async def api_set_filter_mode(request: Request, mode: str, _: str = Depends(require_admin)):
     viewer_service, _ = _get_services(request)
     success = viewer_service.set_filter_mode(mode)
     return UnicodeJSONResponse(content={"success": success, "mode": mode})
@@ -55,7 +57,7 @@ async def api_blacklist_keywords(request: Request):
 
 
 @router.post("/api/blacklist/reload")
-async def api_reload_blacklist(request: Request):
+async def api_reload_blacklist(request: Request, _: str = Depends(require_admin)):
     viewer_service, _ = _get_services(request)
     count = viewer_service.reload_blacklist()
     return UnicodeJSONResponse(content={"success": True, "keywords_count": count})

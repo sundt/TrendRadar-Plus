@@ -31,11 +31,24 @@ CHANGES=$(git diff --cached --stat)
 if [ -z "$CHANGES" ]; then
     echo "No changes to commit."
 else
-    # Auto-commit with timestamp and stat if no message provided
-    MSG="Rebuild $(date +'%Y-%m-%d %H:%M:%S')"
-    # Append stats to commit body if needed, but for -m just keep it simple or use multiple -m
+    # AI 自动生成 conventional commit message
+    echo "   🤖 Generating commit message with AI..."
+    MSG=$(bash "$SCRIPT_DIR/scripts/gen-commit-msg.sh" 2>/dev/null) || MSG=""
+    if [ -z "$MSG" ]; then
+        MSG="rebuild: $(date +'%Y-%m-%d %H:%M:%S')"
+        echo "   ⚠️  AI fallback, using timestamp"
+    fi
     git commit -m "$MSG"
     echo "✅ Committed: $MSG"
+
+    # 自动更新 CHANGELOG.md
+    bash "$SCRIPT_DIR/scripts/update-changelog.sh" "$MSG" 2>&1 || true
+    # 如果 CHANGELOG 有变更，追加到当前 commit
+    if git diff --name-only | grep -q "CHANGELOG.md"; then
+        git add CHANGELOG.md
+        git commit --amend --no-edit
+        echo "✅ CHANGELOG.md updated"
+    fi
 fi
 
 # Step 2: Git Push

@@ -10,6 +10,8 @@ from typing import Dict, Any
 
 from fastapi import APIRouter, Request, Depends
 
+from hotnews.web.deps import require_admin
+
 router = APIRouter(prefix="/api/cache", tags=["cache"])
 
 # 缓存统计数据
@@ -32,7 +34,7 @@ def record_cache_access(path: str, is_hit: bool):
 
 
 @router.get("/stats")
-async def get_cache_stats(request: Request):
+async def get_cache_stats(request: Request, _: str = Depends(require_admin)):
     """
     获取缓存统计信息
     
@@ -88,21 +90,19 @@ async def get_cache_stats(request: Request):
 
 
 @router.post("/reset")
-async def reset_cache_stats(request: Request):
+async def reset_cache_stats(request: Request, _: str = Depends(require_admin)):
     """
     重置缓存统计
     
     需要管理员权限
     """
-    from hotnews.web.server import _require_admin
-    _require_admin(request)
     
     _cache_stats.clear()
     return {"message": "Cache stats reset successfully"}
 
 
 @router.get("/recommendations")
-async def get_cache_recommendations(request: Request):
+async def get_cache_recommendations(request: Request, _: str = Depends(require_admin)):
     """
     获取缓存优化建议
     

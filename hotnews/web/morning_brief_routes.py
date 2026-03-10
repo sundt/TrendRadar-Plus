@@ -12,11 +12,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 
 from hotnews.web.deps import (
     UnicodeJSONResponse,
     get_online_db,
+    require_admin,
     rss_created_at_cutoff,
     rss_row_to_item,
     passes_tag_whitelist,
@@ -537,6 +538,7 @@ async def api_rss_brief_curated(
 @router.get("/api/rss/ai-classification/stats")
 async def api_rss_ai_classification_stats(
     hours: int = Query(24, ge=1, le=24 * 30, description="统计最近N小时的数据"),
+    _: str = Depends(require_admin),
 ):
     """API: 获取RSS AI分类统计信息"""
     from hotnews.kernel.scheduler.rss_scheduler import mb_ai_get_classification_stats
@@ -552,7 +554,7 @@ async def api_rss_ai_classification_stats(
 
 
 @router.post("/api/rss/ai-classification/test")
-async def api_rss_ai_classification_test(request: Request):
+async def api_rss_ai_classification_test(request: Request, _: str = Depends(require_admin)):
     """API: 测试AI分类效果（用于prompt调试）"""
     from hotnews.kernel.scheduler.rss_scheduler import mb_ai_test_classification
 

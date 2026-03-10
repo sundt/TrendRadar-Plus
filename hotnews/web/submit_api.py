@@ -17,7 +17,6 @@ import ipaddress
 import socket
 import time
 import uuid
-import subprocess
 from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse
 
@@ -412,31 +411,22 @@ def _discover_rss(base_url: str) -> Optional[Dict[str, Any]]:
 
 async def _check_server_reachability(feed_url: str) -> bool:
     """
-    在服务器本地测试能否访问 feed_url。
-    返回 True = 需要代理；False = 直连 OK。
+    测试 feed_url 是否可直连访问。
+    返回 True = 可能需要代理（直连失败）；False = 直连 OK。
     """
     try:
-        result = await asyncio.wait_for(
+        resp = await asyncio.wait_for(
             asyncio.to_thread(
-                subprocess.run,
-                [
-                    "ssh", "-p", "52222", "-o", "BatchMode=yes",
-                    "-o", "ConnectTimeout=5",
-                    "root@120.77.222.205",
-                    f"curl -s -o /dev/null -w '%{{http_code}}' -L --max-time 8 '{feed_url}' -A 'Mozilla/5.0'",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=20,
+                requests.head, feed_url,
+                headers=HEADERS, timeout=8, allow_redirects=True,
             ),
-            timeout=25,
+            timeout=12,
         )
-        code = (result.stdout or "").strip()
-        # 200/301/302 = 直连 OK；403/000/其他 = 需要代理
-        return code not in ("200", "301", "302", "304")
+        # 200/301/302/304 = 直连 OK；其他 = 可能需要代理
+        return resp.status_code not in (200, 301, 302, 304)
     except Exception:
-        # SSH 检测失败时，乐观地认为直连可达（管理员可批准后手动调整）
-        return False
+        # 请求失败（超时、连接拒绝等），可能需要代理
+        return True
 
 
 # ─── API 端点 ─────────────────────────────────────────────────────────────────

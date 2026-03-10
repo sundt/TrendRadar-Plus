@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>更新日志 - Hotnews</title>
+    <meta name="description" content="Hotnews 热点新闻聚合平台更新日志，了解最新功能和改进。">
+    <link rel="icon" href="/static/images/hxlogo.jpg" type="image/jpeg">
+    <style>
+        :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border: #e2e8f0;
+            --accent: #667eea;
+            --accent-light: #eef2ff;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.12);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f172a;
+                --card: #1e293b;
+                --text: #f1f5f9;
+                --text-secondary: #94a3b8;
+                --text-muted: #64748b;
+                --border: #334155;
+                --accent: #818cf8;
+                --accent-light: #1e1b4b;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .hero {
+            background: var(--gradient);
+            padding: 48px 20px 56px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at 30% 50%, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .hero p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 16px;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 16px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.2s;
+            z-index: 2;
+        }
+
+        .back-link:hover {
+            color: #fff;
+        }
+
+        /* Container */
+        .container {
+            max-width: 760px;
+            margin: -32px auto 40px;
+            padding: 0 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .loading-spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Date Block */
+        .date-block {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 28px 32px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            transition: box-shadow 0.3s, transform 0.3s;
+            animation: fadeInUp 0.4s ease-out both;
+        }
+
+        .date-block:hover {
+            box-shadow: var(--shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .date-header {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .date-badge {
+            background: var(--gradient);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Category */
+        .category-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            margin: 16px 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .category-title:first-child {
+            margin-top: 0;
+        }
+
+        /* Entry */
+        .entry {
+            padding: 8px 0 8px 20px;
+            position: relative;
+            color: var(--text-secondary);
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .entry::before {
+            content: '';
+            position: absolute;
+            left: 4px;
+            top: 16px;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .entry code {
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 12px;
+            background: var(--accent-light);
+            color: var(--accent);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Intro block (top of changelog) */
+        .intro-block {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 24px 32px;
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 15px;
+        }
+
+        .intro-block h1 {
+            font-size: 24px;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        /* Divider - hidden */
+        .divider {
+            display: none;
+        }
+
+        /* Footer */
+        .page-footer {
+            text-align: center;
+            padding: 24px 20px 40px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        .page-footer a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .hero {
+                padding: 36px 16px 44px;
+            }
+
+            .hero h1 {
+                font-size: 26px;
+            }
+
+            .container {
+                padding: 0 12px;
+            }
+
+            .date-block,
+            .intro-block {
+                padding: 20px;
+                border-radius: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="hero">
+        <a href="/" class="back-link">← 回到首页</a>
+        <div class="hero-content">
+            <h1>📋 更新日志</h1>
+            <p>了解 Hotnews 的最新功能和改进</p>
+        </div>
+    </div>
+
+    <div class="container" id="changelog-container">
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <div>加载中...</div>
+        </div>
+    </div>
+
+    <div class="page-footer">
+        <p>Hotnews - 热点新闻聚合 · <a href="/">回到首页</a></p>
+    </div>
+
+    <script>
+        (async function () {
+            const container = document.getElementById('changelog-container');
+            const loading = document.getElementById('loading');
+
+            try {
+                const resp = await fetch('/api/changelog');
+                const text = await resp.text();
+                loading.style.display = 'none';
+                container.innerHTML = parseChangelog(text);
+            } catch (e) {
+                loading.innerHTML = '<div style="font-size:48px;margin-bottom:16px;">😅</div><div>加载失败，请稍后再试</div>';
+            }
+
+            function parseChangelog(md) {
+                const lines = md.split('\n');
+                let html = '';
+                let inDateBlock = false;
+                let blockIndex = 0;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+
+                    // Main title: # 📋 更新日志
+                    if (line.startsWith('# ')) {
+                        // skip, already in hero
+                        continue;
+                    }
+
+                    // Divider ---
+                    if (line.trim() === '---') {
+                        continue;
+                    }
+
+                    // Date header: ## 2026-03-10
+                    if (line.startsWith('## ')) {
+                        if (inDateBlock) {
+                            html += '</div>'; // close previous date block
+                        }
+                        const dateStr = line.replace('## ', '').trim();
+                        const badge = getDateBadge(dateStr);
+                        html += `<div class="date-block" style="animation-delay: ${blockIndex * 0.08}s">`;
+                        html += `<div class="date-header">${dateStr}${badge}</div>`;
+                        inDateBlock = true;
+                        blockIndex++;
+                        continue;
+                    }
+
+                    // Category: ### ✨ 新功能
+                    if (line.startsWith('### ')) {
+                        const cat = line.replace('### ', '').trim();
+                        html += `<div class="category-title">${cat}</div>`;
+                        continue;
+                    }
+
+                    // Entry: - ✨ description (`hash`)
+                    if (line.startsWith('- ')) {
+                        let entry = line.replace('- ', '').trim();
+                        // Format inline code
+                        entry = entry.replace(/`([^`]+)`/g, '<code>$1</code>');
+                        html += `<div class="entry">${entry}</div>`;
+                        continue;
+                    }
+
+                    // Plain text (intro paragraph)
+                    if (line.trim() && !inDateBlock) {
+                        html += `<div class="intro-block"><p>${line.trim()}</p></div>`;
+                    }
+                }
+
+                if (inDateBlock) {
+                    html += '</div>';
+                }
+
+                return html;
+            }
+
+            function getDateBadge(dateStr) {
+                try {
+                    const date = new Date(dateStr);
+                    const now = new Date();
+                    const diffDays = Math.floor((now - date) / 86400000);
+                    if (diffDays <= 0) return '<span class="date-badge">今天</span>';
+                    if (diffDays === 1) return '<span class="date-badge">昨天</span>';
+                    if (diffDays <= 7) return '<span class="date-badge">本周</span>';
+                    return '';
+                } catch (e) {
+                    return '';
+                }
+            }
+        })();
+    </script>
+</body>
+
+</html>

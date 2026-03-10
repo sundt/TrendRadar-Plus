@@ -576,6 +576,10 @@ async def get_article_stats(request: Request):
 @stats_router.post("/view")
 async def record_article_view(request: Request):
     """记录阅读/总结行为"""
+    # 防刷：拒绝无 Referer 的请求（外部脚本通常不带 Referer）
+    referer = (request.headers.get("referer") or "").strip()
+    if not referer:
+        return _json({"success": False, "error": "invalid request"}, status_code=403)
     user = _resolve_user(request)
     if not user:
         # 未登录也记录，用 user_id=0

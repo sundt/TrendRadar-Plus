@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from datetime import date
+from pathlib import Path
 
 import requests
 from fastapi import APIRouter
@@ -9,6 +10,20 @@ from fastapi.responses import JSONResponse, Response, PlainTextResponse, Redirec
 
 
 router = APIRouter()
+
+
+@router.get("/api/changelog")
+async def api_changelog():
+    """返回 CHANGELOG.md 内容"""
+    # 支持 volume mount 和本地开发两种路径
+    candidates = [
+        Path("/app/CHANGELOG.md"),           # Docker 容器内
+        Path(__file__).parent.parent.parent.parent / "CHANGELOG.md",  # 本地开发
+    ]
+    for p in candidates:
+        if p.is_file():
+            return PlainTextResponse(content=p.read_text(encoding="utf-8"))
+    return PlainTextResponse(content="# 📋 更新日志\n\n暂无更新记录。", status_code=200)
 
 
 @router.get("/extension/install")

@@ -477,7 +477,15 @@ def _inject_rss_subscription_news_into_data(*, request: Request, data: Dict[str,
 
 
 # 创建 FastAPI 应用
-app = FastAPI(title="Hotnews News Viewer", version="1.0.0")
+# 生产环境关闭 Swagger UI（通过 HOTNEWS_DOCS_ENABLED=1 可手动开启）
+_docs_enabled = os.environ.get("HOTNEWS_DOCS_ENABLED", "").strip() == "1"
+app = FastAPI(
+    title="Hotnews News Viewer",
+    version="1.0.0",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 app.state.project_root = project_root
 
 # 启用 Gzip 压缩（响应大于 500 字节时压缩）
@@ -1562,6 +1570,10 @@ async def api_news_click(request: Request):
     """
     API: Record a news item click for analytics and preference tracking.
     """
+    # 防刷：拒绝无 Referer 的请求（外部脚本通常不带 Referer）
+    referer = (request.headers.get("referer") or "").strip()
+    if not referer:
+        return UnicodeJSONResponse(content={"success": False, "error": "invalid request"}, status_code=403)
     import time
     import json as _json
     try:
@@ -1714,7 +1726,7 @@ async def api_admin_news_clicks(
 async def api_news(
     request: Request,
     platforms: Optional[str] = Query(None),
-    limit: int = Query(10000, ge=1, le=20000),
+    limit: int = Query(5000, ge=1, le=5000),
     filter_mode: Optional[str] = Query(None)
 ):
     """API: 获取分类新闻数据（JSON格式）"""
@@ -2256,6 +2268,9 @@ async def api_subscriptions_rss_news(request: Request):
         subscriptions = body.get("subscriptions") if isinstance(body, dict) else None
         if not isinstance(subscriptions, list):
             return JSONResponse(content={"detail": "Invalid subscriptions"}, status_code=400)
+        # 限制订阅数量，防止滥用
+        if len(subscriptions) > 100:
+            return JSONResponse(content={"detail": "Too many subscriptions (max 100)"}, status_code=400)
 
     rss_usage_record(project_root, request, len(subscriptions))
 

@@ -16,6 +16,10 @@ from fastapi.responses import JSONResponse
 RATE_LIMIT_REQUESTS = 100  # 每窗口最大请求数
 RATE_LIMIT_WINDOW = 60  # 窗口大小（秒）
 
+# 写入端点的更严格限制（预留配置，供未来中间件使用）
+RATE_LIMIT_WRITE_REQUESTS = 30  # 写入端点每窗口最大请求数
+RATE_LIMIT_WRITE_WINDOW = 60  # 写入端点窗口大小（秒）
+
 # 存储: {client_id: [timestamp1, timestamp2, ...]}
 _rate_limit_storage: Dict[str, deque] = {}
 _rate_limit_lock = Lock()

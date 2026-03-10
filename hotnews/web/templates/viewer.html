@@ -30,10 +30,10 @@
             try {
                 // E2E 测试模式跳过
                 try { var p = new URLSearchParams(location.search || ''); if (p.get('e2e') === '1') return; } catch (e2) { }
-                
+
                 // 默认隐藏的栏目（与 settings.js 保持一致）
                 var defaultHidden = ['other', 'general', 'social', 'tech_news', 'developer'];
-                
+
                 // 尝试从 localStorage 读取用户配置
                 var userHidden = defaultHidden;
                 try {
@@ -45,10 +45,10 @@
                         }
                     }
                 } catch (e) { }
-                
+
                 // 生成 CSS 选择器隐藏这些栏目
                 if (userHidden.length > 0) {
-                    var selectors = userHidden.map(function(id) {
+                    var selectors = userHidden.map(function (id) {
                         return '.sub-tab[data-category="' + id + '"], #tab-' + id;
                     }).join(', ');
                     document.write('<style id="early-hide-categories">' + selectors + '{display:none!important}</style>');
@@ -147,9 +147,12 @@
     <!-- 非首屏样式异步加载 — 按设备类型条件加载，减少无效下载 -->
     {% if not is_mobile %}
     {# PC 端：加载模态框/设置/主题追踪样式，跳过移动端增强 CSS（~70KB） #}
-    <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
-    <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
-    <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
     <noscript>
         <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet">
@@ -157,10 +160,14 @@
     </noscript>
     {% else %}
     {# 移动端：加载移动增强 CSS + 非阻塞加载其余样式（media=print trick 立即下载，不阻塞渲染） #}
-    <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
-    <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
-    <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
-    <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
+    <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
     <noscript>
         <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet">
@@ -182,9 +189,12 @@
                 </div>
                 <div class="nav-spacer"></div>
                 <div class="nav-tools">
-                    <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()" title="我的收藏">⭐</button>
-                    <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="切换护眼模式">🌙</button>
-                    <button class="icon-btn search-btn" onclick="window.open('/search', '_blank')" title="搜索新闻">🔍</button>
+                    <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()"
+                        title="我的收藏">⭐</button>
+                    <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()"
+                        title="切换护眼模式">🌙</button>
+                    <button class="icon-btn search-btn" onclick="window.open('/search', '_blank')"
+                        title="搜索新闻">🔍</button>
                     <div id="authButtonContainer" class="auth-button-container auth-pending"></div>
                 </div>
             </div>
@@ -199,18 +209,22 @@
                 {% for col in ssr_columns %}
                 {% if col.children %}
                 <div class="sub-tab-wrapper{% if col.id == 'my-tags' %} active{% endif %}" data-category="{{ col.id }}">
-                    <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}"
-                            data-category="{{ col.id }}" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ col.id }}')">
+                    <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}" data-category="{{ col.id }}"
+                        onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ col.id }}')">
                         {{ col.name }}
                     </button>
                     <div class="sub-dropdown">
                         <div class="dropdown-grid">
                             {% for child in col.children %}
                             <div class="dropdown-col">
-                                <div class="dropdown-col-title dropdown-col-title--link" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ child.id }}')">{{ child.name }}</div>
+                                <div class="dropdown-col-title dropdown-col-title--link"
+                                    onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ child.id }}')">
+                                    {{ child.name }}</div>
                                 {% if child.children %}
                                 {% for gc in child.children %}
-                                <div class="dd-item" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ gc.id }}')">{{ gc.name }}</div>
+                                <div class="dd-item"
+                                    onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ gc.id }}')">
+                                    {{ gc.name }}</div>
                                 {% endfor %}
                                 {% endif %}
                             </div>
@@ -219,8 +233,8 @@
                     </div>
                 </div>
                 {% else %}
-                <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}"
-                        data-category="{{ col.id }}" onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ col.id }}')">
+                <button class="sub-tab{% if col.id == 'my-tags' %} active{% endif %}" data-category="{{ col.id }}"
+                    onclick="window.handleTabClickWithAuth && window.handleTabClickWithAuth('{{ col.id }}')">
                     {{ col.name }}
                 </button>
                 {% endif %}
@@ -229,14 +243,18 @@
                 {# 降级：使用旧的 data.categories 渲染 #}
                 {% for cat_id, category in data.categories.items() %}
                 {% if not category.is_topic %}
-                <button class="sub-tab{% if cat_id == 'my-tags' %} active{% endif %}"
-                        data-category="{{ cat_id }}" onclick="switchTab('{{ cat_id }}')">
-                    {{ category.name }}{% if category.is_new %}<span class="new-badge new-badge-category" data-category="{{ cat_id }}">NEW</span>{% endif %}{% if cat_id == 'sports' %}<span class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>{% endif %}
+                <button class="sub-tab{% if cat_id == 'my-tags' %} active{% endif %}" data-category="{{ cat_id }}"
+                    onclick="switchTab('{{ cat_id }}')">
+                    {{ category.name }}{% if category.is_new %}<span class="new-badge new-badge-category"
+                        data-category="{{ cat_id }}">NEW</span>{% endif %}{% if cat_id == 'sports' %}<span
+                        class="new-badge" id="newBadgeSportsTab" style="display:none;">NEW</span>{% endif %}
                 </button>
                 {% endif %}
                 {% endfor %}
                 {% endif %}
-                <button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button>
+                <button class="sub-tab sub-tab-add" onclick="goToSettings()"
+                    onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()"
+                    title="订阅更多内容">+ 订阅</button>
                 <div class="sub-tabs-indicator"></div>
             </div>
 
@@ -261,7 +279,8 @@
             {% set is_active_category = (cat_id == 'my-tags') %}
             {% set is_special = (cat_id in special_cats) or category.is_topic %}
             {% set needs_lazy_load = (not is_special and not is_active_category) %}
-            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}" data-lazy-load="{% if needs_lazy_load %}1{% else %}0{% endif %}">
+            <div class="tab-pane {% if is_active_category %}active{% endif %}" id="tab-{{ cat_id }}"
+                data-lazy-load="{% if needs_lazy_load %}1{% else %}0{% endif %}">
                 {% if cat_id == 'my-tags' %}
                 <div class="platform-grid" id="myTagsGrid">
                     <div class="my-tags-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
@@ -271,7 +290,8 @@
                 </div>
                 {% elif cat_id == 'discovery' %}
                 <div class="platform-grid" id="discoveryGrid">
-                    <div class="discovery-loading" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                    <div class="discovery-loading"
+                        style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
                         <div style="font-size:48px;margin-bottom:16px;">✨</div>
                         <div style="font-size:16px;">发现中...</div>
                     </div>
@@ -301,8 +321,10 @@
                 <div class="platform-grid" id="openclawGrid"></div>
                 {% elif category.is_topic %}
                 {# 主题栏目 - 使用 API 动态加载，与其他动态栏目保持一致 #}
-                <div class="platform-grid" id="topicCards-{{ category.topic_id }}" data-topic-id="{{ category.topic_id }}">
-                    <div class="topic-loading-state" style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
+                <div class="platform-grid" id="topicCards-{{ category.topic_id }}"
+                    data-topic-id="{{ category.topic_id }}">
+                    <div class="topic-loading-state"
+                        style="text-align:center;padding:60px 20px;color:#6b7280;width:100%;">
                         <div style="font-size:48px;margin-bottom:16px;">🔍</div>
                         <div style="font-size:16px;">加载中...</div>
                     </div>
@@ -321,8 +343,7 @@
                 {# 不需要懒加载的栏目渲染完整内容 #}
                 <div class="platform-grid">
                     {% for platform_id, platform in (category.platforms.items()|list) %}
-                    {% set is_real_card = loop.index0 < 3 %}
-                    <div class="platform-card"
+                    {% set is_real_card = loop.index0 < 3 %} <div class="platform-card"
                         data-platform="{{ platform_id }}" data-total-count="{{ platform.news|length }}"
                         data-loaded-count="{% if is_real_card %}{{ [platform.news|length, items_per_card]|min }}{% else %}0{% endif %}"
                         data-lazy="{% if is_real_card %}0{% else %}1{% endif %}" draggable="false">
@@ -356,11 +377,16 @@
                                     </a>
                                     <div class="news-actions">
                                         {% if news.timestamp %}
-                                        <span class="tr-news-date" data-timestamp="{{ news.timestamp }}">{{ news.timestamp[5:10] }}</span>
+                                        <span class="tr-news-date" data-timestamp="{{ news.timestamp }}">{{
+                                            news.timestamp[5:10] }}</span>
                                         {% endif %}
                                         <div class="news-hover-btns">
-                                            <button class="news-summary-btn" data-news-id="{{ news.stable_id }}" data-title="{{ news.display_title or news.title }}" data-url="{{ news.url }}" data-source-id="{{ platform_id }}" data-source-name="{{ platform.name }}"></button>
-                                            <button class="news-comment-btn" data-url="{{ news.url }}" data-title="{{ news.display_title or news.title }}"></button>
+                                            <button class="news-summary-btn" data-news-id="{{ news.stable_id }}"
+                                                data-title="{{ news.display_title or news.title }}"
+                                                data-url="{{ news.url }}" data-source-id="{{ platform_id }}"
+                                                data-source-name="{{ platform.name }}"></button>
+                                            <button class="news-comment-btn" data-url="{{ news.url }}"
+                                                data-title="{{ news.display_title or news.title }}"></button>
                                         </div>
                                     </div>
                                 </div>
@@ -377,40 +403,44 @@
                             {% endif %}
                         </ul>
                         <div class="news-load-sentinel" aria-hidden="true"></div>
-                    </div>
-                    {% endfor %}
                 </div>
-                <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
-                {% endif %}
-                {% endif %}
-            </div>
-            {% endfor %}
-
-            {# SSR placeholder panes for ssr_columns not in data.categories (tag-driven columns) #}
-            {# 不设 data-lazy-load：这些栏目由 categoryTimeline.load() 加载，不走 _loadCategoryData #}
-            {% macro render_ssr_placeholder_panes(columns, categories) %}
-                {% for col in columns %}
-                    {% if col.id not in categories %}
-                    <div class="tab-pane" id="tab-{{ col.id }}">
-                        <div class="platform-grid"></div>
-                    </div>
-                    {% endif %}
-                    {% if col.children %}
-                        {{ render_ssr_placeholder_panes(col.children, categories) }}
-                    {% endif %}
                 {% endfor %}
-            {% endmacro %}
-            {% if ssr_columns %}
-                {{ render_ssr_placeholder_panes(ssr_columns, data.categories) }}
+            </div>
+            <div class="category-empty-state" style="display:none;" aria-hidden="true">没有匹配内容，请调整关键词或切换模式</div>
+            {% endif %}
             {% endif %}
         </div>
+        {% endfor %}
+
+        {# SSR placeholder panes for ssr_columns not in data.categories (tag-driven columns) #}
+        {# 不设 data-lazy-load：这些栏目由 categoryTimeline.load() 加载，不走 _loadCategoryData #}
+        {% macro render_ssr_placeholder_panes(columns, categories) %}
+        {% for col in columns %}
+        {% if col.id not in categories %}
+        <div class="tab-pane" id="tab-{{ col.id }}">
+            <div class="platform-grid"></div>
+        </div>
+        {% endif %}
+        {% if col.children %}
+        {{ render_ssr_placeholder_panes(col.children, categories) }}
+        {% endif %}
+        {% endfor %}
+        {% endmacro %}
+        {% if ssr_columns %}
+        {{ render_ssr_placeholder_panes(ssr_columns, data.categories) }}
+        {% endif %}
+    </div>
     </div>
 
     <div class="tr-footer-info">
         本站内容由系统自动聚合自互联网公开RSS源，仅提供信息索引与导读，版权归属于原作者。本站不对其准确性、完整性负责。如涉及版权或内容违规，请联系我们及时删除。
-        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener" class="tr-footer-top-toggle footer-icp">粤ICP备2022053144号-1</a>
-        <a class="tr-footer-top-toggle footer-icp" href="https://p2fjebt29i.feishu.cn/share/base/form/shrcnL6g8L6M6yFJU9gTnE4pBqe"
-            target="_blank" rel="noopener noreferrer">💡 建议</a>
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener"
+            class="tr-footer-top-toggle footer-icp">粤ICP备2022053144号-1</a>
+        <a class="tr-footer-top-toggle footer-icp"
+            href="https://p2fjebt29i.feishu.cn/share/base/form/shrcnL6g8L6M6yFJU9gTnE4pBqe" target="_blank"
+            rel="noopener noreferrer">💡 建议</a>
+        <a class="tr-footer-top-toggle footer-icp" href="/static/changelog.html" target="_blank"
+            rel="noopener noreferrer">📋 更新日志</a>
         <span class="tr-footer-top-toggle footer-qr-wrapper" style="display:none;">
             <a href="javascript:void(0)" class="footer-qr-trigger" onclick="toggleFooterQR()">加入用户群</a>
             <span class="footer-qr-popup" id="footerQRPopup">
@@ -423,8 +453,8 @@
 
     {% if is_mobile %}
     <script type="module" src="{{ static_prefix }}/js/mobile/index-mobile.js?v={{ asset_rev }}"></script>
- <!-- Mobile JS Enhancement -->
-<script src="{{ static_prefix }}/js/src/mobile-enhance.js?v=20260308h"></script>
+    <!-- Mobile JS Enhancement -->
+    <script src="{{ static_prefix }}/js/src/mobile-enhance.js?v=20260308h"></script>
     {% else %}
     <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
     {% endif %}
@@ -444,27 +474,27 @@
 
     <!-- 日期相对时间格式化 -->
     <script>
-        (function() {
+        (function () {
             // 将时间戳字符串转换为相对时间显示
             function formatRelativeDate(timestampStr) {
                 if (!timestampStr) return '';
-                
+
                 // 解析时间戳字符串 (格式: "2026-01-29 15:30:00" 或 "2026-01-29")
                 var date = new Date(timestampStr.replace(' ', 'T'));
                 if (isNaN(date.getTime())) return timestampStr.substring(5, 10); // 解析失败，返回原格式
-                
+
                 var now = new Date();
                 var diffMs = now - date;
                 var diffMins = Math.floor(diffMs / 60000);
                 var diffHours = Math.floor(diffMs / 3600000);
                 var diffDays = Math.floor(diffMs / 86400000);
-                
+
                 if (diffMins < 0) return '刚刚'; // 未来时间
                 if (diffMins < 1) return '刚刚';
                 if (diffMins < 60) return diffMins + '分钟前';
                 if (diffHours < 24) return diffHours + '小时前';
                 if (diffDays < 7) return diffDays + '天前';
-                
+
                 var month = date.getMonth() + 1;
                 var day = date.getDate();
                 if (date.getFullYear() === now.getFullYear()) {
@@ -472,25 +502,25 @@
                 }
                 return date.getFullYear() + '-' + month + '-' + day;
             }
-            
+
             // 格式化所有带 data-timestamp 的日期元素
             function formatAllDates() {
                 var dateElements = document.querySelectorAll('.tr-news-date[data-timestamp]');
-                dateElements.forEach(function(el) {
+                dateElements.forEach(function (el) {
                     var timestamp = el.getAttribute('data-timestamp');
                     if (timestamp) {
                         el.textContent = formatRelativeDate(timestamp);
                     }
                 });
             }
-            
+
             // 页面加载后执行
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', formatAllDates);
             } else {
                 formatAllDates();
             }
-            
+
             // 暴露函数供动态内容使用
             window.formatAllDates = formatAllDates;
         })();
@@ -501,7 +531,7 @@
             var popup = document.getElementById('footerQRPopup');
             popup.classList.toggle('show');
         }
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             var popup = document.getElementById('footerQRPopup');
             var wrapper = document.querySelector('.footer-qr-wrapper');
             if (popup && wrapper && !wrapper.contains(e.target)) {
@@ -509,7 +539,7 @@
             }
         });
     </script>
-<script src="/static/js/src/source-submit-chat.js?v=20260308i"></script>
+    <script src="/static/js/src/source-submit-chat.js?v=20260308i"></script>
 </body>
 
 </html>
