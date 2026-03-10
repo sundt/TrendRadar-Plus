@@ -1919,24 +1919,48 @@ async def api_search(
         except Exception:
             return 0.0
 
-    # Enrich each result with platform_name and format date
+    # Enrich each result with platform_name and real published_at timestamp
+    # Build a URL -> published_at mapping from real database
+    _url_timestamps: Dict[str, int] = {}
+    try:
+        conn = _get_online_db_conn()
+        # Collect all URLs from payload for batch lookup
+        urls_to_lookup = [d.get("url", "") for d in payload if d.get("url")]
+        if urls_to_lookup:
+            # Batch lookup in chunks of 500
+            for chunk_start in range(0, len(urls_to_lookup), 500):
+                chunk_urls = urls_to_lookup[chunk_start:chunk_start + 500]
+                placeholders = ",".join(["?"] * len(chunk_urls))
+                cur = conn.execute(
+                    f"SELECT url, published_at, created_at FROM rss_entries WHERE url IN ({placeholders})",
+                    chunk_urls,
+                )
+                for row in cur.fetchall():
+                    url_val = row[0]
+                    pub_at = row[1] if row[1] and row[1] > 946684800 else row[2]
+                    if url_val and pub_at:
+                        _url_timestamps[url_val] = int(pub_at)
+    except Exception:
+        pass
+
     for d in payload:
         pid = d.get("platform_id", "")
         if pid and "platform_name" not in d:
             d["platform_name"] = _platform_names.get(pid, "")
-        # Format date for display (keep only MM-DD if current year)
-        raw_date = d.get("date", "")
-        if raw_date and isinstance(raw_date, str) and len(raw_date) >= 10:
-            try:
-                dt = _parse_dt(raw_date)
-                if dt:
-                    now = datetime.now()
-                    if dt.year == now.year:
-                        d["date_display"] = dt.strftime("%m-%d %H:%M") if len(raw_date) > 10 else dt.strftime("%m-%d")
-                    else:
-                        d["date_display"] = dt.strftime("%Y-%m-%d")
-            except Exception:
-                pass
+        # Look up real published_at timestamp from database
+        url = d.get("url", "")
+        if url and url in _url_timestamps:
+            d["timestamp"] = _url_timestamps[url]
+        else:
+            # Fallback: try to parse the date string into a timestamp
+            raw_date = d.get("date", "")
+            if raw_date:
+                try:
+                    dt = _parse_dt(raw_date)
+                    if dt:
+                        d["timestamp"] = int(dt.timestamp())
+                except Exception:
+                    pass
 
     payload.sort(
         key=lambda d: (
