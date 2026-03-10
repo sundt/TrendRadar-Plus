@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +13,7 @@
             --tr-search-card-height: clamp(700px, calc(100vh - 260px), 1100px);
         }
 
-        #searchPanels.platform-grid > .platform-card {
+        #searchPanels.platform-grid>.platform-card {
             flex: 0 0 calc((100% - 20px) / 3);
             width: calc((100% - 20px) / 3);
             height: var(--tr-search-card-height);
@@ -21,14 +22,14 @@
             min-height: 0;
         }
 
-        #searchPanels.platform-grid > .platform-card .tr-panel-body {
+        #searchPanels.platform-grid>.platform-card .tr-panel-body {
             flex: 1;
             min-height: 0;
             display: flex;
             flex-direction: column;
         }
 
-        #searchPanels.platform-grid > .platform-card .news-list {
+        #searchPanels.platform-grid>.platform-card .news-list {
             flex: 1;
             min-height: 0;
             overflow-y: auto;
@@ -37,39 +38,40 @@
             -ms-overflow-style: none;
         }
 
-        #searchPanels.platform-grid > .platform-card .news-list::-webkit-scrollbar {
+        #searchPanels.platform-grid>.platform-card .news-list::-webkit-scrollbar {
             width: 0;
             height: 0;
         }
 
         @media (max-width: 1024px) {
-            #searchPanels.platform-grid > .platform-card {
+            #searchPanels.platform-grid>.platform-card {
                 flex: 0 0 calc((100% - 10px) / 2);
                 width: calc((100% - 10px) / 2);
             }
         }
 
         @media (max-width: 640px) {
-            #searchPanels.platform-grid > .platform-card {
+            #searchPanels.platform-grid>.platform-card {
                 flex: 0 0 100%;
                 width: 100%;
             }
         }
-
     </style>
 </head>
+
 <body>
     <div class="main-container">
         <div class="header-card">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 <a href="/" class="btn btn-sm btn-outline-secondary">返回</a>
                 <div class="flex-grow-1" style="min-width: 240px;">
-                    <input id="searchQuery" type="text" class="form-control form-control-sm" placeholder="🔍 跨日期搜索..." value="{{ q or '' }}" autocomplete="off" />
+                    <input id="searchQuery" type="text" class="form-control form-control-sm" placeholder="🔍 跨日期搜索..."
+                        value="{{ q or '' }}" autocomplete="off" />
                 </div>
                 <select id="searchMode" class="form-select form-select-sm" style="width: 140px;">
-                    <option value="hybrid" {% if mode == 'hybrid' %}selected{% endif %}>混合</option>
-                    <option value="keyword" {% if mode == 'keyword' %}selected{% endif %}>关键词</option>
-                    <option value="semantic" {% if mode == 'semantic' %}selected{% endif %}>语义</option>
+                    <option value="hybrid" {% if mode=='hybrid' %}selected{% endif %}>混合</option>
+                    <option value="keyword" {% if mode=='keyword' %}selected{% endif %}>关键词</option>
+                    <option value="semantic" {% if mode=='semantic' %}selected{% endif %}>语义</option>
                 </select>
                 <button id="searchBtn" class="btn btn-sm btn-primary">搜索</button>
                 <button id="clearBtn" class="btn btn-sm btn-outline-secondary">清空</button>
@@ -83,7 +85,7 @@
     </div>
 
     <script>
-        (function() {
+        (function () {
             var _skeletonWidths = [80, 65, 75, 90, 60, 72, 85, 68];
             function _makeSkeletonItems(n) {
                 var html = '';
@@ -122,7 +124,7 @@
             function _formatNow() {
                 try {
                     var d = new Date();
-                    var pad = function(n) { return String(n).padStart(2, '0'); };
+                    var pad = function (n) { return String(n).padStart(2, '0'); };
                     return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
                 } catch (e) {
                     return '';
@@ -132,7 +134,7 @@
             function _formatTs(ts) {
                 try {
                     var d = new Date(Number(ts) || Date.now());
-                    var pad = function(n) { return String(n).padStart(2, '0'); };
+                    var pad = function (n) { return String(n).padStart(2, '0'); };
                     return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
                 } catch (e) {
                     return _formatNow();
@@ -203,14 +205,14 @@
 
                 var removeBtn = wrap.querySelector('[data-action="remove"]');
                 if (removeBtn) {
-                    removeBtn.addEventListener('click', function() {
-                        try { wrap.remove(); } catch (e) {}
+                    removeBtn.addEventListener('click', function () {
+                        try { wrap.remove(); } catch (e) { }
                     });
                 }
 
                 var followBtn = wrap.querySelector('[data-action="follow"]');
                 if (followBtn) {
-                    followBtn.addEventListener('click', async function() {
+                    followBtn.addEventListener('click', async function () {
                         var kw = String(wrap?.dataset?.query || '').trim();
                         if (!kw || followBtn.disabled) return;
                         followBtn.disabled = true;
@@ -225,7 +227,7 @@
                             if (resp.status === 401) {
                                 followBtn.textContent = '请先登录';
                                 followBtn.classList.replace('btn-outline-success', 'btn-outline-secondary');
-                                setTimeout(function() {
+                                setTimeout(function () {
                                     followBtn.textContent = '关注';
                                     followBtn.classList.replace('btn-outline-secondary', 'btn-outline-success');
                                     followBtn.disabled = false;
@@ -238,7 +240,7 @@
                             }
                         } catch (e) {
                             followBtn.textContent = '失败';
-                            setTimeout(function() {
+                            setTimeout(function () {
                                 followBtn.textContent = '关注';
                                 followBtn.disabled = false;
                             }, 2000);
@@ -285,16 +287,21 @@
                         return;
                     }
 
-                    listEl.innerHTML = results.map(function(r) {
+                    listEl.innerHTML = results.map(function (r) {
                         var title = esc(r.title);
                         var url = esc(r.url);
-                        var meta = esc((r.date || '') + ' · ' + (r.platform_id || ''));
+                        var dateStr = r.date_display || r.date || '';
+                        var platName = r.platform_name || '';
+                        var metaParts = [];
+                        if (dateStr) metaParts.push(esc(dateStr));
+                        if (platName) metaParts.push(esc(platName));
+                        var meta = metaParts.join(' · ');
                         return (
                             '<li class="news-item">' +
                             '<div class="news-item-content">' +
                             '<a class="news-title" href="' + url + '" target="_blank" rel="noopener noreferrer">' + title + '</a>' +
                             '</div>' +
-                            '<div class="news-subtitle">' + meta + '</div>' +
+                            (meta ? '<div class="news-subtitle">' + meta + '</div>' : '') +
                             '</li>'
                         );
                     }).join('');
@@ -317,7 +324,7 @@
                 if (opts.reuseExisting) {
                     panel = _findExistingPanel(q, mode);
                     if (panel && panelsEl && panel.wrap && panelsEl.firstChild !== panel.wrap) {
-                        try { panelsEl.prepend(panel.wrap); } catch (e) {}
+                        try { panelsEl.prepend(panel.wrap); } catch (e) { }
                     }
                 }
                 if (!panel) panel = createPanel(q, mode);
@@ -339,11 +346,11 @@
             }
 
             var btn = document.getElementById('searchBtn');
-            if (btn) btn.addEventListener('click', function() { triggerSearch(); });
+            if (btn) btn.addEventListener('click', function () { triggerSearch(); });
 
             var clearBtn = document.getElementById('clearBtn');
             if (clearBtn) {
-                clearBtn.addEventListener('click', function() {
+                clearBtn.addEventListener('click', function () {
                     if (!panelsEl) return;
                     panelsEl.innerHTML = '';
                 });
@@ -353,28 +360,29 @@
             var isComposing = false;
             if (input) {
                 // 处理中文输入法组合事件
-                input.addEventListener('compositionstart', function() {
+                input.addEventListener('compositionstart', function () {
                     isComposing = true;
                 });
-                input.addEventListener('compositionend', function() {
+                input.addEventListener('compositionend', function () {
                     isComposing = false;
                 });
-                input.addEventListener('keydown', function(ev) {
+                input.addEventListener('keydown', function (ev) {
                     if (ev && ev.key === 'Enter') {
                         ev.preventDefault();
                         // 如果正在输入法组合中，等待 compositionend 后再搜索
                         if (isComposing) {
-                            setTimeout(function() { triggerSearch(); }, 10);
+                            setTimeout(function () { triggerSearch(); }, 10);
                         } else {
                             triggerSearch();
                         }
                     }
                 });
-                try { input.focus(); } catch (e) {}
+                try { input.focus(); } catch (e) { }
             }
 
             runSearchFromUrl();
         })();
     </script>
 </body>
+
 </html>

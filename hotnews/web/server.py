@@ -1870,6 +1870,18 @@ async def api_search(
         except Exception:
             payload.append(getattr(r, "__dict__", {}) or {})
 
+    # --- Enrich with platform_name ---
+    # Build a platform_id -> human-readable name mapping
+    _platform_names: Dict[str, str] = {}
+    try:
+        conn = _get_online_db_conn()
+        for row in conn.execute("SELECT id, name FROM rss_sources"):
+            _platform_names[f"rss-{row[0]}"] = row[1]
+        for row in conn.execute("SELECT id, name FROM custom_sources"):
+            _platform_names[row[0]] = row[1]
+    except Exception:
+        pass
+
     def _parse_dt(val: Any) -> Optional[datetime]:
         if not val:
             return None
@@ -1906,6 +1918,25 @@ async def api_search(
             return float(v) if v is not None else 0.0
         except Exception:
             return 0.0
+
+    # Enrich each result with platform_name and format date
+    for d in payload:
+        pid = d.get("platform_id", "")
+        if pid and "platform_name" not in d:
+            d["platform_name"] = _platform_names.get(pid, "")
+        # Format date for display (keep only MM-DD if current year)
+        raw_date = d.get("date", "")
+        if raw_date and isinstance(raw_date, str) and len(raw_date) >= 10:
+            try:
+                dt = _parse_dt(raw_date)
+                if dt:
+                    now = datetime.now()
+                    if dt.year == now.year:
+                        d["date_display"] = dt.strftime("%m-%d %H:%M") if len(raw_date) > 10 else dt.strftime("%m-%d")
+                    else:
+                        d["date_display"] = dt.strftime("%Y-%m-%d")
+            except Exception:
+                pass
 
     payload.sort(
         key=lambda d: (
