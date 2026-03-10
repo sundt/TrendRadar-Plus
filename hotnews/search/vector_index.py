@@ -353,10 +353,11 @@ class VectorIndex:
 
     def build_from_data(self, data: List[Tuple[str, str, str, str, int]]):
         """
-        从数据列表构建索引（原子替换）
+        从数据列表构建索引（内存高效 + 断点续传 + 原子替换）
 
-        先构建到临时文件，成功后原子替换正式文件。
-        即使 worker 中途被杀，也不会导致索引数据丢失。
+        - 每 5000 条写入一次 FAISS 并缓存 embeddings，避免 OOM
+        - 缓存已编码的 embeddings，中断后可从断点恢复，不重复调 API
+        - 最终原子替换正式文件
 
         Args:
             data: [(title, url, platform_id, date, id), ...]
@@ -367,49 +368,82 @@ class VectorIndex:
             logger.warning("没有数据可索引")
             return
 
-        logger.info(f"开始构建向量索引: {len(data)} 条数据 (embedding: {self._embedding_type})")
+        total = len(data)
+        logger.info(f"开始构建向量索引: {total} 条数据 (embedding: {self._embedding_type})")
 
-        # 提取文本
+        # ---- 路径定义 ----
+        cache_dir = self.index_dir / "build_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        tmp_index_path = self.index_dir / "vector_index.faiss.tmp"
+        tmp_meta_path = self.index_dir / "vector_meta.pkl.tmp"
+
+        # ---- 检查缓存，确定断点 ----
+        cached_count = 0
+        cached_files = sorted(cache_dir.glob("emb_*.npy"))
+        if cached_files:
+            # 计算已缓存的条数
+            for cf in cached_files:
+                chunk = np.load(str(cf))
+                cached_count += chunk.shape[0]
+                del chunk
+            logger.info(f"发现缓存: 已编码 {cached_count}/{total} 条，从断点继续")
+
+        # ---- API 编码阶段：分批编码并缓存到磁盘 ----
+        api_batch_size = 10 if self._embedding_type == "bailian" else 32
+        commit_size = 5000  # 每 5000 条保存一次缓存
         texts = [item[0] for item in data]
 
-        # 批量编码
-        batch_size = 10 if self._embedding_type == "bailian" else 32
-        all_embeddings = []
+        encoded = cached_count
+        batch_buffer = []
 
-        total_batches = (len(texts) + batch_size - 1) // batch_size
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            embeddings = self.encode_texts(batch)
-            all_embeddings.append(embeddings)
-            
-            batch_num = i // batch_size + 1
-            if batch_num % 10 == 0 or batch_num == total_batches:
-                logger.info(f"编码进度: {min(i + batch_size, len(texts))}/{len(texts)} ({batch_num}/{total_batches} 批)")
+        while encoded < total:
+            # 取一个 API 批次
+            end = min(encoded + api_batch_size, total)
+            batch_texts = texts[encoded:end]
+            emb = self.encode_texts(batch_texts)
+            batch_buffer.append(emb)
+            encoded += emb.shape[0]
 
-        # 合并所有嵌入
-        embeddings = np.vstack(all_embeddings)
+            # 日志
+            if (encoded // api_batch_size) % 50 == 0 or encoded >= total:
+                logger.info(f"编码进度: {encoded}/{total} ({encoded * 100 // total}%)")
 
-        # 构建新的 FAISS 索引（内存中）
+            # 每 commit_size 条或处理完毕时，保存缓存到磁盘
+            buffer_count = sum(e.shape[0] for e in batch_buffer)
+            if buffer_count >= commit_size or encoded >= total:
+                chunk = np.vstack(batch_buffer)
+                chunk_idx = len(list(cache_dir.glob("emb_*.npy")))
+                np.save(str(cache_dir / f"emb_{chunk_idx:04d}.npy"), chunk)
+                logger.info(f"缓存保存: chunk_{chunk_idx} ({chunk.shape[0]} 条), 累计 {encoded}/{total}")
+                del chunk
+                batch_buffer = []
+
+        logger.info("所有 embeddings 编码完成，开始构建 FAISS 索引...")
+
+        # ---- FAISS 构建阶段：从缓存文件分批加载并写入索引 ----
         new_index = faiss.IndexHNSWFlat(
             self.vector_size,
             32,
             faiss.METRIC_INNER_PRODUCT,
         )
-        new_index.add(embeddings)
 
+        cached_files = sorted(cache_dir.glob("emb_*.npy"))
+        for i, cf in enumerate(cached_files):
+            chunk = np.load(str(cf))
+            new_index.add(chunk)
+            logger.info(f"FAISS 写入: chunk {i + 1}/{len(cached_files)} ({chunk.shape[0]} 条, 索引总计 {new_index.ntotal})")
+            del chunk  # 立即释放内存
+
+        # 构建元数据
         new_metadata = {i: (data[i][0], data[i][1], data[i][2], data[i][3])
                         for i in range(len(data))}
 
-        # 原子替换：先写临时文件，再 os.replace 替换正式文件
-        tmp_index_path = self.index_dir / "vector_index.faiss.tmp"
-        tmp_meta_path = self.index_dir / "vector_meta.pkl.tmp"
-
+        # ---- 原子替换 ----
         try:
             faiss.write_index(new_index, str(tmp_index_path))
             with open(tmp_meta_path, "wb") as f:
                 pickle.dump(new_metadata, f)
 
-            # 原子替换（os.replace 在 POSIX 上是原子操作）
             os.replace(str(tmp_index_path), str(self.index_path))
             os.replace(str(tmp_meta_path), str(self.meta_path))
 
@@ -417,9 +451,13 @@ class VectorIndex:
             self.faiss_index = new_index
             self.metadata = new_metadata
 
-            logger.info(f"✓ 向量索引构建完成: {len(data)} 条记录（原子替换）")
+            # 清理缓存目录
+            import shutil
+            shutil.rmtree(str(cache_dir), ignore_errors=True)
+
+            logger.info(f"✓ 向量索引构建完成: {total} 条记录（原子替换，缓存已清理）")
         except Exception as e:
-            # 清理临时文件
+            # 清理临时文件（保留缓存以便下次恢复）
             for tmp in (tmp_index_path, tmp_meta_path):
                 try:
                     tmp.unlink(missing_ok=True)
