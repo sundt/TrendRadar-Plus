@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>孙东涛 — IT系统与项目管理 | 在线简历</title>
+    <meta name="description" content="17年IT行业经验，擅长企业系统规划、ERP/OA/HR实施集成、AI落地">
+    <meta property="og:title" content="孙东涛 — IT系统与项目管理">
+    <meta property="og:description" content="17年IT行业经验 | 企业信息化专家 | AI应用实践者">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* === VIEWPORT BASE === */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; overflow: hidden; width: 100%; }
+        html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+        
+        :root {
+            /* Dark Botanical Palette */
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.05);
+            --border-color: rgba(212, 165, 116, 0.15);
+            --text-primary: #e8e4df;
+            --text-secondary: #9a9590;
+            --text-muted: #6b6764;
+            --accent: #d4a574;
+            --accent-light: #e8b4b8;
+            --success: #7fb069;
+            --accent-glow: rgba(212, 165, 116, 0.15);
+            
+            --gradient-1: linear-gradient(135deg, var(--accent), var(--accent-light));
+            --gradient-2: linear-gradient(135deg, var(--accent) 0%, var(--success) 100%);
+            
+            --font-display: 'Cormorant Garamond', 'Noto Sans SC', serif;
+            --font-sans: 'DM Sans', 'Noto Sans SC', sans-serif;
+            
+            --title-size: clamp(2.5rem, 6vw, 4.5rem);
+            --h2-size: clamp(1.8rem, 4vw, 2.8rem);
+            --h3-size: clamp(1.2rem, 2.5vw, 1.4rem);
+            --body-size: clamp(0.95rem, 1.5vw, 1.15rem);
+            --small-size: clamp(0.85rem, 1.2vw, 0.95rem);
+            
+            --radius: 12px;
+            --radius-sm: 6px;
+            --slide-padding: clamp(2rem, 5vw, 4rem);
+            
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: var(--body-size);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* === BACKGROUND EFFECTS === */
+        .bg-effect {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image: 
+                linear-gradient(rgba(212,165,116,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(212,165,116,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+        .bg-effect::before, .bg-effect::after {
+            content: ''; position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.5;
+        }
+        .bg-effect::before {
+            width: 50vw; height: 50vw; top: -20vh; right: -10vw;
+            background: radial-gradient(circle, rgba(127,176,105,0.1), transparent 70%);
+            animation: bgFloat 25s ease-in-out infinite;
+        }
+        .bg-effect::after {
+            width: 40vw; height: 40vw; bottom: -10vh; left: -10vw;
+            background: radial-gradient(circle, rgba(212,165,116,0.08), transparent 70%);
+            animation: bgFloat 20s ease-in-out infinite reverse;
+        }
+        @keyframes bgFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(3vw, -4vh) scale(1.05); }
+        }
+
+        /* === SLIDES SYSTEM === */
+        .slides-container {
+            height: 100vh; height: 100dvh; width: 100vw;
+            position: relative; z-index: 1;
+        }
+        .slide {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            padding: var(--slide-padding);
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.8s var(--ease-out-expo), visibility 0.8s;
+            overflow-y: auto; scroll-snap-align: start;
+        }
+        .slide.active { opacity: 1; visibility: visible; }
+        .slide-inner {
+            max-width: min(90vw, 1100px); max-height: 100%; width: 100%; margin: auto;
+        }
+        
+        .slide::-webkit-scrollbar { width: 4px; }
+        .slide::-webkit-scrollbar-track { background: transparent; }
+        .slide::-webkit-scrollbar-thumb { background: rgba(212,165,116,0.2); border-radius: 4px; }
+
+        /* === TYPOGRAPHY === */
+        h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 600; }
+        
+        .section-title {
+            font-size: var(--h2-size); color: var(--accent);
+            margin-bottom: 0.5rem; display: flex; align-items: center; gap: 12px;
+        }
+        .section-title::after {
+            content: ''; flex: 1; height: 1px;
+            background: linear-gradient(90deg, var(--border-color), transparent);
+            margin-left: 1rem;
+        }
+        .section-subtitle {
+            color: var(--text-secondary); font-size: var(--body-size);
+            margin-bottom: clamp(1.5rem, 4vh, 3rem); font-weight: 400;
+        }
+
+        /* === ANIMATIONS (STAGGERED REVEAL) === */
+        .reveal {
+            opacity: 0; transform: translateY(20px);
+            transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
+        }
+        .slide.active .reveal { opacity: 1; transform: translateY(0); }
+        .delay-1 { transition-delay: 0.1s; }
+        .delay-2 { transition-delay: 0.2s; }
+        .delay-3 { transition-delay: 0.3s; }
+        .delay-4 { transition-delay: 0.4s; }
+        .delay-5 { transition-delay: 0.5s; }
+        .delay-6 { transition-delay: 0.6s; }
+        .delay-7 { transition-delay: 0.7s; }
+        .delay-8 { transition-delay: 0.8s; }
+
+        /* === COVER SLIDE === */
+        .cover { text-align: center; }
+        .avatar-ring {
+            position: relative;
+            width: clamp(100px, 15vw, 140px); height: clamp(100px, 15vw, 140px);
+            margin: 0 auto clamp(1.5rem, 4vh, 2.5rem);
+            border-radius: 50%; padding: 2px;
+            background: var(--gradient-2);
+        }
+        .avatar-ring::after {
+            content: ''; position: absolute; inset: -4px;
+            border-radius: 50%; border: 1px solid var(--accent);
+            opacity: 0.3; animation: pulseRing 3s ease-in-out infinite;
+        }
+        @keyframes pulseRing {
+            0%, 100% { transform: scale(1); opacity: 0.3; }
+            50% { transform: scale(1.08); opacity: 0.1; }
+        }
+        .avatar-inner {
+            width: 100%; height: 100%; border-radius: 50%;
+            background: var(--bg-primary); display: flex; align-items: center; justify-content: center;
+            font-size: calc(var(--title-size) * 0.7); font-family: var(--font-display);
+            color: var(--accent);
+        }
+        .cover h1 {
+            font-size: var(--title-size); margin-bottom: 0.5rem; letter-spacing: 2px;
+            background: var(--gradient-1); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .cover .tagline {
+            font-size: calc(var(--body-size) * 1.1); color: var(--text-secondary);
+            margin-bottom: clamp(1.5rem, 4vh, 2.5rem); letter-spacing: 1px;
+            font-style: italic; font-family: var(--font-display);
+        }
+        .contact-bar {
+            display: flex; justify-content: center; gap: clamp(1rem, 3vw, 2rem);
+            flex-wrap: wrap; margin-bottom: clamp(2rem, 5vh, 4rem);
+        }
+        .contact-item { display: flex; align-items: center; gap: 8px; font-size: var(--body-size); }
+        .stats-bar {
+            display: flex; justify-content: center; gap: clamp(1.5rem, 5vw, 4rem); flex-wrap: wrap;
+        }
+        .stat .num {
+            font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem);
+            color: var(--accent); line-height: 1.1; margin-bottom: 4px;
+        }
+        .stat .label {
+            font-size: var(--small-size); color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;
+        }
+
+        /* === CARDS GRID (STRENGTHS) === */
+        .cards-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+            gap: clamp(1rem, 2vw, 1.5rem);
+        }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: var(--radius); padding: clamp(1.25rem, 3vw, 1.75rem);
+            transition: all 0.3s var(--ease-out-expo);
+            position: relative; overflow: hidden;
+            transform-style: preserve-3d;
+        }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+            background: var(--gradient-2); opacity: 0; transition: 0.3s;
+        }
+        .card:hover { background: var(--bg-card-hover); transform: translateY(-3px); border-color: rgba(212,165,116,0.3); }
+        .card:hover::before { opacity: 1; }
+        .card-icon { font-size: 1.8rem; margin-bottom: 1rem; width: max-content; }
+        .card h3 { font-size: var(--h3-size); color: var(--text-primary); margin-bottom: 0.5rem; }
+        .card p { color: var(--text-secondary); font-size: var(--small-size); line-height: 1.7; }
+
+        /* === TIMELINE (EXPERIENCE) === */
+        .timeline { position: relative; padding-left: 2rem; max-width: 800px; }
+        .timeline::before {
+            content: ''; position: absolute; left: 5px; top: 4px; bottom: 0; width: 1px;
+            background: linear-gradient(to bottom, var(--accent), transparent);
+        }
+        .timeline-item { position: relative; margin-bottom: clamp(1.5rem, 4vh, 2.5rem); }
+        .timeline-item::before {
+            content: ''; position: absolute; left: -2rem; top: 6px;
+            width: 11px; height: 11px; border-radius: 50%;
+            background: var(--bg-primary); border: 2px solid var(--accent);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        .time { font-size: var(--small-size); color: var(--accent); font-weight: 500; margin-bottom: 0.25rem; letter-spacing: 1px; }
+        .timeline-item h3 { font-size: var(--h3-size); margin-bottom: 0.25rem; }
+        .timeline-item p { color: var(--text-secondary); font-size: var(--small-size); line-height: 1.6; }
+
+        /* === CLIENTS & PROJECTS === */
+        .clients-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 1rem;
+        }
+        .client-card {
+            background: transparent; border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm); padding: 1.25rem; text-align: center; transition: 0.3s;
+        }
+        .client-card:hover { border-color: var(--accent); background: var(--bg-card); transform: translateY(-2px); }
+        .client-name { font-family: var(--font-display); font-size: var(--h3-size); color: var(--accent-light); margin-bottom: 0.25rem; }
+        .client-code { font-size: 0.75rem; color: var(--success); letter-spacing: 0.5px; }
+
+        .project-header h2 { font-size: var(--h2-size); color: var(--accent); }
+        .project-link {
+            font-size: var(--small-size); color: var(--text-muted); text-decoration: none;
+            display: inline-block; margin-top: 0.25rem; border-bottom: 1px dashed var(--text-muted);
+        }
+        .project-link:hover { color: var(--accent); border-color: var(--accent); }
+        .project-desc { font-size: var(--body-size); color: var(--text-secondary); margin: 1rem 0 1.5rem; max-width: 800px; }
+        .feature-list {
+            list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; margin-bottom: 1.5rem;
+        }
+        .feature-list li {
+            display: flex; align-items: flex-start; gap: 10px; padding: 1rem;
+            background: var(--bg-card); border-left: 2px solid var(--border-color);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-size: var(--small-size); color: var(--text-secondary);
+            transition: 0.3s;
+        }
+        .feature-list li:hover { border-color: var(--accent); }
+        .feature-list li .dot { color: var(--success); font-family: var(--font-display); font-weight: bold; }
+        .tech-tags { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .tech-tag {
+            padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; background: rgba(127,176,105,0.08); color: var(--success); border: 1px solid rgba(127,176,105,0.2);
+        }
+
+        /* === CONTACT === */
+        .contact-cards {
+            display: flex; justify-content: center; gap: clamp(1rem, 2vw, 2rem); flex-wrap: wrap; margin-bottom: clamp(2rem, 5vh, 4rem);
+        }
+        .contact-card {
+            background: transparent; border: 1px solid var(--border-color); border-radius: var(--radius);
+            padding: clamp(1.5rem, 3vw, 2.5rem); text-align: center; min-width: 160px; transition: 0.3s;
+        }
+        .contact-card:hover { border-color: var(--accent); transform: translateY(-4px); background: var(--bg-card); }
+        .cc-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+        .cc-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem; }
+        .cc-value { font-family: var(--font-display); font-size: var(--h3-size); color: var(--accent-light); }
+        .download-btn {
+            display: inline-flex; align-items: center; gap: 10px; padding: 0.8rem 2rem;
+            background: transparent; color: var(--accent); border: 1px solid var(--accent);
+            border-radius: 50px; font-size: var(--body-size); font-family: var(--font-sans); cursor: pointer; transition: 0.3s;
+        }
+        .download-btn:hover { background: var(--accent); color: var(--bg-primary); box-shadow: 0 0 15px var(--accent-glow); transform: translateY(-2px); }
+
+        /* === NAVIGATION UI === */
+        .nav-wrapper {
+            position: fixed; bottom: clamp(1rem, 3vh, 2rem); left: 0; right: 0;
+            display: flex; justify-content: center; z-index: 100; pointer-events: none;
+        }
+        .nav-content {
+            background: rgba(15, 15, 15, 0.8); backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color); border-radius: 50px;
+            padding: 0.4rem 1rem; display: flex; align-items: center; gap: 1.5rem; pointer-events: auto;
+        }
+        .nav-dots { display: flex; gap: 8px; }
+        .nav-dot {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+            border: none; cursor: pointer; transition: 0.3s; padding: 0;
+        }
+        .nav-dot.active { background: var(--accent); transform: scale(1.5); box-shadow: 0 0 5px var(--accent-glow); }
+        .nav-arrow { background: transparent; border: none; color: var(--text-secondary); font-size: 1.2rem; cursor: pointer; transition: 0.3s; padding: 4px; }
+        .nav-arrow:hover:not(:disabled) { color: var(--accent); }
+        .nav-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+        .slide-counter { font-size: 0.75rem; color: var(--text-secondary); letter-spacing: 1px; }
+
+        /* === RESPONSIVE TWEAKS === */
+        @media (max-height: 700px) {
+            :root { --title-size: clamp(2rem, 5vw, 3rem); --slide-padding: clamp(1rem, 3vw, 2rem); }
+            .avatar-ring { width: 90px; height: 90px; margin-bottom: 1rem; }
+            .cover .tagline { margin-bottom: 1.5rem; }
+            .timeline-item { margin-bottom: 1.2rem; }
+        }
+        @media (max-height: 600px) { :root { --slide-padding: 0.5rem 1.5rem; } }
+        @media (max-width: 600px) { .cards-grid, .feature-list, .clients-grid { grid-template-columns: 1fr; } }
+        
+        /* === REDUCED MOTION === */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+            .reveal { opacity: 1 !important; transform: none !important; }
+            .bg-effect::before, .bg-effect::after { animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-effect"></div>
+
+    <div class="slides-container" id="slidesContainer">
+        <!-- 1: COVER -->
+        <div class="slide active">
+            <div class="slide-inner cover">
+                <div class="avatar-ring reveal delay-1"><div class="avatar-inner">孙</div></div>
+                <h1 class="reveal delay-2">孙东涛</h1>
+                <p class="tagline reveal delay-3">IT系统与项目管理专家 · AI应用实践者</p>
+                
+                <div class="contact-bar reveal delay-4">
+                    <span class="contact-item">📱 18818804020</span>
+                    <span class="contact-item">✉️ 122016316@qq.com</span>
+                    <span class="contact-item">📍 深圳</span>
+                </div>
+                
+                <div class="stats-bar reveal delay-5">
+                    <div class="stat"><div class="num">17</div><div class="label">年行业经验</div></div>
+                    <div class="stat"><div class="num">20+</div><div class="label">大中型项目</div></div>
+                    <div class="stat"><div class="num">100%</div><div class="label">项目交付率</div></div>
+                    <div class="stat"><div class="num">500强</div><div class="label">服务经验</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2: STRENGTHS -->
+        <div class="slide">
+            <div class="slide-inner">
+                <h2 class="section-title reveal delay-1">核心优势</h2>
+                <p class="section-subtitle reveal delay-2">12年+企业信息化实战经验，从规划到落地的全栈能力</p>
+                <div class="cards-grid">
+                    <div class="card tilt-element reveal delay-3">
+                        <div class="card-icon">🏗️</div>
+                        <h3>系统蓝图规划</h3>
+                        <p>主导企业系统整体规划，熟悉 ERP/SRM/OA/HR 选型，具备顶层设计到落地执行全链路能力</p>
+                    </div>
+                    <div class="card tilt-element reveal delay-4">
+                        <div class="card-icon">🔗</div>
+                        <h3>多系统集成打通</h3>
+                        <p>擅长跨系统协同集成，曾为世界500强完成 ERP/OA 等多系统业务流程闭环</p>
+                    </div>
+                    <div class="card tilt-element reveal delay-5">
+                        <div class="card-icon">📊</div>
+                        <h3>飞书生态实践</h3>
+                        <p>深度使用飞书多维表格与开放平台，构建敏捷解决方案与办公协同门户</p>
+                    </div>
+                    <div class="card tilt-element reveal delay-6">
+                        <div class="card-icon">🎯</div>
+                        <h3>项目管理</h3>
+                        <p>跨部门并行项目管理，注重进度/成本/质量/风险，区域满意度常年第一</p>
+                    </div>
+                    <div class="card tilt-element reveal delay-7">
+                        <div class="card-icon">🤝</div>
+                        <h3>供应商管控</h3>
+                        <p>开发评估、工时审核、合同与验收全流程管理，确保外包资源成本可控</p>
+                    </div>
+                    <div class="card tilt-element reveal delay-8">
+                        <div class="card-icon">🤖</div>
+                        <h3>AI 技术应用</h3>
+                        <p>独立搭建多通道 AI 助手平台，集成 LLMs 与 RAG，完成企业级 AI 落地实践</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3: EXPERIENCE -->
+        <div class="slide">
+            <div class="slide-inner">
+                <h2 class="section-title reveal delay-1">工作经历</h2>
+                <p class="section-subtitle reveal delay-2">深圳市哈希软件有限公司 · IT总监 · 2009 – 至今</p>
+                <div class="timeline">
+                    <div class="timeline-item reveal delay-3">
+                        <div class="time">2021 – 至今</div>
+                        <h3>AI 驱动的信息系统升级</h3>
+                        <p>引入 AI 技术搭建企业级智能助手，打通多渠道；深度使用低代码平台输出行业方案</p>
+                    </div>
+                    <div class="timeline-item reveal delay-4">
+                        <div class="time">2016 – 2021</div>
+                        <h3>大型企业信息化建设</h3>
+                        <p>主导 AGC(世界500强)、中国燃气、中核等标杆项目，交付20+大中型平台项目</p>
+                    </div>
+                    <div class="timeline-item reveal delay-5">
+                        <div class="time">2012 – 2016</div>
+                        <h3>区域实施团队管理</h3>
+                        <p>负责泛三角实施团队，区域满意度第一；全周期把控项目成本与风险</p>
+                    </div>
+                    <div class="timeline-item reveal delay-6">
+                        <div class="time">2009 – 2012</div>
+                        <h3>项目实施与技术基础</h3>
+                        <p>政府/电力等行业系统实施与 MIS/OA 开发；底层服务器运维</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4: CLIENTS -->
+        <div class="slide">
+            <div class="slide-inner">
+                <h2 class="section-title reveal delay-1">代表客户</h2>
+                <p class="section-subtitle reveal delay-2">服务标杆企业，覆盖制造、物流、工程、零售行业</p>
+                <div class="clients-grid">
+                    <div class="client-card reveal delay-3"><div class="client-name">AGC 旭硝子</div><div class="client-code">世界500强</div></div>
+                    <div class="client-card reveal delay-4"><div class="client-name">中国燃气</div><div class="client-code">00384.HK</div></div>
+                    <div class="client-card reveal delay-5"><div class="client-name">华强集团</div><div class="client-code">000062</div></div>
+                    <div class="client-card reveal delay-6"><div class="client-name">中核集团</div><div class="client-code">大型国企</div></div>
+                    <div class="client-card reveal delay-7"><div class="client-name">三利谱</div><div class="client-code">002876</div></div>
+                    <div class="client-card reveal delay-8"><div class="client-name">任子行</div><div class="client-code">300311</div></div>
+                    <div class="client-card reveal delay-9"><div class="client-name">佛山新中源</div><div class="client-code">制造业</div></div>
+                    <div class="client-card reveal delay-10"><div class="client-name">装饰工程集群</div><div class="client-code">数字化先锋</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5: PROJECT - AI -->
+        <div class="slide">
+            <div class="slide-inner">
+                <div class="project-header reveal delay-1"><h2>企业级 AI 助手平台</h2></div>
+                <p class="project-desc reveal delay-2">基于开源网关，私有化部署多渠道智能交互系统与自动化业务工作流。</p>
+                <ul class="feature-list reveal delay-3">
+                    <li><span class="dot">▸</span>集成通义千问、Claude、Kimi 等 8+ 大模型路由架构</li>
+                    <li><span class="dot">▸</span>打通 Telegram / 飞书等多端消息通道，统一交互入口</li>
+                    <li><span class="dot">▸</span>基于 Qdrant + Mem0 实现对话持久化记忆与检索</li>
+                </ul>
+                <div class="tech-tags reveal delay-4">
+                    <span class="tech-tag">Node.js</span><span class="tech-tag">Docker</span><span class="tech-tag">Qdrant</span><span class="tech-tag">飞书开放平台</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6: PROJECT - HOTNEWS -->
+        <div class="slide">
+            <div class="slide-inner">
+                <div class="project-header reveal delay-1"><h2>HotNews 热点聚合平台</h2></div>
+                <a class="project-link reveal delay-2" href="https://hot.uihash.com" target="_blank">🔗 hot.uihash.com</a>
+                <p class="project-desc reveal delay-3">全量栈独立开发的热点与 RSS 阅读器，全天候全自动追踪全网资讯。</p>
+                <ul class="feature-list reveal delay-4">
+                    <li><span class="dot">▸</span>FastAPI + SQLite 轻量化微服务架构部署</li>
+                    <li><span class="dot">▸</span>Docker 容器化组装，DCDN 边缘节点加速分发</li>
+                    <li><span class="dot">▸</span>去重过滤算法与 AI 内容抽取分类引擎</li>
+                </ul>
+                <div class="tech-tags reveal delay-5">
+                    <span class="tech-tag">Python</span><span class="tech-tag">FastAPI</span><span class="tech-tag">Playwright</span><span class="tech-tag">DCDN</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 7: PROJECT - SUMMARY -->
+        <div class="slide">
+            <div class="slide-inner">
+                <div class="project-header reveal delay-1"><h2>AI 网页总结助手</h2></div>
+                <div class="project-link reveal delay-2">Chrome 浏览器扩展</div>
+                <p class="project-desc reveal delay-3">支持 Ollama 直连及云端 API 的智能网页信息萃取工具，极大提升泛读效率。</p>
+                <ul class="feature-list reveal delay-4">
+                    <li><span class="dot">▸</span>智能正文DOM提取，自动去噪，支持多种 Prompt 模板</li>
+                    <li><span class="dot">▸</span>沉浸式侧边栏打字机 Streaming 流式输出体验</li>
+                    <li><span class="dot">▸</span>本地模型优先，确保隐私内容端侧闭环处理</li>
+                </ul>
+                <div class="tech-tags reveal delay-5">
+                    <span class="tech-tag">Chrome Extension</span><span class="tech-tag">JavaScript</span><span class="tech-tag">LLM Streaming</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 8: CONTACT -->
+        <div class="slide">
+            <div class="slide-inner cover">
+                <h2 class="font-display reveal delay-1" style="font-size: var(--title-size); color: var(--accent); margin-bottom: 0.5rem;">期待与您交流</h2>
+                <p class="tagline reveal delay-2">无论是企业信息化规划、系统集成，还是 AI 应用落地</p>
+                <div class="contact-cards">
+                    <div class="contact-card reveal delay-3">
+                        <div class="cc-icon">📱</div><div class="cc-label">电话</div><div class="cc-value">188 1880 4020</div>
+                    </div>
+                    <div class="contact-card reveal delay-4">
+                        <div class="cc-icon">✉️</div><div class="cc-label">邮箱</div><div class="cc-value">122016316@qq.com</div>
+                    </div>
+                    <div class="contact-card reveal delay-5">
+                        <div class="cc-icon">🌐</div><div class="cc-label">在线作品</div><div class="cc-value">hot.uihash.com</div>
+                    </div>
+                </div>
+                <div class="reveal delay-6">
+                    <button class="download-btn" onclick="downloadResume()">↓ 下载简历 PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Centralized Navigation -->
+    <div class="nav-wrapper">
+        <div class="nav-content">
+            <button class="nav-arrow" id="prevBtn" onclick="prevSlide()">◂</button>
+            <div class="nav-dots" id="navDots"></div>
+            <div class="slide-counter" id="slideCounter">1 / 8</div>
+            <button class="nav-arrow" id="nextBtn" onclick="nextSlide()">▸</button>
+        </div>
+    </div>
+
+    <script>
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+        let currentSlideIndex = 0;
+        let isAnimating = false;
+        
+        const dotsContainer = document.getElementById('navDots');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const counter = document.getElementById('slideCounter');
+
+        // Init dots
+        for (let i = 0; i < totalSlides; i++) {
+            const dot = document.createElement('button');
+            dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+            dot.onclick = () => goToSlide(i);
+            dotsContainer.appendChild(dot);
+        }
+        const dots = document.querySelectorAll('.nav-dot');
+
+        function updateUI() {
+            counter.textContent = `${currentSlideIndex + 1} / ${totalSlides}`;
+            prevBtn.disabled = currentSlideIndex === 0;
+            nextBtn.disabled = currentSlideIndex === totalSlides - 1;
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentSlideIndex);
+            });
+        }
+
+        function goToSlide(index) {
+            if (index < 0 || index >= totalSlides || index === currentSlideIndex || isAnimating) return;
+            isAnimating = true;
+            const oldSlide = slides[currentSlideIndex];
+            const newSlide = slides[index];
+            oldSlide.classList.remove('active');
+            
+            setTimeout(() => {
+                currentSlideIndex = index;
+                newSlide.scrollTop = 0;
+                newSlide.classList.add('active');
+                updateUI();
+                setTimeout(() => { isAnimating = false; }, 800);
+            }, 300);
+        }
+
+        function nextSlide() { goToSlide(currentSlideIndex + 1); }
+        function prevSlide() { goToSlide(currentSlideIndex - 1); }
+
+        document.addEventListener('keydown', (e) => {
+            if (['ArrowRight', 'ArrowDown', ' '].includes(e.key)) { e.preventDefault(); nextSlide(); }
+            if (['ArrowLeft', 'ArrowUp'].includes(e.key)) { e.preventDefault(); prevSlide(); }
+        });
+
+        let wheelTimeout;
+        document.addEventListener('wheel', (e) => {
+            const activeSlide = slides[currentSlideIndex];
+            const isScrollable = activeSlide.scrollHeight > activeSlide.clientHeight;
+            if (isScrollable) {
+                const atTop = activeSlide.scrollTop === 0;
+                const atBottom = Math.ceil(activeSlide.scrollTop + activeSlide.clientHeight) >= activeSlide.scrollHeight;
+                if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) return;
+            }
+            clearTimeout(wheelTimeout);
+            wheelTimeout = setTimeout(() => {
+                if (e.deltaY > 40) nextSlide(); else if (e.deltaY < -40) prevSlide();
+            }, 50);
+        }, { passive: true });
+
+        // Touch gestures
+        let touchStartY = 0;
+        document.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, {passive: true});
+        document.addEventListener('touchend', e => {
+            const deltaY = touchStartY - e.changedTouches[0].clientY;
+            if (slides[currentSlideIndex].scrollHeight > slides[currentSlideIndex].clientHeight) return; 
+            if (deltaY > 50) nextSlide(); else if (deltaY < -50) prevSlide();
+        }, {passive: true});
+
+        // 3D Tilt on Hover
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            document.querySelectorAll('.tilt-element').forEach(el => {
+                el.addEventListener('mousemove', e => {
+                    const rect = el.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width - 0.5;
+                    const y = (e.clientY - rect.top) / rect.height - 0.5;
+                    el.style.transform = `rotateY(${x * 8}deg) rotateX(${-y * 8}deg)`;
+                });
+                el.addEventListener('mouseleave', () => { el.style.transform = 'none'; });
+            });
+        }
+
+        function downloadResume() {
+            const style = document.createElement('style');
+            style.id = 'print-style';
+            style.textContent = `
+                @media print {
+                    body, html { height: auto !important; overflow: visible !important; background: white !important;}
+                    .slides-container { position: static !important; height: auto !important; overflow: visible !important; }
+                    .slide { position: relative !important; opacity: 1 !important; visibility: visible !important; page-break-after: always; height: 100vh !important; }
+                    .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+                    .nav-wrapper, .bg-effect, .download-btn { display: none !important; }
+                }
+            `;
+            document.head.appendChild(style);
+            slides.forEach(s => s.classList.add('active'));
+            setTimeout(() => {
+                window.print();
+                setTimeout(() => {
+                    document.getElementById('print-style')?.remove();
+                    slides.forEach((s, i) => { if (i !== currentSlideIndex) s.classList.remove('active'); });
+                }, 500);
+            }, 300);
+        }
+        updateUI();
+    </script>
+</body>
+</html>

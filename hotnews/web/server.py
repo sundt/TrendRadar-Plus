@@ -1371,6 +1371,16 @@ async def privacy_policy():
     return HTMLResponse(content="<h1>Privacy Policy</h1><p>Coming soon...</p>")
 
 
+@app.get("/resume", response_class=HTMLResponse)
+async def resume_page():
+    """在线简历展示页"""
+    from pathlib import Path
+    resume_file = Path(__file__).parent / "static" / "resume.html"
+    if resume_file.exists():
+        return HTMLResponse(content=resume_file.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>Coming soon</h1>", status_code=404)
+
+
 @app.get("/index.html", response_class=HTMLResponse)
 async def index_html(request: Request):
     return _redirect_to_root(request)

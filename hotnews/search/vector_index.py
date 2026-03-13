@@ -280,8 +280,8 @@ class VectorIndex:
         # 尝试加载现有索引
         if self.index_path.exists() and self.meta_path.exists():
             try:
-                # 加载 FAISS 索引
-                self.faiss_index = faiss.read_index(str(self.index_path))
+                # 加载 FAISS 索引（使用 mmap，按需加载，降低内存占用）
+                self.faiss_index = faiss.read_index(str(self.index_path), faiss.IO_FLAG_MMAP)
 
                 # 加载元数据
                 with open(self.meta_path, "rb") as f:

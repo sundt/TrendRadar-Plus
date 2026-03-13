@@ -65,5 +65,8 @@ apiclient_*.pem
 we-mp-rss/
 wechat-article-exporter/
 
+# IDE memory (embedding vectors, local only)
+.agent/memory/
+
 # Auto-generated copy for Docker volume mount
 hotnews/CHANGELOG.md
