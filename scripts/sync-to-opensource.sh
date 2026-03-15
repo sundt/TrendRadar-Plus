@@ -51,16 +51,22 @@ EXCLUDES=(
   "--exclude=tests/"
   
   # 微信支付相关（已从开源版删除）
-  "--exclude=hotnews/kernel/user/payment_api.py"
-  "--exclude=hotnews/kernel/user/payment_routes.py"
-  "--exclude=hotnews/kernel/user/subscription_routes.py"
-  "--exclude=hotnews/kernel/user/subscription_api.py"
-  "--exclude=hotnews/kernel/user/subscription_service.py"
-  "--exclude=hotnews/kernel/user/source_subscription_api.py"
-  "--exclude=hotnews/web/static/js/src/payment.js"
-  "--exclude=hotnews/web/static/js/src/subscription.js"
-  "--exclude=hotnews/web/static/js/src/source-subscription.js"
-  "--exclude=hotnews/web/static/css/features/payment-modal.css"
+  "--exclude=kernel/user/payment_api.py"
+  "--exclude=kernel/user/payment_routes.py"
+  "--exclude=kernel/user/subscription_routes.py"
+  "--exclude=kernel/user/subscription_api.py"
+  "--exclude=kernel/user/subscription_service.py"
+  "--exclude=kernel/user/source_subscription_api.py"
+  "--exclude=web/static/js/src/payment.js"
+  "--exclude=web/static/js/src/subscription.js"
+  "--exclude=web/static/js/src/source-subscription.js"
+  "--exclude=web/static/js/payment-*.js"
+  "--exclude=web/static/js/subscription-*.js"
+  "--exclude=web/static/js/source-subscription-*.js"
+  "--exclude=web/static/js/mobile/payment-*.js"
+  "--exclude=web/static/js/mobile/subscription-*.js"
+  "--exclude=web/static/js/mobile/source-subscription-*.js"
+  "--exclude=web/static/css/features/payment-modal.css"
   
   # 私有部署脚本（已从开源版删除）
   "--exclude=scripts/sync_from_server.sh"
@@ -110,8 +116,8 @@ EXCLUDES=(
   "--exclude=docker/Dockerfile"
   "--exclude=docker/docker-compose-build.yml"
   "--exclude=config/config.yaml"
-  "--exclude=hotnews/web/rss_proxy.py"
-  "--exclude=hotnews/report/html.py"
+  "--exclude=web/rss_proxy.py"
+  "--exclude=report/html.py"
 )
 
 echo "🔄 开始同步代码目录..."
