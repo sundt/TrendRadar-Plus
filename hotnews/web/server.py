@@ -1972,9 +1972,10 @@ async def api_search(
                 except Exception:
                     pass
 
+    # Sort primarily by timestamp (newest first), secondarily by score
     payload.sort(
         key=lambda d: (
-            _parse_dt(d.get("date")) or datetime.min,
+            d.get("timestamp") or 0,
             _score_val(d),
         ),
         reverse=True,
