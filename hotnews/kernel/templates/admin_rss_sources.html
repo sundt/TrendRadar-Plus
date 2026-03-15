@@ -332,39 +332,39 @@
 
     <!-- Tab Panel: Import Management -->
     <div class="tab-panel" data-panel="import">
-      <h2>CSV Paste Import</h2>
+      <h2>导入管理 (CSV/OPML 批量导入)</h2>
       <div class="card">
         <div class="muted" style="margin-bottom:8px;">
-          Paste CSV rows and import into <code>rss_sources</code>.
+          在此处粘贴多行文本或 CSV 内容，批量导入订阅源到 <code>rss_sources</code>
         </div>
         <div class="muted" style="margin-bottom:8px;">
-          Supported formats:
+          支持的格式 (Supported formats):
           <div style="margin-top:4px;">
             <div>
-              <b>URL-only</b>: one RSS URL per line (Preview will autofill fields)
+              <b>纯 URL 模式 (URL-only)</b>: 每行一个 RSS 地址（预览时会自动补全名称等信息）
             </div>
             <div>
-              <b>Headerless fixed-order (8/9 columns)</b>:
-              name,url,seed_last_updated,category,feed_type,country,language,source[,added_at]
+              <b>无表头固定顺序 (Headerless)</b>:
+              名称,订阅地址,最后更新,分类,类型,国家,语言,来源[,添加时间]
             </div>
             <div>
-              <b>Chinese headers</b>: 标题,订阅地址,最后更新,分类,类型,国家,语言,来源,添加时间
+              <b>带中文表头 (Chinese headers)</b>: 标题,订阅地址,最后更新,分类,类型,国家,语言,来源,添加时间
             </div>
           </div>
         </div>
         <textarea id="csv-import-text"
           style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:10px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;font-size:12px;"
-          placeholder="Example (URL-only):\nhttps://blog.samaltman.com/posts.atom\nhttps://blog.google/technology/ai/rss/\n\nExample (CSV):\nGoogle Blog AI,https://blog.google/technology/ai/rss/,,人工智能,分类订阅,美国,英文,手动添加,2026-01-09 10:00">
+          placeholder="示例 (纯 URL 模式):\nhttps://blog.samaltman.com/posts.atom\nhttps://blog.google/technology/ai/rss/\n\n示例 (CSV 模式):\nGoogle Blog AI,https://blog.google/technology/ai/rss/,,人工智能,分类订阅,美国,英文,手动添加,2026-01-09 10:00">
 </textarea>
         <div style="height:10px;">
         </div>
         <div class="row" style="align-items:center;">
-          <button class="btn btn-primary" onclick="previewCsvImport()">Preview</button>
-          <button class="btn btn-primary" onclick="commitCsvImport()">Commit</button>
-          <button class="btn btn-danger" onclick="bulkDisableByUrls()">Bulk Disable (From URLs)</button>
-          <button class="btn btn-primary" onclick="bulkEnableCatalogAll()">Bulk Enable Catalog (All)</button>
-          <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">Bulk Disable Catalog (All)</button>
-          <button class="btn btn-primary" onclick="exportCatalogAll()">Export Catalog (All)</button>
+          <button class="btn btn-primary" onclick="previewCsvImport()">👁️ 预览 (Preview)</button>
+          <button class="btn btn-primary" onclick="commitCsvImport()">🚀 确认导入 (Commit)</button>
+          <button class="btn btn-danger" onclick="bulkDisableByUrls()">批量禁用 (依URL)</button>
+          <button class="btn btn-primary" onclick="bulkEnableCatalogAll()">全部启用</button>
+          <button class="btn btn-danger" onclick="bulkDisableCatalogAll()">全部禁用</button>
+          <button class="btn btn-primary" onclick="exportCatalogAll()">📤 导出全部 (Export)</button>
           <span class="muted" id="csv-import-status">
           </span>
         </div>
