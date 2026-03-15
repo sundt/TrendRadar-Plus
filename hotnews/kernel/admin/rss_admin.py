@@ -410,6 +410,63 @@ def _preview_hash(csv_text: str) -> str:
     return _md5_hex(text)
 
 
+def _parse_opml_text(opml_text: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Parse OPML XML text and return (items, errors).
+
+    Each item: {"url": str, "name": str, "category": str, "line_no": int}
+    Errors:    {"line_no": int, "reason": str, "raw": str}
+    """
+    import xml.etree.ElementTree as ET
+
+    items: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+
+    try:
+        root = ET.fromstring((opml_text or "").strip())
+    except Exception as e:
+        errors.append({"line_no": 0, "reason": f"XML parse error: {e}", "raw": opml_text[:200]})
+        return items, errors
+
+    line_no = 0
+
+    def _walk(node: ET.Element, parent_category: str = "") -> None:
+        nonlocal line_no
+        for child in node:
+            if child.tag.lower() != "outline":
+                _walk(child, parent_category)
+                continue
+
+            xml_url = (child.get("xmlUrl") or child.get("xmlurl") or "").strip()
+            title = (child.get("title") or child.get("text") or "").strip()
+            category = (child.get("category") or parent_category or "").strip()
+            feed_type = (child.get("type") or "rss").strip().lower()
+
+            if xml_url:
+                line_no += 1
+                if not xml_url.startswith(("http://", "https://")):
+                    errors.append({"line_no": line_no, "reason": "Invalid URL scheme", "raw": xml_url})
+                else:
+                    items.append({
+                        "line_no": line_no,
+                        "url": xml_url,
+                        "name": title,
+                        "category": category,
+                        "feed_type": feed_type,
+                    })
+            else:
+                # Folder node — recurse with this node's title as category
+                folder_name = title or category
+                _walk(child, folder_name)
+
+    body = root.find("body")
+    if body is not None:
+        _walk(body)
+    else:
+        _walk(root)
+
+    return items, errors
+
+
 def _upsert_rss_source(*, conn, item: Dict[str, Any], now: int, write: bool) -> str:
     url = str(item.get("url") or "").strip()
     cur = conn.execute("SELECT id FROM rss_sources WHERE url = ? LIMIT 1", (url,))
@@ -2183,6 +2240,278 @@ async def api_admin_get_source_entries(request: Request, source_id: str):
         return JSONResponse({"entries": entries})
     except Exception as e:
         return JSONResponse({"detail": str(e)}, status_code=500)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPML Import — Preview
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/api/admin/rss-sources/import-opml/preview")
+async def api_admin_rss_sources_import_opml_preview(request: Request):
+    """Parse OPML and return a preview of what would be imported, without writing."""
+    _require_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    opml_text = str((body.get("opml_text") if isinstance(body, dict) else "") or "")
+    if not opml_text.strip():
+        return JSONResponse(content={"detail": "Missing opml_text"}, status_code=400)
+
+    items, errors = _parse_opml_text(opml_text)
+
+    cap = 1000
+    if len(items) > cap:
+        items = items[:cap]
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    cur = conn.execute("SELECT url FROM rss_sources")
+    existing_urls = {str(r[0] or "").strip() for r in (cur.fetchall() or [])}
+    existing_urls.discard("")
+
+    seen: Dict[str, int] = {}
+    duplicates: List[Dict[str, Any]] = []
+    unique_items: List[Dict[str, Any]] = []
+    for it in items:
+        url = str(it.get("url") or "").strip()
+        if not url:
+            continue
+        if url in seen:
+            duplicates.append({"line_no": int(it.get("line_no") or 0), "url": url, "first_line_no": seen[url]})
+            continue
+        seen[url] = int(it.get("line_no") or 0)
+        unique_items.append(it)
+
+    inserted = 0
+    updated = 0
+    for it in unique_items:
+        url = str(it.get("url") or "").strip()
+        if url in existing_urls:
+            updated += 1
+            it["action"] = "update"
+        else:
+            inserted += 1
+            it["action"] = "insert"
+
+    preview_hash = _preview_hash(opml_text)
+    sample = unique_items[:20]
+
+    return JSONResponse(content={
+        "ok": True,
+        "preview_hash": preview_hash,
+        "summary": {
+            "total_feeds": len(items),
+            "unique_urls": len(unique_items),
+            "inserted": inserted,
+            "updated": updated,
+            "duplicates": len(duplicates),
+            "invalid": len(errors),
+        },
+        "invalid_rows": errors[:50],
+        "duplicate_rows": duplicates[:50],
+        "sample": sample,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPML Import — Commit
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/api/admin/rss-sources/import-opml/commit")
+async def api_admin_rss_sources_import_opml_commit(request: Request):
+    """Actually import the OPML into the database. Requires preview_hash obtained from preview endpoint."""
+    _require_admin(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    opml_text = str((body.get("opml_text") if isinstance(body, dict) else "") or "")
+    preview_hash = str((body.get("preview_hash") if isinstance(body, dict) else "") or "")
+
+    if not opml_text.strip():
+        return JSONResponse(content={"detail": "Missing opml_text"}, status_code=400)
+    if not preview_hash.strip():
+        return JSONResponse(content={"detail": "Missing preview_hash"}, status_code=400)
+
+    got_hash = _preview_hash(opml_text)
+    if got_hash != preview_hash.strip():
+        return JSONResponse(content={"detail": "preview_hash mismatch — please re-preview before committing"}, status_code=400)
+
+    items, errors = _parse_opml_text(opml_text)
+    if errors:
+        return JSONResponse(
+            content={"detail": "OPML contains invalid entries", "errors": errors[:50]},
+            status_code=400,
+        )
+
+    cap = 1000
+    if len(items) > cap:
+        items = items[:cap]
+
+    seen: Dict[str, int] = {}
+    unique_items: List[Dict[str, Any]] = []
+    duplicates = 0
+    for it in items:
+        url = str(it.get("url") or "").strip()
+        if not url:
+            continue
+        if url in seen:
+            duplicates += 1
+            continue
+        seen[url] = int(it.get("line_no") or 0)
+        unique_items.append(it)
+
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+    now = _now_ts()
+    inserted = 0
+    updated = 0
+    skipped = 0
+    for it in unique_items:
+        status = _upsert_rss_source(conn=conn, item=it, now=now, write=True)
+        if status == "inserted":
+            inserted += 1
+        elif status == "updated":
+            updated += 1
+        else:
+            skipped += 1
+    conn.commit()
+
+    return JSONResponse(content={
+        "ok": True,
+        "summary": {
+            "total_feeds": len(items),
+            "unique_urls": len(unique_items),
+            "inserted": inserted,
+            "updated": updated,
+            "skipped": skipped,
+            "duplicates": duplicates,
+        },
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPML Export (Admin — all enabled sources)
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("/api/admin/rss-sources/export-opml")
+async def api_admin_rss_sources_export_opml(
+    request: Request,
+    enabled_only: bool = Query(True, description="Only export enabled sources"),
+):
+    """Export all (or enabled-only) RSS sources as a standard OPML file."""
+    _require_admin(request)
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+    where = "WHERE enabled = 1" if enabled_only else ""
+    cur = conn.execute(
+        f"SELECT id, name, url, category FROM rss_sources {where} ORDER BY category, name"
+    )
+    rows = cur.fetchall() or []
+
+    # Group by category
+    cats: Dict[str, List[Dict[str, str]]] = {}
+    for r in rows:
+        cat = str(r[3] or "General").strip() or "General"
+        if cat not in cats:
+            cats[cat] = []
+        cats[cat].append({"name": str(r[1] or "").strip(), "url": str(r[2] or "").strip()})
+
+    now_str = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<opml version="1.0">',
+        "  <head>",
+        "    <title>HotNews RSS Subscriptions</title>",
+        f"    <dateCreated>{now_str}</dateCreated>",
+        "  </head>",
+        "  <body>",
+    ]
+
+    def _xml_escape(s: str) -> str:
+        return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
+    for cat, feeds in sorted(cats.items()):
+        lines.append(f'    <outline text="{_xml_escape(cat)}" title="{_xml_escape(cat)}">')
+        for feed in feeds:
+            name = _xml_escape(feed["name"] or feed["url"])
+            url = _xml_escape(feed["url"])
+            lines.append(f'      <outline type="rss" text="{name}" title="{name}" xmlUrl="{url}"/>')
+        lines.append("    </outline>")
+
+    lines += ["  </body>", "</opml>"]
+    content = "\n".join(lines).encode("utf-8")
+
+    filename = "hotnews_rss_sources" + ("_enabled" if enabled_only else "_all") + ".opml"
+    return Response(
+        content=content,
+        media_type="application/xml; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public Curated OPML — for sharing with users
+# GET /api/rss-sources/curated-opml
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("/api/rss-sources/curated-opml")
+async def api_rss_sources_curated_opml(request: Request):
+    """Public endpoint: export enabled RSS sources as OPML for users to one-click import.
+    Only returns sources that are enabled and have entries (healthily active).
+    """
+    conn = get_online_db_conn(project_root=request.app.state.project_root)
+
+    # Only export sources that are enabled and have at least 1 entry
+    cur = conn.execute(
+        """
+        SELECT s.id, s.name, s.url, s.category
+        FROM rss_sources s
+        WHERE s.enabled = 1
+          AND EXISTS (SELECT 1 FROM rss_entries e WHERE e.source_id = s.id LIMIT 1)
+        ORDER BY s.category, s.name
+        """
+    )
+    rows = cur.fetchall() or []
+
+    # Group by category
+    cats: Dict[str, List[Dict[str, str]]] = {}
+    for r in rows:
+        cat = str(r[3] or "General").strip() or "General"
+        if cat not in cats:
+            cats[cat] = []
+        cats[cat].append({"name": str(r[1] or "").strip(), "url": str(r[2] or "").strip()})
+
+    now_str = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<opml version="1.0">',
+        "  <head>",
+        "    <title>HotNews Curated RSS Sources</title>",
+        f"    <dateCreated>{now_str}</dateCreated>",
+        "  </head>",
+        "  <body>",
+    ]
+
+    def _xml_escape(s: str) -> str:
+        return s.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+
+    for cat, feeds in sorted(cats.items()):
+        lines.append(f'    <outline text="{_xml_escape(cat)}" title="{_xml_escape(cat)}">')
+        for feed in feeds:
+            name = _xml_escape(feed["name"] or feed["url"])
+            url = _xml_escape(feed["url"])
+            lines.append(f'      <outline type="rss" text="{name}" title="{name}" xmlUrl="{url}"/>')
+        lines.append("    </outline>")
+
+    lines += ["  </body>", "</opml>"]
+    content = "\n".join(lines).encode("utf-8")
+
+    return Response(
+        content=content,
+        media_type="application/xml; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=hotnews_curated_sources.opml",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+
 
 
 class UpdateSourceReq(BaseModel):

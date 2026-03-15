@@ -24,8 +24,8 @@ class SearchConfig:
     # FTS5 全文索引配置
     fts_tokenizer: str = "porter"  # tokenizer: porter, icu, unicode61
 
-    # 向量搜索配置
-    vector_enabled: bool = True  # 是否启用向量搜索
+    # 向量搜索配置（默认禁用，节省内存）
+    vector_enabled: bool = False  # 是否启用向量搜索
     embedding_model: str = "shibing624/text2vec-base-chinese"  # embedding 模型
     vector_top_k: int = 50  # 向量搜索返回数量
     vector_similarity_threshold: float = 0.5  # 相似度阈值
