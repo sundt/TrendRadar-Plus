@@ -3,7 +3,9 @@
 # sync-to-opensource.sh
 # 将私有 hotnews 项目同步到开源版 uihash-hotnews
 # 使用方式：
-#   bash scripts/sync-to-opensource.sh [--dry-run]
+#   bash scripts/sync-to-opensource.sh            # 同步
+#   bash scripts/sync-to-opensource.sh --dry-run  # 预览（不修改文件）
+#   bash scripts/sync-to-opensource.sh --check    # 仅检查开源目录有无私有文件
 #
 # 注意：以下文件在开源版中已被修改，不会被覆盖（需手动维护）：
 #   - README.md
@@ -20,6 +22,47 @@ set -e
 PRIVATE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OPENSOURCE_DIR="${OPENSOURCE_DIR:-/Users/sun/Downloads/project/uihash-hotnews}"
 DRY_RUN=""
+
+# -------------------------------------------------------
+# 私有文件特征列表（用于自动验证）
+# -------------------------------------------------------
+PRIVATE_PATTERNS=(
+  "payment_api\.py"
+  "payment_routes\.py"
+  "subscription_api\.py"
+  "subscription_routes\.py"
+  "subscription_service\.py"
+  "source_subscription_api\.py"
+  "payment-modal\.css"
+  "payment-.*\.js"
+  "subscription-.*\.js"
+)
+
+# -------------------------------------------------------
+# --check 模式：仅扫描开源目录，不做同步
+# -------------------------------------------------------
+if [ "$1" = "--check" ]; then
+  echo "🔍 扫描开源目录是否存在私有内容..."
+  echo "📦 开源项目: $OPENSOURCE_DIR"
+  echo ""
+  LEAKED=0
+  for pat in "${PRIVATE_PATTERNS[@]}"; do
+    found=$(find "$OPENSOURCE_DIR" -not -path "*/.git/*" | grep -E "$pat" 2>/dev/null || true)
+    if [ -n "$found" ]; then
+      echo "❌ 发现私有文件泄露："
+      echo "$found"
+      LEAKED=1
+    fi
+  done
+  if [ "$LEAKED" = "0" ]; then
+    echo "✅ 未发现私有文件，开源目录干净！"
+    exit 0
+  else
+    echo ""
+    echo "⚠️  请清理上述文件后再推送到 GitHub！"
+    exit 1
+  fi
+fi
 
 if [ "$1" = "--dry-run" ]; then
   DRY_RUN="--dry-run"
@@ -46,10 +89,10 @@ EXCLUDES=(
   "--exclude=openspec/"
   "--exclude=.agent/"
   "--exclude=docs/"
-  
+
   # 测试文件
   "--exclude=tests/"
-  
+
   # 微信支付相关（已从开源版删除）
   "--exclude=kernel/user/payment_api.py"
   "--exclude=kernel/user/payment_routes.py"
@@ -67,7 +110,7 @@ EXCLUDES=(
   "--exclude=web/static/js/mobile/subscription-*.js"
   "--exclude=web/static/js/mobile/source-subscription-*.js"
   "--exclude=web/static/css/features/payment-modal.css"
-  
+
   # 私有部署脚本（已从开源版删除）
   "--exclude=scripts/sync_from_server.sh"
   "--exclude=scripts/sync-kernel.sh"
@@ -93,12 +136,12 @@ EXCLUDES=(
   "--exclude=scripts/migrate_comment_url_hash.py"
   "--exclude=scripts/migrate_add_use_scraperapi.py"
   "--exclude=scripts/optimize_columns.sql"
-  
+
   # 私有二进制/证书文件
   "--exclude=docker/supercronic-linux-amd64"
   "--exclude=pub_key.pem"
   "--exclude=key/"
-  
+
   # 工程/IDE/依赖文件
   "--exclude=.git/"
   "--exclude=.github/"
@@ -109,7 +152,7 @@ EXCLUDES=(
   "--exclude=.env"
   "--exclude=.DS_Store"
   "--exclude=package-lock.json"
-  
+
   # 开源版中已被手动修改，保留开源版本（不覆盖）
   "--exclude=README.md"
   "--exclude=.env.example"
@@ -153,6 +196,30 @@ rsync -av $DRY_RUN \
 
 echo ""
 echo "✅ 同步完成！"
+echo ""
+
+# -------------------------------------------------------
+# 自动执行安全验证（同步后检测）
+# -------------------------------------------------------
+echo "🔍 正在验证开源目录安全性（自动检测私有文件）..."
+LEAKED=0
+for pat in "${PRIVATE_PATTERNS[@]}"; do
+  found=$(find "$OPENSOURCE_DIR" -not -path "*/.git/*" | grep -E "$pat" 2>/dev/null || true)
+  if [ -n "$found" ]; then
+    echo "❌ 发现私有文件泄露："
+    echo "$found"
+    LEAKED=1
+  fi
+done
+if [ "$LEAKED" = "0" ]; then
+  echo "✅ 安全验证通过，未发现私有文件！"
+else
+  echo ""
+  echo "🚨 警告：发现私有文件！请清理后再推送到 GitHub！"
+  echo "   可运行 'git reset --hard && git clean -fd' 撤销开源目录的变更。"
+  exit 1
+fi
+
 echo ""
 echo "⚠️  以下文件在开源版中有独立修改，请根据私有版更新情况手动 review："
 echo "   - hotnews/web/rss_proxy.py   (Docker代理IP默认值已清空)"
