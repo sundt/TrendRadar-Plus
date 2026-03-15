@@ -12,11 +12,16 @@ from threading import Lock
 class CacheService:
     """缓存服务类"""
 
-    def __init__(self):
-        """初始化缓存服务"""
+    def __init__(self, max_size: int = 500):
+        """初始化缓存服务
+        
+        Args:
+            max_size: 最大缓存条目数，超出后 LRU 淘汰最旧的 key（默认 500）
+        """
         self._cache = {}
         self._timestamps = {}
         self._lock = Lock()
+        self._max_size = max_size
 
     def get(self, key: str, ttl: int = 900) -> Optional[Any]:
         """
@@ -49,6 +54,11 @@ class CacheService:
             value: 缓存值
         """
         with self._lock:
+            # LRU 淘汰：超过上限时删除最旧的 key
+            if key not in self._cache and len(self._cache) >= self._max_size:
+                oldest = min(self._timestamps, key=self._timestamps.get)
+                del self._cache[oldest]
+                del self._timestamps[oldest]
             self._cache[key] = value
             self._timestamps[key] = time.time()
 

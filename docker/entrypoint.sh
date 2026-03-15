@@ -12,11 +12,23 @@ env >> /etc/environment
 
 case "${RUN_MODE:-cron}" in
 "viewer")
-    echo "🌐 启动 Viewer (FastAPI)..."
+    echo "🌐 启动 Viewer (FastAPI + Gunicorn)..."
     HOST="${VIEWER_HOST:-0.0.0.0}"
     PORT="${VIEWER_PORT:-8090}"
     WORKERS="${VIEWER_WORKERS:-2}"
-    exec /usr/local/bin/python -m uvicorn hotnews.web.server:app --host "$HOST" --port "$PORT" --workers "$WORKERS"
+    MAX_REQUESTS="${VIEWER_MAX_REQUESTS:-1000}"
+    MAX_REQUESTS_JITTER="${VIEWER_MAX_REQUESTS_JITTER:-200}"
+    exec gunicorn hotnews.web.server:app \
+        -k uvicorn.workers.UvicornWorker \
+        --bind "${HOST}:${PORT}" \
+        --workers "${WORKERS}" \
+        --max-requests "${MAX_REQUESTS}" \
+        --max-requests-jitter "${MAX_REQUESTS_JITTER}" \
+        --graceful-timeout 30 \
+        --timeout 120 \
+        --pid /tmp/gunicorn.pid \
+        --access-logfile - \
+        --error-logfile -
     ;;
 "once")
     echo "🔄 单次执行"

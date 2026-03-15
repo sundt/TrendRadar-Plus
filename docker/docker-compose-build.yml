@@ -121,6 +121,8 @@ services:
       - VIEWER_HOST=0.0.0.0
       - VIEWER_PORT=${VIEWER_PORT:-8090}
       - VIEWER_WORKERS=${VIEWER_WORKERS:-2}
+      - VIEWER_MAX_REQUESTS=${VIEWER_MAX_REQUESTS:-1000}
+      - VIEWER_MAX_REQUESTS_JITTER=${VIEWER_MAX_REQUESTS_JITTER:-200}
       - HOTNEWS_ADMIN_TOKEN=${HOTNEWS_ADMIN_TOKEN:-}
       - HOTNEWS_ADMIN_PASSWORD=${HOTNEWS_ADMIN_PASSWORD:-}
       - HOTNEWS_ADMIN_SESSION_HOURS=${HOTNEWS_ADMIN_SESSION_HOURS:-24}
@@ -195,7 +197,7 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          memory: 1536M
+          memory: 1024M
         reservations:
           cpus: '0.25'
           memory: 256M

@@ -27,9 +27,9 @@ from typing import Any, Dict, List, Optional
 # Do NOT hardcode TTL values when creating new cache instances.
 
 DEFAULT_CACHE_TTL = 600  # 10 minutes - unified TTL for all caches
-DEFAULT_MAX_ITEMS = 1000  # Default max items per cache
-DEFAULT_MAX_ITEMS_PER_USER = 500  # For per-user caches
-DEFAULT_MAX_USERS = 100  # Max users for per-user caches
+DEFAULT_MAX_ITEMS = 200   # Reduced from 1000 to save ~60% timeline cache RAM
+DEFAULT_MAX_ITEMS_PER_USER = 100  # Reduced from 500
+DEFAULT_MAX_USERS = 50   # Reduced from 100
 
 
 class TimelineCache:
@@ -288,10 +288,10 @@ class UserTimelineCache:
 # All caches use DEFAULT_CACHE_TTL (10 minutes) for consistency.
 # When adding a new category, create a cache instance here using the defaults.
 
-brief_timeline_cache = TimelineCache(max_items=1000)  # 早报 (deprecated, kept for cache_warmup compat)
-explore_timeline_cache = TimelineCache(max_items=1000)  # 探索 (explore)
+brief_timeline_cache = TimelineCache(max_items=200)   # 早报 (deprecated, kept for cache_warmup compat)
+explore_timeline_cache = TimelineCache(max_items=200)  # 探索 (explore)
 my_tags_cache = UserTimelineCache()  # 我的关注 (my-tags) - per-user
-discovery_news_cache = TimelineCache(max_items=1500)  # 新发现 (discovery)
+discovery_news_cache = TimelineCache(max_items=300)   # 新发现 (discovery)
 recommended_tags_cache = TimelineCache(ttl_seconds=300, max_items=100)  # 推荐标签 (5分钟缓存，数据变化不频繁)
 # featured_mps uses API-level caching, not timeline cache
 
