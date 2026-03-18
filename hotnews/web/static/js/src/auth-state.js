@@ -61,6 +61,8 @@ class AuthStateManager {
 
             console.log('[AuthState] User fetched:', this.currentUser ? 'logged in' : 'not logged in');
             this._notifyListeners();
+            // Check if email binding is needed
+            this._checkEmailBinding();
             return this.currentUser;
         } catch (e) {
             console.error('[AuthState] Fetch user failed:', e);
@@ -207,6 +209,157 @@ class AuthStateManager {
         } catch (e) {
             console.warn('[AuthState] BroadcastChannel setup failed:', e);
         }
+    }
+
+    /**
+     * Check if logged-in user needs to bind email, show modal if so
+     */
+    _checkEmailBinding() {
+        if (!this.currentUser) return;
+        if (this.currentUser.email && this.currentUser.email_verified) return;
+        // Skip if on bind-email page already
+        if (window.location.pathname === '/bind-email') return;
+        // Skip if modal already shown
+        if (document.getElementById('bindEmailModal')) return;
+
+        console.log('[AuthState] User needs email binding, showing modal...');
+        this._showBindEmailModal();
+    }
+
+    /**
+     * Show non-dismissible email binding modal
+     */
+    _showBindEmailModal() {
+        const overlay = document.createElement('div');
+        overlay.id = 'bindEmailModal';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+        overlay.innerHTML = `
+<div style="background:#fff;border-radius:16px;padding:36px 32px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+  <div style="text-align:center;margin-bottom:6px;"><img src="/static/images/hxlogo.jpg" style="width:48px;height:48px;border-radius:10px;" alt=""></div>
+  <div style="text-align:center;font-size:20px;font-weight:600;color:#1a1a1a;margin-bottom:4px;">绑定邮箱</div>
+  <div style="text-align:center;font-size:13px;color:#888;margin-bottom:24px;line-height:1.5;">请绑定邮箱以完善账号信息，<br>方便找回密码和接收通知。</div>
+  <div style="margin-bottom:14px;">
+    <input type="email" id="be-email" placeholder="请输入邮箱地址" autocomplete="email"
+      style="width:100%;padding:11px 13px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:15px;outline:none;background:#fafafa;box-sizing:border-box;">
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:14px;">
+    <input type="text" id="be-code" placeholder="------" maxlength="6" inputmode="numeric"
+      style="flex:1;padding:11px 13px;border:1.5px solid #e0e0e0;border-radius:10px;font-size:17px;text-align:center;letter-spacing:4px;outline:none;background:#fafafa;box-sizing:border-box;">
+    <button id="be-send-btn"
+      style="padding:11px 16px;border:none;border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;background:#f0f0f0;color:#333;white-space:nowrap;min-width:100px;">发送验证码</button>
+  </div>
+  <button id="be-bind-btn"
+    style="width:100%;padding:13px;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#fff;">确认绑定</button>
+  <div id="be-msg" style="text-align:center;font-size:13px;margin-top:10px;min-height:18px;"></div>
+</div>`;
+
+        document.body.appendChild(overlay);
+
+        // Wire up logic
+        const emailInput = document.getElementById('be-email');
+        const codeInput = document.getElementById('be-code');
+        const sendBtn = document.getElementById('be-send-btn');
+        const bindBtn = document.getElementById('be-bind-btn');
+        const msgEl = document.getElementById('be-msg');
+        let countdown = 0;
+
+        const showMsg = (text, isError) => {
+            msgEl.textContent = text;
+            msgEl.style.color = isError ? '#e53e3e' : '#38a169';
+        };
+
+        const startCountdown = () => {
+            countdown = 60;
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.5';
+            const tick = () => {
+                if (countdown <= 0) {
+                    sendBtn.textContent = '重新发送';
+                    sendBtn.disabled = false;
+                    sendBtn.style.opacity = '1';
+                    return;
+                }
+                sendBtn.textContent = countdown + 's';
+                countdown--;
+                setTimeout(tick, 1000);
+            };
+            tick();
+        };
+
+        sendBtn.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            if (!email || !email.includes('@')) {
+                showMsg('请输入有效的邮箱地址', true);
+                return;
+            }
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = '0.5';
+            showMsg('', false);
+            try {
+                const resp = await fetch('/api/auth/bind-email/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email }),
+                });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    showMsg('验证码已发送，请查看邮箱', false);
+                    startCountdown();
+                    codeInput.focus();
+                } else {
+                    showMsg(data.detail || data.message || '发送失败', true);
+                    sendBtn.disabled = false;
+                    sendBtn.style.opacity = '1';
+                }
+            } catch (e) {
+                showMsg('网络错误，请重试', true);
+                sendBtn.disabled = false;
+                sendBtn.style.opacity = '1';
+            }
+        });
+
+        bindBtn.addEventListener('click', async () => {
+            const email = emailInput.value.trim();
+            const code = codeInput.value.trim();
+            if (!email || !email.includes('@')) { showMsg('请输入有效的邮箱地址', true); return; }
+            if (!code || code.length < 4) { showMsg('请输入验证码', true); return; }
+            bindBtn.disabled = true;
+            bindBtn.style.opacity = '0.5';
+            bindBtn.textContent = '绑定中...';
+            showMsg('', false);
+            try {
+                const resp = await fetch('/api/auth/bind-email/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, code }),
+                });
+                const data = await resp.json();
+                if (resp.ok && data.ok) {
+                    showMsg('✅ 绑定成功！', false);
+                    setTimeout(() => {
+                        overlay.remove();
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    showMsg(data.detail || data.message || '绑定失败', true);
+                    bindBtn.disabled = false;
+                    bindBtn.style.opacity = '1';
+                    bindBtn.textContent = '确认绑定';
+                }
+            } catch (e) {
+                showMsg('网络错误，请重试', true);
+                bindBtn.disabled = false;
+                bindBtn.style.opacity = '1';
+                bindBtn.textContent = '确认绑定';
+            }
+        });
+
+        // Enter key support
+        emailInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
+        codeInput.addEventListener('keydown', e => { if (e.key === 'Enter') bindBtn.click(); });
+        // Focus email input
+        setTimeout(() => emailInput.focus(), 200);
     }
 
     /**
