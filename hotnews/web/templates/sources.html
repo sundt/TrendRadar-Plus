@@ -323,7 +323,11 @@
                     </div>
                     <div style="min-width: 0; flex: 1;">
                         <div class="source-name">{{ s.name }}</div>
+                        {% if s.type == 'rss' %}
+                        <span class="source-url"><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.url }}</a></span>
+                        {% else %}
                         <span class="source-url">{{ s.url }}</span>
+                        {% endif %}
                     </div>
                 </div>
                 {% if s.description %}
