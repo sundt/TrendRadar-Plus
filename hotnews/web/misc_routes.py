@@ -86,3 +86,51 @@ async def api_nba_today():
 
     games = _extract_tencent_nba_matches(payload)
     return UnicodeJSONResponse(content={"date": today, "games": games})
+
+
+@router.get("/api/export/rss-sources.csv")
+async def export_rss_sources_csv():
+    """导出所有启用的 RSS 订阅源为 CSV 文件，方便用户导入到自己的 RSS 阅读器"""
+    import csv
+    import io
+    from hotnews.web.db_online import get_online_db_conn
+
+    project_root = Path(os.environ.get("PROJECT_ROOT", Path(__file__).parent.parent.parent))
+    conn = get_online_db_conn(project_root)
+
+    cur = conn.execute(
+        """
+        SELECT name, url, category, description, tags, language, country, feed_type
+        FROM rss_sources
+        WHERE enabled = 1 AND source_type = 'rss'
+        ORDER BY category, name
+        """
+    )
+    rows = cur.fetchall() or []
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["name", "url", "category", "description", "tags", "language", "country", "feed_type"])
+    for r in rows:
+        writer.writerow([
+            str(r[0] or "").strip(),
+            str(r[1] or "").strip(),
+            str(r[2] or "").strip(),
+            str(r[3] or "").strip(),
+            str(r[4] or "").strip(),
+            str(r[5] or "").strip(),
+            str(r[6] or "").strip(),
+            str(r[7] or "").strip(),
+        ])
+
+    csv_content = buf.getvalue()
+    # Add UTF-8 BOM for Excel compatibility
+    bom = "\ufeff"
+    return Response(
+        content=(bom + csv_content).encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=hotnews-rss-sources.csv",
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
