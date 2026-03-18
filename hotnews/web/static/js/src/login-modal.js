@@ -236,11 +236,14 @@ function startWechatQRPolling() {
                 loginShowMessage('登录成功', 'success');
                 
                 // Call confirm-cookie endpoint to set the session cookie
+                let needsEmailBinding = false;
                 try {
-                    await fetch(`/api/auth/wechat-qr/confirm-cookie?session_id=${encodeURIComponent(currentSessionId)}`, {
+                    const cookieResp = await fetch(`/api/auth/wechat-qr/confirm-cookie?session_id=${encodeURIComponent(currentSessionId)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' }
                     });
+                    const cookieData = await cookieResp.json();
+                    needsEmailBinding = cookieData.needs_email_binding;
                 } catch (e) {
                     console.error('Failed to set cookie:', e);
                 }
@@ -250,7 +253,11 @@ function startWechatQRPolling() {
                 
                 setTimeout(() => {
                     closeLoginModal();
-                    window.location.reload();
+                    if (needsEmailBinding) {
+                        window.location.href = '/bind-email';
+                    } else {
+                        window.location.reload();
+                    }
                 }, 500);
                 return;
             } else if (data.status === 'scanned') {

@@ -90,13 +90,23 @@ async def confirm_login_with_cookie(request: Request, session_id: str = ""):
     if result.get("status") != "confirmed" or not result.get("session_token"):
         return {"ok": False, "message": "登录未完成"}
     
+    # 检查是否需要绑定邮箱
+    user = result.get("user") or {}
+    needs_email = not user.get("email") or not user.get("email_verified")
+    
     # 设置 cookie
     from hotnews.kernel.auth.auth_api import _set_session_cookie
     
     response = Response(
-        content=json.dumps({"ok": True, "message": "登录成功", "user": result.get("user")}),
+        content=json.dumps({
+            "ok": True,
+            "message": "登录成功",
+            "user": user,
+            "needs_email_binding": needs_email,
+        }),
         media_type="application/json"
     )
     _set_session_cookie(response, result["session_token"], request)
     
     return response
+
