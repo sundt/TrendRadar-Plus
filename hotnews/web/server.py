@@ -1401,18 +1401,20 @@ async def sources_page(request: Request):
     except Exception:
         pass
 
-    # WeChat MP sources (from rss_sources with source_type='mp')
+    # WeChat MP sources (from featured_wechat_mps table)
     mp_count = 0
     try:
         rows = conn.execute(
-            "SELECT name, url, category, description, tags "
-            "FROM rss_sources WHERE enabled = 1 AND source_type = 'mp' ORDER BY name"
+            "SELECT nickname, fakeid, category, signature "
+            "FROM featured_wechat_mps WHERE enabled = 1 ORDER BY category, nickname"
         ).fetchall() or []
         for r in rows:
             sources.append({
-                "type": "mp", "name": str(r[0] or "").strip(), "url": str(r[1] or "").strip(),
-                "category": str(r[2] or "").strip(), "description": str(r[3] or "").strip(),
-                "tags": str(r[4] or "").strip(), "language": "中文",
+                "type": "mp", "name": str(r[0] or "").strip(),
+                "url": f"weixin://mp/{str(r[1] or '').strip()}",
+                "category": str(r[2] or "").strip(),
+                "description": str(r[3] or "").strip(),
+                "tags": "", "language": "中文",
                 "country": "中国", "feed_type": "微信公众号",
             })
         mp_count = len(rows)
