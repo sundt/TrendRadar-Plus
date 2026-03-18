@@ -1367,7 +1367,19 @@ async def bind_email_page(request: Request):
 
 @app.get("/sources", response_class=HTMLResponse)
 async def sources_page(request: Request):
-    """订阅源一览页面"""
+    """订阅源一览页面（需登录）"""
+    # Check login
+    from hotnews.kernel.auth.auth_api import _get_session_token
+    from hotnews.kernel.auth.auth_service import validate_session
+    from hotnews.web.user_db import get_user_db_conn
+    session_token = _get_session_token(request)
+    if not session_token:
+        return RedirectResponse(url="/?login=1", status_code=302)
+    conn_user = get_user_db_conn(project_root)
+    is_valid, _ = validate_session(conn_user, session_token)
+    if not is_valid:
+        return RedirectResponse(url="/?login=1", status_code=302)
+
     cdn_base_url = _get_cdn_base_url()
     static_prefix = cdn_base_url if cdn_base_url else "/static"
     asset_rev = page_rendering._get_asset_rev(project_root)
