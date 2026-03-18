@@ -147,6 +147,8 @@ services:
       - HOTNEWS_RSS_WARMUP_MAX_PER_HOUR=${HOTNEWS_RSS_WARMUP_MAX_PER_HOUR:-120}
       - SCRAPERAPI_KEY=${SCRAPERAPI_KEY:-}
       - HOTNEWS_SCRAPER_AI_MODEL=${HOTNEWS_SCRAPER_AI_MODEL:-}
+      # 向量搜索（默认禁用，节省内存）
+      - HOTNEWS_VECTOR_ENABLED=${HOTNEWS_VECTOR_ENABLED:-0}
       # RSS Source AI Classification (禁用本地 AI 分类，避免成本)
       - HOTNEWS_RSS_SOURCE_AI_ENABLED=${HOTNEWS_RSS_SOURCE_AI_ENABLED:-false}
       # Socks5 代理配置
@@ -197,7 +199,7 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          memory: 1024M
+          memory: 1536M
         reservations:
           cpus: '0.25'
           memory: 256M

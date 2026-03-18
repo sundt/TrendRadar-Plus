@@ -2585,7 +2585,7 @@ async def _warmup_cache():
 
         viewer_service.get_categorized_news(
             platforms=None,
-            limit=10000,
+            limit=500,  # was 10000, reduced to save memory on low-RAM servers
             apply_filter=True,
             filter_mode=None,
             per_platform_limit=items_per_card
@@ -2698,38 +2698,45 @@ async def on_startup():
     except Exception as e:
         print(f"⚠️ RSS init failed: {e}")
 
-    try:
-        await rss_scheduler.start(app, project_root)
-    except Exception as e:
-        print(f"⚠️ RSS scheduler start failed: {e}")
+    # Check if RSS scheduler should run in this process
+    _rss_sched_flag = os.environ.get("HOTNEWS_RSS_SCHEDULER_ENABLED", "1").strip().lower()
+    _rss_scheduler_enabled = _rss_sched_flag not in ("0", "false", "no")
 
-    # Start tag auto-promotion task
-    try:
-        rss_scheduler.start_tag_promotion_task()
-    except Exception as e:
-        print(f"⚠️ Tag promotion task start failed: {e}")
+    if _rss_scheduler_enabled:
+        try:
+            await rss_scheduler.start(app, project_root)
+        except Exception as e:
+            print(f"⚠️ RSS scheduler start failed: {e}")
 
-    # Start WeChat MP article scheduler
-    try:
-        from hotnews.kernel.scheduler.wechat_scheduler import start_wechat_scheduler
-        start_wechat_scheduler(project_root)
-        print("✅ WeChat MP scheduler started (controlled by HOTNEWS_WECHAT_SCHEDULER_ENABLED)")
-    except ImportError:
-        pass  # Kernel module not available
-    except Exception as e:
-        print(f"⚠️ WeChat scheduler start failed: {e}")
+        # Start tag auto-promotion task
+        try:
+            rss_scheduler.start_tag_promotion_task()
+        except Exception as e:
+            print(f"⚠️ Tag promotion task start failed: {e}")
 
-    # Initialize WeChat shared credentials service (load from SQLite)
-    try:
-        from hotnews.kernel.services.wechat_shared_credentials import init_shared_credentials
-        init_shared_credentials()
-        print("✅ WeChat shared credentials service initialized")
-    except ImportError:
-        pass  # Kernel module not available
-    except Exception as e:
-        print(f"⚠️ WeChat shared credentials init failed: {e}")
+        # Start WeChat MP article scheduler
+        try:
+            from hotnews.kernel.scheduler.wechat_scheduler import start_wechat_scheduler
+            start_wechat_scheduler(project_root)
+            print("✅ WeChat MP scheduler started (controlled by HOTNEWS_WECHAT_SCHEDULER_ENABLED)")
+        except ImportError:
+            pass  # Kernel module not available
+        except Exception as e:
+            print(f"⚠️ WeChat scheduler start failed: {e}")
 
-    # Start background cache refresh task
+        # Initialize WeChat shared credentials service (load from SQLite)
+        try:
+            from hotnews.kernel.services.wechat_shared_credentials import init_shared_credentials
+            init_shared_credentials()
+            print("✅ WeChat shared credentials service initialized")
+        except ImportError:
+            pass  # Kernel module not available
+        except Exception as e:
+            print(f"⚠️ WeChat shared credentials init failed: {e}")
+    else:
+        print("⏭️ RSS scheduler disabled (HOTNEWS_RSS_SCHEDULER_ENABLED=0), running as pure viewer")
+
+    # Start background cache refresh task (always needed for viewer)
     _start_cache_refresh_task()
 
 

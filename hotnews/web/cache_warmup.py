@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 class WarmupConfig:
     """缓存预热配置"""
     enabled: bool = True
-    brief_timeline_limit: int = 5000
-    explore_timeline_limit: int = 1000
+    brief_timeline_limit: int = 1000
+    explore_timeline_limit: int = 500
     timeout_seconds: int = 60
 
     @classmethod
@@ -41,8 +41,8 @@ class WarmupConfig:
         warmup = perf.get("cache_warmup", {}) or {}
         return cls(
             enabled=warmup.get("enabled", True),
-            brief_timeline_limit=warmup.get("brief_timeline_limit", 5000),
-            explore_timeline_limit=warmup.get("explore_timeline_limit", 1000),
+            brief_timeline_limit=warmup.get("brief_timeline_limit", 1000),
+            explore_timeline_limit=warmup.get("explore_timeline_limit", 500),
             timeout_seconds=warmup.get("timeout_seconds", 60),
         )
 

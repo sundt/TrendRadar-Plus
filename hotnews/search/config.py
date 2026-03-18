@@ -48,7 +48,7 @@ class SearchConfig:
         return cls(
             search_days=int(os.environ.get("HOTNEWS_SEARCH_DAYS", cls.search_days)),
             index_dir=os.environ.get("HOTNEWS_INDEX_DIR", cls.index_dir),
-            vector_enabled=os.environ.get("HOTNEWS_VECTOR_ENABLED", "1").lower() in ("1", "true", "yes"),
+            vector_enabled=os.environ.get("HOTNEWS_VECTOR_ENABLED", "0").lower() in ("1", "true", "yes"),
             embedding_model=os.environ.get("HOTNEWS_EMBEDDING_MODEL", cls.embedding_model),
             vector_top_k=int(os.environ.get("HOTNEWS_VECTOR_TOP_K", cls.vector_top_k)),
             max_results=int(os.environ.get("HOTNEWS_MAX_RESULTS", cls.max_results)),
