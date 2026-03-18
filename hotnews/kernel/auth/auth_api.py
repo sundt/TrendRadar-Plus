@@ -633,7 +633,11 @@ async def wechat_oauth_callback(request: Request, code: str = "", state: str = "
     if not success:
         raise HTTPException(status_code=400, detail=message)
     
-    response = RedirectResponse(url=f"/?login={int(time.time())}")
+    # Check if email needs binding
+    needs_email = not user_info.get("email") or not user_info.get("email_verified")
+    redirect_url = "/bind-email" if needs_email else f"/?login={int(time.time())}"
+    
+    response = RedirectResponse(url=redirect_url)
     _set_session_cookie(response, session_token, request)
     return response
 
@@ -758,7 +762,11 @@ async def wechat_mp_oauth_callback(request: Request, code: str = "", state: str 
     if not success:
         raise HTTPException(status_code=400, detail=message)
     
-    response = RedirectResponse(url=f"/?login={int(time.time())}")
+    # Check if email needs binding
+    needs_email = not user_info.get("email") or not user_info.get("email_verified")
+    redirect_url = "/bind-email" if needs_email else f"/?login={int(time.time())}"
+    
+    response = RedirectResponse(url=redirect_url)
     _set_session_cookie(response, session_token, request)
     return response
 
@@ -810,6 +818,78 @@ async def change_password(
     
     success, message = do_change_password(conn, user_info["id"], old_password, new_password)
     
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    
+    return {"ok": True, "message": message}
+
+
+# ==================== Email Binding (微信登录后绑定邮箱) ====================
+
+@router.post("/bind-email/send-code")
+async def bind_email_send_code(
+    request: Request,
+    email: str = Body(..., embed=True),
+):
+    """Send verification code for email binding (after WeChat login)."""
+    import asyncio
+    from hotnews.kernel.auth.auth_service import validate_session
+    
+    session_token = _get_session_token(request)
+    if not session_token:
+        raise HTTPException(status_code=401, detail="请先登录")
+    
+    conn = _get_user_db_conn(request)
+    is_valid, user_info = validate_session(conn, session_token)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="登录已过期")
+    
+    # Check if email is used by another user
+    cur = conn.execute(
+        "SELECT id FROM users WHERE email = ? AND id != ?",
+        (email.strip().lower(), user_info["id"])
+    )
+    if cur.fetchone():
+        raise HTTPException(status_code=400, detail="该邮箱已被其他账号使用")
+    
+    from hotnews.kernel.services.email_code_service import send_verification_code as do_send_code
+    ip_address = _get_client_ip(request)
+    project_root = str(request.app.state.project_root)
+    
+    success, message = await asyncio.to_thread(do_send_code, project_root, email, ip_address)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    
+    return {"ok": True, "message": message}
+
+
+@router.post("/bind-email/verify")
+async def bind_email_verify(
+    request: Request,
+    email: str = Body(..., embed=True),
+    code: str = Body(..., embed=True),
+):
+    """Verify code and bind email to current user."""
+    from hotnews.kernel.auth.auth_service import validate_session, bind_email_to_user
+    from hotnews.kernel.services.email_code_service import verify_code
+    
+    session_token = _get_session_token(request)
+    if not session_token:
+        raise HTTPException(status_code=401, detail="请先登录")
+    
+    conn = _get_user_db_conn(request)
+    is_valid, user_info = validate_session(conn, session_token)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="登录已过期")
+    
+    # Verify the code
+    project_root = str(request.app.state.project_root)
+    success, message = verify_code(project_root, email, code)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    
+    # Bind email
+    success, message = bind_email_to_user(conn, user_info["id"], email)
     if not success:
         raise HTTPException(status_code=400, detail=message)
     
@@ -973,11 +1053,16 @@ async def qr_login_complete(request: Request, temp_user_id: int):
     except Exception as e:
         print(f"[AUTH] Failed to save wechat credentials: {e}")
     
+    # Check if email needs binding
+    needs_email = not user_info.get("email") or not user_info.get("email_verified")
+    
     return {
         "ok": True,
         "token": session_token,
         "user": user_info,
         "message": "登录成功",
+        "needs_email_binding": needs_email,
+        "redirect": "/bind-email" if needs_email else None,
     }
 
 

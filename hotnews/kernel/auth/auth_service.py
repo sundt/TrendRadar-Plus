@@ -548,6 +548,41 @@ def oauth_login_or_register(
     return True, "Login successful", session_token, user_info
 
 
+# ==================== Email Binding ====================
+
+def bind_email_to_user(
+    conn,
+    user_id: int,
+    email: str,
+) -> Tuple[bool, str]:
+    """
+    Bind and verify an email to an existing user (e.g. after WeChat login).
+    
+    Returns:
+        (success, message)
+    """
+    email = email.strip().lower()
+    if not email or "@" not in email:
+        return False, "邮箱格式不正确"
+    
+    # Check if email is used by another user
+    cur = conn.execute(
+        "SELECT id FROM users WHERE email = ? AND id != ?",
+        (email, user_id)
+    )
+    if cur.fetchone():
+        return False, "该邮箱已被其他账号使用"
+    
+    now = _now_ts()
+    conn.execute(
+        "UPDATE users SET email = ?, email_verified = 1, last_seen_at = ? WHERE id = ?",
+        (email, now, user_id)
+    )
+    conn.commit()
+    
+    return True, "邮箱绑定成功"
+
+
 # ==================== User Profile ====================
 
 def update_user_profile(

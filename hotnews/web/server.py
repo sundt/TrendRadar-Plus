@@ -1355,6 +1355,16 @@ async def search_page(
     )
 
 
+@app.get("/bind-email", response_class=HTMLResponse)
+async def bind_email_page(request: Request):
+    """微信登录后邮箱绑定页面"""
+    template_dir = Path(__file__).parent / "templates"
+    html_path = template_dir / "bind_email.html"
+    if html_path.exists():
+        return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
+    return HTMLResponse(content="<h1>页面未找到</h1>", status_code=404)
+
+
 @app.get("/sources", response_class=HTMLResponse)
 async def sources_page(request: Request):
     """订阅源一览页面"""
