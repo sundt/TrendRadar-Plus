@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订阅源一览 - Hotnews</title>
+    <link rel="icon" href="{{ static_prefix }}/images/hxlogo.jpg?v={{ asset_rev }}" type="image/jpeg">
+    <link href="{{ static_prefix }}/css/vendor/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_prefix }}/css/viewer.css?v={{ asset_rev }}" rel="stylesheet">
+    <style>
+        .sources-header {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: saturate(180%) blur(20px);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            border-radius: 14px;
+            border: 1px solid rgba(229, 231, 235, 0.6);
+            padding: 20px 24px;
+            margin-bottom: 16px;
+        }
+
+        .sources-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin: 0 0 4px 0;
+        }
+
+        .sources-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 0;
+        }
+
+        .sources-stats {
+            display: flex;
+            gap: 16px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            color: #4c51bf;
+            border: 1px solid rgba(102, 126, 234, 0.15);
+        }
+
+        .stat-badge.custom {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+            color: #047857;
+            border-color: rgba(16, 185, 129, 0.15);
+        }
+
+        .stat-badge.mp {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.1));
+            color: #b45309;
+            border-color: rgba(245, 158, 11, 0.15);
+        }
+
+        .sources-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .sources-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 8px 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+            background: white;
+        }
+
+        .sources-search:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .sources-filter-btn {
+            padding: 7px 14px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 13px;
+            background: white;
+            color: #374151;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sources-filter-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .sources-filter-btn.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-color: transparent;
+        }
+
+        .download-btn {
+            padding: 7px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .download-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 12px;
+        }
+
+        @media (max-width: 640px) {
+            .source-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .source-card {
+            background: white;
+            border-radius: 10px;
+            padding: 14px 16px;
+            border: 1px solid #e5e7eb;
+            transition: all 0.2s;
+            cursor: default;
+        }
+
+        .source-card:hover {
+            border-color: #c7d2fe;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .source-card-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .source-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #f0f4ff, #e8ecff);
+        }
+
+        .source-icon.custom {
+            background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+        }
+
+        .source-icon.mp {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+        }
+
+        .source-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1f2937;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .source-url {
+            font-size: 12px;
+            color: #9ca3af;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .source-url a {
+            color: #9ca3af;
+            text-decoration: none;
+        }
+
+        .source-url a:hover {
+            color: #667eea;
+        }
+
+        .source-desc {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 6px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .source-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .source-tag {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        .source-meta {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .source-meta-item {
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        .sources-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .sources-empty-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .source-count-label {
+            font-size: 13px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+        }
+
+        .tr-footer-info {
+            margin-top: 24px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <div class="sources-header">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <h1 class="sources-title">📡 订阅源一览</h1>
+                    <p class="sources-subtitle">Hotnews 使用的全部信息来源，共 {{ total_count }} 个</p>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <a href="/" class="sources-filter-btn">← 返回首页</a>
+                    <a href="/api/export/rss-sources.csv" download="hotnews-rss-sources.csv" class="download-btn">📥 下载 CSV</a>
+                </div>
+            </div>
+
+            <div class="sources-stats">
+                <span class="stat-badge">📰 RSS {{ rss_count }} 个</span>
+                {% if custom_count > 0 %}
+                <span class="stat-badge custom">⚙️ 自定义源 {{ custom_count }} 个</span>
+                {% endif %}
+                {% if mp_count > 0 %}
+                <span class="stat-badge mp">💬 公众号 {{ mp_count }} 个</span>
+                {% endif %}
+            </div>
+
+            <div class="sources-toolbar">
+                <input type="text" class="sources-search" id="sourceSearch" placeholder="🔍 搜索源名称、URL、描述..." autocomplete="off">
+                <button class="sources-filter-btn active" data-filter="all" onclick="filterSources('all')">全部</button>
+                <button class="sources-filter-btn" data-filter="rss" onclick="filterSources('rss')">RSS</button>
+                {% if custom_count > 0 %}
+                <button class="sources-filter-btn" data-filter="custom" onclick="filterSources('custom')">自定义</button>
+                {% endif %}
+                {% if mp_count > 0 %}
+                <button class="sources-filter-btn" data-filter="mp" onclick="filterSources('mp')">公众号</button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="source-count-label" id="sourceCountLabel">显示 {{ total_count }} 个源</div>
+
+        <div class="source-grid" id="sourceGrid">
+            {% for s in sources %}
+            <div class="source-card" data-type="{{ s.type }}" data-searchable="{{ s.name|lower }} {{ s.url|lower }} {{ (s.description or '')|lower }} {{ (s.category or '')|lower }} {{ (s.tags or '')|lower }}">
+                <div class="source-card-header">
+                    <div class="source-icon {% if s.type == 'custom' %}custom{% elif s.type == 'mp' %}mp{% endif %}">
+                        {% if s.type == 'rss' %}📰{% elif s.type == 'custom' %}⚙️{% elif s.type == 'mp' %}💬{% endif %}
+                    </div>
+                    <div style="min-width: 0; flex: 1;">
+                        <div class="source-name">{{ s.name }}</div>
+                        <span class="source-url"><a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.url }}</a></span>
+                    </div>
+                </div>
+                {% if s.description %}
+                <div class="source-desc">{{ s.description }}</div>
+                {% endif %}
+                {% if s.tags %}
+                <div class="source-tags">
+                    {% for tag in s.tags.split(',')[:5] %}
+                    {% if tag.strip() %}
+                    <span class="source-tag">{{ tag.strip() }}</span>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="source-meta">
+                    {% if s.category %}<span class="source-meta-item">📁 {{ s.category }}</span>{% endif %}
+                    {% if s.language %}<span class="source-meta-item">🌐 {{ s.language }}</span>{% endif %}
+                    {% if s.country %}<span class="source-meta-item">📍 {{ s.country }}</span>{% endif %}
+                    {% if s.feed_type %}<span class="source-meta-item">{{ s.feed_type }}</span>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="sources-empty" id="sourcesEmpty" style="display: none;">
+            <div class="sources-empty-icon">🔍</div>
+            <div>没有找到匹配的订阅源</div>
+        </div>
+    </div>
+
+    <div class="tr-footer-info">
+        本站内容由系统自动聚合自互联网公开RSS源，仅提供信息索引与导读，版权归属于原作者。
+        <a href="/" class="tr-footer-top-toggle footer-icp">返回首页</a>
+    </div>
+
+    <script>
+        (function () {
+            var searchInput = document.getElementById('sourceSearch');
+            var grid = document.getElementById('sourceGrid');
+            var emptyState = document.getElementById('sourcesEmpty');
+            var countLabel = document.getElementById('sourceCountLabel');
+            var currentFilter = 'all';
+
+            function applyFilters() {
+                if (!grid) return;
+                var query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+                var cards = grid.querySelectorAll('.source-card');
+                var visible = 0;
+
+                cards.forEach(function (card) {
+                    var type = card.getAttribute('data-type') || '';
+                    var searchable = card.getAttribute('data-searchable') || '';
+                    var typeMatch = currentFilter === 'all' || type === currentFilter;
+                    var searchMatch = !query || searchable.indexOf(query) !== -1;
+                    if (typeMatch && searchMatch) {
+                        card.style.display = '';
+                        visible++;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                if (emptyState) emptyState.style.display = visible === 0 ? '' : 'none';
+                if (countLabel) countLabel.textContent = '显示 ' + visible + ' 个源';
+            }
+
+            window.filterSources = function (type) {
+                currentFilter = type;
+                document.querySelectorAll('.sources-filter-btn[data-filter]').forEach(function (btn) {
+                    btn.classList.toggle('active', btn.getAttribute('data-filter') === type);
+                });
+                applyFilters();
+            };
+
+            if (searchInput) {
+                var debounceTimer;
+                searchInput.addEventListener('input', function () {
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(applyFilters, 150);
+                });
+            }
+        })();
+    </script>
+</body>
+
+</html>

@@ -1355,6 +1355,85 @@ async def search_page(
     )
 
 
+@app.get("/sources", response_class=HTMLResponse)
+async def sources_page(request: Request):
+    """订阅源一览页面"""
+    cdn_base_url = _get_cdn_base_url()
+    static_prefix = cdn_base_url if cdn_base_url else "/static"
+    asset_rev = page_rendering._get_asset_rev(project_root)
+
+    conn = get_online_db_conn(project_root)
+    sources = []
+
+    # RSS sources
+    try:
+        rows = conn.execute(
+            "SELECT name, url, category, description, tags, language, country, feed_type "
+            "FROM rss_sources WHERE enabled = 1 AND source_type = 'rss' ORDER BY category, name"
+        ).fetchall() or []
+        for r in rows:
+            sources.append({
+                "type": "rss", "name": str(r[0] or "").strip(), "url": str(r[1] or "").strip(),
+                "category": str(r[2] or "").strip(), "description": str(r[3] or "").strip(),
+                "tags": str(r[4] or "").strip(), "language": str(r[5] or "").strip(),
+                "country": str(r[6] or "").strip(), "feed_type": str(r[7] or "").strip(),
+            })
+    except Exception:
+        pass
+    rss_count = len(sources)
+
+    # Custom sources
+    custom_count = 0
+    try:
+        rows = conn.execute(
+            "SELECT name, provider_type, category, country, language "
+            "FROM custom_sources WHERE enabled = 1 ORDER BY name"
+        ).fetchall() or []
+        for r in rows:
+            sources.append({
+                "type": "custom", "name": str(r[0] or "").strip(),
+                "url": f"自定义 ({str(r[1] or '').strip()})",
+                "category": str(r[2] or "").strip(), "description": "",
+                "tags": "", "language": str(r[4] or "").strip(),
+                "country": str(r[3] or "").strip(), "feed_type": str(r[1] or "").strip(),
+            })
+        custom_count = len(rows)
+    except Exception:
+        pass
+
+    # WeChat MP sources (from rss_sources with source_type='mp')
+    mp_count = 0
+    try:
+        rows = conn.execute(
+            "SELECT name, url, category, description, tags "
+            "FROM rss_sources WHERE enabled = 1 AND source_type = 'mp' ORDER BY name"
+        ).fetchall() or []
+        for r in rows:
+            sources.append({
+                "type": "mp", "name": str(r[0] or "").strip(), "url": str(r[1] or "").strip(),
+                "category": str(r[2] or "").strip(), "description": str(r[3] or "").strip(),
+                "tags": str(r[4] or "").strip(), "language": "中文",
+                "country": "中国", "feed_type": "微信公众号",
+            })
+        mp_count = len(rows)
+    except Exception:
+        pass
+
+    return templates.TemplateResponse(
+        "sources.html",
+        {
+            "request": request,
+            "static_prefix": static_prefix,
+            "asset_rev": asset_rev,
+            "sources": sources,
+            "total_count": len(sources),
+            "rss_count": rss_count,
+            "custom_count": custom_count,
+            "mp_count": mp_count,
+        },
+    )
+
+
 def _redirect_to_root(request: Request) -> RedirectResponse:
     qs = request.url.query
     url = "/" + (f"?{qs}" if qs else "")
