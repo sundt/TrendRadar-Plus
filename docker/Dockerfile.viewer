@@ -10,11 +10,15 @@ ENV PYTHONUNBUFFERED=1
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || \
     sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
 
-# Install build dependencies for bcrypt (required for compilation if wheel not available)
+# Install build dependencies + jemalloc (reduces Python memory fragmentation by 30-50%)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
+    libjemalloc2 \
     && rm -rf /var/lib/apt/lists/*
+
+# Use jemalloc as memory allocator (replaces glibc malloc, automatically returns freed memory to OS)
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 COPY docker/requirements.viewer.txt ./requirements.viewer.txt
 RUN pip install --no-cache-dir --retries 3 --timeout 60 \
