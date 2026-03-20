@@ -28,18 +28,39 @@ def cleanup_old_data(db_path: str, retention_config: dict) -> dict:
         清理统计
     """
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
     now_ts = int(time.time())
     stats = {}
     
-    # rss_entries: 保留 60 天
+    # rss_entries: 保留 N 天（默认 60 天）
     cutoff_entries = now_ts - retention_config.get("rss_entries", 60) * 86400
     conn.execute("DELETE FROM rss_entries WHERE fetched_at < ?", (cutoff_entries,))
     stats["rss_entries_deleted"] = conn.total_changes
     
-    # rss_entry_ai_labels: 保留 30 天
-    cutoff_labels = now_ts - retention_config.get("rss_entry_ai_labels", 30) * 86400
+    # rss_entry_tags: 级联删除（删除已不存在的 rss_entries 对应的标签映射）
     try:
-        conn.execute("DELETE FROM rss_entry_ai_labels WHERE labeled_at < ?", (cutoff_labels,))
+        conn.execute("""
+            DELETE FROM rss_entry_tags
+            WHERE NOT EXISTS (
+                SELECT 1 FROM rss_entries e
+                WHERE e.source_id = rss_entry_tags.source_id
+                  AND e.dedup_key = rss_entry_tags.dedup_key
+            )
+        """)
+        stats["entry_tags_deleted"] = conn.total_changes
+    except Exception:
+        stats["entry_tags_deleted"] = 0
+    
+    # rss_entry_ai_labels: 级联删除（与 rss_entries 保持一致）
+    try:
+        conn.execute("""
+            DELETE FROM rss_entry_ai_labels
+            WHERE NOT EXISTS (
+                SELECT 1 FROM rss_entries e
+                WHERE e.source_id = rss_entry_ai_labels.source_id
+                  AND e.dedup_key = rss_entry_ai_labels.dedup_key
+            )
+        """)
         stats["ai_labels_deleted"] = conn.total_changes
     except Exception:
         stats["ai_labels_deleted"] = 0
@@ -52,11 +73,36 @@ def cleanup_old_data(db_path: str, retention_config: dict) -> dict:
     except Exception:
         stats["usage_events_deleted"] = 0
     
+    # cross_source_dedup: 保留 30 天
+    cutoff_dedup = now_ts - retention_config.get("cross_source_dedup", 30) * 86400
+    try:
+        conn.execute("DELETE FROM cross_source_dedup WHERE detected_at < ?", (cutoff_dedup,))
+        stats["dedup_deleted"] = conn.total_changes
+    except Exception:
+        stats["dedup_deleted"] = 0
+    
+    # tag_candidates: 保留 30 天（仅清理已处理的）
+    cutoff_candidates = now_ts - retention_config.get("tag_candidates", 30) * 86400
+    try:
+        conn.execute("DELETE FROM tag_candidates WHERE status != 'pending' AND updated_at < ?", (cutoff_candidates,))
+        stats["candidates_deleted"] = conn.total_changes
+    except Exception:
+        stats["candidates_deleted"] = 0
+    
+    # tag_evolution_log: 保留 60 天
+    cutoff_evolution = now_ts - retention_config.get("tag_evolution_log", 60) * 86400
+    try:
+        conn.execute("DELETE FROM tag_evolution_log WHERE created_at < ?", (cutoff_evolution,))
+        stats["evolution_log_deleted"] = conn.total_changes
+    except Exception:
+        stats["evolution_log_deleted"] = 0
+    
     conn.commit()
     
-    # VACUUM 回收空间
+    # VACUUM 回收空间 + PRAGMA optimize
     try:
         conn.execute("VACUUM")
+        conn.execute("PRAGMA optimize")
     except Exception:
         pass
     
@@ -207,8 +253,12 @@ def main():
     }
     cleanup_stats = cleanup_old_data(db_path, retention_config)
     print(f"[Cleanup] Deleted: entries={cleanup_stats.get('rss_entries_deleted', 0)}, "
+          f"tags={cleanup_stats.get('entry_tags_deleted', 0)}, "
           f"labels={cleanup_stats.get('ai_labels_deleted', 0)}, "
-          f"events={cleanup_stats.get('usage_events_deleted', 0)}")
+          f"events={cleanup_stats.get('usage_events_deleted', 0)}, "
+          f"dedup={cleanup_stats.get('dedup_deleted', 0)}, "
+          f"candidates={cleanup_stats.get('candidates_deleted', 0)}, "
+          f"evolution={cleanup_stats.get('evolution_log_deleted', 0)}")
     
     # 2. 自动调整 Cadence
     cadence_stats = auto_adjust_cadence(db_path)

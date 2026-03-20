@@ -23,9 +23,9 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-16384")      # 16MB page cache (was 64MB, reduced for low-memory servers)
-    conn.execute("PRAGMA temp_store=MEMORY")      # temp tables in memory
-    conn.execute("PRAGMA mmap_size=67108864")     # 64MB memory-mapped I/O (was 256MB, reduced for low-memory servers)
+    conn.execute("PRAGMA cache_size=-8192")       # 8MB page cache (reduced for low-memory servers)
+    conn.execute("PRAGMA temp_store=FILE")        # temp tables on disk (save RAM)
+    conn.execute("PRAGMA mmap_size=0")            # disable mmap (save ~48MB RSS on low-memory servers)
     conn.execute("PRAGMA busy_timeout=5000")      # wait 5s on lock instead of failing
 
     conn.execute(

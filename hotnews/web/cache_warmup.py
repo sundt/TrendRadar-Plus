@@ -241,7 +241,7 @@ class CacheWarmupService:
         tag_whitelist_enabled = bool(rules.get("tag_whitelist_enabled", True))
         tag_whitelist = set(rules.get("tag_whitelist") or [])
 
-        raw_fetch = min(self.config.brief_timeline_limit * 4, 20000)
+        raw_fetch = min(self.config.brief_timeline_limit * 2, 8000)
 
         # AI mode is always enabled
         if drop_zero:
@@ -360,12 +360,12 @@ class CacheWarmupService:
         """预热 Explore Timeline 缓存，返回加载的条目数"""
         min_ts = 946684800
         max_ts = int(time.time()) + 365 * 86400
-        fetch_limit = min(self.config.explore_timeline_limit * 2, 2000)
+        fetch_limit = min(self.config.explore_timeline_limit * 2, 1000)
 
         cur = self.conn.execute(
             """
             SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
-                   e.description, e.content
+                   e.description
             FROM rss_entries e
             JOIN rss_sources s ON e.source_id = s.id
             WHERE e.published_at > 0
@@ -395,7 +395,7 @@ class CacheWarmupService:
 
         items: List[Dict[str, Any]] = []
         seen_titles: Set[str] = set()
-        max_items = 1000
+        max_items = 500
 
         for r in rows:
             if len(items) >= max_items:
@@ -406,7 +406,6 @@ class CacheWarmupService:
             created_at = int(r[3] or 0)
             published_at = int(r[4] or 0)
             description = str(r[5] or "").strip() if len(r) > 5 else ""
-            content = str(r[6] or "").strip() if len(r) > 6 else ""
             sname = source_names.get(sid, "")
 
             if not url.strip():
@@ -422,9 +421,7 @@ class CacheWarmupService:
                 title=title, url=url, created_at=created_at,
             )
             it["published_at"] = published_at
-            body = content or description
-            if body:
-                it["content"] = body
+            # 不缓存 content/description 大字段，节省内存
             items.append(it)
 
         explore_timeline_cache.set(items)

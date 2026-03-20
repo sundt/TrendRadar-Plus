@@ -37,6 +37,8 @@ case "${RUN_MODE:-cron}" in
 "cron")
     # 生成 crontab
     echo "${CRON_SCHEDULE:-*/30 * * * *} cd /app && /usr/local/bin/python -m hotnews" > /tmp/crontab
+    # 每日凌晨 3 点执行数据清理（防止数据库无限增长）
+    echo "0 3 * * * cd /app && /usr/local/bin/python scripts/cleanup_old_data.py >> /tmp/cleanup.log 2>&1" >> /tmp/crontab
     
     echo "📅 生成的crontab内容:"
     cat /tmp/crontab
