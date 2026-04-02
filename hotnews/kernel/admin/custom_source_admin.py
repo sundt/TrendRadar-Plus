@@ -873,8 +873,7 @@ async def detect_custom_source(req: DetectRequest, request: Request, _=Depends(_
                  return {}
 
              # Use dedicated scraper model if set, otherwise fall back to general MB AI model
-             model = (os.environ.get("HOTNEWS_SCRAPER_AI_MODEL") or 
-                      os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus").strip() or "qwen-plus"
+             model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus").strip() or "qwen-plus"
              endpoint = (os.environ.get("HOTNEWS_MB_AI_ENDPOINT") or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
              
              prompt = f"""
@@ -1147,7 +1146,7 @@ async def autofix_custom_source(payload: AutofixRequest, _=Depends(_require_admi
         raise HTTPException(status_code=500, detail="No AI API Key configured")
 
     endpoint = (os.environ.get("HOTNEWS_MB_AI_ENDPOINT") or "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
-    model = (os.environ.get("HOTNEWS_SCRAPER_AI_MODEL") or os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus").strip()
+    model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus").strip()
 
     current_code = payload.script_content if payload.provider_type == 'dynamic_py' else payload.config_json
     
@@ -1319,8 +1318,7 @@ async def ai_debug_conversation(payload: AIDebugRequest, _=Depends(_require_admi
     
     endpoint = (os.environ.get("HOTNEWS_MB_AI_ENDPOINT") or 
                 "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
-    model = (os.environ.get("HOTNEWS_SCRAPER_AI_MODEL") or 
-             os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus").strip()
+    model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus").strip()
     
     # System prompt - conditionally different for JSON API vs HTML
     if is_json_api:
@@ -1704,7 +1702,7 @@ Reply ONLY with the lesson sentence."""
 
         # Call LLM (reuse logic or simple request)
         req_body = {
-            "model": os.environ.get("HOTNEWS_SCRAPER_AI_MODEL", "qwen-plus"),
+            "model": os.environ.get("DASHSCOPE_MODEL", "qwen-plus"),
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_msg}

@@ -48,17 +48,15 @@ def init_defaults():
         print(f"AI Providers already exist ({len(existing_p)}), skipping init.")
 
     # 2. Initialize Models
-    # We migrate current env var HOTNEWS_MB_AI_MODEL if DB is empty
+    # Use $DASHSCOPE_MODEL reference so DB entry always resolves from env var
     existing_m = mgr.get_models()
     if not existing_m:
-        print("Initializing default AI Models...")
-        current_model = os.environ.get("HOTNEWS_MB_AI_MODEL", "qwen-plus").strip()
-        
+        print("Initializing default AI Models (env-var reference)...")
         models = [
             {
                 "id": "default-env-model",
-                "name": current_model,
-                "provider_id": "dashscope", # Default to dashscope as per current logic
+                "name": "$DASHSCOPE_MODEL",  # Resolves to DASHSCOPE_MODEL env var at runtime
+                "provider_id": "dashscope",
                 "priority": 50,
                 "expires": "",
                 "enabled": True

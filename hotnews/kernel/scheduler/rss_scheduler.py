@@ -612,8 +612,8 @@ async def _mb_ai_loop() -> None:
                     }
                 )
 
-            model = (os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus").strip() or "qwen-plus"
-            provider = "model_pool"  # Changed from "dashscope" to indicate using model pool
+            model = (os.environ.get("DASHSCOPE_MODEL") or "qwen-plus").strip() or "qwen-plus"
+            provider = "dashscope"
             labeled_at = _now_ts()
 
             if _mb_ai_global_sem is None:
@@ -682,8 +682,8 @@ async def mb_ai_run_once(batch_size: int = 20, force: bool = False) -> Dict[str,
             }
         )
 
-    model = (os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus").strip() or "qwen-plus"
-    provider = "model_pool"  # Changed from "dashscope" to indicate using model pool
+    model = (os.environ.get("DASHSCOPE_MODEL") or "qwen-plus").strip() or "qwen-plus"
+    provider = "dashscope"
     labeled_at = _now_ts()
 
     try:
@@ -879,7 +879,7 @@ async def mb_ai_test_classification(test_items: List[Dict[str, str]], force_mode
     if not test_items or not isinstance(test_items, list):
         return {"ok": False, "detail": "invalid_test_items"}
     
-    model = force_model or (os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus").strip() or "qwen-plus"
+    model = force_model or (os.environ.get("DASHSCOPE_MODEL") or "qwen-plus").strip() or "qwen-plus"
     
     try:
         if _mb_ai_global_sem is None:
@@ -2168,7 +2168,7 @@ def get_all_tasks_status() -> Dict[str, Any]:
             "task_active": _mb_ai_task is not None and not _mb_ai_task.done(),
             "config": {
                 "enabled": _mb_ai_enabled(),
-                "model": os.environ.get("HOTNEWS_MB_AI_MODEL", "qwen-plus"),
+                "model": os.environ.get("DASHSCOPE_MODEL", "qwen-plus"),
                 "check_interval": os.environ.get("HOTNEWS_MB_AI_CHECK_INTERVAL", "30"),
             }
         },

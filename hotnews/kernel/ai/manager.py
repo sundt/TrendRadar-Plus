@@ -160,33 +160,11 @@ class AIModelManager:
         return candidates
 
     def call_chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """Execute chat completion with rotation logic.
-        Auto-switches to next model if current fails.
+        """Execute chat completion via env-configured model (DASHSCOPE_MODEL).
+        DB-based rotation is disabled; model is always read from environment variables.
         """
-        candidates = self.get_active_rotation_list()
-        
-        # Fallback to env var if no DB config
-        if not candidates:
-            # Fallback legacy logic
-            logger.info("No DB-configured models found, utilizing legacy env implementation...")
-            return self._call_legacy_env_fallback(messages, **kwargs)
-
-        last_error = None
-        
-        for model_conf in candidates:
-            try:
-                provider = model_conf["_provider_config"]
-                logger.info(f"AI Rotation: Trying model '{model_conf['name']}' (Provider: {provider.get('name', provider['id'])})...")
-                
-                resp = self._execute_provider_call(provider, model_conf["name"], messages, **kwargs)
-                return resp
-                
-            except Exception as e:
-                logger.warning(f"AI Rotation: Model '{model_conf['name']}' failed: {str(e)[:200]}. Switching to next...")
-                last_error = e
-                continue
-        
-        raise RuntimeError(f"All AI models failed. Last error: {last_error}")
+        logger.info("AI call: using env-configured model (DASHSCOPE_MODEL)")
+        return self._call_legacy_env_fallback(messages, **kwargs)
 
     def _execute_provider_call(self, provider: Dict[str, Any], model_name: str, messages: List[Dict[str, str]], timeout=60) -> Dict[str, Any]:
         """Generic OpenAI-compatible API call with model-specific handling"""
@@ -360,20 +338,19 @@ class AIModelManager:
         }
 
     def _call_legacy_env_fallback(self, messages, **kwargs):
-        """Original implementation moved here as fallback"""
-        # This implementation mirrors _mb_ai_call_qwen logic roughly but returns raw OpenAI format
-        # Actually it's better to raise error if user expects rotation but config is empty.
-        # But to be safe, we check HOTNEWS_MB_AI_ENABLED env vars.
-        
+        """Call AI using model and key from environment variables.
+        Reads DASHSCOPE_MODEL (primary) as the model name.
+        """
         api_key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
         if not api_key:
-             raise RuntimeError("No AI Config (DB empty) and DASHSCOPE_API_KEY missing.")
-             
-        model = os.environ.get("HOTNEWS_MB_AI_MODEL", "qwen-plus").strip()
+            raise RuntimeError("DASHSCOPE_API_KEY is not set in environment variables.")
+
+        model = os.environ.get("DASHSCOPE_MODEL", "qwen-plus").strip()
         endpoint = os.environ.get("HOTNEWS_MB_AI_ENDPOINT", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions").strip()
-        
+
+        logger.info(f"AI call: model={model}")
         return self._execute_provider_call({
-            "id": "legacy_env",
+            "id": "env",
             "api_key": api_key,
             "base_url": endpoint.replace("/chat/completions", "")
         }, model, messages, **kwargs)

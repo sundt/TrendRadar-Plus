@@ -803,7 +803,7 @@ async def api_admin_morning_brief_ai_stats(request: Request):
             "backlog_unlabeled": backlog_unlabeled,
             "last_labeled_at": last_labeled_at,
             "ai_enabled": (os.environ.get("HOTNEWS_MB_AI_ENABLED") or "0"),
-            "model": (os.environ.get("HOTNEWS_MB_AI_MODEL") or "qwen-plus"),
+            "model": (os.environ.get("DASHSCOPE_MODEL") or "qwen-plus"),
         }
     )
 
