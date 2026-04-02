@@ -146,6 +146,13 @@ class AIModelManager:
             # Enriched model object
             m_copy = m.copy()
             m_copy["_provider_config"] = pmap[pid]
+            # Resolve $VAR in model name (same pattern as api_key resolution)
+            model_name = (m_copy.get("name") or "").strip()
+            if model_name.startswith("$"):
+                env_var = model_name[1:]
+                resolved = os.environ.get(env_var, "").strip()
+                if resolved:
+                    m_copy["name"] = resolved
             candidates.append(m_copy)
 
         # Sort by priority (ASC), then by ID
