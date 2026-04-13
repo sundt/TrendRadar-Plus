@@ -4,7 +4,7 @@
 
 ### 访问页面
 ```
-http://120.77.222.205/api/user/preferences/page
+http://YOUR_SERVER_IP/api/user/preferences/page
 ```
 
 或从首页点击用户头像 → 「我的设置」

@@ -335,14 +335,14 @@ LIMIT 10;
 
 ```bash
 # 需要 admin 权限
-curl -X POST http://120.77.222.205/api/admin/rss/mb-ai-run-once \
+curl -X POST http://YOUR_SERVER_IP/api/admin/rss/mb-ai-run-once \
   -H "Cookie: your_admin_session_cookie"
 ```
 
 ### 通过服务器命令
 
 ```bash
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 cd ~/hotnews
 python3 -c "
 import asyncio
@@ -370,7 +370,7 @@ print(result)
 
 ```bash
 # 查看容器日志
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 docker logs hotnews --tail 100 | grep "mb_ai"
 ```
 

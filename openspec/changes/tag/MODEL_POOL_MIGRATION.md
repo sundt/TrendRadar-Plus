@@ -194,7 +194,7 @@ docker logs hotnews --tail 100 | grep "mb_ai"
 
 ```bash
 # SSH 到服务器
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 
 # 运行一次 AI 标注
 cd ~/hotnews
@@ -229,12 +229,12 @@ OPENAI_API_KEY=your_key_here    # 可选
 
 **查看模型池**:
 ```bash
-curl http://120.77.222.205/api/admin/ai/config
+curl http://YOUR_SERVER_IP/api/admin/ai/config
 ```
 
 **更新模型优先级**:
 ```bash
-curl -X POST http://120.77.222.205/api/admin/ai/models \
+curl -X POST http://YOUR_SERVER_IP/api/admin/ai/models \
   -H "Content-Type: application/json" \
   -d '[
     {"id": "gen_xxx", "priority": 1, "enabled": true},
@@ -257,7 +257,7 @@ git push
 
 ### 2. 验证模型池配置
 ```bash
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 cd ~/hotnews
 sqlite3 output/online.db "SELECT COUNT(*) FROM admin_kv WHERE key = 'ai_models'"
 # 应该返回 1
@@ -349,7 +349,7 @@ SELECT model FROM rss_entry_ai_labels ORDER BY labeled_at DESC LIMIT 1;
 ./deploy-fast.sh
 
 # 检查代码版本
-ssh -p 52222 root@120.77.222.205 "cd ~/hotnews && git log -1 --oneline"
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP "cd ~/hotnews && git log -1 --oneline"
 ```
 
 ### 问题 3: 模型池为空

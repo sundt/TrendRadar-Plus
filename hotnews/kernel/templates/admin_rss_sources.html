@@ -858,58 +858,6 @@
 
         <!-- AI Tab -->
         <div id="settings-tab-ai" class="settings-tab-content">
-
-          <!-- NEW: AI Provider & Model Management Section -->
-          <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
-
-            <!-- Left: Providers -->
-            <div style="flex:1; min-width:280px;">
-              <div class="settings-card no-border" style="height:100%;">
-                <div class="row" style="justify-content:space-between; margin-bottom:10px;">
-                  <h3 style="margin:0;">🏢 供应商 (Providers)</h3>
-                </div>
-                <div id="ai-providers-list" style="font-size:13px;">
-                  <div class="muted">Loading...</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Right: Models -->
-            <div style="flex:2; min-width:380px;">
-              <div class="settings-card no-border" style="height:100%;">
-                <div class="row" style="justify-content:space-between; margin-bottom:10px;">
-                  <h3 style="margin:0;">🤖 模型池 (Model Pool)</h3>
-                  <div>
-                    <button class="btn btn-sm" onclick="testAIRotation()">🔄 Test</button>
-                    <button class="btn btn-sm btn-secondary"
-                      onclick="document.getElementById('ai-batch-import-modal').style.display='flex'">📥 Import</button>
-                  </div>
-                </div>
-                <div id="ai-test-result" style="margin-bottom:8px;"></div>
-                <div class="table-scroll" style="max-height:300px; overflow-y:auto;">
-                  <table style="font-size:12px;">
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Provider</th>
-                        <th>Priority</th>
-                        <th>Expires</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody id="ai-models-tbody">
-                      <tr>
-                        <td colspan="5" class="muted">Loading...</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-          </div>
-          <!-- END: AI Provider & Model Management Section -->
-
           <div class="settings-card no-border">
             <div class="settings-card-body">
               <div class="muted" style="margin-bottom:16px;">
@@ -1844,8 +1792,7 @@
     </script>
     <script src="/static_kernel/js/admin_rss_visual.js">
     </script>
-    <script src="/static_kernel/js/admin_ai_settings.js?v=5">
-    </script>
+
 <script>
       // Initialize tabs
       if (typeof initTabs === 'function') initTabs();

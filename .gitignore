@@ -70,3 +70,7 @@ wechat-article-exporter/
 
 # Auto-generated copy for Docker volume mount
 hotnews/CHANGELOG.md
+.agent/
+.claude/
+.kiro/
+.gemini/

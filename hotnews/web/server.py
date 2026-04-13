@@ -192,7 +192,6 @@ from hotnews.web.timeline_cache import clear_all_timeline_caches, get_cache_stat
 from hotnews.web.morning_brief_routes import router as _morning_brief_router
 from hotnews.web.explore_timeline_routes import router as _explore_timeline_router
 from hotnews.web.category_timeline_routes import router as _category_timeline_router
-from hotnews.web.admin_ai_routes import router as _admin_ai_router
 from hotnews.web.viewer_controls_routes import router as _viewer_controls_router
 from hotnews.web.fetch_metrics_routes import router as _fetch_metrics_router
 from hotnews.web.system_routes import router as _system_router
@@ -518,7 +517,6 @@ app.include_router(_misc_router)
 app.include_router(_morning_brief_router)
 app.include_router(_explore_timeline_router)
 app.include_router(_category_timeline_router)
-app.include_router(_admin_ai_router)
 app.include_router(_viewer_controls_router)
 app.include_router(_fetch_metrics_router)
 app.include_router(_system_router)

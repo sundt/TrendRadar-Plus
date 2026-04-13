@@ -3,7 +3,7 @@
 ## ✅ 初始化完成
 
 **时间**: 2026-01-19  
-**服务器**: 120.77.222.205:52222  
+**服务器**: YOUR_SERVER_IP:YOUR_SSH_PORT  
 **数据库**: ~/hotnews/output/online.db
 
 ## 📊 标签数据统计
@@ -77,7 +77,7 @@
 
 1. **登录 Admin 后台**
    ```
-   http://120.77.222.205/admin/login
+   http://YOUR_SERVER_IP/admin/login
    ```
 
 2. **查看标签管理**（需要先重启服务）
@@ -88,7 +88,7 @@
 
 ```bash
 # SSH 到服务器
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 
 # 查看标签统计
 cd ~/hotnews
@@ -195,18 +195,18 @@ CREATE TABLE rss_entry_tags (
 
 1. **重启服务**（可选，如需使用 API）
    ```bash
-   ssh -p 52222 root@120.77.222.205
+   ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
    cd ~/hotnews/docker
    docker compose restart
    ```
 
 2. **测试 API**
    ```bash
-   curl http://120.77.222.205/api/admin/tags/public/all
+   curl http://YOUR_SERVER_IP/api/admin/tags/public/all
    ```
 
 3. **在 Admin 界面管理标签**
-   - 访问 http://120.77.222.205/admin/login
+   - 访问 http://YOUR_SERVER_IP/admin/login
    - 登录后可以查看和管理标签
 
 4. **配置 RSS 源标签**
@@ -217,5 +217,5 @@ CREATE TABLE rss_entry_tags (
 
 **状态**: ✅ 标签数据已成功初始化  
 **总数**: 62 个标签（12 大类 + 40 主题 + 10 属性）  
-**位置**: 服务器 120.77.222.205 的 ~/hotnews/output/online.db  
+**位置**: 服务器 YOUR_SERVER_IP 的 ~/hotnews/output/online.db  
 **下一步**: 可以在 Admin 后台查看和管理标签

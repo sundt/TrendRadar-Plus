@@ -112,7 +112,7 @@ HotNews 使用多标签分类系统，支持对新闻内容进行精细化分类
 
 ### 当前状态
 ```bash
-# 服务器: 120.77.222.205:52222
+# 服务器: YOUR_SERVER_IP:YOUR_SSH_PORT
 # 数据库: ~/hotnews/output/online.db
 # 标签表: tags (已创建但为空)
 ```
@@ -127,12 +127,12 @@ HotNews 使用多标签分类系统，支持对新闻内容进行精细化分类
 
 1. **访问 Admin 后台**
    ```
-   http://120.77.222.205/admin/login
+   http://YOUR_SERVER_IP/admin/login
    ```
 
 2. **登录后调用初始化 API**
    ```bash
-   curl -X POST http://120.77.222.205/api/admin/tags/init \
+   curl -X POST http://YOUR_SERVER_IP/api/admin/tags/init \
      -H "Cookie: your_admin_session_cookie"
    ```
 
@@ -140,7 +140,7 @@ HotNews 使用多标签分类系统，支持对新闻内容进行精细化分类
 
 ```bash
 # SSH 到服务器
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 
 # 进入项目目录
 cd ~/hotnews
@@ -157,7 +157,7 @@ init_tags(Path.cwd())
 
 ```bash
 # SSH 到服务器
-ssh -p 52222 root@120.77.222.205
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
 
 # 进入容器
 docker exec -it hotnews bash
@@ -176,12 +176,12 @@ init_tags(Path('/app'))
 
 **登录页面**：
 ```
-http://120.77.222.205/admin/login
+http://YOUR_SERVER_IP/admin/login
 ```
 
 **RSS 源管理**：
 ```
-http://120.77.222.205/admin/rss-sources
+http://YOUR_SERVER_IP/admin/rss-sources
 ```
 
 ### 标签管理 API
@@ -269,7 +269,7 @@ GET /api/admin/tags/public/all
 
 ```bash
 # 在服务器上执行
-ssh -p 52222 root@120.77.222.205 "cd ~/hotnews && sqlite3 output/online.db 'SELECT type, COUNT(*) FROM tags WHERE enabled = 1 GROUP BY type'"
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP "cd ~/hotnews && sqlite3 output/online.db 'SELECT type, COUNT(*) FROM tags WHERE enabled = 1 GROUP BY type'"
 ```
 
 预期输出：
@@ -283,17 +283,17 @@ topic|55
 
 ```bash
 # 查看所有科技类主题
-ssh -p 52222 root@120.77.222.205 "cd ~/hotnews && sqlite3 output/online.db \"SELECT id, name, icon FROM tags WHERE type='topic' AND parent_id='tech' ORDER BY sort_order\""
+ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP "cd ~/hotnews && sqlite3 output/online.db \"SELECT id, name, icon FROM tags WHERE type='topic' AND parent_id='tech' ORDER BY sort_order\""
 ```
 
 ### 通过 API 查看
 
 ```bash
 # 获取所有标签
-curl http://120.77.222.205/api/admin/tags/public/all | jq .
+curl http://YOUR_SERVER_IP/api/admin/tags/public/all | jq .
 
 # 获取标签类型统计
-curl http://120.77.222.205/api/admin/tags/types | jq .
+curl http://YOUR_SERVER_IP/api/admin/tags/types | jq .
 ```
 
 ## 📝 使用场景
@@ -318,7 +318,7 @@ curl http://120.77.222.205/api/admin/tags/types | jq .
 
 1. **初始化标签数据**
    ```bash
-   ssh -p 52222 root@120.77.222.205
+   ssh -p YOUR_SSH_PORT root@YOUR_SERVER_IP
    cd ~/hotnews
    python -c "from pathlib import Path; from hotnews.kernel.admin.tag_init import init_tags; init_tags(Path.cwd())"
    ```
@@ -329,17 +329,17 @@ curl http://120.77.222.205/api/admin/tags/types | jq .
    ```
 
 3. **访问 Admin 界面**
-   - 打开浏览器访问 http://120.77.222.205/admin/login
+   - 打开浏览器访问 http://YOUR_SERVER_IP/admin/login
    - 登录后可以管理标签
 
 4. **测试 API**
    ```bash
-   curl http://120.77.222.205/api/admin/tags/public/all
+   curl http://YOUR_SERVER_IP/api/admin/tags/public/all
    ```
 
 ---
 
 **文档创建时间**: 2026-01-19  
-**服务器**: 120.77.222.205:52222  
+**服务器**: YOUR_SERVER_IP:YOUR_SSH_PORT  
 **数据库**: ~/hotnews/output/online.db  
 **当前状态**: 标签表已创建，等待初始化数据

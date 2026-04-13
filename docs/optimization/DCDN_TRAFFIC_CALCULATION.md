@@ -34,7 +34,7 @@
 
 ```bash
 # 服务器日志统计
-ssh root@120.77.222.205 -p 52222
+ssh root@YOUR_SERVER_IP -p YOUR_SSH_PORT
 docker exec hotnews cat /var/log/nginx/access.log | wc -l
 
 # 缓存统计 API
