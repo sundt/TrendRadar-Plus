@@ -352,10 +352,15 @@ def main():
         "dashscope": args.dashscope_key or os.environ.get("DASHSCOPE_API_KEY", ""),
     }
     
-    # 如果没有提供 key，尝试从配置文件读取
+    # 如果没有提供 key，尝试从 docker/.env 读取
     if not api_keys["hunyuan"]:
-        # 默认混元 key
-        api_keys["hunyuan"] = "sk-1Esl0ltKDX3vuU8XXS7bEuwEbEP8b9Kydyg3T9P3y1aRvoGN"
+        env_path = Path(__file__).parent.parent / "docker" / ".env"
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith("HUNYUAN_API_KEY="):
+                        api_keys["hunyuan"] = line.split("=", 1)[1].strip()
+                        break
     
     if not api_keys["dashscope"]:
         # 尝试从 docker/.env 读取
