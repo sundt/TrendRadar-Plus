@@ -18,6 +18,7 @@ from hotnews.kernel.providers.runner import run_provider_ingestion_once, build_d
 from hotnews.web.rss_proxy import rss_proxy_fetch_warmup, rss_proxy_fetch_warmup_async
 from hotnews.kernel.ai.manager import AIModelManager
 from hotnews.kernel.services.tag_discovery import TagDiscoveryService
+from hotnews.kernel.services.rule_classifier import classify_batch
 
 
 _project_root = None
@@ -44,6 +45,10 @@ _mb_ai_global_sem: Optional[asyncio.Semaphore] = None
 _mb_ai_budget_lock = Lock()
 _mb_ai_budget_window_start: float = 0.0
 _mb_ai_budget_count: int = 0
+
+# Rule-based classification (fallback when AI is disabled)
+_rule_label_task: Optional[asyncio.Task] = None
+_rule_label_running: bool = False
 
 
 # RSS Source AI Classification scheduled task
@@ -648,6 +653,167 @@ async def _mb_ai_loop() -> None:
         await asyncio.sleep(1)
 
     logger.info("mb_ai.stop")
+
+
+# =============================================================================
+# Rule-based Classification Loop (替代 AI LLM 调用)
+# =============================================================================
+
+def _rule_label_select_unlabeled(conn, limit: int) -> List[Dict[str, Any]]:
+    """Select unlabeled entries for rule-based classification.
+    Reuses same logic as AI labeler to find entries without labels.
+    """
+    lim = max(1, min(200, int(limit or 50)))
+    sql = """
+        SELECT e.source_id, e.dedup_key, e.url, e.title,
+               COALESCE(s.category, '') as source_category
+        FROM rss_entries e
+        LEFT JOIN rss_sources s ON e.source_id = s.id
+        LEFT JOIN rss_entry_ai_labels l
+          ON l.source_id = e.source_id AND l.dedup_key = e.dedup_key
+        WHERE l.id IS NULL
+        ORDER BY e.published_at DESC, e.id DESC
+        LIMIT ?
+    """
+    cur = conn.execute(sql, (lim,))
+    rows = cur.fetchall() or []
+    out = []
+    for r in rows:
+        sid = str(r[0] or "").strip()
+        dk = str(r[1] or "").strip()
+        url = str(r[2] or "").strip()
+        title = str(r[3] or "")
+        cat = str(r[4] or "").strip()
+        if sid and dk and url:
+            out.append({
+                "source_id": sid, "dedup_key": dk,
+                "url": url, "title": title,
+                "source_category": cat,
+            })
+    return out
+
+
+def _rule_label_store(conn, results: List[Dict[str, Any]], labeled_at: int) -> None:
+    """Store rule-based classification results in the same tables as AI labels."""
+    label_rows = []
+    tag_rows = []
+
+    for r in results:
+        sid = str(r.get("source_id") or "").strip()
+        dk = str(r.get("dedup_key") or "")[:500]
+        url = str(r.get("url") or "")[:2000]
+        domain = str(r.get("domain") or "")[:255]
+        title = str(r.get("title") or "")[:500]
+        category = str(r.get("category") or "other")[:40]
+        action = str(r.get("action") or "exclude")[:10]
+        score = max(0, min(100, int(r.get("score") or 0)))
+        confidence = max(0.0, min(1.0, float(r.get("confidence") or 0.0)))
+        reason = str(r.get("reason") or "")[:300]
+
+        label_rows.append((
+            sid, dk, url, domain, title,
+            category, action, score, confidence, reason,
+            "rule_engine",   # provider
+            "rule_v1",       # model
+            "rule_v1",       # prompt_version
+            labeled_at,
+            "",              # error
+        ))
+
+        # Add category as tag
+        if category:
+            tag_rows.append((sid, dk, category, confidence, "rule", labeled_at))
+
+        # Add topics as tags
+        for topic in (r.get("topics") or []):
+            if topic:
+                tag_rows.append((sid, dk, topic, confidence, "rule", labeled_at))
+
+        # Add attributes as tags
+        for attr in (r.get("attributes") or []):
+            if attr:
+                tag_rows.append((sid, dk, attr, confidence, "rule", labeled_at))
+
+        # Add region as tag
+        region = str(r.get("region") or "global").strip().lower()
+        if region in ("cn", "us", "global"):
+            tag_rows.append((sid, dk, f"region:{region}", confidence, "rule", labeled_at))
+
+    if not label_rows:
+        return
+
+    conn.executemany(
+        """
+        INSERT OR IGNORE INTO rss_entry_ai_labels(
+            source_id, dedup_key, url, domain, title,
+            category, action, score, confidence, reason,
+            provider, model, prompt_version, labeled_at, error
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        label_rows,
+    )
+
+    if tag_rows:
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO rss_entry_tags(
+                source_id, dedup_key, tag_id, confidence, source, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            tag_rows,
+        )
+
+
+async def _rule_label_loop() -> None:
+    """Rule-based classification loop — runs when AI is disabled.
+    
+    Processes unlabeled entries using keyword/domain/source rules
+    instead of LLM API calls. Zero cost, <1ms per entry.
+    """
+    global _rule_label_running
+    logger.info("rule_label.start — rule-based classifier active (AI disabled)")
+
+    while _rule_label_running:
+        try:
+            conn = _get_online_db_conn()
+            entries = _rule_label_select_unlabeled(conn, 100)
+
+            if not entries:
+                await asyncio.sleep(30)
+                continue
+
+            # Build source_category mapping
+            source_categories = {
+                e["source_id"]: e.get("source_category", "")
+                for e in entries
+            }
+
+            # Classify using rules
+            results = classify_batch(entries, source_categories)
+            labeled_at = _now_ts()
+
+            try:
+                _rule_label_store(conn, results, labeled_at)
+                conn.commit()
+                inc = sum(1 for r in results if r.get("action") == "include")
+                exc = len(results) - inc
+                logger.info(
+                    "rule_label.batch ok size=%s include=%s exclude=%s",
+                    len(results), inc, exc,
+                )
+            except Exception as e:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                logger.warning("rule_label.store fail error=%s", str(e))
+
+        except Exception as e:
+            logger.warning("rule_label.loop error=%s", str(e))
+
+        await asyncio.sleep(2)
+
+    logger.info("rule_label.stop")
 
 
 async def mb_ai_run_once(batch_size: int = 20, force: bool = False) -> Dict[str, Any]:
@@ -2062,13 +2228,20 @@ async def start(app, project_root) -> None:
     if _rss_warmup_producer_task is None or _rss_warmup_producer_task.done():
         _rss_warmup_producer_task = asyncio.create_task(_rss_warmup_producer_loop())
 
-    # Morning Brief AI labeler (DashScope/Qwen)
+    # Morning Brief AI labeler (DashScope/Qwen) OR Rule-based fallback
+    global _rule_label_task, _rule_label_running
     if _mb_ai_enabled():
         if _mb_ai_global_sem is None:
             _mb_ai_global_sem = asyncio.Semaphore(1)
         _mb_ai_running = True
         if _mb_ai_task is None or _mb_ai_task.done():
             _mb_ai_task = asyncio.create_task(_mb_ai_loop())
+    else:
+        # AI disabled → start rule-based classification loop
+        _rule_label_running = True
+        if _rule_label_task is None or _rule_label_task.done():
+            _rule_label_task = asyncio.create_task(_rule_label_loop())
+            logger.info("rule_label.enabled (AI disabled, using rule-based classifier)")
     
     # RSS Source AI Classification (Daily)
     if _rss_source_ai_enabled():
@@ -2096,12 +2269,14 @@ async def stop() -> None:
     global _rss_source_ai_running
     global _custom_ingest_running
     global _search_vector_running
+    global _rule_label_running
 
     _rss_warmup_running = False
     _mb_ai_running = False
     _rss_source_ai_running = False
     _custom_ingest_running = False
     _search_vector_running = False
+    _rule_label_running = False
 
     logger.info("rss_warmup.stop")
 
@@ -2120,6 +2295,12 @@ async def stop() -> None:
     try:
         if _mb_ai_task is not None:
             _mb_ai_task.cancel()
+    except Exception:
+        pass
+
+    try:
+        if _rule_label_task is not None:
+            _rule_label_task.cancel()
     except Exception:
         pass
 
