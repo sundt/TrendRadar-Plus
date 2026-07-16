@@ -12,7 +12,8 @@ import json
 import re
 import time
 import hashlib
-from typing import Optional, List
+import sqlite3
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Request, HTTPException, Body, Query, Response
 
@@ -98,8 +99,282 @@ def _deduplicate_news_by_title(news_rows: list, limit: int) -> list:
     return news_items
 
 
+def _prefetch_tag_only(
+    online_conn,
+    tag_ids: list,
+    limit: int,
+    cache_key: dict,
+    tag_follow_times: dict,
+    min_timestamp: int,
+    max_timestamp: int,
+) -> None:
+    """Background prefetch helper for my-tags: pulls next window of tag-only groups
+    and writes them to my_tags_cache under cache_key. Caller is responsible for
+    ensuring tag_ids are all "tag" type entries from the next slice.
+
+    Uses the same SQLite connection as the main request (sqlite3 serializes
+    internally). Errors are caught by the caller's thread wrapper.
+    """
+    if not tag_ids:
+        return
+    from hotnews.web.timeline_cache import my_tags_cache
+
+    # Pull tag details for header info
+    placeholders = ",".join(["?"] * len(tag_ids))
+    tag_cur = online_conn.execute(
+        f"SELECT id, name, name_en, type, icon, color FROM tags WHERE id IN ({placeholders})",
+        tuple(tag_ids)
+    )
+    tag_details = {}
+    for t in tag_cur.fetchall() or []:
+        tag_details[t[0]] = {
+            "id": t[0], "name": t[1], "name_en": t[2],
+            "type": t[3], "icon": t[4], "color": t[5]
+        }
+
+    result = []
+    for tag_id in tag_ids:
+        if tag_id not in tag_details:
+            continue
+        news_cur = online_conn.execute(
+            """
+            WITH recent_tag AS (
+                SELECT source_id, dedup_key
+                FROM rss_entry_tags
+                WHERE tag_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1000
+            )
+            SELECT e.id, e.title, e.url, e.published_at, e.source_id
+            FROM recent_tag r
+            JOIN rss_entries e ON e.source_id = r.source_id AND e.dedup_key = r.dedup_key
+            WHERE e.published_at > 0
+              AND e.published_at >= ?
+              AND e.published_at <= ?
+            ORDER BY e.published_at DESC
+            LIMIT ?
+            """,
+            (tag_id, min_timestamp, max_timestamp, limit * 2)
+        )
+        valid_rows = []
+        for row in news_cur.fetchall() or []:
+            published_at = row[3]
+            if min_timestamp <= published_at <= max_timestamp:
+                valid_rows.append(row)
+        news_items = _deduplicate_news_by_title(valid_rows, limit)
+        result.append({
+            "tag": tag_details[tag_id],
+            "news": news_items,
+            "count": len(news_items),
+            "item_type": "tag",
+            "followed_at": tag_follow_times.get(tag_id, 0),
+        })
+
+    my_tags_cache.set(result, config=cache_key)
+
+
 def _now_ts() -> int:
     return int(time.time())
+
+
+def _date_to_ts(date_text: str) -> int:
+    try:
+        return int(time.mktime(time.strptime(str(date_text or ""), "%Y-%m-%d")))
+    except Exception:
+        return 0
+
+
+# Module-level per-keyword result cache. FTS db is 297MB on a 2GB server,
+# easily evicted from OS page cache, so cold LIKE scans take 4-5s per keyword.
+# Cache the post-dedup result list across users and across 5min bucket flips.
+_KEYWORD_FTS_CACHE: Dict[str, tuple] = {}  # key=(kw, limit) -> (timestamp, items)
+_KEYWORD_FTS_CACHE_TTL = 900  # 15 minutes
+_KEYWORD_FTS_CACHE_MAX = 200
+
+
+def _search_keyword_news_fts(request: Request, online_conn, keyword: str, limit: int) -> Optional[list]:
+    """Search keyword news through the prebuilt FTS index.
+
+    Returns None when the FTS DB is unavailable so callers can fall back to
+    SQLite rss_entries. Returns [] when the FTS DB is available but no item
+    matches, avoiding a slow full-table LIKE scan for cold keywords.
+    """
+    kw = str(keyword or "").strip()
+    if not kw:
+        return []
+
+    # Check per-keyword cache first (saves 0.05-5s per cold call)
+    cache_key = (kw, limit)
+    cached = _KEYWORD_FTS_CACHE.get(cache_key)
+    if cached and (time.time() - cached[0]) < _KEYWORD_FTS_CACHE_TTL:
+        print(f"[fts-kw] kw={kw[:30]!r} cache_hit age={time.time() - cached[0]:.0f}s", flush=True)
+        return list(cached[1])  # return copy to avoid caller mutation
+
+    db_path = request.app.state.project_root / "output" / "search_indexes" / "fts_index.db"
+    if not db_path.exists():
+        return None
+
+    rows = []
+    # target_rows 给 dedup 留缓冲。之前是 limit*20=400，太大导致 LIKE 慢且 hydration 巨大。
+    # limit*5=100 已经能覆盖 dedup（相似标题）的常见去重比例。
+    target_rows = max(limit * 5, 60)
+    # LIKE fallback 只在 MATCH 命中很少时才跑。FTS db 在 2GB 服务器上常被 OS page cache 挤出，
+    # LIKE 冷查询会扫 297MB 数据 → 4-5s/keyword。把阈值降到 5：MATCH 命中 5 条就够前端展示，
+    # 不再为可能的"未捕获的子串"付出全表扫的代价。如需 100% 召回可后续上 bigram 索引。
+    like_threshold = max(limit // 4, 5)
+    conn = None
+    _t_fts_match = 0.0
+    _t_fts_like = 0.0
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cur = conn.cursor()
+
+        # Prefer MATCH so FTS can use its index. Some Chinese compound terms
+        # may only partially match with unicode61 tokenization, so fill the
+        # remainder from LIKE on the smaller FTS table instead of rss_entries.
+        # 2-char Chinese keywords (like "美团") work fine with MATCH on unicode61;
+        # the previous `>= 3` cutoff forced them through 4-5s LIKE scans.
+        if len(kw) >= 2:
+            try:
+                _t_m0 = time.perf_counter()
+                cur.execute(
+                    """
+                    SELECT title, url, platform_id, date
+                    FROM news_fts
+                    WHERE title MATCH ?
+                    ORDER BY date DESC
+                    LIMIT ?
+                    """,
+                    (kw, target_rows),
+                )
+                rows = cur.fetchall() or []
+                _t_fts_match = time.perf_counter() - _t_m0
+            except Exception:
+                rows = []
+
+        # 只有 MATCH 没拿到足够候选时才回退到 LIKE（之前是 < target_rows，几乎总是跑）
+        if len(rows) < like_threshold:
+            _t_l0 = time.perf_counter()
+            cur.execute(
+                """
+                SELECT title, url, platform_id, date
+                FROM news_fts
+                WHERE title LIKE ?
+                ORDER BY date DESC
+                LIMIT ?
+                """,
+                (f"%{kw}%", target_rows),
+            )
+            seen_urls = {str(row[1] or "") for row in rows}
+            rows.extend([row for row in (cur.fetchall() or []) if str(row[1] or "") not in seen_urls])
+            _t_fts_like = time.perf_counter() - _t_l0
+    except Exception:
+        return None
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    fts_by_url = {}
+    for title, url, platform_id, date_text in rows:
+        title = str(title or "").strip()
+        url = str(url or "").strip()
+        if not title or not url:
+            continue
+        if url not in fts_by_url:
+            fts_by_url[url] = (title, url, platform_id, date_text)
+
+    if not fts_by_url:
+        return []
+
+    hydrated_by_url = {}
+    urls = list(fts_by_url.keys())
+    _t_h0 = time.perf_counter()
+    try:
+        for start in range(0, len(urls), 400):
+            batch = urls[start:start + 400]
+            placeholders = ",".join(["?"] * len(batch))
+            rss_cur = online_conn.execute(
+                f"""
+                SELECT id, title, url, published_at, source_id, created_at
+                FROM rss_entries
+                WHERE url IN ({placeholders})
+                """,
+                tuple(batch),
+            )
+            for row in rss_cur.fetchall() or []:
+                url = str(row[2] or "")
+                prev = hydrated_by_url.get(url)
+                current_sort = (int(row[3] or 0), int(row[5] or 0), int(row[0] or 0))
+                prev_sort = (int(prev[3] or 0), int(prev[5] or 0), int(prev[0] or 0)) if prev else None
+                if prev is None or current_sort > prev_sort:
+                    hydrated_by_url[url] = row
+    except Exception:
+        hydrated_by_url = {}
+    _t_fts_hydrate = time.perf_counter() - _t_h0
+    print(
+        f"[fts-kw] kw={kw[:30]!r} rows={len(rows)} urls={len(urls)} "
+        f"match={_t_fts_match:.2f}s like={_t_fts_like:.2f}s hydrate={_t_fts_hydrate:.2f}s",
+        flush=True,
+    )
+
+    candidates = []
+    for url, (title, _url, platform_id, date_text) in fts_by_url.items():
+        hydrated = hydrated_by_url.get(url)
+        if hydrated:
+            candidates.append({
+                "id": hydrated[0],
+                "title": str(hydrated[1] or "").strip(),
+                "url": str(hydrated[2] or "").strip(),
+                "published_at": int(hydrated[3] or 0),
+                "source_id": str(hydrated[4] or "").strip(),
+                "_created_at": int(hydrated[5] or 0),
+            })
+            continue
+
+        item_id = hashlib.md5(url.encode("utf-8", errors="ignore")).hexdigest()
+        source_id = str(platform_id or "").strip()
+        if source_id.startswith("rss-"):
+            source_id = source_id[4:]
+        # Hydration via rss_entries failed (row deleted or never inserted).
+        # 不再用 FTS 的 date_text 当 published_at —— FTS 历史上把所有条目的 date
+        # 都塞成了构建当天（daily_aggregator 处理 INTEGER published_at 的 bug），
+        # 信它会让"我的关注"显示"22 小时前"。published_at=0 让前端 formatNewsDate
+        # 返回空串，卡片不显示时间徽章，比显示假时间好。
+        candidates.append({
+            "id": item_id,
+            "title": title,
+            "url": url,
+            "published_at": 0,
+            "source_id": source_id,
+            "_created_at": 0,
+        })
+
+    candidates.sort(key=lambda item: (item.get("published_at") or 0, item.get("_created_at") or 0), reverse=True)
+
+    seen_titles = []
+    items = []
+    for item in candidates:
+        title = item.get("title") or ""
+        if not title or not item.get("url"):
+            continue
+        if any(_is_similar_title(title, seen) for seen in seen_titles):
+            continue
+        seen_titles.append(title)
+        item.pop("_created_at", None)
+        items.append(item)
+        if len(items) >= limit:
+            break
+
+    # Write through to per-keyword cache. Bound size with simple FIFO eviction.
+    if len(_KEYWORD_FTS_CACHE) >= _KEYWORD_FTS_CACHE_MAX:
+        oldest_key = min(_KEYWORD_FTS_CACHE.items(), key=lambda kv: kv[1][0])[0]
+        _KEYWORD_FTS_CACHE.pop(oldest_key, None)
+    _KEYWORD_FTS_CACHE[cache_key] = (time.time(), list(items))
+
+    return items
 
 
 def _get_user_db_conn(request: Request):
@@ -617,25 +892,38 @@ def _compute_new_tags(online_conn, now: int) -> list:
 # ==================== Followed News ====================
 
 @router.get("/followed-news")
-async def get_followed_news(
+def get_followed_news(
     request: Request,
     response: Response,
     limit: int = Query(50, ge=1, le=100),
+    group_limit: int = Query(0, ge=0, le=50),
+    group_offset: int = Query(0, ge=0),
     source_type: Optional[str] = Query(None, description="Filter by source type: tag, source, keyword, wechat, or all")
 ):
     """Get news matching user's followed tags, subscribed sources, and keywords, grouped by tag/source/keyword.
     
     Args:
         limit: Maximum number of news items per group
+        group_limit: Maximum number of groups to return; 0 returns all groups
+        group_offset: Number of groups to skip when group_limit > 0
         source_type: Filter by source type (tag, source, keyword, wechat, or all/None for all types)
     """
     # Set no-cache headers to prevent CDN/browser caching of user-specific data
     for key, value in NO_CACHE_HEADERS.items():
         response.headers[key] = value
-    
+
+    import time as _entry_time
+    _t_entry = _entry_time.perf_counter()
     user = _get_current_user(request)
+    _t_user = _entry_time.perf_counter()
     conn = _get_user_db_conn(request)
     online_conn = _get_online_db_conn(request)
+    _t_conn = _entry_time.perf_counter()
+    print(
+        f"[my-tags-entry] user={(user or {}).get('id') if user else None} "
+        f"get_user={_t_user - _t_entry:.2f}s get_conn={_t_conn - _t_user:.2f}s",
+        flush=True,
+    )
     
     # Normalize source_type filter
     filter_type = (source_type or "").strip().lower()
@@ -695,20 +983,112 @@ async def get_followed_news(
     
     if not followed_tag_ids and not subscribed_sources and not user_keywords and not wechat_subscriptions:
         return {"ok": True, "tags": [], "message": "No followed tags, subscribed sources, keywords, or WeChat subscriptions", "filter": filter_type}
-    
-    # Create cache key based on user_id, followed tags, subscribed sources, keywords, wechat, and filter
+
+    # Get stored order before group pagination so the first page matches the
+    # visible order users configured previously.
+    order_cur = conn.execute(
+        "SELECT preference FROM user_tag_settings WHERE user_id = ? AND tag_id = '__tag_order__'",
+        (user["id"],)
+    )
+    order_row = order_cur.fetchone()
+    tag_order = order_row[0].split(",") if order_row and order_row[0] else []
+
+    # 用户右键"置顶/置底"会把整个 my-tags 卡片序列写到 __tag_order__；
+    # 这里要把"出现在 tag_order 里的"item 放到 pinned 桶（按 tag_order 索引排序），
+    # 其余 fallback 到原来的 followed_at 排序。否则后端永远按 followed_at 重排，
+    # 用户的置顶在刷新后立刻被冲掉。
+    def _composite_id(item_type: str, item_id) -> str:
+        if item_type == "keyword":
+            return f"keyword_{item_id}".lower()
+        if item_type == "wechat":
+            return f"mp-{item_id}".lower()
+        return str(item_id).lower()
+
+    def _group_sort_key(item):
+        item_type = item["type"]
+        item_id = item["id"]
+        followed_at = item.get("followed_at", 0) or 0
+        cid = _composite_id(item_type, item_id)
+        try:
+            pin_idx = tag_order.index(cid)
+            return (0, pin_idx, 0)  # pinned 桶
+        except ValueError:
+            pass
+        # 未 pin：按 type 桶 + followed_at 兜底
+        type_bucket = {"tag": 0, "keyword": 1, "wechat": 2}.get(item_type, 3)
+        return (1, -followed_at, type_bucket)
+
+    all_groups = []
+    for tag_id in followed_tag_ids:
+        all_groups.append({"type": "tag", "id": tag_id, "followed_at": tag_follow_times.get(tag_id, 0)})
+    for source_id, display_name in subscribed_sources:
+        all_groups.append({"type": "source", "id": source_id, "display_name": display_name, "followed_at": source_follow_times.get(source_id, 0)})
+    for kw_id, keyword, kw_type, priority in user_keywords:
+        all_groups.append({"type": "keyword", "id": kw_id, "keyword": keyword, "keyword_type": kw_type, "priority": priority, "followed_at": keyword_follow_times.get(kw_id, 0)})
+    for fakeid, nickname in wechat_subscriptions:
+        all_groups.append({"type": "wechat", "id": fakeid, "nickname": nickname, "followed_at": wechat_follow_times.get(fakeid, 0)})
+
+    all_groups.sort(key=_group_sort_key)
+    total_groups = len(all_groups)
+
+    # 预取窗口：第一次请求（group_offset=0）只查首屏 group_limit 个 group 立刻返回，
+    # 然后异步起一个 background thread 把 offset=group_limit 的下一批查好塞 cache，
+    # 用户右滑时直接命中。这样首屏不阻塞（之前翻倍把 5 个 group 变 10 个让冷查询从 3s 变 7s）。
+    prefetch_enabled = (group_limit > 0 and group_offset == 0)
+
+    if group_limit > 0:
+        selected_groups = all_groups[group_offset:group_offset + group_limit]
+    else:
+        selected_groups = all_groups
+
+    # 当前请求实际要返回的切片（cache key 必须基于这个切片，否则后续请求拿不同切片算出来的 key 命不中）
+    current_slice = all_groups[group_offset:group_offset + group_limit] if group_limit > 0 else all_groups
+    # 预取阶段：next_slice 对应 offset=group_limit 的窗口（用于后台异步任务里独立查询并写 cache）
+    next_slice = all_groups[group_limit:group_limit * 2] if prefetch_enabled else []
+
+    selected_tag_ids = {g["id"] for g in selected_groups if g["type"] == "tag"}
+    selected_source_ids = {g["id"] for g in selected_groups if g["type"] == "source"}
+    selected_keyword_ids = {g["id"] for g in selected_groups if g["type"] == "keyword"}
+    selected_wechat_ids = {g["id"] for g in selected_groups if g["type"] == "wechat"}
+
+    followed_tag_ids = [tag_id for tag_id in followed_tag_ids if tag_id in selected_tag_ids]
+    subscribed_sources = [(source_id, display_name) for source_id, display_name in subscribed_sources if source_id in selected_source_ids]
+    user_keywords = [(kw_id, keyword, kw_type, priority) for kw_id, keyword, kw_type, priority in user_keywords if kw_id in selected_keyword_ids]
+    wechat_subscriptions = [(fakeid, nickname) for fakeid, nickname in wechat_subscriptions if fakeid in selected_wechat_ids]
+
+    # 缓存版本号桶：每 300 秒一个桶。这样在 5 分钟内即便 worker 持续插入 rss_entries，
+    # 同一用户也能复用缓存，而不是每次插入都强制冷查询（之前用最新 entry id 做版本，
+    # 命中率近乎 0，所有用户每次访问都跑完整 N+1 查询）。
+    import time as _time_mod
+    rss_data_version = str(int(_time_mod.time()) // 300)
+
+    # Create cache key based on user config, page, and RSS data version. This
+    # keeps repeat opens fast, but invalidates as soon as crawler inserts news.
     from hotnews.web.timeline_cache import my_tags_cache
-    
-    cache_key_data = {
-        "user_id": user["id"],
-        "followed_tags": sorted(followed_tag_ids),
-        "subscribed_sources": sorted([s[0] for s in subscribed_sources]),
-        "keywords": sorted([kw[1] for kw in user_keywords]),
-        "wechat_subs": sorted([w[0] for w in wechat_subscriptions]),
-        "limit": limit,
-        "filter": filter_type,
-    }
-    
+
+    def _build_cache_key(g_offset: int, g_limit: int, groups_subset: List[Dict[str, Any]]) -> Dict[str, Any]:
+        # 用 groups_subset 算 followed_tags 等，是因为后续请求（带不同 offset）会基于自己的切片重新算这些列表，
+        # 必须保证存入和查询时算出来的 key 一致。
+        subset_tag_ids = sorted([g["id"] for g in groups_subset if g["type"] == "tag"])
+        subset_source_ids = sorted([g["id"] for g in groups_subset if g["type"] == "source"])
+        subset_keyword_ids = sorted([g["id"] for g in groups_subset if g["type"] == "keyword"])
+        subset_wechat_ids = sorted([g["id"] for g in groups_subset if g["type"] == "wechat"])
+        # 关键词的 cache key 历史上用的是 keyword 文本，这里 fallback 到 id 也能保证唯一
+        return {
+            "user_id": user["id"],
+            "followed_tags": subset_tag_ids,
+            "subscribed_sources": subset_source_ids,
+            "keywords": subset_keyword_ids,
+            "wechat_subs": subset_wechat_ids,
+            "limit": limit,
+            "group_limit": g_limit,
+            "group_offset": g_offset,
+            "filter": filter_type,
+            "rss_data_version": rss_data_version,
+        }
+
+    cache_key_data = _build_cache_key(group_offset, group_limit, current_slice)
+
     # Try to get from cache
     cached_result = my_tags_cache.get(config=cache_key_data)
     if cached_result is not None:
@@ -718,13 +1098,29 @@ async def get_followed_news(
             "cached": True,
             "cache_age": round(my_tags_cache.age_seconds, 1),
             "filter": filter_type,
+            "total": total_groups,
+            "group_limit": group_limit,
+            "group_offset": group_offset,
         }
     
     # Cache miss - fetch from database
     result = []
-    
-    # Define valid timestamp range: 2000-01-01 to current time + 7 days
     import time as time_module
+    _t_start = time_module.perf_counter()
+    _t_tag_sql = 0.0
+    _t_tag_dedup = 0.0
+    _tag_count = 0
+    _t_src_sql = 0.0
+    _t_src_dedup = 0.0
+    _src_count = 0
+    _t_kw_sql = 0.0
+    _t_kw_dedup = 0.0
+    _kw_count = 0
+    _kw_fts_count = 0
+    _t_wc_sql = 0.0
+    _wc_count = 0
+
+    # Define valid timestamp range: 2000-01-01 to current time + 7 days
     MIN_TIMESTAMP = 946684800  # 2000-01-01 00:00:00 UTC
     MAX_TIMESTAMP = int(time_module.time()) + (7 * 24 * 60 * 60)  # Current + 7 days
     
@@ -746,16 +1142,26 @@ async def get_followed_news(
         for tag_id in followed_tag_ids:
             if tag_id not in tag_details:
                 continue
-            
+
             # Query news matching this tag using rss_entry_tags table
             # Fetch more results for deduplication
+            # 用 CTE 先按 created_at DESC 拉该 tag 最近 1000 个条目（命中 idx_entry_tags_tag_created），
+            # 再 join rss_entries 拿详情。这样 SQLite 不会先把这个 tag 的全部 N 万条目都展开再排序。
+            # 热门 tag（如 region:global）能从 30 秒降到 < 300ms。
+            _t_q0 = time_module.perf_counter()
             news_cur = online_conn.execute(
                 """
-                SELECT DISTINCT e.id, e.title, e.url, e.published_at, e.source_id
-                FROM rss_entries e
-                JOIN rss_entry_tags t ON e.source_id = t.source_id AND e.dedup_key = t.dedup_key
-                WHERE t.tag_id = ?
-                  AND e.published_at > 0
+                WITH recent_tag AS (
+                    SELECT source_id, dedup_key
+                    FROM rss_entry_tags
+                    WHERE tag_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT 1000
+                )
+                SELECT e.id, e.title, e.url, e.published_at, e.source_id
+                FROM recent_tag r
+                JOIN rss_entries e ON e.source_id = r.source_id AND e.dedup_key = r.dedup_key
+                WHERE e.published_at > 0
                   AND e.published_at >= ?
                   AND e.published_at <= ?
                 ORDER BY e.published_at DESC
@@ -763,16 +1169,21 @@ async def get_followed_news(
                 """,
                 (tag_id, MIN_TIMESTAMP, MAX_TIMESTAMP, limit * 2)
             )
-            
+
             # Filter by timestamp and deduplicate by title similarity
             valid_rows = []
             for row in news_cur.fetchall() or []:
                 published_at = row[3]
                 if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
                     valid_rows.append(row)
-            
+            _t_q1 = time_module.perf_counter()
+
             news_items = _deduplicate_news_by_title(valid_rows, limit)
-            
+            _t_q2 = time_module.perf_counter()
+            _t_tag_sql += (_t_q1 - _t_q0)
+            _t_tag_dedup += (_t_q2 - _t_q1)
+            _tag_count += 1
+
             result.append({
                 "tag": tag_details[tag_id],
                 "news": news_items,
@@ -783,6 +1194,7 @@ async def get_followed_news(
     
     # === Part 2: Get news for subscribed sources ===
     for source_id, display_name in subscribed_sources:
+        _t_s0 = time_module.perf_counter()
         # Get source details from rss_sources
         src_cur = online_conn.execute(
             "SELECT name, url, category FROM rss_sources WHERE id = ?",
@@ -792,7 +1204,7 @@ async def get_followed_news(
         source_name = display_name or (src_row[0] if src_row else source_id)
         source_url = src_row[1] if src_row else ""
         source_category = src_row[2] if src_row else ""
-        
+
         # Query news from this source (fetch more for deduplication)
         news_cur = online_conn.execute(
             """
@@ -807,7 +1219,7 @@ async def get_followed_news(
             """,
             (source_id, MIN_TIMESTAMP, MAX_TIMESTAMP, limit * 2)
         )
-        
+
         # Filter by timestamp and deduplicate by title similarity
         valid_rows = []
         for row in news_cur.fetchall() or []:
@@ -815,8 +1227,12 @@ async def get_followed_news(
             if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
                 # Add source_id as 5th element for compatibility with _deduplicate_news_by_title
                 valid_rows.append((row[0], row[1], row[2], row[3], source_id))
-        
+        _t_s1 = time_module.perf_counter()
         news_items = _deduplicate_news_by_title(valid_rows, limit)
+        _t_s2 = time_module.perf_counter()
+        _t_src_sql += (_t_s1 - _t_s0)
+        _t_src_dedup += (_t_s2 - _t_s1)
+        _src_count += 1
         
         result.append({
             "tag": {
@@ -833,35 +1249,47 @@ async def get_followed_news(
             "followed_at": source_follow_times.get(source_id, 0),
         })
     
-    # === Part 3: Get news for user keywords (search in rss_entries only) ===
+    # === Part 3: Get news for user keywords ===
     for kw_id, keyword, kw_type, priority in user_keywords:
-        # Simple LIKE search on rss_entries table (RSS + custom sources only)
-        search_pattern = f"%{keyword}%"
-        
-        # Query more results for deduplication
-        news_cur = online_conn.execute(
-            """
-            SELECT id, title, url, published_at, source_id
-            FROM rss_entries
-            WHERE title LIKE ?
-              AND published_at > 0
-              AND published_at >= ?
-              AND published_at <= ?
-            ORDER BY published_at DESC
-            LIMIT ?
-            """,
-            (search_pattern, MIN_TIMESTAMP, MAX_TIMESTAMP, limit * 3)
-        )
-        
-        # Filter by timestamp and deduplicate by title similarity
-        valid_rows = []
-        for row in news_cur.fetchall() or []:
-            published_at = row[3]
-            if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
-                valid_rows.append(row)
-        
-        news_items = _deduplicate_news_by_title(valid_rows, limit)
-        
+        _t_k0 = time_module.perf_counter()
+        news_items = _search_keyword_news_fts(request, online_conn, keyword, limit)
+        if news_items is not None:
+            _kw_fts_count += 1
+        if news_items is None:
+            # FTS unavailable: query a bounded recent window first, then do LIKE
+            # inside that window. A raw title LIKE '%keyword%' can scan a large
+            # rss_entries table for cold keywords.
+            search_pattern = f"%{keyword}%"
+            news_cur = online_conn.execute(
+                """
+                SELECT id, title, url, published_at, source_id FROM (
+                    SELECT id, title, url, published_at, source_id
+                    FROM rss_entries
+                    WHERE published_at > 0
+                      AND published_at >= ?
+                      AND published_at <= ?
+                    ORDER BY published_at DESC
+                    LIMIT ?
+                )
+                WHERE title LIKE ?
+                ORDER BY published_at DESC
+                LIMIT ?
+                """,
+                (MIN_TIMESTAMP, MAX_TIMESTAMP, max(3000, limit * 120), search_pattern, limit * 3)
+            )
+
+            valid_rows = []
+            for row in news_cur.fetchall() or []:
+                published_at = row[3]
+                if published_at >= MIN_TIMESTAMP and published_at <= MAX_TIMESTAMP:
+                    valid_rows.append(row)
+
+            news_items = _deduplicate_news_by_title(valid_rows, limit)
+
+        _t_k1 = time_module.perf_counter()
+        _t_kw_sql += (_t_k1 - _t_k0)
+        _kw_count += 1
+
         result.append({
             "tag": {
                 "id": f"keyword_{kw_id}",
@@ -884,6 +1312,7 @@ async def get_followed_news(
     from hotnews.kernel.services.mp_article_reader import get_mp_articles
     
     for fakeid, nickname in wechat_subscriptions:
+        _t_w0 = time_module.perf_counter()
         try:
             # Query articles using unified reader
             articles = get_mp_articles(online_conn, fakeid, limit=limit)
@@ -920,6 +1349,9 @@ async def get_followed_news(
         except Exception:
             # MP articles may not be available in public mode
             pass
+        _t_w1 = time_module.perf_counter()
+        _t_wc_sql += (_t_w1 - _t_w0)
+        _wc_count += 1
     
     # Get stored order to sort results (tags first, then sources)
     order_cur = conn.execute(
@@ -929,34 +1361,74 @@ async def get_followed_news(
     order_row = order_cur.fetchone()
     tag_order = order_row[0].split(",") if order_row and order_row[0] else []
     
-    # Sort: newest followed/subscribed items first, regardless of type.
-    # Within same followed_at time, use tag_order for tags, then count for others.
+    # 排序逻辑：pinned（出现在 __tag_order__ 中）优先，按存储顺序；
+    # 未 pin 的回到原来的 followed_at + type 排序。
+    # item["tag"]["id"] 已经是 composite 格式（keyword_X / mp-X / tag-uuid / source-id）
+    # 与前端发回 /tag-order 的 ID 一致。
     def sort_key(item):
         followed_at = item.get("followed_at", 0)
         item_type = item.get("item_type", "tag")
-        item_id = item["tag"]["id"]
-        # Primary: newest followed first (negate for descending)
-        # Secondary: type order (tag=0, keyword=1, wechat=2, source=3)
-        # Tertiary: tag_order for tags, count for others
-        if item_type == "tag":
-            try:
-                tertiary = tag_order.index(item_id)
-            except ValueError:
-                tertiary = 9999
-            return (-followed_at, 0, tertiary)
-        elif item_type == "keyword":
-            return (-followed_at, 1, -item["count"])
-        elif item_type == "wechat":
-            return (-followed_at, 2, -item["count"])
-        else:
-            return (-followed_at, 3, -item["count"])
+        item_id = str(item["tag"]["id"]).lower()
+        try:
+            pin_idx = tag_order.index(item_id)
+            return (0, pin_idx, 0)  # pinned 桶
+        except ValueError:
+            pass
+        type_bucket = {"tag": 0, "keyword": 1, "wechat": 2}.get(item_type, 3)
+        return (1, -followed_at, type_bucket, -item.get("count", 0))
     
     result.sort(key=sort_key)
-    
-    # Store in cache
+
+    # 当前批写 cache
     my_tags_cache.set(result, config=cache_key_data)
-    
-    return {"ok": True, "tags": result, "cached": False, "filter": filter_type}
+
+    _t_total = time_module.perf_counter() - _t_start
+    print(
+        f"[my-tags-timing] user={user.get('id')} groups={len(result)} "
+        f"tags={_tag_count} srcs={_src_count} kws={_kw_count}(fts={_kw_fts_count}) wcs={_wc_count} "
+        f"total={_t_total:.2f}s "
+        f"tag_sql={_t_tag_sql:.2f}s tag_dedup={_t_tag_dedup:.2f}s "
+        f"src_sql={_t_src_sql:.2f}s src_dedup={_t_src_dedup:.2f}s "
+        f"kw_sql={_t_kw_sql:.2f}s wc_sql={_t_wc_sql:.2f}s",
+        flush=True,
+    )
+
+    # 异步预取下一批（fire-and-forget），不阻塞当前响应。
+    # 只在 next_slice 全部是 "tag" 类型时启用（source/keyword/wechat 的预取需要额外参数，先不做）。
+    if (
+        prefetch_enabled
+        and next_slice
+        and all(g["type"] == "tag" for g in next_slice)
+    ):
+        next_key = _build_cache_key(group_limit, group_limit, next_slice)
+        if my_tags_cache.get(config=next_key) is None:
+            import threading
+            _next_tag_ids = [g["id"] for g in next_slice]
+            _next_tag_follow_times = dict(tag_follow_times)
+            def _prefetch_tag_window():
+                try:
+                    _prefetch_tag_only(
+                        online_conn=online_conn,
+                        tag_ids=_next_tag_ids,
+                        limit=limit,
+                        cache_key=next_key,
+                        tag_follow_times=_next_tag_follow_times,
+                        min_timestamp=MIN_TIMESTAMP,
+                        max_timestamp=MAX_TIMESTAMP,
+                    )
+                except Exception as e:
+                    print(f"[my-tags-prefetch] error: {e}", flush=True)
+            threading.Thread(target=_prefetch_tag_window, daemon=True).start()
+
+    return {
+        "ok": True,
+        "tags": result,
+        "cached": False,
+        "filter": filter_type,
+        "total": total_groups,
+        "group_limit": group_limit,
+        "group_offset": group_offset,
+    }
 
 
 # ==================== Settings Page ====================

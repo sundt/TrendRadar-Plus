@@ -74,7 +74,7 @@ const MobileEnhance = {
     nav.className = 'me-bottom-nav';
     nav.setAttribute('aria-label', '底部导航');
 
-    // 5 个导航按钮配置：action, label, svgContent
+    // 底部导航按钮配置：action, label, svgContent
     const buttons = [
       {
         action: 'list',
@@ -82,20 +82,9 @@ const MobileEnhance = {
         svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
       },
       {
-        action: 'bookmark',
-        label: '收藏',
-        svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>',
-        dot: true // 书签循环状态指示点
-      },
-      {
         action: 'rss',
         label: '订阅',
         svg: '<svg viewBox="0 0 24 24" fill="none"><path d="M4 11a9 9 0 019 9M4 4a16 16 0 0116 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="19" r="2" fill="currentColor"/></svg>'
-      },
-      {
-        action: 'search',
-        label: '搜索',
-        svg: '<svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
       },
       {
         action: 'more',
@@ -1015,10 +1004,8 @@ const MobileEnhance = {
       </div>
       <div class="me-drawer-tabs">
         <button class="me-drawer-tab active" data-drawer-tab="home">主页</button>
-        <button class="me-drawer-tab" data-drawer-tab="topics">我的主题</button>
       </div>
       <div class="me-drawer-tree" id="meDrawerTreeHome"></div>
-      <div class="me-drawer-tree" id="meDrawerTreeTopics" style="display:none;"></div>
     `;
 
     overlay.appendChild(drawer);
@@ -1150,7 +1137,13 @@ const MobileEnhance = {
     const container = this._drawer?.querySelector('#meDrawerTreeHome');
     if (!container) return;
 
-    const columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
+    let columns = Array.isArray(window._columnConfig) ? window._columnConfig : [];
+    if (!columns.length) {
+      columns = this._buildColumnsFromRenderedTabs();
+      if (columns.length) {
+        window._columnConfig = columns;
+      }
+    }
     if (!columns.length) {
       container.innerHTML = '<div class="me-drawer-empty">暂无分类数据</div>';
       return;
@@ -1159,6 +1152,28 @@ const MobileEnhance = {
     container.innerHTML = '';
     this._buildTreeNodes(columns, container, 1);
     this._drawerTreeBuilt = true;
+  },
+
+  /** column_config 为空时，从 SSR 已渲染的顶部 tabs 兜底生成移动端分类菜单。 */
+  _buildColumnsFromRenderedTabs() {
+    const tabs = Array.from(document.querySelectorAll('#homeSubTabs .sub-tab[data-category]'))
+      .filter(tab => !tab.classList.contains('sub-tab-add'))
+      .filter(tab => !this._isTabHiddenByUser(tab));
+
+    return tabs.map(tab => {
+      const id = String(tab.dataset.category || '').trim();
+      const name = (tab.textContent || '')
+        .replace(/[☰▶]/g, '')
+        .replace(/NEW/g, '')
+        .replace(/\s+/g, ' ')
+        .trim() || id;
+      return {
+        id,
+        name,
+        icon: '',
+        children: [],
+      };
+    }).filter(item => item.id);
   },
 
   /** 递归构建树节点 DOM */

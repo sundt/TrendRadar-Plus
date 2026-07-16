@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Set
 from hotnews.web.timeline_cache import (
     brief_timeline_cache,
     explore_timeline_cache,
+    finance_timeline_cache,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ class WarmupResult:
     success: bool = False
     brief_count: int = 0
     explore_count: int = 0
+    finance_count: int = 0
     elapsed_ms: int = 0
     errors: List[str] = field(default_factory=list)
 
@@ -166,6 +168,15 @@ class CacheWarmupService:
             logger.warning(f"  ⚠️ {msg}")
             errors.append(msg)
 
+        # Finance Timeline（800 raw → AI 过滤后池子，避免冷启动 2-3s 等待）
+        try:
+            result.finance_count = self._warmup_finance_timeline()
+            logger.info(f"  ✅ Finance Timeline 缓存已预热: {result.finance_count} 条")
+        except Exception as e:
+            msg = f"Finance Timeline warmup failed: {e}"
+            logger.warning(f"  ⚠️ {msg}")
+            errors.append(msg)
+
         result.elapsed_ms = int((time.time() - start) * 1000)
         result.errors = errors
         result.success = len(errors) == 0
@@ -227,6 +238,19 @@ class CacheWarmupService:
                 pass
 
         return warmed
+
+    # ------------------------------------------------------------------
+    # Finance Timeline warmup
+    # ------------------------------------------------------------------
+    def _warmup_finance_timeline(self) -> int:
+        """预热 finance_timeline_cache（filter 模式，最常访问）。
+
+        复用 endpoint 同一段计算逻辑，避免两边逻辑漂移。
+        """
+        from hotnews.web.category_timeline_routes import compute_finance_timeline_items
+        items = compute_finance_timeline_items(self.conn, skip_filter=False)
+        finance_timeline_cache.set(items, config={"mode": "filter"})
+        return len(items)
 
     # ------------------------------------------------------------------
     # Brief Timeline warmup

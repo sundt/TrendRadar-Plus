@@ -9,6 +9,7 @@ Provides REST API endpoints for:
 - Image proxy for WeChat avatars
 """
 
+import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -201,9 +202,10 @@ async def save_auth(request: Request, body: AuthSaveRequest) -> Dict[str, Any]:
     if not cookie or not token:
         raise HTTPException(status_code=400, detail="Cookie 和 Token 不能为空")
     
-    # Test credentials first
+    # Test credentials first (run in executor to avoid blocking event loop)
     provider = WeChatMPProvider(cookie, token)
-    result = provider.test_auth()
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, provider.test_auth)
     
     if not result.ok:
         if result.error_code == WeChatErrorCode.SESSION_EXPIRED:
@@ -340,9 +342,10 @@ async def save_auth_from_plugin(request: Request, body: PluginAuthRequest) -> Di
         logger.error(f"Failed to extract token: {e}")
         raise HTTPException(status_code=500, detail=f"验证失败: {str(e)}")
     
-    # Test credentials
+    # Test credentials (run in executor to avoid blocking event loop)
     provider = WeChatMPProvider(credentials, token)
-    result = provider.test_auth()
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, provider.test_auth)
     
     if not result.ok:
         if result.error_code == WeChatErrorCode.SESSION_EXPIRED:
@@ -411,9 +414,10 @@ async def test_auth(request: Request) -> Dict[str, Any]:
     if not cookie:
         return {"ok": False, "valid": False, "error": "无法解密 Cookie"}
     
-    # Test credentials
+    # Test credentials (run in executor to avoid blocking event loop)
     provider = WeChatMPProvider(cookie, token)
-    result = provider.test_auth()
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, provider.test_auth)
     
     # Update status in database
     now = _now_ts()
@@ -570,9 +574,10 @@ async def complete_qr_login(request: Request) -> Dict[str, Any]:
     if not success or not cookie or not token:
         return {"ok": False, "error": message}
     
-    # 验证获取的凭证是否有效
+    # 验证获取的凭证是否有效 (run in executor to avoid blocking event loop)
     provider = WeChatMPProvider(cookie, token)
-    test_result = provider.test_auth()
+    loop = asyncio.get_event_loop()
+    test_result = await loop.run_in_executor(None, provider.test_auth)
     
     if not test_result.ok:
         return {"ok": False, "error": f"认证验证失败: {test_result.error_message}"}
@@ -625,6 +630,11 @@ async def cancel_qr_login(request: Request) -> Dict[str, Any]:
 
 # ========== Auto Auth Endpoint (简化用户体验) ==========
 
+# 凭证验证结果缓存：避免频繁对微信服务器发起验证请求
+_auth_verify_cache: Dict[int, tuple] = {}  # user_id -> (is_valid, verified_at, expires_at, remaining_minutes)
+_AUTH_CACHE_TTL = 300  # 5 分钟内不重复验证
+
+
 @router.post("/auth/auto")
 async def auto_acquire_auth(request: Request) -> Dict[str, Any]:
     """
@@ -641,6 +651,20 @@ async def auto_acquire_auth(request: Request) -> Dict[str, Any]:
     user_id = user["id"]
     conn = _get_user_db_conn(request)
     now = _now_ts()
+    loop = asyncio.get_event_loop()
+    
+    # 快速路径：检查验证结果缓存
+    cached = _auth_verify_cache.get(user_id)
+    if cached:
+        is_valid, verified_at, cached_expires, cached_remaining = cached
+        if is_valid and (now - verified_at) < _AUTH_CACHE_TTL and cached_expires > now:
+            return {
+                "ok": True,
+                "has_auth": True,
+                "source": "cache",
+                "expires_at": cached_expires,
+                "remaining_minutes": max(0, (cached_expires - now) // 60),
+            }
     
     # Step 1: 检查用户自己的凭证
     cur = conn.execute(
@@ -655,12 +679,14 @@ async def auto_acquire_auth(request: Request) -> Dict[str, Any]:
         if status == "valid" and expires_at and expires_at > now:
             cookie = decrypt_cookie(cookie_encrypted)
             if cookie and token:
-                # 验证凭证是否真的有效
+                # 验证凭证是否真的有效 (run in executor to avoid blocking event loop)
                 provider = WeChatMPProvider(cookie, token)
-                test_result = provider.test_auth()
+                test_result = await loop.run_in_executor(None, provider.test_auth)
                 
                 if test_result.ok:
                     remaining_minutes = (expires_at - now) // 60
+                    # 更新缓存
+                    _auth_verify_cache[user_id] = (True, now, expires_at, remaining_minutes)
                     return {
                         "ok": True,
                         "has_auth": True,
@@ -685,9 +711,9 @@ async def auto_acquire_auth(request: Request) -> Dict[str, Any]:
     cred = get_available_credential()
     
     if cred:
-        # 验证共享凭证
+        # 验证共享凭证 (run in executor to avoid blocking event loop)
         provider = WeChatMPProvider(cred.cookie, cred.token)
-        test_result = provider.test_auth()
+        test_result = await loop.run_in_executor(None, provider.test_auth)
         
         if test_result.ok:
             # 保存到用户账号
@@ -714,6 +740,9 @@ async def auto_acquire_auth(request: Request) -> Dict[str, Any]:
                 
                 remaining_minutes = max(0, (cred.expires_at - now) // 60)
                 logger.info(f"[AutoAuth] User {user_id} acquired shared credential #{cred.id}")
+                
+                # 更新缓存
+                _auth_verify_cache[user_id] = (True, now, cred.expires_at, remaining_minutes)
                 
                 return {
                     "ok": True,
@@ -1423,9 +1452,10 @@ async def use_shared_credential(request: Request) -> Dict[str, Any]:
             "error": "当前没有可用的共享凭证，请等待其他用户贡献或自行扫码登录",
         }
     
-    # 验证凭证是否有效
+    # 验证凭证是否有效 (run in executor to avoid blocking event loop)
     provider = WeChatMPProvider(cred.cookie, cred.token)
-    test_result = provider.test_auth()
+    loop = asyncio.get_event_loop()
+    test_result = await loop.run_in_executor(None, provider.test_auth)
     
     if not test_result.ok:
         # 标记凭证失效
@@ -1496,9 +1526,10 @@ async def complete_qr_login_and_share(request: Request) -> Dict[str, Any]:
     if not success or not cookie or not token:
         return {"ok": False, "error": message}
     
-    # 验证凭证
+    # 验证凭证 (run in executor to avoid blocking event loop)
     provider = WeChatMPProvider(cookie, token)
-    test_result = provider.test_auth()
+    loop = asyncio.get_event_loop()
+    test_result = await loop.run_in_executor(None, provider.test_auth)
     
     if not test_result.ok:
         return {"ok": False, "error": f"认证验证失败: {test_result.error_message}"}
@@ -1537,20 +1568,26 @@ async def complete_qr_login_and_share(request: Request) -> Dict[str, Any]:
     # 自动贡献到共享池（使用实际的过期时间）
     from hotnews.kernel.services.wechat_shared_credentials import add_shared_credential
     
-    add_shared_credential(
-        cookie=cookie,
-        token=token,
-        contributed_by=user_id,
-        expires_in=expires_in,
-    )
+    shared = False
+    try:
+        shared_ok, shared_msg, _ = add_shared_credential(
+            cookie=cookie,
+            token=token,
+            contributed_by=user_id,
+            expires_in=expires_in,
+        )
+        shared = bool(shared_ok)
+        if not shared_ok:
+            logger.warning(f"[QRLogin] Shared credential contribution skipped for user {user_id}: {shared_msg}")
+    except Exception as e:
+        logger.warning(f"[QRLogin] Shared credential contribution failed for user {user_id}: {e}")
     
     remaining_hours = expires_in / 3600
-    logger.info(f"[QRLogin] User {user_id} logged in and contributed to shared pool, expires in {remaining_hours:.1f} hours")
+    logger.info(f"[QRLogin] User {user_id} logged in, shared={shared}, expires in {remaining_hours:.1f} hours")
     
     return {
         "ok": True,
-        "message": "登录成功！您的凭证已贡献到共享池，感谢您的支持",
+        "message": "登录成功！" + ("您的凭证已贡献到共享池，感谢您的支持" if shared else "共享池暂时繁忙，已跳过共享贡献"),
         "expires_at": expires_at,
-        "shared": True,
+        "shared": shared,
     }
-

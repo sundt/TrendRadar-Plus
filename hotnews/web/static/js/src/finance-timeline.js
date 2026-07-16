@@ -6,6 +6,7 @@
 import { TR, ready, escapeHtml, formatNewsDate } from './core.js';
 import { events } from './events.js';
 import { viewMode } from './view-mode.js';
+import { skeletonCards } from './skeleton.js';
 
 const CATEGORY_ID = 'finance';
 const INITIAL_CARDS_DESKTOP = 3;
@@ -193,7 +194,7 @@ async function _loadTimeline() {
     const myGen = _generation;
     _offset = 0;
     _finished = false;
-    grid.innerHTML = '<div style="padding:40px;text-align:center;color:#9ca3af;width:100%;">⏳ 加载中...</div>';
+    grid.innerHTML = skeletonCards(_getInitialCards(), { rows: 10, extraClass: 'tr-skeleton-finance' });
 
     try {
         const limit = getItemsPerCard();

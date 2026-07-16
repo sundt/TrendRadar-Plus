@@ -828,7 +828,6 @@ export const platformReorder = {
                     <div class="tr-ctx-item" data-action="top">⬆️ 置顶</div>
                     <div class="tr-ctx-item" data-action="bottom">⬇️ 置底</div>
                     <div class="tr-ctx-item" data-action="hide" style="border-top:1px solid #e5e7eb;">👁️‍🗨️ 隐藏卡片</div>
-                    <div class="tr-ctx-item" data-action="edit" style="border-top:1px solid #e5e7eb;">⚙️ 编辑顺序</div>
                 `;
                 
                 // Add unfollow option for my-tags
@@ -1080,9 +1079,32 @@ export const platformReorder = {
                     grid.appendChild(card);
                 }
 
-                // Save order
-                const ordered = Array.from(grid.querySelectorAll('.platform-card')).map(c => c.dataset.platform).filter(Boolean);
-                persistPlatformOrder(categoryId, ordered);
+                if (isMyTags) {
+                    // my-tags 卡片来自后端动态加载，本地 platformOrder 没用
+                    // （刷新后后端重新按 followed_at 排）。改成把 tag.id 序列写到
+                    // /api/user/preferences/tag-order，后端排序把 pinned 项放前面。
+                    const orderedIds = Array.from(grid.querySelectorAll('.platform-card'))
+                        .map(c => c.dataset.tagId)
+                        .filter(Boolean);
+                    fetch('/api/user/preferences/tag-order', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(orderedIds),
+                    }).then(() => {
+                        // 服务端会 invalidate my_tags_cache；本地缓存也清掉
+                        try { localStorage.removeItem('hotnews_my_tags_cache'); } catch {}
+                    }).catch(err => {
+                        console.error('Save my-tags order failed:', err);
+                        if (window.TR?.toast?.show) {
+                            window.TR.toast.show('保存顺序失败，刷新后将复原', { variant: 'warning', durationMs: 2500 });
+                        }
+                    });
+                } else {
+                    // 其他栏目继续走本地 platformOrder
+                    const ordered = Array.from(grid.querySelectorAll('.platform-card')).map(c => c.dataset.platform).filter(Boolean);
+                    persistPlatformOrder(categoryId, ordered);
+                }
 
                 hideContextMenu();
             });

@@ -344,8 +344,25 @@ def _slim_categories_for_ssr(data: Dict[str, Any]) -> Dict[str, Any]:
 # 默认隐藏的栏目（与前端 settings.js 保持一致）
 DEFAULT_HIDDEN_CATEGORIES = ['other', 'general', 'social', 'tech_news', 'developer']
 
+# 服务端强制隐藏的栏目，不受用户本地配置影响
+FORCED_HIDDEN_CATEGORIES = {"discovery", "openclaw", "knowledge", "morning-brief"}
+
 # 特殊栏目，不应该被服务端过滤（它们有自己的动态加载逻辑）
 PROTECTED_CATEGORIES = ['my-tags', 'discovery', 'explore', 'source-subscription', 'finance']
+
+
+def _remove_forced_hidden_categories(data: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        cats = data.get("categories") if isinstance(data, dict) else None
+        if isinstance(cats, dict):
+            data["categories"] = {
+                cid: cdata
+                for cid, cdata in cats.items()
+                if str(cid or "").strip() not in FORCED_HIDDEN_CATEGORIES
+            }
+    except Exception:
+        pass
+    return data
 
 
 def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str, Any]:
@@ -379,6 +396,8 @@ def _filter_default_hidden_categories(data: Dict[str, Any], request) -> Dict[str
         # 过滤隐藏的栏目（但保护特殊栏目不被过滤）
         filtered_cats = {}
         for cat_id, cat_data in cats.items():
+            if cat_id in FORCED_HIDDEN_CATEGORIES:
+                continue
             # 特殊栏目始终保留
             if cat_id in PROTECTED_CATEGORIES:
                 filtered_cats[cat_id] = cat_data
@@ -416,6 +435,39 @@ def _inject_explore_category(data: Dict[str, Any]) -> Dict[str, Any]:
         return data
     except Exception:
         return data
+
+
+def _build_ssr_shell_data(viewer_service: Any) -> Dict[str, Any]:
+    """Build a fast, data-light category shell for first HTML paint."""
+    categories: Dict[str, Any] = {}
+    try:
+        category_list = viewer_service.get_category_list()
+    except Exception:
+        category_list = []
+
+    for cat in category_list or []:
+        cat_id = str(cat.get("id") or "").strip()
+        if not cat_id or cat_id in FORCED_HIDDEN_CATEGORIES:
+            continue
+        categories[cat_id] = {
+            "id": cat_id,
+            "name": cat.get("name") or cat_id,
+            "icon": cat.get("icon") or "📰",
+            "platforms": {},
+            "news_count": 0,
+            "filtered_count": 0,
+            "is_new": False,
+        }
+
+    return {
+        "categories": categories,
+        "cross_platform_count": 0,
+        "total_news": 0,
+        "total_filtered": 0,
+        "filter_stats": {},
+        "updated_at": "",
+        "filter_mode": "moderate",
+    }
 
 
 def _get_cdn_base_url(project_root) -> str:
@@ -457,6 +509,9 @@ def _load_column_config_for_ssr(project_root) -> List[Dict[str, Any]]:
         # Build tree (same as columns_routes.py)
         by_parent: Dict[Optional[str], List[Dict]] = {}
         for row in rows:
+            node_id = str(row[0] or "").strip()
+            if node_id in FORCED_HIDDEN_CATEGORIES:
+                continue
             sf_str = row[6] or "{}"
             try:
                 sf = json.loads(sf_str)
@@ -469,7 +524,7 @@ def _load_column_config_for_ssr(project_root) -> List[Dict[str, Any]]:
                 tag_ids = []
 
             node = {
-                "id": row[0],
+                "id": node_id,
                 "name": row[1],
                 "icon": row[2] or "",
                 "tag_ids": tag_ids,
@@ -493,7 +548,7 @@ def _load_column_config_for_ssr(project_root) -> List[Dict[str, Any]]:
                 result.append(node)
             return result
 
-        roots = by_parent.get(None, [])
+        roots = by_parent.get(None, []) + by_parent.get("", [])
         return attach_children(roots)
     except Exception:
         return []
@@ -710,20 +765,16 @@ async def render_viewer_page(
         if allow_e2e:
             data = _build_e2e_viewer_data()
         else:
-            data = viewer_service.get_categorized_news(
-                platforms=platform_list,
-                limit=10000,
-                apply_filter=True,
-                filter_mode=filter,
-                per_platform_limit=sys_settings.get("display", {}).get("items_per_card", 50)
-            )
+            # Keep SSR cheap: the frontend refreshes /api/news immediately after
+            # load, so first HTML paint should not block on RSS/news aggregation.
+            data = _build_ssr_shell_data(viewer_service)
 
         data = _inject_explore_category(data)
         data = _inject_my_tags_category(data)
         # 安全修复：不再在服务端注入用户主题，改为前端动态加载
         # 这样即使页面被 CDN/Nginx 缓存，也不会泄露用户主题
         # data = _inject_user_topics_as_categories(data, request)
-        data = _inject_discovery_category(data)
+        data = _remove_forced_hidden_categories(data)
         # Removed: source-subscription tab is now integrated into user settings page
         # data = _inject_source_subscription_category(data)
 
@@ -796,5 +847,3 @@ def _detect_mobile(request: Request) -> bool:
     ua = (request.headers.get("user-agent") or "").lower()
     mobile_keywords = ("mobile", "android", "iphone", "ipad", "ipod", "webos", "opera mini", "ucbrowser", "micromessenger")
     return any(kw in ua for kw in mobile_keywords)
-
-

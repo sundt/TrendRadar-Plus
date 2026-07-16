@@ -1624,14 +1624,29 @@ def _update_fts_index_for_rss_entries(entries: List[tuple]) -> None:
         
         # Convert to FTS format: (title, url, platform_id, date, id)
         # Use negative IDs to distinguish from news_items
-        today = datetime.now().strftime("%Y-%m-%d")
+        # row 结构来自 1899: (sid, dk, url, title, published_at, published_raw, fetched_at, created_at, summary, content)
+        # 之前所有增量条目 date 都塞 today，"我的关注"通过 FTS 命中关键词时拿到的
+        # 时间永远是今天 → 卡片显示"X 小时前"。改成从 published_at 派生真实日期。
+        today_fallback = datetime.now().strftime("%Y-%m-%d")
         data = []
         for i, row in enumerate(entries):
             source_id = row[0]  # source_id
             url = row[2]        # url
             title = row[3]      # title
+            published_at = row[4] if len(row) > 4 else 0
+            try:
+                pub_ts = int(published_at or 0)
+            except Exception:
+                pub_ts = 0
+            if pub_ts > 0:
+                try:
+                    date = datetime.fromtimestamp(pub_ts).strftime("%Y-%m-%d")
+                except Exception:
+                    date = today_fallback
+            else:
+                date = today_fallback
             platform_id = f"rss-{source_id}"
-            data.append((title, url, platform_id, today, -(i + 1)))
+            data.append((title, url, platform_id, date, -(i + 1)))
         
         if data:
             manager.fts_index.incremental_update(data)

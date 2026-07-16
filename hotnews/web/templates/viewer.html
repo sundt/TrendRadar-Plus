@@ -146,7 +146,9 @@
     <link href="{{ static_prefix }}/css/layout/tabs.css?v={{ asset_rev }}" rel="stylesheet">
     <!-- 非首屏样式异步加载 — 按设备类型条件加载，减少无效下载 -->
     {% if not is_mobile %}
-    {# PC 端：加载模态框/设置/主题追踪样式，跳过移动端增强 CSS（~70KB） #}
+    {# PC 端：加载模态框/设置/主题追踪样式。移动增强 CSS 自身有 max-width 保护，用于 UA 误判兜底。 #}
+    <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet" media="print"
+        onload="this.media='all'">
     <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet" media="print"
         onload="this.media='all'">
     <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet" media="print"
@@ -154,6 +156,7 @@
     <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet" media="print"
         onload="this.media='all'">
     <noscript>
+        <link href="{{ static_prefix }}/css/mobile-enhance.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/viewer-deferred.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/topic-tracker.css?v={{ asset_rev }}" rel="stylesheet">
         <link href="{{ static_prefix }}/css/comment-preview.css?v={{ asset_rev }}" rel="stylesheet">
@@ -185,16 +188,11 @@
             <div class="nav-top">
                 <div class="main-nav">
                     <button class="main-nav-item active" data-nav="home">主页</button>
-                    <button class="main-nav-item" data-nav="topics">我的主题</button>
                 </div>
                 <div class="nav-spacer"></div>
                 <div class="nav-tools">
-                    <button class="icon-btn favorites-btn" id="favoritesBtn" onclick="toggleFavoritesPanel()"
-                        title="我的收藏">⭐</button>
                     <button class="icon-btn theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()"
                         title="切换护眼模式">🌙</button>
-                    <button class="icon-btn search-btn" onclick="window.open('/search', '_blank')"
-                        title="搜索新闻">🔍</button>
                     <div id="authButtonContainer" class="auth-button-container auth-pending"></div>
                 </div>
             </div>
@@ -253,15 +251,8 @@
                 {% endfor %}
                 {% endif %}
                 <button class="sub-tab sub-tab-add" onclick="goToSettings()"
-                    onmouseenter="typeof preloadSubscribeSidebar === 'function' && preloadSubscribeSidebar()"
                     title="订阅更多内容">+ 订阅</button>
                 <div class="sub-tabs-indicator"></div>
-            </div>
-
-            <!-- 主题子栏目（默认隐藏，按需加载） -->
-            <div class="sub-tabs" id="topicSubTabs" style="display:none;">
-                <div class="sub-tabs-indicator"></div>
-                <button class="sub-tab sub-tab-new" onclick="TopicTracker.openModal()">+ 新建主题</button>
             </div>
 
             <!-- 过滤面板和进度条（nav-card 内部） -->
@@ -458,9 +449,13 @@
     {% if is_mobile %}
     <script type="module" src="{{ static_prefix }}/js/mobile/index-mobile.js?v={{ asset_rev }}"></script>
     <!-- Mobile JS Enhancement -->
-    <script src="{{ static_prefix }}/js/src/mobile-enhance.js?v=20260308h"></script>
+    <script src="{{ static_prefix }}/js/src/mobile-enhance.js?v={{ asset_rev }}"></script>
     {% else %}
     <script type="module" src="{{ static_prefix }}/js/index.js?v={{ asset_rev }}"></script>
+    {% endif %}
+    {% if not is_mobile %}
+    {# 视口兜底：微信/代理 UA 偶发误判时仍可生成底部分类菜单。脚本内部会在非窄屏直接退出。 #}
+    <script src="{{ static_prefix }}/js/src/mobile-enhance.js?v={{ asset_rev }}"></script>
     {% endif %}
     <script>
         (function () {

@@ -25,21 +25,18 @@ function isWeChatBrowser() {
  * Open the login modal
  */
 function openLoginModal() {
-    // If in WeChat browser AND on a proper domain (not IP), redirect to WeChat OAuth directly
-    const isProperDomain = !/^(\d{1,3}\.){3}\d{1,3}/.test(window.location.hostname) && window.location.hostname !== 'localhost';
-    if (isWeChatBrowser() && isProperDomain) {
-        window.location.href = '/api/auth/oauth/wechat-mp';
-        return;
-    }
-    
     const modal = document.getElementById('loginModal');
     if (modal) {
         modal.style.display = 'flex';
         // Reset to main view
         loginHideEmailForm();
         loginGoToStep(1);
-        // Load WeChat QR code
-        loadWechatQR();
+        if (isWeChatBrowser()) {
+            window.location.href = '/api/auth/oauth/wechat-mp';
+        } else {
+            // Load WeChat QR code
+            loadWechatQR();
+        }
     }
 }
 

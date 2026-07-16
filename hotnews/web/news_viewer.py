@@ -534,10 +534,6 @@ class NewsViewerService:
             platform_name = news.get("platform_name", platform_id)
             cat_id = self.get_platform_category(platform_id)
             
-            # DEBUG: Trace RSS categorization
-            if str(platform_id).startswith("rss-"):
-                print(f"DEBUG: RSS Item {platform_id} -> Category {cat_id}")
-                
             title = news.get("title", "").strip()
 
             display_title = title

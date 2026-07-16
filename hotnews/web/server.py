@@ -26,7 +26,17 @@ from urllib.parse import unquote, urljoin, urlparse
 
 from fastapi import FastAPI, Request, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.gzip import GZipMiddleware as _StarletteGZipMiddleware
+
+
+class GZipMiddleware(_StarletteGZipMiddleware):
+    """跳过 /static/ 的 GZip：CDN/反代会处理静态文件压缩，省 Python CPU。"""
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path", "").startswith("/static/"):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -488,7 +498,9 @@ app = FastAPI(
 app.state.project_root = project_root
 
 # 启用 Gzip 压缩（响应大于 500 字节时压缩）
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# - compresslevel=6：从默认 9 降到 6，压缩比基本不变但 CPU 减半
+# - /static/ 路径在自定义 GZipMiddleware 里跳过，交给 CDN/反代
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 # CORS 配置 - 通过环境变量控制允许的域名
 # 格式: HOTNEWS_CORS_ORIGINS=https://example.com,https://app.example.com
@@ -1838,7 +1850,8 @@ async def api_news(
     request: Request,
     platforms: Optional[str] = Query(None),
     limit: int = Query(5000, ge=1, le=5000),
-    filter_mode: Optional[str] = Query(None)
+    filter_mode: Optional[str] = Query(None),
+    include_platforms: bool = Query(False)
 ):
     """API: 获取分类新闻数据（JSON格式）"""
     viewer_service, _ = get_services()
@@ -1846,10 +1859,38 @@ async def api_news(
     platform_list = None
     if platforms:
         platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
+
+    # The normal page refresh only needs tab/category metadata. Building the
+    # full categorized payload scans thousands of RSS entries and is later
+    # stripped back to metadata, so keep that work for callers that explicitly
+    # need platform lists.
+    if platform_list is None and not include_platforms and not filter_mode:
+        data = page_rendering._build_ssr_shell_data(viewer_service)
+
+        try:
+            from .page_rendering import _inject_my_tags_category
+            data = _inject_my_tags_category(data)
+        except Exception:
+            pass
+
+        try:
+            from .page_rendering import _inject_user_topics_as_categories
+            data = _inject_user_topics_as_categories(data, request)
+        except Exception:
+            pass
+
+        try:
+            from .page_rendering import _filter_default_hidden_categories, _remove_forced_hidden_categories
+            data = _remove_forced_hidden_categories(data)
+            data = _filter_default_hidden_categories(data, request)
+        except Exception:
+            pass
+
+        return UnicodeJSONResponse(content=data)
     
     # Load system settings for per_platform_limit
     sys_settings = get_system_settings(project_root)
-    items_per_card = sys_settings.get("display", {}).get("items_per_card", 50)
+    items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
 
     data = viewer_service.get_categorized_news(
         platforms=platform_list,
@@ -1916,7 +1957,8 @@ async def api_news(
     # Without this, hidden categories like tech_news/developer still return
     # full data (~2.7MB) that the frontend immediately discards.
     try:
-        from .page_rendering import _filter_default_hidden_categories
+        from .page_rendering import _filter_default_hidden_categories, _remove_forced_hidden_categories
+        data = _remove_forced_hidden_categories(data)
         data = _filter_default_hidden_categories(data, request)
     except Exception:
         pass
@@ -1935,7 +1977,7 @@ async def api_category(
     
     # Load system settings
     sys_settings = get_system_settings(project_root)
-    items_per_card = sys_settings.get("display", {}).get("items_per_card", 50)
+    items_per_card = sys_settings.get("display", {}).get("items_per_card", 20)
     
     # 获取完整数据
     data = viewer_service.get_categorized_news(
@@ -2704,6 +2746,41 @@ async def _warmup_cache():
                     print(f"  ⚠️ {err}")
         except Exception as e:
             print(f"  ⚠️ Timeline 缓存预热失败: {e}")
+
+        # 3. 预热 FTS keyword 查询的 OS page cache。
+        # FTS db 297MB，2GB 服务器上常被挤出 page cache，冷 LIKE 扫表要 4-5s/keyword。
+        # 启动时把所有活跃 keyword 跑一遍，让 OS 把相关 FTS 页装入 page cache，
+        # 两个 gunicorn worker 都受益（OS page cache 跨进程共享）。
+        try:
+            fts_db = project_root / "output" / "search_indexes" / "fts_index.db"
+            if fts_db.exists():
+                user_conn = _get_user_db_conn()
+                kw_rows = user_conn.execute(
+                    "SELECT DISTINCT keyword FROM user_keywords WHERE enabled = 1"
+                ).fetchall() or []
+                keywords = [r[0] for r in kw_rows if r[0]]
+                if keywords:
+                    _t_fts_warm = time.time()
+                    fts_conn = sqlite3.connect(str(fts_db))
+                    for kw in keywords:
+                        try:
+                            fts_conn.execute(
+                                "SELECT title FROM news_fts WHERE title MATCH ? LIMIT 5",
+                                (kw,)
+                            ).fetchall()
+                        except Exception:
+                            pass
+                        try:
+                            fts_conn.execute(
+                                "SELECT title FROM news_fts WHERE title LIKE ? LIMIT 5",
+                                (f"%{kw}%",)
+                            ).fetchall()
+                        except Exception:
+                            pass
+                    fts_conn.close()
+                    print(f"  ✅ FTS keyword 缓存已预热: {len(keywords)} 个关键词 ({time.time() - _t_fts_warm:.1f}s)")
+        except Exception as e:
+            print(f"  ⚠️ FTS keyword 预热失败: {e}")
 
         elapsed = time.time() - start_time
         print(f"✅ 缓存预热完成 ({elapsed:.2f}s)")

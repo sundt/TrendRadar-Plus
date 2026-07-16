@@ -250,13 +250,19 @@ class DailyDataAggregator:
                 entry_id, title, url, source_id, published_at = row
                 # 使用 rss-{source_id} 作为 platform_id
                 platform_id = f"rss-{source_id}" if source_id else "rss-unknown"
-                # 从 published_at 提取日期，如果没有则使用今天
-                if published_at:
+                # published_at 是 unix 时间戳（INTEGER）。历史代码按字符串切片
+                # `published_at[:10]` 拿 YYYY-MM-DD，整数不能切片会吞 TypeError 然后
+                # 回退到 today，结果 FTS 整张表 date 全是当天，导致"我的关注"通过 FTS
+                # 命中关键词时拿到的 date 永远是今天 → 卡片显示"X 小时前"。
+                date = None
+                if isinstance(published_at, (int, float)) and published_at > 0:
                     try:
-                        date = published_at[:10]  # YYYY-MM-DD
+                        date = datetime.fromtimestamp(int(published_at)).strftime("%Y-%m-%d")
                     except Exception:
-                        date = datetime.now().strftime("%Y-%m-%d")
-                else:
+                        date = None
+                elif isinstance(published_at, str) and published_at:
+                    date = published_at[:10]
+                if not date:
                     date = datetime.now().strftime("%Y-%m-%d")
 
                 # 使用负数 ID 来区分 RSS 条目（避免与 news_items 冲突）

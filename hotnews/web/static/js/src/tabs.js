@@ -471,7 +471,17 @@ export const tabs = {
             // Generic timeline mode — use categoryTimeline renderer
             const grid = paneEl.querySelector('.platform-grid');
             const hasTlCards = grid && grid.querySelector('.tl-card');
-            if (!hasTlCards) {
+            const navState = TR.scroll?.peekNavigationState?.() || null;
+            const shouldRestoreNav = navState && navState.activeTab === categoryId;
+            const shouldResetMyTags = String(categoryId) === 'my-tags'
+                && prevCategoryId !== categoryId
+                && !shouldRestoreNav;
+            if (shouldResetMyTags) {
+                try {
+                    if (grid) grid.scrollLeft = 0;
+                } catch {}
+                categoryTimeline.load(categoryId, true);
+            } else if (!hasTlCards) {
                 categoryTimeline.load(categoryId);
             } else {
                 // Already loaded, just re-attach observer if needed

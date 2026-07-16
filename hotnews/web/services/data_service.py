@@ -169,22 +169,22 @@ class DataService:
                 source_ids = list(source_id_to_name.keys())
                 
                 if source_ids:
-                    # Batch query: fetch top N entries per source using window function
-                    # This reduces 467 queries to 1 query
-                    placeholders = ','.join(['?'] * len(source_ids))
-                    batch_sql = f"""
+                    # On production SQLite, the window-function version can spend
+                    # 10s+ ranking the whole RSS corpus. Per-source indexed LIMIT
+                    # queries are faster and keep first paint responsive.
+                    all_entries = []
+                    entry_sql = """
                         SELECT source_id, title, url, published_raw, published_at, created_at, dedup_key
-                        FROM (
-                            SELECT source_id, title, url, published_raw, published_at, created_at, dedup_key,
-                                   ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY created_at DESC) as rn
-                            FROM rss_entries
-                            WHERE source_id IN ({placeholders})
-                        )
-                        WHERE rn <= ?
+                        FROM rss_entries
+                        WHERE source_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ?
                     """
                     try:
-                        cur = conn.execute(batch_sql, source_ids + [per_platform_limit])
-                        all_entries = cur.fetchall()
+                        for source_id in source_ids:
+                            all_entries.extend(
+                                conn.execute(entry_sql, (source_id, per_platform_limit)).fetchall()
+                            )
                     except Exception:
                         all_entries = []
                     

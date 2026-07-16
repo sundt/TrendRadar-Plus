@@ -5,48 +5,36 @@
  * Integrated with auth-state.js for reactive auth updates.
  */
 
-import { formatNewsDate } from './core.js';
+import { TR, formatNewsDate } from './core.js';
 import { authState } from './auth-state.js';
 import { events } from './events.js';
 import { skeletonCards } from './skeleton.js';
 
 const MY_TAGS_CATEGORY_ID = 'my-tags';
 const MY_TAGS_CACHE_KEY = 'hotnews_my_tags_cache';
-const MY_TAGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+const INITIAL_CARDS_DESKTOP = 5;
+const INITIAL_CARDS_MOBILE = 2;
+const MAX_CARDS = 20;
 
 let myTagsLoaded = false;
 let myTagsLoading = false;
 let _myTagsGeneration = 0;
-/** Dedup: shared in-flight promise for fetchFollowedNews */
-let _fetchInflight = null;
+let _timelineOffset = 0;
+let _timelineFinished = false;
+let _timelineObserver = null;
+let _timelineScrollArmed = false;
+
+function getItemsPerCard() {
+    return (window.SYSTEM_SETTINGS && window.SYSTEM_SETTINGS.display && window.SYSTEM_SETTINGS.display.items_per_card) || 20;
+}
+
+function getInitialCards() {
+    return window.innerWidth <= 640 ? INITIAL_CARDS_MOBILE : INITIAL_CARDS_DESKTOP;
+}
 
 /**
  * Check if user is authenticated using authState
  */
-function checkAuth() {
-    // Use authState directly for instant check (sync)
-    return authState.getUser();
-}
-
-/**
- * Get cached data from localStorage
- * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
- * Backend has 5-minute cache, so no performance impact.
- */
-function getCachedData() {
-    // Disable frontend cache to fix compatibility issues
-    return null;
-}
-
-/**
- * Save data to localStorage cache
- * DISABLED: Frontend cache causes issues in WeChat browser and other environments.
- */
-function setCachedData(tags) {
-    // Disable frontend cache to fix compatibility issues
-    return;
-}
-
 /**
  * Clear cached data
  */
@@ -64,33 +52,6 @@ function clearCache() {
  */
 function redirectToLogin() {
     window.location.href = '/api/auth/page';
-}
-
-/**
- * Fetch followed news from API (deduped — concurrent calls share one request)
- */
-async function fetchFollowedNews() {
-    if (_fetchInflight) return _fetchInflight;
-    _fetchInflight = _doFetchFollowedNews();
-    try { return await _fetchInflight; } finally { _fetchInflight = null; }
-}
-
-async function _doFetchFollowedNews() {
-    try {
-        const res = await fetch('/api/user/preferences/followed-news?limit=50', {
-            credentials: 'include'
-        });
-        if (!res.ok) {
-            if (res.status === 401) {
-                return { needsAuth: true };
-            }
-            throw new Error('Failed to fetch');
-        }
-        return await res.json();
-    } catch (e) {
-        console.error('[MyTags] Fetch failed:', e);
-        return { error: e.message };
-    }
 }
 
 /**
@@ -203,101 +164,203 @@ function renderError(container, message) {
     `;
 }
 
-/**
- * Create a news card HTML for a tag
- */
-function createTagCard(tagData) {
+function ensureTimelineLayout(container) {
+    if (!container) return;
+    container.style.display = 'flex';
+    container.style.flexDirection = 'row';
+    container.style.overflowX = 'auto';
+    container.style.overflowY = 'hidden';
+    container.style.alignItems = 'flex-start';
+    container.style.overscrollBehavior = 'contain';
+}
+
+function createTimelineSentinel(container) {
+    const existing = container.querySelector('#my-tags-load-sentinel');
+    if (existing) existing.remove();
+
+    const sentinel = document.createElement('div');
+    sentinel.id = 'my-tags-load-sentinel';
+    sentinel.style.minWidth = '20px';
+    sentinel.style.height = '100%';
+    sentinel.style.flexShrink = '0';
+    sentinel.innerHTML = '<div style="padding:20px;color:#9ca3af;font-size:12px;">⏳</div>';
+    container.appendChild(sentinel);
+    return sentinel;
+}
+
+function createTagCard(tagData, cardIndex) {
     const { tag, news, count } = tagData;
     const itemType = tagData.item_type || tag.type || 'tag';
     const tagIcon = tag.icon || '🏷️';
     const tagName = tag.name || tag.id;
 
-    const newsListHtml = news.length > 0
+    const newsListHtml = Array.isArray(news) && news.length > 0
         ? news.map((item, idx) => {
-            // Format date using the imported function
             const dateStr = formatNewsDate(item.published_at);
-            // Escape title for HTML attribute
             const safeTitle = (item.title || '').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const escapedTitle = safeTitle.replace(/'/g, "\\'");
             const escapedUrl = (item.url || '').replace(/'/g, "\\'");
             const escapedTagName = (tagName || '').replace(/'/g, "\\'");
-            
-            // AI indicator dot
-            const aiDotHtml = `<span class="news-ai-indicator" data-news-id="${item.id}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')"></span>`;
-            
-            // Actions container (date + summary button)
             const dateHtml = dateStr ? `<span class="tr-news-date">${dateStr}</span>` : '';
             const summaryBtnHtml = `<button class="news-summary-btn" data-news-id="${item.id}" data-title="${safeTitle}" data-url="${item.url || ''}" data-source-id="${tag.id}" data-source-name="${tagName || ''}" onclick="event.preventDefault();event.stopPropagation();handleSummaryClick(event, '${item.id}', '${escapedTitle}', '${escapedUrl}', '${tag.id}', '${escapedTagName}')" ></button>`;
             const commentBtnHtml = `<button class="news-comment-btn" data-url="${(item.url || '').replace(/"/g, '&quot;')}" data-title="${safeTitle}"></button>`;
             const actionsHtml = `<div class="news-actions">${dateHtml}<div class="news-hover-btns">${summaryBtnHtml}${commentBtnHtml}</div></div>`;
-            
             return `
-            <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
-                <div class="news-item-content">
-                    <span class="news-index">${idx + 1}</span>
-                    <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)">
-                        ${item.title}
-                    </a>
-                    ${aiDotHtml}
-                    ${actionsHtml}
-                </div>
-            </li>
+                <li class="news-item" data-news-id="${item.id}" data-news-title="${safeTitle}" data-news-url="${item.url || ''}">
+                    <div class="news-item-content">
+                        <span class="news-index">${idx + 1}</span>
+                        <a class="news-title" href="${item.url || '#'}" target="_blank" rel="noopener noreferrer" onclick="handleTitleClickV2(this, event)" onauxclick="handleTitleClickV2(this, event)" oncontextmenu="handleTitleClickV2(this, event)" onkeydown="handleTitleKeydownV2(this, event)">
+                            ${safeTitle}
+                        </a>
+                        ${actionsHtml}
+                    </div>
+                </li>
             `;
         }).join('')
         : '<li class="news-placeholder" style="color:#9ca3af;padding:20px;text-align:center;">暂无相关新闻</li>';
 
-    // Extra data attributes for unfollow handler
     const extraAttrs = [];
     extraAttrs.push(`data-item-type="${itemType}"`);
-    if (itemType === 'keyword' && tagData.keyword_id) {
-        extraAttrs.push(`data-keyword-id="${tagData.keyword_id}"`);
-    }
-    if (itemType === 'wechat' && tagData.fakeid) {
-        extraAttrs.push(`data-fakeid="${tagData.fakeid}"`);
-    }
+    extraAttrs.push(`data-my-tags-index="${cardIndex}"`);
+    if (itemType === 'keyword' && tagData.keyword_id) extraAttrs.push(`data-keyword-id="${tagData.keyword_id}"`);
+    if (itemType === 'wechat' && tagData.fakeid) extraAttrs.push(`data-fakeid="${tagData.fakeid}"`);
 
-    return `
-        <div class="platform-card" data-platform="${tag.id}" data-tag-id="${tag.id}" ${extraAttrs.join(' ')} draggable="false">
-            <div class="platform-header">
-                <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
-                    ${tagIcon} ${tagName}
-                    <span style="font-size:12px;color:#9ca3af;margin-left:8px;">(${count}条)</span>
-                </div>
-                <div class="platform-header-actions"></div>
+    const card = document.createElement('div');
+    card.className = 'platform-card tr-my-tags-card';
+    card.style.minWidth = '360px';
+    // data-platform 必须用稳定 ID（基于 tag.id），不能用位置 index。
+    // 否则用户右键置顶后，保存的"位置-X"和刷新后重新分配的"位置-Y"对不上。
+    card.dataset.platform = `mytags:${String(tag.id || '').toLowerCase()}`;
+    card.dataset.tagId = tag.id;
+    card.draggable = false;
+    card.innerHTML = `
+        <div class="platform-header">
+            <div class="platform-name" style="margin-bottom:0;padding-bottom:0;border-bottom:none;">
+                ${tagIcon} ${tagName}
+                <span style="font-size:12px;color:#9ca3af;margin-left:8px;">(${count}条)</span>
             </div>
-            <ul class="news-list">
-                ${newsListHtml}
-            </ul>
+            <div class="platform-header-actions"></div>
         </div>
+        <ul class="news-list" ${extraAttrs.join(' ')}>
+            ${newsListHtml}
+        </ul>
     `;
+    return card;
 }
 
-/**
- * Render the tags with news
- */
-function renderTagsNews(container, tagsData) {
-    console.log('[MyTags] renderTagsNews called, container:', container, 'tagsData:', tagsData);
+function appendTagCards(tagsData, startIndex, container) {
+    if (!container || !Array.isArray(tagsData) || tagsData.length <= 0) return;
+    const sentinel = container.querySelector('#my-tags-load-sentinel');
+    const fragment = document.createDocumentFragment();
+    tagsData.forEach((tagData, idx) => {
+        fragment.appendChild(createTagCard(tagData, startIndex + idx));
+    });
+    if (sentinel) container.insertBefore(fragment, sentinel);
+    else container.appendChild(fragment);
+}
 
-    if (!container) {
-        console.error('[MyTags] renderTagsNews: container is null!');
+async function fetchGroupedBatch(groupLimit, groupOffset, signal) {
+    const newsLimit = getItemsPerCard();
+    const url = `/api/user/preferences/followed-news?limit=${encodeURIComponent(String(newsLimit))}&group_limit=${encodeURIComponent(String(groupLimit))}&group_offset=${encodeURIComponent(String(groupOffset))}`;
+    const res = await fetch(url, { credentials: 'include', signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const payload = await res.json();
+    if (payload?.needsAuth) return { needsAuth: true, tags: [], total: 0 };
+    return {
+        ok: payload?.ok !== false,
+        tags: Array.isArray(payload?.tags) ? payload.tags : [],
+        total: Number.isFinite(payload?.total) ? payload.total : null,
+    };
+}
+
+function attachTimelineObserver(container) {
+    if (_timelineObserver) {
+        try { _timelineObserver.disconnect(); } catch (e) { /* ignore */ }
+        _timelineObserver = null;
+    }
+    if (!container) return;
+
+    _timelineScrollArmed = false;
+    const armScroll = () => {
+        _timelineScrollArmed = true;
+        container.removeEventListener('scroll', armScroll);
+        const sentinel = container.querySelector('#my-tags-load-sentinel');
+        if (sentinel) {
+            const rootRect = container.getBoundingClientRect();
+            const sentinelRect = sentinel.getBoundingClientRect();
+            if (sentinelRect.left < rootRect.right + 200) {
+                loadNextTimelineBatch().catch(() => {});
+            }
+        }
+    };
+    container.addEventListener('scroll', armScroll, { passive: true });
+
+    _timelineObserver = new IntersectionObserver((entries) => {
+        if (!_timelineScrollArmed) return;
+        for (const entry of entries) {
+            if (entry.isIntersecting) {
+                loadNextTimelineBatch().catch(() => {});
+            }
+        }
+    }, { root: container, rootMargin: '200px', threshold: 0.01 });
+
+    const sentinel = container.querySelector('#my-tags-load-sentinel');
+    if (sentinel) _timelineObserver.observe(sentinel);
+}
+
+async function loadNextTimelineBatch() {
+    if (myTagsLoading || _timelineFinished) return;
+
+    if (_timelineOffset >= MAX_CARDS) {
+        _timelineFinished = true;
+        const sentinel = document.getElementById('my-tags-load-sentinel');
+        if (sentinel) {
+            sentinel.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已达到最大显示数量</div>';
+            sentinel.style.width = '40px';
+        }
         return;
     }
 
-    if (!tagsData || tagsData.length === 0) {
-        console.log('[MyTags] No tags data, showing empty state');
-        renderEmptyState(container);
-        return;
-    }
+    const container = document.getElementById('myTagsGrid');
+    if (!container) return;
 
-    console.log('[MyTags] Rendering', tagsData.length, 'tags');
-    const cardsHtml = tagsData.map(tagData => createTagCard(tagData)).join('');
-    console.log('[MyTags] Generated HTML length:', cardsHtml.length);
-    container.innerHTML = cardsHtml;
-    console.log('[MyTags] HTML inserted into container');
-    
-    // Restore read state for the newly rendered items
-    if (window.TR && window.TR.readState) {
-        window.TR.readState.restoreReadState();
+    myTagsLoading = true;
+    const myGeneration = _myTagsGeneration;
+    try {
+        const groupLimit = getInitialCards();
+        const result = await fetchGroupedBatch(groupLimit, _timelineOffset);
+        if (myGeneration !== _myTagsGeneration) return;
+        if (result.needsAuth) {
+            renderLoginRequired(container);
+            _timelineFinished = true;
+            return;
+        }
+
+        const tags = result.tags || [];
+        if (!tags.length) {
+            _timelineFinished = true;
+            const sentinel = document.getElementById('my-tags-load-sentinel');
+            if (sentinel) {
+                sentinel.innerHTML = '<div style="writing-mode:vertical-rl;padding:20px;color:#9ca3af;font-size:12px;">已显示全部内容</div>';
+                sentinel.style.width = '40px';
+            }
+            return;
+        }
+
+        appendTagCards(tags, _timelineOffset, container);
+        _timelineOffset += tags.length;
+
+        if (tags.length < groupLimit || (result.total !== null && _timelineOffset >= result.total)) {
+            _timelineFinished = true;
+            const sentinel = document.getElementById('my-tags-load-sentinel');
+            if (sentinel) sentinel.remove();
+        }
+
+        try { TR.readState?.restoreReadState?.(); } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error('[MyTags] timeline next batch failed:', e);
+    } finally {
+        myTagsLoading = false;
     }
 }
 
@@ -366,92 +429,67 @@ async function loadMyTags(force = false) {
         }
         console.log('[MyTags] User authenticated:', user);
 
-        // Try to load from frontend cache first (if not forcing refresh)
-        if (!force) {
-            const cachedTags = getCachedData();
-            if (cachedTags && cachedTags.length > 0) {
-                console.log('[MyTags] Loading from frontend cache, tags:', cachedTags.length);
-                renderTagsNews(container, cachedTags);
-                myTagsLoaded = true;
-                myTagsLoading = false;
+        ensureTimelineLayout(container);
+        container.innerHTML = skeletonCards(getInitialCards(), { rows: 10, extraClass: 'tr-skeleton-my-tags' });
+        _timelineOffset = 0;
+        _timelineFinished = false;
+        _timelineScrollArmed = false;
+        if (_timelineObserver) {
+            try { _timelineObserver.disconnect(); } catch (e) { /* ignore */ }
+            _timelineObserver = null;
+        }
 
-                // Restore scroll position from navigation state (cached path)
-                if (myGeneration > 0 || window._trNoRebuildExpected) {
-                    try {
-                        if (window.TR?.scroll) {
-                            const navState = window.TR.scroll.peekNavigationState?.() || null;
-                            if (navState && navState.activeTab === MY_TAGS_CATEGORY_ID) {
-                                console.log('[MyTags] Restoring navigation scroll after cached load (gen:', myGeneration, ')');
-                                const consumed = window.TR.scroll.consumeNavigationState();
-                                requestAnimationFrame(() => {
-                                    window.TR.scroll.restoreNavigationScrollY(consumed || navState);
-                                    window.TR.scroll.restoreNavGridScroll(consumed || navState);
-                                });
-                            }
-                        }
-                    } catch (e) {
-                        console.error('[MyTags] Failed to restore scroll (cached):', e);
+        let neededCards = getInitialCards();
+        if (myGeneration > 0 || window._trNoRebuildExpected) {
+            try {
+                const navState = TR.scroll?.peekNavigationState?.() || null;
+                if (navState && navState.activeTab === MY_TAGS_CATEGORY_ID && navState.anchorPlatformId) {
+                    const match = String(navState.anchorPlatformId).match(/my-tags-group-(\d+)/);
+                    if (match) {
+                        const anchorIdx = parseInt(match[1], 10);
+                        neededCards = Math.min(MAX_CARDS, Math.max(neededCards, anchorIdx + 2));
                     }
                 }
-
-                // Fetch fresh data in background to update cache
-                fetchAndUpdateCache().catch(e => {
-                    console.error('[MyTags] Background update failed:', e);
-                });
-                return;
-            } else {
-                console.log('[MyTags] No valid cache found');
-            }
+            } catch (e) { /* ignore */ }
         }
 
-        // Show loading state
-        console.log('[MyTags] Showing loading state...');
-        container.innerHTML = skeletonCards(window.innerWidth <= 640 ? 1 : 3);
-
-        // Fetch followed news (will use backend cache if available)
-        console.log('[MyTags] Fetching followed news from API...');
-        const result = await fetchFollowedNews();
-        console.log('[MyTags] API response:', result);
+        console.log('[MyTags] Fetching grouped cards, groupLimit:', neededCards);
+        const result = await fetchGroupedBatch(neededCards, 0);
+        if (myGeneration !== _myTagsGeneration) return;
 
         if (result.needsAuth) {
-            console.log('[MyTags] API returned needsAuth');
+            console.log('[MyTags] Grouped API returned needsAuth');
             renderLoginRequired(container);
-            myTagsLoading = false;
-            return;
-        }
-
-        if (result.error) {
-            console.error('[MyTags] API returned error:', result.error);
-            renderError(container, result.error);
-            myTagsLoading = false;
-            return;
-        }
-
-        if (!result.ok) {
-            console.error('[MyTags] API returned not ok');
-            renderError(container, '请求失败');
-            myTagsLoading = false;
             return;
         }
 
         const tags = result.tags || [];
-        console.log('[MyTags] Got tags from API:', tags.length, 'tags');
+        console.log('[MyTags] Got grouped cards:', tags.length);
 
-        // Log cache status
-        if (result.cached) {
-            console.log(`[MyTags] Loaded from backend cache (age: ${result.cache_age}s)`);
-        } else {
-            console.log('[MyTags] Loaded fresh data from database');
+        container.innerHTML = '';
+        ensureTimelineLayout(container);
+
+        if (!tags.length) {
+            renderEmptyState(container);
+            myTagsLoaded = true;
+            return;
         }
 
-        // Save to frontend cache
-        setCachedData(tags);
+        createTimelineSentinel(container);
+        appendTagCards(tags, 0, container);
 
-        // Render the tags
-        console.log('[MyTags] Rendering tags...');
-        renderTagsNews(container, tags);
+        _timelineOffset = tags.length;
+        if (tags.length < neededCards || (result.total !== null && _timelineOffset >= result.total)) {
+            _timelineFinished = true;
+            const s = document.getElementById('my-tags-load-sentinel');
+            if (s) s.remove();
+        } else {
+            attachTimelineObserver(container);
+        }
+
+        try { TR.readState?.restoreReadState?.(); } catch (e) { /* ignore */ }
         myTagsLoaded = true;
-        console.log('[MyTags] Load complete!');
+        console.log('[MyTags] Grouped load complete!');
         
         // Restore scroll position from navigation state if this is the active tab
         // Only restore if this load was triggered after renderViewerFromData
@@ -492,38 +530,11 @@ async function loadMyTags(force = false) {
 }
 
 /**
- * Fetch and update cache in background
- */
-async function fetchAndUpdateCache() {
-    try {
-        const result = await fetchFollowedNews();
-        if (result.ok && result.tags) {
-            setCachedData(result.tags);
-            console.log('[MyTags] Background cache update completed');
-            return result.tags;
-        }
-    } catch (e) {
-        console.error('[MyTags] Background cache update error:', e);
-    }
-    return null;
-}
-
-/**
  * Preload data in background (called after login)
  */
 async function preloadData() {
-    // Only preload if user is logged in and we don't have fresh cache
-    const user = checkAuth();
-    if (!user) return;
-    
-    const cached = getCachedData();
-    if (cached && cached.length > 0) {
-        console.log('[MyTags] Preload skipped - cache is fresh');
-        return;
-    }
-    
-    console.log('[MyTags] Preloading data in background...');
-    await fetchAndUpdateCache();
+    // My-tags now uses paged timeline loading; avoid the old 50-item preload.
+    return;
 }
 
 /**
@@ -542,6 +553,13 @@ events.on('viewer:rendered', () => {
         _myTagsGeneration++;
         myTagsLoaded = false;
         myTagsLoading = false;
+        _timelineOffset = 0;
+        _timelineFinished = false;
+        _timelineScrollArmed = false;
+        if (_timelineObserver) {
+            try { _timelineObserver.disconnect(); } catch (e) { /* ignore */ }
+            _timelineObserver = null;
+        }
 
         // If my-tags tab is active, reload
         setTimeout(() => {
@@ -573,6 +591,13 @@ function init() {
             // Reset loaded state
             myTagsLoaded = false;
             myTagsLoading = false;
+            _timelineOffset = 0;
+            _timelineFinished = false;
+            _timelineScrollArmed = false;
+            if (_timelineObserver) {
+                try { _timelineObserver.disconnect(); } catch (e) { /* ignore */ }
+                _timelineObserver = null;
+            }
             // Clear cache on logout
             if (!isLoggedIn) {
                 clearCache();

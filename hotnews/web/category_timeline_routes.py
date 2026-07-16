@@ -171,59 +171,39 @@ def _get_finance_source_ids(conn) -> tuple:
     return source_ids, name_map
 
 
-@router.get("/api/rss/finance/timeline")
-async def api_finance_timeline(
-    limit: int = Query(50, ge=1, le=5000),
-    offset: int = Query(0, ge=0),
-    nofilter: int = Query(0, ge=0, le=1),
-):
-    """财经投资时间线 - 包含 rss_sources 和 custom_sources 中 category='finance' 的所有源。
+# Finance 池子大小：raw 行 → dedup → AI 过滤后约 500-700 条，足够多页翻页都命中缓存
+FINANCE_FETCH_LIMIT = 800
 
-    过滤策略（nofilter=0，默认）：
-    - 有 AI 标注的文章：排除被 AI 标为 exclude 且无财经标签的
-    - 未被 AI 标注的文章：保留（来源本身是财经源）
-    - 有财经相关标签的文章：优先保留
 
-    nofilter=1 时跳过 AI 过滤，返回所有财经源文章（用于卡片模式）。
+def compute_finance_timeline_items(conn, *, skip_filter: bool = False) -> List[Dict[str, Any]]:
+    """计算财经 timeline 完整池子（dedup + 可选 AI 过滤）。
+
+    被 endpoint 和 cache warmup 共用，确保两边逻辑永远一致。
     """
-    conn = get_online_db()
-    lim = min(int(limit or 50), 5000)
-    off = int(offset or 0)
-    skip_filter = bool(nofilter)
-
     source_ids, name_map = _get_finance_source_ids(conn)
     if not source_ids:
-        return UnicodeJSONResponse(
-            content={"offset": off, "limit": lim, "items": [], "total_returned": 0}
-        )
-
+        return []
     ph = ",".join(["?"] * len(source_ids))
 
     if skip_filter:
-        # Card mode: no AI filtering, just return all finance source articles
-        fetch_limit = off + lim + 200
+        sql = f"""
+            SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
+            FROM rss_entries e
+            WHERE e.source_id IN ({ph})
+              AND e.published_at > 0
+              AND e.title IS NOT NULL AND e.title != ''
+              AND e.url IS NOT NULL AND e.url != ''
+            ORDER BY e.published_at DESC
+            LIMIT ?
+        """
         try:
-            cur = conn.execute(
-                f"""
-                SELECT e.source_id, e.title, e.url, e.created_at, e.published_at
-                FROM rss_entries e
-                WHERE e.source_id IN ({ph})
-                  AND e.published_at > 0
-                  AND e.title IS NOT NULL AND e.title != ''
-                  AND e.url IS NOT NULL AND e.url != ''
-                ORDER BY e.published_at DESC
-                LIMIT ?
-                """,
-                (*source_ids, fetch_limit),
-            )
-            rows = cur.fetchall() or []
+            rows = conn.execute(sql, (*source_ids, FINANCE_FETCH_LIMIT)).fetchall() or []
         except Exception:
             rows = []
 
         seen_urls: set = set()
         seen_titles: set = set()
         items_nf: List[Dict[str, Any]] = []
-
         for r in rows:
             sid = str(r[0] or "").strip()
             title = str(r[1] or "").strip()
@@ -251,32 +231,20 @@ async def api_finance_timeline(
             )
             it["published_at"] = published_at
             items_nf.append(it)
+        return items_nf
 
-        sliced_nf = items_nf[off:off + lim]
-        return UnicodeJSONResponse(
-            content={"offset": off, "limit": lim, "items": sliced_nf, "total_returned": len(sliced_nf)}
-        )
-
-    # 使用统一 AI 过滤模块
-    from .ai_filter import apply_ai_filter
-
-    fetch_limit = (off + lim) * 3 + 500  # fetch more to compensate for filtering
-
+    sql = f"""
+        SELECT e.source_id, e.dedup_key, e.title, e.url,
+               e.created_at, e.published_at
+        FROM rss_entries e
+        WHERE e.source_id IN ({ph})
+          AND e.published_at > 0
+          AND e.title IS NOT NULL AND e.title != ''
+        ORDER BY e.published_at DESC, e.id DESC
+        LIMIT ?
+    """
     try:
-        cur = conn.execute(
-            f"""
-            SELECT e.source_id, e.dedup_key, e.title, e.url,
-                   e.created_at, e.published_at
-            FROM rss_entries e
-            WHERE e.source_id IN ({ph})
-              AND e.published_at > 0
-              AND e.title IS NOT NULL AND e.title != ''
-            ORDER BY e.published_at DESC, e.id DESC
-            LIMIT ?
-            """,
-            (*source_ids, fetch_limit),
-        )
-        rows = cur.fetchall() or []
+        rows = conn.execute(sql, (*source_ids, FINANCE_FETCH_LIMIT)).fetchall() or []
     except Exception:
         rows = []
 
@@ -315,10 +283,56 @@ async def api_finance_timeline(
         it["dedup_key"] = dk
         items_all.append(it)
 
-    # 调用统一 AI 过滤
+    from .ai_filter import apply_ai_filter
     filtered_items, _stats = apply_ai_filter(items_all, "finance", conn)
+    return filtered_items
 
-    sliced = filtered_items[off:off + lim]
+
+@router.get("/api/rss/finance/timeline")
+async def api_finance_timeline(
+    limit: int = Query(50, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+    nofilter: int = Query(0, ge=0, le=1),
+):
+    """财经投资时间线 - 包含 rss_sources 和 custom_sources 中 category='finance' 的所有源。
+
+    过滤策略（nofilter=0，默认）：
+    - 有 AI 标注的文章：排除被 AI 标为 exclude 且无财经标签的
+    - 未被 AI 标注的文章：保留（来源本身是财经源）
+    - 有财经相关标签的文章：优先保留
+
+    nofilter=1 时跳过 AI 过滤，返回所有财经源文章（用于卡片模式）。
+    """
+    conn = get_online_db()
+    lim = min(int(limit or 50), 5000)
+    off = int(offset or 0)
+    skip_filter = bool(nofilter)
+
+    # 缓存：finance timeline 每次都要扫 12 个源 × 650 条 + AI 过滤，DB 暖也要 120ms。
+    # 同一个池子（500 条已过滤好的 items）用 cache_key 区分 nofilter，offset/limit 在内存切片。
+    from hotnews.web.timeline_cache import finance_timeline_cache
+    cache_key = {"mode": "nofilter" if skip_filter else "filter"}
+    cached_items = finance_timeline_cache.get(config=cache_key)
+    if cached_items is not None:
+        sliced = cached_items[off:off + lim]
+        return UnicodeJSONResponse(
+            content={
+                "offset": off,
+                "limit": lim,
+                "items": sliced,
+                "total_returned": len(sliced),
+                "cached": True,
+            }
+        )
+
+    items_pool = compute_finance_timeline_items(conn, skip_filter=skip_filter)
+    if not items_pool:
+        return UnicodeJSONResponse(
+            content={"offset": off, "limit": lim, "items": [], "total_returned": 0}
+        )
+
+    finance_timeline_cache.set(items_pool, config=cache_key)
+    sliced = items_pool[off:off + lim]
     return UnicodeJSONResponse(
         content={
             "offset": off,
@@ -542,7 +556,10 @@ async def api_my_tags_timeline(
     if not tag_ids and not source_ids and not keywords:
         return UnicodeJSONResponse(content={"offset": 0, "limit": lim, "items": [], "total_returned": 0})
 
-    fetch_limit = off + lim + 300
+    # Fetch a bounded candidate window for each branch, then de-dupe globally.
+    # My-tags can combine tags, followed sources, MPs and keywords; keeping the
+    # buffer modest avoids over-reading thousands of rows for a 20-item page.
+    fetch_limit = off + lim + 120
     all_rows = []
 
     # Fetch from tags
@@ -590,21 +607,27 @@ async def api_my_tags_timeline(
         except Exception:
             pass
 
-    # Fetch from keywords
-    for kw in keywords[:10]:  # limit to 10 keywords
+    # Fetch from keywords.  A single OR query scans rss_entries once; the older
+    # per-keyword loop scanned and sorted the same table up to 10 times.
+    keyword_terms = [str(kw or "").strip() for kw in keywords[:10]]
+    keyword_terms = [kw for kw in keyword_terms if kw]
+    if keyword_terms:
+        clauses = " OR ".join(["e.title LIKE ?"] * len(keyword_terms))
+        params = [f"%{kw}%" for kw in keyword_terms]
         try:
             cur = online.execute(
-                """
+                f"""
                 SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
                        COALESCE(s.name, e.source_id) as source_name
                 FROM rss_entries e
                 LEFT JOIN rss_sources s ON s.id = e.source_id
-                WHERE e.title LIKE ?
+                WHERE ({clauses})
                   AND e.published_at > 0
+                  AND e.title IS NOT NULL AND e.title != ''
                 ORDER BY e.published_at DESC
                 LIMIT ?
                 """,
-                (f"%{kw}%", fetch_limit),
+                (*params, fetch_limit),
             )
             all_rows.extend(cur.fetchall() or [])
         except Exception:

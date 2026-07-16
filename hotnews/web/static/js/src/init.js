@@ -217,8 +217,9 @@ ready(function () {
         defaultConfig.hiddenDefaultCategories && 
         defaultConfig.hiddenDefaultCategories.length > 0;
 
-    // 如果有自定义配置，或者有默认隐藏的栏目，都需要刷新数据
-    if (hasCustomConfig || hasDefaultHiddenCategories) {
+    // 如果有自定义配置，需要刷新数据来应用用户的个性化栏目设置
+    // 注意：仅有默认隐藏栏目时不需要刷新，因为 SSR 已经处理了默认隐藏
+    if (hasCustomConfig) {
         // 触发数据刷新来应用配置
         // renderViewerFromData 完成后会添加 .categories-ready 类
         // If returning from navigation (WeChat back), preserve scroll position
@@ -284,9 +285,17 @@ ready(function () {
 
         // 加载 _columnConfig，使 tag-driven 栏目（AI、开发者等）的
         // viewMode / categoryTimeline 能正确工作（SSR 不会调用 renderViewerFromData）
-        fetch('/api/columns').then(r => r.ok ? r.json() : null).then(d => {
+        // 优化：SSR 已在 HTML 中内嵌了 _columnConfig，仅在缺失时才从 API 获取
+        const existingConfig = window._columnConfig;
+        const configPromise = (Array.isArray(existingConfig) && existingConfig.length > 0)
+            ? Promise.resolve(existingConfig)
+            : fetch('/api/columns').then(r => r.ok ? r.json() : null).then(d => {
+                if (!d) return null;
+                return Array.isArray(d) ? d : (d.columns || []);
+            });
+        configPromise.then(d => {
             if (!d) return;
-            window._columnConfig = Array.isArray(d) ? d : (d.columns || []);
+            window._columnConfig = d;
             window._columnParentMap = {};
             function _bp(nodes, pid) {
                 for (const n of nodes) {

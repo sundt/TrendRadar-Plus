@@ -123,9 +123,10 @@ def _get_db_conn() -> sqlite3.Connection:
         db_path = Path("output/online.db")
         db_path.parent.mkdir(parents=True, exist_ok=True)
     
-    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     
     # 创建表
     conn.execute("""

@@ -72,7 +72,7 @@ def _load_yaml_defaults(project_root: Path) -> Dict[str, Any]:
             "push_window_end": "22:00",
         },
         "display": {
-            "items_per_card": 50,
+            "items_per_card": 20,
             "morning_brief_items": 50,
         },
         "ai": {
@@ -292,4 +292,3 @@ async def api_scraperapi_usage(request: Request):
         
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-

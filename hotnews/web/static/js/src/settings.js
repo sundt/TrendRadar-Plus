@@ -354,7 +354,7 @@ export const settings = {
         // NEW 标记现在始终显示，不再隐藏
         // Always fetch fresh categories to ensure admin-added categories appear
         try {
-            const response = await fetch('/api/news');
+            const response = await fetch('/api/news?include_platforms=1');
             const data = await response.json();
             if (data?.categories) {
                 _defaultCategories = {};

@@ -24,7 +24,7 @@ router = APIRouter()
 async def api_rss_explore_timeline(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    no_content: int = Query(0, ge=0, le=1),
+    no_content: int = Query(1, ge=0, le=1),
 ):
     """API: Explore timeline - all RSS entries sorted by published_at DESC."""
     conn = get_online_db()
@@ -54,10 +54,11 @@ async def api_rss_explore_timeline(
 
     try:
         fetch_limit = 2000
+        content_select = "e.description, e.content" if not no_content else "e.description, '' AS content"
         cur = conn.execute(
-            """
+            f"""
             SELECT e.source_id, e.title, e.url, e.created_at, e.published_at,
-                   e.description, e.content
+                   {content_select}
             FROM rss_entries e
             JOIN rss_sources s ON e.source_id = s.id
             WHERE e.published_at > 0

@@ -811,7 +811,7 @@ export const data = {
             </div>`;
         }).join('');
 
-        tabsEl.innerHTML = tabsHtml + '<button class="sub-tab sub-tab-add" onclick="goToSettings()" onmouseenter="typeof preloadSubscribeSidebar === \'function\' && preloadSubscribeSidebar()" title="订阅更多内容">+ 订阅</button><div class="sub-tabs-indicator"></div>';
+        tabsEl.innerHTML = tabsHtml + '<button class="sub-tab sub-tab-add" onclick="goToSettings()" title="订阅更多内容">+ 订阅</button><div class="sub-tabs-indicator"></div>';
 
         // 为 _columnConfig 中所有子节点（L1/L2/L3）生成 pane（/api/news 不返回这些）
         let extraPanesHtml = '';

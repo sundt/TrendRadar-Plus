@@ -164,10 +164,11 @@ class UserTimelineCache:
         self._ttl = ttl_seconds
         self._max_items = max_items_per_user
         self._max_users = max_users
-        # Dict of user_id -> {items, created_at, config_hash}
-        self._user_caches: Dict[int, Dict[str, Any]] = {}
+        # Dict of (user_id, config_hash) -> {items, created_at, config_hash, user_id}
+        # 同一用户可以有多份缓存条目（例如 my-tags 的预取窗口要分别缓存当前批次和下一批次）。
+        self._user_caches: Dict[tuple, Dict[str, Any]] = {}
         # Track access order for LRU eviction
-        self._access_order: List[int] = []
+        self._access_order: List[tuple] = []
     
     def _compute_config_hash(self, config: Dict[str, Any]) -> str:
         """Compute a hash of the config for cache invalidation."""
@@ -177,81 +178,85 @@ class UserTimelineCache:
         except Exception:
             return ""
     
-    def _touch_user(self, user_id: int) -> None:
+    def _touch_user(self, key: tuple) -> None:
         """Update access order for LRU."""
-        if user_id in self._access_order:
-            self._access_order.remove(user_id)
-        self._access_order.append(user_id)
-    
+        if key in self._access_order:
+            self._access_order.remove(key)
+        self._access_order.append(key)
+
     def _evict_if_needed(self) -> None:
-        """Evict oldest users if over limit."""
+        """Evict oldest entries if over limit (max_users 现在指最大 entry 数)。"""
         while len(self._user_caches) >= self._max_users and self._access_order:
-            oldest_user = self._access_order.pop(0)
-            self._user_caches.pop(oldest_user, None)
-    
+            oldest = self._access_order.pop(0)
+            self._user_caches.pop(oldest, None)
+
     def get(self, config: Optional[Dict[str, Any]] = None) -> Optional[List[Dict[str, Any]]]:
         """
         Get cached items for a user if valid.
-        
+
         Args:
             config: Config dict containing user_id and other params
-            
+
         Returns:
             Cached items list or None if cache is invalid
         """
         if config is None:
             return None
-        
+
         user_id = config.get("user_id")
         if user_id is None:
             return None
-        
-        cache_entry = self._user_caches.get(user_id)
+
+        cfg_hash = self._compute_config_hash(config)
+        cache_key = (user_id, cfg_hash)
+        cache_entry = self._user_caches.get(cache_key)
         if cache_entry is None:
             return None
-        
+
         # Check TTL
         if (time.time() - cache_entry["created_at"]) >= self._ttl:
-            self._user_caches.pop(user_id, None)
+            self._user_caches.pop(cache_key, None)
             return None
-        
-        # Check config hash
-        current_hash = self._compute_config_hash(config)
-        if current_hash != cache_entry["config_hash"]:
-            return None
-        
-        self._touch_user(user_id)
+
+        self._touch_user(cache_key)
         return cache_entry["items"]
-    
+
     def set(self, items: List[Dict[str, Any]], config: Optional[Dict[str, Any]] = None) -> None:
         """
         Store items in cache for a user.
-        
+
         Args:
             items: List of items to cache
             config: Config dict containing user_id
         """
         if config is None:
             return
-        
+
         user_id = config.get("user_id")
         if user_id is None:
             return
-        
+
         self._evict_if_needed()
-        
+
+        cfg_hash = self._compute_config_hash(config)
+        cache_key = (user_id, cfg_hash)
         truncated_items = items[:self._max_items] if len(items) > self._max_items else items
-        self._user_caches[user_id] = {
+        self._user_caches[cache_key] = {
             "items": truncated_items,
             "created_at": time.time(),
-            "config_hash": self._compute_config_hash(config),
+            "config_hash": cfg_hash,
         }
-        self._touch_user(user_id)
-    
+        self._touch_user(cache_key)
+
     def invalidate(self, user_id: Optional[int] = None) -> None:
         """Clear cache for a specific user or all users."""
         if user_id is not None:
-            self._user_caches.pop(user_id, None)
+            # 清掉这个 user 的所有 entries（多份预取窗口）
+            keys_to_remove = [k for k in self._user_caches.keys() if k[0] == user_id]
+            for k in keys_to_remove:
+                self._user_caches.pop(k, None)
+                if k in self._access_order:
+                    self._access_order.remove(k)
             if user_id in self._access_order:
                 self._access_order.remove(user_id)
         else:
@@ -290,6 +295,7 @@ class UserTimelineCache:
 
 brief_timeline_cache = TimelineCache(max_items=200)   # 早报 (deprecated, kept for cache_warmup compat)
 explore_timeline_cache = TimelineCache(max_items=200)  # 探索 (explore)
+finance_timeline_cache = TimelineCache(max_items=300)  # 财经投资 (finance) - 含过滤后池子
 my_tags_cache = UserTimelineCache()  # 我的关注 (my-tags) - per-user
 discovery_news_cache = TimelineCache(max_items=300)   # 新发现 (discovery)
 recommended_tags_cache = TimelineCache(ttl_seconds=300, max_items=100)  # 推荐标签 (5分钟缓存，数据变化不频繁)
@@ -442,6 +448,7 @@ def clear_all_timeline_caches() -> Dict[str, bool]:
     """Clear all timeline caches."""
     brief_timeline_cache.invalidate()
     explore_timeline_cache.invalidate()
+    finance_timeline_cache.invalidate()
     my_tags_cache.invalidate()
     discovery_news_cache.invalidate()
     topic_news_cache.invalidate()
@@ -449,6 +456,7 @@ def clear_all_timeline_caches() -> Dict[str, bool]:
     return {
         "brief_cleared": True,
         "explore_cleared": True,
+        "finance_cleared": True,
         "my_tags_cleared": True,
         "discovery_cleared": True,
         "topic_news_cleared": True,

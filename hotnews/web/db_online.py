@@ -103,6 +103,8 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_pub ON rss_entries(source_id, published_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub ON rss_entries(published_at DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_pub_id ON rss_entries(published_at DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_created ON rss_entries(created_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_created_id ON rss_entries(created_at DESC, id DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_source_created ON rss_entries(source_id, created_at DESC)")
     # Indexes for data lifecycle management and custom source queries
     conn.execute("CREATE INDEX IF NOT EXISTS idx_rss_entries_fetched_at ON rss_entries(fetched_at DESC)")
@@ -616,10 +618,12 @@ def get_online_db_conn(project_root: Path) -> sqlite3.Connection:
     # Migration: add generation_time_ms column for performance tracking
     _ensure_column("article_summaries", "generation_time_ms", "INTEGER DEFAULT 0")
 
-    # ========== Payment Tables ==========
-    # Initialize payment tables for WeChat Pay Token recharge
-    from hotnews.kernel.user.payment_api import init_payment_tables
-    init_payment_tables(conn)
+    # ========== Payment Tables (optional; private module may be absent in opensource) ==========
+    try:
+        from hotnews.kernel.user.payment_api import init_payment_tables
+        init_payment_tables(conn)
+    except ImportError:
+        pass
 
     # ========== Summary Failure Tracking Tables ==========
     # 总结失败追踪表（用于标记无法总结的网页/订阅源）

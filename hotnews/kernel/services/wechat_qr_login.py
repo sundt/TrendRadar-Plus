@@ -43,7 +43,7 @@ DEFAULT_HEADERS = {
 RATE_LIMIT_GLOBAL_PER_MINUTE = 10  # 全局每分钟最多请求数
 RATE_LIMIT_USER_PER_HOUR = 5       # 每用户每小时最多请求数
 MAX_CONCURRENT_SESSIONS = 3        # 最大并发会话数
-SESSION_TIMEOUT = 300              # 会话超时时间（秒）
+SESSION_TIMEOUT = 600              # 会话超时时间（秒），10 分钟 — 与微信侧 QR 生命周期对齐
 
 # 速率限制状态
 _rate_limit_lock = threading.Lock()
@@ -179,7 +179,9 @@ def start_login_session(user_id: int) -> Tuple[bool, str, Optional[str]]:
         
         result = resp.json()
         if result.get("base_resp", {}).get("ret") != 0:
-            err_msg = result.get("base_resp", {}).get("err_msg", "未知错误")
+            err_msg = str(result.get("base_resp", {}).get("err_msg", "未知错误"))
+            if err_msg == "10003":
+                err_msg = "微信拒绝了本次公众号后台扫码会话（10003），请稍后重试，或在系统浏览器/电脑端打开后再授权"
             return False, f"创建会话失败: {err_msg}", None
         
         # 提取 uuid cookie
@@ -231,11 +233,11 @@ def get_qrcode_url(user_id: int) -> Tuple[bool, str, Optional[bytes]]:
     if not session:
         return False, "请先创建登录会话", None
     
-    # 检查会话是否过期（5分钟）
-    if time.time() - session.created_at > 300:
+    # 检查会话是否过期
+    if time.time() - session.created_at > SESSION_TIMEOUT:
         session.status = "expired"
         return False, "会话已过期，请重新扫码", None
-    
+
     try:
         url = f"{MP_BASE_URL}/cgi-bin/scanloginqrcode"
         params = {
@@ -279,12 +281,14 @@ def check_scan_status(user_id: int) -> Dict[str, Any]:
     session = _login_sessions.get(user_id)
     if not session:
         return {"ok": False, "status": "error", "message": "请先创建登录会话", "need_refresh": True}
-    
+
     # 检查会话是否过期
-    if time.time() - session.created_at > 300:
+    age = int(time.time() - session.created_at)
+    if age > SESSION_TIMEOUT:
         session.status = "expired"
+        logger.info(f"[QRLogin] expired-local user={user_id} uuid={session.uuid[:8]} age={age}s ttl={SESSION_TIMEOUT}s")
         return {"ok": True, "status": "expired", "message": "二维码已过期", "need_refresh": True}
-    
+
     try:
         url = f"{MP_BASE_URL}/cgi-bin/scanloginqrcode"
         params = {
@@ -295,31 +299,39 @@ def check_scan_status(user_id: int) -> Dict[str, Any]:
             "ajax": "1",
         }
         headers = {**DEFAULT_HEADERS, "Cookie": f"uuid={session.uuid}"}
-        
+
         resp = requests.get(url, params=params, headers=headers, timeout=10)
-        
+
         if resp.status_code != 200:
+            logger.warning(f"[QRLogin] check user={user_id} HTTP {resp.status_code}")
             return {"ok": False, "status": "error", "message": f"HTTP {resp.status_code}", "need_refresh": False}
-        
+
         result = resp.json()
         status_code = result.get("status", -1)
-        
+        acct_size = result.get("acct_size", 0)
+
+        # 单行调试日志：每次轮询都记录微信侧 raw status，便于追查偶发 expired
+        logger.info(
+            f"[QRLogin] check user={user_id} uuid={session.uuid[:8]} age={age}s "
+            f"wx_status={status_code} acct_size={acct_size}"
+        )
+
         # 状态码含义：
         # 0 - 等待扫码
         # 1 - 已确认登录
         # 2, 3 - 需要刷新二维码
         # 4, 6 - 已扫码，等待确认
         # 5 - 未绑定邮箱
-        
+
         if status_code == 0:
             return {"ok": True, "status": "waiting", "message": "等待扫码", "need_refresh": False}
         elif status_code == 1:
             session.status = "confirmed"
             return {"ok": True, "status": "confirmed", "message": "已确认登录", "need_refresh": False}
         elif status_code in (2, 3):
+            logger.info(f"[QRLogin] expired-wx user={user_id} uuid={session.uuid[:8]} age={age}s wx_status={status_code}")
             return {"ok": True, "status": "expired", "message": "二维码已过期", "need_refresh": True}
         elif status_code in (4, 6):
-            acct_size = result.get("acct_size", 0)
             if acct_size >= 1:
                 session.status = "scanned"
                 return {"ok": True, "status": "scanned", "message": "已扫码，请在手机上确认", "need_refresh": False}
@@ -329,7 +341,7 @@ def check_scan_status(user_id: int) -> Dict[str, Any]:
             return {"ok": True, "status": "error", "message": "该账号未绑定邮箱，无法扫码登录", "need_refresh": True}
         else:
             return {"ok": True, "status": "waiting", "message": "等待扫码", "need_refresh": False}
-        
+
     except requests.RequestException as e:
         logger.error(f"[QRLogin] Check status error: {e}")
         return {"ok": False, "status": "error", "message": f"网络错误: {e}", "need_refresh": False}

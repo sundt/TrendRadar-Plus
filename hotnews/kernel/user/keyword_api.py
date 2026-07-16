@@ -94,8 +94,80 @@ async def add_keyword(request: Request, data: AddKeywordRequest):
     
     if keyword_id is None:
         raise HTTPException(status_code=400, detail="Invalid keyword")
-    
-    return {"ok": True, "keyword_id": keyword_id}
+
+    # 新增/重复添加的关键词自动塞到 __tag_order__ 第一位，命中 my-tags 排序里的 pinned 桶。
+    # 否则刚加完的关键词会按 followed_at 落到所有已 pin 项之后，用户还得手动找到再右键置顶。
+    try:
+        import time as _time_mod
+        composite_id = f"keyword_{keyword_id}".lower()
+        order_row = user_conn.execute(
+            "SELECT preference FROM user_tag_settings WHERE user_id = ? AND tag_id = '__tag_order__'",
+            (user_id,)
+        ).fetchone()
+        existing = [x for x in (order_row[0].split(",") if order_row and order_row[0] else []) if x and x != composite_id]
+        new_order = ",".join([composite_id] + existing)
+        now_ts = int(_time_mod.time())
+        user_conn.execute(
+            """
+            INSERT INTO user_tag_settings (user_id, tag_id, preference, created_at)
+            VALUES (?, '__tag_order__', ?, ?)
+            ON CONFLICT(user_id, tag_id) DO UPDATE SET preference = ?, created_at = ?
+            """,
+            (user_id, new_order, now_ts, new_order, now_ts)
+        )
+        user_conn.commit()
+        from hotnews.web.timeline_cache import my_tags_cache
+        my_tags_cache.invalidate()
+    except Exception:
+        pass
+
+    # 咖啡弹窗：非会员且关键词超过 3 个时返回提示信号，前端弹"请我喝杯咖啡 ¥9.9"
+    show_coffee_prompt = False
+    try:
+        row = user_conn.execute(
+            "SELECT is_member FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        is_member = bool(row and row[0])
+        if not is_member:
+            kw_count_row = user_conn.execute(
+                "SELECT COUNT(*) FROM user_keywords WHERE user_id = ? AND enabled = 1",
+                (user_id,),
+            ).fetchone()
+            kw_count = int(kw_count_row[0]) if kw_count_row else 0
+            if kw_count > 3:
+                show_coffee_prompt = True
+    except Exception:
+        pass
+
+    # 触发 FTS keyword 预热（fire-and-forget）：把新 keyword 的相关 FTS 页面
+    # 拉进 OS page cache，避免该用户/其他用户首次访问时遭遇 4-5s 冷 LIKE 扫表。
+    # OS page cache 跨 worker 共享，一个 worker 跑一次两个 worker 都受益。
+    try:
+        import threading
+        project_root = request.app.state.project_root
+        fts_db_path = project_root / "output" / "search_indexes" / "fts_index.db"
+        new_kw = (data.keyword or "").strip()
+        if fts_db_path.exists() and new_kw:
+            def _warm():
+                try:
+                    import sqlite3 as _sq
+                    _c = _sq.connect(str(fts_db_path))
+                    try:
+                        _c.execute("SELECT title FROM news_fts WHERE title MATCH ? LIMIT 5", (new_kw,)).fetchall()
+                    except Exception:
+                        pass
+                    try:
+                        _c.execute("SELECT title FROM news_fts WHERE title LIKE ? LIMIT 5", (f"%{new_kw}%",)).fetchall()
+                    except Exception:
+                        pass
+                    _c.close()
+                except Exception:
+                    pass
+            threading.Thread(target=_warm, daemon=True).start()
+    except Exception:
+        pass
+
+    return {"ok": True, "keyword_id": keyword_id, "show_coffee_prompt": show_coffee_prompt}
 
 
 @router.put("/{keyword_id}")
